@@ -1,0 +1,31 @@
+# Environment and credentials
+.env
+.env.*
+!.env.example
+
+# JavaScript
+node_modules/
+dist/
+.vercel/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+
+# Tests and tooling
+coverage/
+.pytest_cache/
+.mypy_cache/
+
+# OS and editors
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Local data and exports
+*.sqlite
+*.sqlite3
+exports/
+
