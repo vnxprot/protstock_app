@@ -13,13 +13,14 @@ Personal PWA for end-of-day analysis of a curated Vietnamese stock universe.
 
 ## Current phase
 
-Phase 2 — the EOD connector, technical indicators, explainable price-pattern engine, analysis schema, and per-symbol workspace are implemented. Controlled production ingestion is being activated before the full-universe schedule.
+Phases 2–5 are implemented in code: multi-timeframe EOD analysis, versioned natural-language rules, screener signals, no-look-ahead backtest engine, portfolio risk sizing, and decision journal. Production database migrations and the initial full-universe backfill are the remaining activation steps.
 
 See:
 
 - [Phase 0 specification](docs/phase-0-spec.md)
 - [Phase 1 data foundation](docs/phase-1-data-foundation.md)
 - [Phase 2 core analysis](docs/phase-2-core-analysis.md)
+- [Phase 3–5 implementation](docs/phases-3-5.md)
 - [Pattern engine specification](docs/pattern-engine-spec.md)
 - [Initial universe](data/universe.csv)
 
@@ -27,6 +28,6 @@ See:
 
 1. Data foundation — implemented
 2. Core analysis and pattern engine — implemented
-3. Screener and rules
-4. Backtesting
-5. Portfolio and journal
+3. Screener and rules — implemented in code
+4. Backtesting — engine and result workspace implemented
+5. Portfolio and journal — implemented in code

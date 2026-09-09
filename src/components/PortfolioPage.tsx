@@ -1,0 +1,21 @@
+import { FormEvent, useMemo, useState } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { supabase } from '../lib/supabase'
+import { useSymbols } from '../hooks/useStockAnalysis'
+
+export function PortfolioPage({ authenticated }: { authenticated: boolean }) {
+  const queryClient = useQueryClient(); const symbols = useSymbols(authenticated)
+  const [capital, setCapital] = useState(1_000_000_000); const [riskPct, setRiskPct] = useState(1)
+  const [symbol, setSymbol] = useState('FPT'); const [quantity, setQuantity] = useState(100); const [cost, setCost] = useState(100_000); const [stop, setStop] = useState(93_000)
+  const portfolio = useQuery({ queryKey: ['portfolio'], enabled: authenticated && Boolean(supabase), queryFn: async () => { const { data, error } = await supabase!.from('portfolios').select('id,name,capital,max_risk_per_trade_pct,positions(id,quantity,average_cost,stop_price,opened_at,thesis,symbols(symbol,sector))').limit(1).maybeSingle(); if (error) throw error; return data } })
+  const sizing = useMemo(() => { const perShare = cost - stop; const budget = capital * riskPct / 100; return perShare > 0 ? Math.floor(budget / perShare) : 0 }, [capital, riskPct, cost, stop])
+  async function createPortfolio() { await supabase!.from('portfolios').insert({ capital, max_risk_per_trade_pct: riskPct }); queryClient.invalidateQueries({ queryKey: ['portfolio'] }) }
+  async function addPosition(event: FormEvent) { event.preventDefault(); if (!portfolio.data) return; const symbolId = symbols.data?.find(item => item.symbol === symbol)?.id; if (!symbolId) return; await supabase!.from('positions').upsert({ portfolio_id: portfolio.data.id, symbol_id: symbolId, quantity, average_cost: cost, stop_price: stop, opened_at: new Date().toISOString().slice(0, 10) }, { onConflict: 'portfolio_id,symbol_id' }); queryClient.invalidateQueries({ queryKey: ['portfolio'] }) }
+  return <section className="workspace-page"><span className="eyebrow">PHASE 5 · RISK</span><h1>Danh mục</h1>
+    {!portfolio.data ? <article className="panel rule-form"><h3>Khởi tạo danh mục riêng</h3><label>Vốn<input type="number" value={capital} onChange={e => setCapital(Number(e.target.value))}/></label><label>Rủi ro tối đa mỗi lệnh (%)<input type="number" step="0.1" value={riskPct} onChange={e => setRiskPct(Number(e.target.value))}/></label><button onClick={createPortfolio}>Tạo danh mục</button></article> : <>
+      <div className="metric-grid"><article className="metric-card"><span>Vốn quản lý</span><strong>{Number(portfolio.data.capital).toLocaleString('vi-VN')}</strong></article><article className="metric-card"><span>Risk / lệnh</span><strong>{portfolio.data.max_risk_per_trade_pct}%</strong></article><article className="metric-card"><span>Số vị thế</span><strong>{portfolio.data.positions?.length ?? 0}</strong></article><article className="metric-card"><span>Gợi ý số lượng</span><strong>{sizing.toLocaleString('vi-VN')}</strong></article></div>
+      <div className="analysis-columns"><form className="panel rule-form" onSubmit={addPosition}><h3>Thêm/cập nhật vị thế</h3><label>Mã<select value={symbol} onChange={e => setSymbol(e.target.value)}>{(symbols.data ?? []).map(item => <option key={item.id}>{item.symbol}</option>)}</select></label><label>Số lượng<input type="number" value={quantity} onChange={e => setQuantity(Number(e.target.value))}/></label><label>Giá vốn<input type="number" value={cost} onChange={e => setCost(Number(e.target.value))}/></label><label>Giá stop<input type="number" value={stop} onChange={e => setStop(Number(e.target.value))}/></label><button>Lưu vị thế</button></form>
+      <article className="panel"><div className="panel-title"><h3>Vị thế mở</h3><span>{portfolio.data.positions?.length ?? 0}</span></div>{(portfolio.data.positions ?? []).map((item: any) => <div className="rule-row" key={item.id}><div><strong>{item.symbols?.symbol} · {Number(item.quantity).toLocaleString('vi-VN')} cp</strong><small>Giá vốn {Number(item.average_cost).toLocaleString('vi-VN')} · Stop {Number(item.stop_price).toLocaleString('vi-VN')}</small></div><span>{(((Number(item.average_cost) - Number(item.stop_price)) * Number(item.quantity)) / Number(portfolio.data?.capital ?? 1) * 100).toFixed(2)}% risk</span></div>)}</article></div>
+    </>}
+  </section>
+}

@@ -5,6 +5,9 @@ import { isSupabaseConfigured, supabase } from './lib/supabase'
 const AnalysisPage = lazy(() => import('./components/AnalysisPage').then(module => ({ default: module.AnalysisPage })))
 const RuleBuilderPage = lazy(() => import('./components/RuleBuilderPage').then(module => ({ default: module.RuleBuilderPage })))
 const ScreenerPage = lazy(() => import('./components/ScreenerPage').then(module => ({ default: module.ScreenerPage })))
+const BacktestPage = lazy(() => import('./components/BacktestPage').then(module => ({ default: module.BacktestPage })))
+const PortfolioPage = lazy(() => import('./components/PortfolioPage').then(module => ({ default: module.PortfolioPage })))
+const JournalPage = lazy(() => import('./components/JournalPage').then(module => ({ default: module.JournalPage })))
 
 const modules = [
   { id: 'today', icon: '⌁', label: 'Tổng quan' },
@@ -46,7 +49,9 @@ function App({ authenticated = false }: { authenticated?: boolean }) {
       {page === 'analysis' && <Suspense fallback={<div className="empty-state">Đang mở biểu đồ…</div>}><AnalysisPage authenticated={authenticated} /></Suspense>}
       {page === 'screener' && <Suspense fallback={<div className="empty-state">Đang mở screener…</div>}><ScreenerPage authenticated={authenticated} /></Suspense>}
       {page === 'rules' && <Suspense fallback={<div className="empty-state">Đang mở Rule Builder…</div>}><RuleBuilderPage authenticated={authenticated} /></Suspense>}
-      {!['today', 'analysis', 'screener', 'rules'].includes(page) && <ComingSoon page={modules.find(item => item.id === page)?.label ?? page} />}
+      {page === 'backtest' && <Suspense fallback={<div className="empty-state">Đang mở Backtest…</div>}><BacktestPage authenticated={authenticated} /></Suspense>}
+      {page === 'portfolio' && <Suspense fallback={<div className="empty-state">Đang mở danh mục…</div>}><PortfolioPage authenticated={authenticated} /></Suspense>}
+      {page === 'journal' && <Suspense fallback={<div className="empty-state">Đang mở nhật ký…</div>}><JournalPage authenticated={authenticated} /></Suspense>}
       <footer>Prot Stock · Personal research system · Không phải khuyến nghị đầu tư</footer>
     </main>
   </div>
@@ -61,14 +66,10 @@ function Dashboard({ universeCount, connectionLabel, health }: { universeCount: 
     </section>
     <section className="roadmap"><div className="section-heading"><div><span className="eyebrow">BUILD STATUS</span><h2>Lộ trình tinh gọn</h2></div><span className="phase-pill">Phase 3 · In progress</span></div>
       <div className="phase-list">{[
-        ['01','Nền tảng dữ liệu','Hoàn tất'],['02','Phân tích & mẫu hình','Hoàn tất code'],['03','Screener & rules','Đang triển khai'],['04','Backtest','Kế tiếp'],['05','Danh mục & nhật ký','Đã đặc tả'],
+        ['01','Nền tảng dữ liệu','Hoàn tất'],['02','Phân tích & mẫu hình','Hoàn tất code'],['03','Screener & rules','Hoàn tất code'],['04','Backtest','Engine hoàn tất'],['05','Danh mục & nhật ký','Đang triển khai'],
       ].map(([number,title,status]) => <article className="phase-row" key={number}><span className="phase-number">{number}</span><h3>{title}</h3><span>{status}</span></article>)}</div>
     </section>
   </>
-}
-
-function ComingSoon({ page }: { page: string }) {
-  return <section className="workspace-page"><span className="eyebrow">NEXT PHASE</span><h1>{page}</h1><div className="empty-state">Module này đã có đặc tả và sẽ được mở ngay sau khi Phase 2 vượt kiểm thử dữ liệu.</div></section>
 }
 
 export default App
