@@ -1,6 +1,6 @@
 -- Prot Stock Phase 5: one-owner portfolio and decision journal.
 
-create table public.portfolios (
+create table if not exists public.portfolios (
   id uuid primary key default extensions.gen_random_uuid(),
   user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
   name text not null default 'Danh mục Prot',
@@ -10,7 +10,7 @@ create table public.portfolios (
   unique (user_id, name)
 );
 
-create table public.positions (
+create table if not exists public.positions (
   id uuid primary key default extensions.gen_random_uuid(),
   portfolio_id uuid not null references public.portfolios(id) on delete cascade,
   symbol_id bigint not null references public.symbols(id) on delete restrict,
@@ -23,7 +23,7 @@ create table public.positions (
   unique (portfolio_id, symbol_id)
 );
 
-create table public.journal_entries (
+create table if not exists public.journal_entries (
   id uuid primary key default extensions.gen_random_uuid(),
   user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
   signal_id uuid references public.signals(id) on delete set null,
@@ -42,10 +42,12 @@ create table public.journal_entries (
 alter table public.portfolios enable row level security;
 alter table public.positions enable row level security;
 alter table public.journal_entries enable row level security;
+drop policy if exists owner_portfolios on public.portfolios;
+drop policy if exists owner_positions on public.positions;
+drop policy if exists owner_journal on public.journal_entries;
 create policy owner_portfolios on public.portfolios for all to authenticated using (user_id = auth.uid()) with check (user_id = auth.uid());
 create policy owner_positions on public.positions for all to authenticated
   using (exists (select 1 from public.portfolios p where p.id = portfolio_id and p.user_id = auth.uid()))
   with check (exists (select 1 from public.portfolios p where p.id = portfolio_id and p.user_id = auth.uid()));
 create policy owner_journal on public.journal_entries for all to authenticated using (user_id = auth.uid()) with check (user_id = auth.uid());
 grant select, insert, update, delete on public.portfolios, public.positions, public.journal_entries to authenticated;
-

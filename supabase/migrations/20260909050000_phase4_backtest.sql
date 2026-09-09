@@ -1,6 +1,6 @@
 -- Prot Stock Phase 4: reproducible backtests pinned to immutable rule versions.
 
-create table public.backtest_runs (
+create table if not exists public.backtest_runs (
   id uuid primary key default extensions.gen_random_uuid(),
   user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
   rule_version_id uuid not null references public.rule_versions(id) on delete restrict,
@@ -20,7 +20,7 @@ create table public.backtest_runs (
   check (date_to >= date_from)
 );
 
-create table public.backtest_trades (
+create table if not exists public.backtest_trades (
   id bigint generated always as identity primary key,
   backtest_run_id uuid not null references public.backtest_runs(id) on delete cascade,
   symbol_id bigint not null references public.symbols(id) on delete restrict,
@@ -38,6 +38,8 @@ create table public.backtest_trades (
 
 alter table public.backtest_runs enable row level security;
 alter table public.backtest_trades enable row level security;
+drop policy if exists owner_backtests on public.backtest_runs;
+drop policy if exists owner_backtest_trades on public.backtest_trades;
 create policy owner_backtests on public.backtest_runs for all to authenticated using (user_id = auth.uid()) with check (user_id = auth.uid());
 create policy owner_backtest_trades on public.backtest_trades for select to authenticated
   using (exists (select 1 from public.backtest_runs b where b.id = backtest_run_id and b.user_id = auth.uid()));

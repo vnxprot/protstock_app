@@ -1,6 +1,6 @@
 -- Prot Stock Phase 2: point-in-time technical snapshots and explainable patterns.
 
-create table public.technical_snapshots (
+create table if not exists public.technical_snapshots (
   symbol_id bigint not null references public.symbols(id) on delete restrict,
   timeframe text not null check (timeframe in ('D', 'W', 'M')),
   as_of_date date not null,
@@ -30,10 +30,10 @@ create table public.technical_snapshots (
   primary key (symbol_id, timeframe, as_of_date)
 );
 
-create index technical_snapshots_lookup_idx
+create index if not exists technical_snapshots_lookup_idx
   on public.technical_snapshots (symbol_id, timeframe, as_of_date desc);
 
-create table public.support_resistance_zones (
+create table if not exists public.support_resistance_zones (
   id uuid primary key default extensions.gen_random_uuid(),
   symbol_id bigint not null references public.symbols(id) on delete restrict,
   timeframe text not null check (timeframe in ('D', 'W', 'M')),
@@ -51,7 +51,7 @@ create table public.support_resistance_zones (
   unique (symbol_id, timeframe, as_of_date, zone_type, lower_price, upper_price)
 );
 
-create table public.pattern_instances (
+create table if not exists public.pattern_instances (
   id uuid primary key default extensions.gen_random_uuid(),
   symbol_id bigint not null references public.symbols(id) on delete restrict,
   timeframe text not null check (timeframe in ('D', 'W', 'M')),
@@ -79,10 +79,10 @@ create table public.pattern_instances (
   check (confirmed_at is null or confirmed_at between start_date and as_of_date)
 );
 
-create index pattern_instances_lookup_idx
+create index if not exists pattern_instances_lookup_idx
   on public.pattern_instances (symbol_id, timeframe, as_of_date desc, quality_score desc);
 
-create table public.pattern_points (
+create table if not exists public.pattern_points (
   id bigint generated always as identity primary key,
   pattern_id uuid not null references public.pattern_instances(id) on delete cascade,
   point_type text not null,
@@ -93,7 +93,7 @@ create table public.pattern_points (
   unique (pattern_id, point_type, sequence)
 );
 
-create table public.fundamental_periods (
+create table if not exists public.fundamental_periods (
   id uuid primary key default extensions.gen_random_uuid(),
   symbol_id bigint not null references public.symbols(id) on delete restrict,
   period_type text not null check (period_type in ('QUARTER', 'YEAR')),
@@ -109,7 +109,7 @@ create table public.fundamental_periods (
   unique nulls not distinct (symbol_id, period_type, fiscal_year, fiscal_quarter, content_hash)
 );
 
-create table public.fundamental_metrics (
+create table if not exists public.fundamental_metrics (
   period_id uuid primary key references public.fundamental_periods(id) on delete cascade,
   revenue numeric(24,2),
   revenue_growth numeric(12,4),
@@ -124,7 +124,7 @@ create table public.fundamental_metrics (
   raw_metrics jsonb not null default '{}'::jsonb
 );
 
-create view public.latest_technical_snapshots
+create or replace view public.latest_technical_snapshots
 with (security_invoker = true)
 as
 select distinct on (t.symbol_id, t.timeframe)
@@ -141,6 +141,12 @@ alter table public.pattern_points enable row level security;
 alter table public.fundamental_periods enable row level security;
 alter table public.fundamental_metrics enable row level security;
 
+drop policy if exists authenticated_read_technical on public.technical_snapshots;
+drop policy if exists authenticated_read_zones on public.support_resistance_zones;
+drop policy if exists authenticated_read_patterns on public.pattern_instances;
+drop policy if exists authenticated_read_pattern_points on public.pattern_points;
+drop policy if exists authenticated_read_fundamental_periods on public.fundamental_periods;
+drop policy if exists authenticated_read_fundamental_metrics on public.fundamental_metrics;
 create policy authenticated_read_technical on public.technical_snapshots for select to authenticated using (true);
 create policy authenticated_read_zones on public.support_resistance_zones for select to authenticated using (true);
 create policy authenticated_read_patterns on public.pattern_instances for select to authenticated using (true);
@@ -151,4 +157,3 @@ create policy authenticated_read_fundamental_metrics on public.fundamental_metri
 grant select on public.technical_snapshots, public.support_resistance_zones,
   public.pattern_instances, public.pattern_points, public.fundamental_periods,
   public.fundamental_metrics, public.latest_technical_snapshots to authenticated;
-

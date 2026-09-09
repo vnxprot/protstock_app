@@ -1,6 +1,6 @@
 -- Prot Stock Phase 3: versioned rules and explainable signals.
 
-create table public.rules (
+create table if not exists public.rules (
   id uuid primary key default extensions.gen_random_uuid(),
   user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
   name text not null,
@@ -10,7 +10,7 @@ create table public.rules (
   updated_at timestamptz not null default now()
 );
 
-create table public.rule_versions (
+create table if not exists public.rule_versions (
   id uuid primary key default extensions.gen_random_uuid(),
   rule_id uuid not null references public.rules(id) on delete cascade,
   version integer not null check (version > 0),
@@ -21,7 +21,7 @@ create table public.rule_versions (
   unique (rule_id, compiled_hash)
 );
 
-create table public.signals (
+create table if not exists public.signals (
   id uuid primary key default extensions.gen_random_uuid(),
   rule_version_id uuid not null references public.rule_versions(id) on delete restrict,
   symbol_id bigint not null references public.symbols(id) on delete restrict,
@@ -35,12 +35,15 @@ create table public.signals (
   unique (rule_version_id, symbol_id, timeframe, as_of_date, action)
 );
 
-create index signals_screener_idx on public.signals (as_of_date desc, score desc);
+create index if not exists signals_screener_idx on public.signals (as_of_date desc, score desc);
 
 alter table public.rules enable row level security;
 alter table public.rule_versions enable row level security;
 alter table public.signals enable row level security;
 
+drop policy if exists owner_rules on public.rules;
+drop policy if exists owner_rule_versions on public.rule_versions;
+drop policy if exists owner_signals_read on public.signals;
 create policy owner_rules on public.rules for all to authenticated using (user_id = auth.uid()) with check (user_id = auth.uid());
 create policy owner_rule_versions on public.rule_versions for all to authenticated
   using (exists (select 1 from public.rules r where r.id = rule_id and r.user_id = auth.uid()))
@@ -50,4 +53,3 @@ create policy owner_signals_read on public.signals for select to authenticated
 
 grant select, insert, update, delete on public.rules, public.rule_versions to authenticated;
 grant select on public.signals to authenticated;
-
