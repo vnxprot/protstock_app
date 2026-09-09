@@ -11,7 +11,8 @@ import httpx
 from .config import Settings
 from .supabase_rest import SupabaseRestClient
 
-HNX_ISSUER_RSS = "https://www.hnx.vn/3/vi_vn/thong-tin-cong-bo-tu-to-chuc-phat-hanh.rss"
+# HNX itself advertises this canonical RSS endpoint in its channel metadata.
+HNX_ISSUER_RSS = "http://www.hnx.vn:7978/3/vi_vn/thong-tin-cong-bo-tu-to-chuc-phat-hanh.rss"
 
 
 def parse_hnx_rss(xml_text: str, symbols: set[str]) -> list[dict]:
