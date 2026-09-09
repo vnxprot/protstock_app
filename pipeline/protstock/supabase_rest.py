@@ -32,6 +32,27 @@ class SupabaseRestClient:
         response.raise_for_status()
         return response.json()
 
+    def price_history(self, symbol_id: int, limit: int = 260) -> list[dict[str, Any]]:
+        response = self._client.get(
+            "/daily_prices",
+            params={
+                "select": "trading_date,open,high,low,close,volume",
+                "symbol_id": f"eq.{symbol_id}",
+                "order": "trading_date.desc",
+                "limit": str(limit),
+            },
+        )
+        response.raise_for_status()
+        return list(reversed(response.json()))
+
+    def create_job_item(self, payload: dict[str, Any]) -> None:
+        response = self._client.post(
+            "/job_run_items",
+            headers={"Prefer": "return=minimal"},
+            json=payload,
+        )
+        response.raise_for_status()
+
     def upsert(self, table: str, rows: Iterable[dict[str, Any]], on_conflict: str) -> int:
         payload = list(rows)
         if not payload:
