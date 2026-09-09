@@ -57,8 +57,8 @@ def run_eod(
         for symbol_row in symbols:
             started = monotonic()
             try:
-                fetched = provider.history(
-                    symbol_row["symbol"], trading_date - timedelta(days=lookback_days), trading_date
+                fetched = _fetch_history_with_retry(
+                    provider, symbol_row["symbol"], trading_date - timedelta(days=lookback_days), trading_date
                 )
                 price_rows = [{
                     "symbol_id": symbol_row["id"], "trading_date": bar.trading_date.isoformat(),
@@ -121,6 +121,19 @@ def run_eod(
 def _now() -> str:
     from datetime import datetime, timezone
     return datetime.now(timezone.utc).isoformat()
+
+
+def _fetch_history_with_retry(provider: VnstockProvider, symbol: str, start: date, end: date) -> list:
+    """Free upstream rate limits are transient; never burn the remaining universe."""
+    for attempt in range(3):
+        try:
+            return provider.history(symbol, start, end)
+        except Exception as exc:
+            text = str(exc).lower()
+            if attempt == 2 or not any(token in text for token in ("rate limit", "too many", "429", "giới hạn")):
+                raise
+            sleep(65 * (attempt + 1))
+    raise RuntimeError("unreachable")
 
 
 def _write_analysis(
