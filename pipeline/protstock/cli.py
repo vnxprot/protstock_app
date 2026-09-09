@@ -40,7 +40,7 @@ def main() -> None:
     eod.add_argument("--lookback-days", type=int, default=10)
     eod.add_argument("--symbol-offset", type=int, default=0)
     eod.add_argument("--symbol-limit", type=int)
-    eod.add_argument("--pause-seconds", type=float, default=3.2)
+    eod.add_argument("--pause-seconds", type=float, default=6.5)
     worker = subparsers.add_parser("backtest-worker")
     worker.add_argument("--limit", type=int, default=3)
     args = parser.parse_args()
