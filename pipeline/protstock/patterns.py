@@ -40,20 +40,22 @@ def detect_accumulation_base(bars: Sequence[dict]) -> PatternCandidate | None:
     lows = [float(x["low"]) for x in window]
     closes = [float(x["close"]) for x in window]
     volumes = [float(x.get("volume", 0)) for x in window]
-    resistance, support = max(highs), min(lows)
+    resistance, support = max(highs[:-1]), min(lows)
     depth = (resistance - support) / resistance if resistance else 1
     recent_range = (max(highs[-10:]) - min(lows[-10:])) / closes[-1]
     prior_range = (max(highs[:10]) - min(lows[:10])) / closes[9]
     dry_up = sum(volumes[-10:]) / 10 < sum(volumes[-20:-10]) / 10 if len(window) >= 20 else False
+    breakout_volume_ok = volumes[-1] > (sum(volumes[-21:-1]) / 20) * 1.5 if len(volumes) >= 21 else False
+    confirmed = closes[-1] > resistance and breakout_volume_ok
     near_breakout = closes[-1] >= resistance * 0.97
     if depth > 0.35 or recent_range > prior_range * 1.15:
         return None
     score = min(100.0, 45 + (15 if dry_up else 0) + (20 if near_breakout else 0) + max(0, 20 - depth * 50))
     return PatternCandidate(
-        "ACCUMULATION_BASE", "READY" if near_breakout else "FORMING", "BULLISH",
+        "ACCUMULATION_BASE", "CONFIRMED" if confirmed else "READY" if near_breakout else "FORMING", "BULLISH",
         len(bars) - len(window), len(bars) - 1, resistance, support, score,
-        tuple(filter(None, ("RANGE_CONTRACTION", "VOLUME_DRY_UP" if dry_up else "", "NEAR_BREAKOUT" if near_breakout else ""))),
-        {"depth_pct": round(depth * 100, 2), "recent_range_pct": round(recent_range * 100, 2)},
+        tuple(filter(None, ("RANGE_CONTRACTION", "VOLUME_DRY_UP" if dry_up else "", "BREAKOUT_VOLUME" if breakout_volume_ok else "", "NEAR_BREAKOUT" if near_breakout else ""))),
+        {"depth_pct": round(depth * 100, 2), "recent_range_pct": round(recent_range * 100, 2), "breakout_volume_ok": breakout_volume_ok},
     )
 
 
@@ -73,15 +75,17 @@ def detect_double(bars: Sequence[dict], kind: str) -> PatternCandidate | None:
     middle_slice = bars[first:second + 1]
     neckline = max(float(x["high"]) for x in middle_slice) if kind == "bottom" else min(float(x["low"]) for x in middle_slice)
     close = float(bars[-1]["close"])
-    confirmed = close > neckline if kind == "bottom" else close < neckline
+    avg_volume = sum(float(x.get("volume", 0)) for x in bars[-21:-1]) / 20 if len(bars) >= 21 else 0
+    volume_ok = float(bars[-1].get("volume", 0)) > avg_volume * 1.3 if avg_volume else False
+    confirmed = (close > neckline if kind == "bottom" else close < neckline) and volume_ok
     pattern_type = "DOUBLE_BOTTOM" if kind == "bottom" else "DOUBLE_TOP"
     direction = "BULLISH" if kind == "bottom" else "BEARISH"
     invalidation = min(values[first], values[second]) if kind == "bottom" else max(values[first], values[second])
     return PatternCandidate(
         pattern_type, "CONFIRMED" if confirmed else "READY", direction, first, len(bars) - 1,
         neckline, invalidation, max(45.0, 82 - tolerance * 500),
-        ("TWO_CONFIRMED_PIVOTS", "NECKLINE_BREAK" if confirmed else "NEAR_NECKLINE"),
-        {"first_pivot": first, "second_pivot": second, "similarity_pct": round((1 - tolerance) * 100, 2)},
+        tuple(filter(None, ("TWO_CONFIRMED_PIVOTS", "NECKLINE_BREAK" if confirmed else "NEAR_NECKLINE", "BREAKOUT_VOLUME" if volume_ok else ""))),
+        {"first_pivot": first, "second_pivot": second, "similarity_pct": round((1 - tolerance) * 100, 2), "breakout_volume_ok": volume_ok},
     )
 
 

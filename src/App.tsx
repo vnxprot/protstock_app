@@ -1,4 +1,5 @@
 import { lazy, Suspense, useEffect, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { useDataHealth } from './hooks/useDataHealth'
 import { isSupabaseConfigured, supabase } from './lib/supabase'
 
@@ -58,11 +59,15 @@ function App({ authenticated = false }: { authenticated?: boolean }) {
 }
 
 function Dashboard({ universeCount, connectionLabel, health }: { universeCount: number, connectionLabel: string, health?: { latest_price_date: string | null, failed_jobs_7d: number } }) {
+  const signals = useQuery({ queryKey: ['today-signals'], enabled: Boolean(supabase), queryFn: async () => { const { data, error } = await supabase!.from('signals').select('id,action,score,reasons,as_of_date,symbols(symbol),rule_versions(rules(name))').order('as_of_date', { ascending: false }).order('score', { ascending: false }).limit(12); if (error) throw error; return data ?? [] } })
   return <>
     <header><div><span className="eyebrow">EOD INTELLIGENCE</span><h1>Chào Prot.</h1><p>Không gian phân tích riêng cho 205 cổ phiếu Việt Nam.</p></div><div className="market-badge"><span /> {connectionLabel}</div></header>
     <section className="hero-grid" aria-label="Trạng thái hệ thống">
       <article className="feature-card"><div className="card-top"><span>UNIVERSE</span><b>{universeCount}</b></div><h2>Danh sách đã khóa</h2><p>205 mã duy nhất · TDC thuộc BDS_KCN · có cơ chế mở rộng có kiểm soát.</p><div className="ticker-line">{['FPT','HPG','MBB','VNM','TDC'].map(ticker => <span key={ticker}>{ticker}</span>)}</div></article>
       <article className="feature-card accent"><div className="card-top"><span>PIPELINE</span><b>D · W · M</b></div><h2>Phân tích sau phiên</h2><p>Phiên dữ liệu mới nhất: {health?.latest_price_date ?? 'chưa chạy EOD'}. Job lỗi 7 ngày: {health?.failed_jobs_7d ?? 0}.</p><div className="signal-preview"><i /> Giá <strong>→</strong> Khối lượng <strong>→</strong> Mẫu hình <strong>→</strong> Rule</div></article>
+    </section>
+    <section className="roadmap"><div className="section-heading"><div><span className="eyebrow">TODAY · CORE RULES V1</span><h2>Tín hiệu sau phiên</h2></div><a href="#screener" className="phase-pill">Mở Screener</a></div>
+      <article className="panel">{(signals.data ?? []).map((signal: any) => <div className="signal-row" key={signal.id}><strong>{signal.symbols?.symbol}</strong><span>{signal.action}</span><span>{signal.reasons?.join(' · ')}</span><small>{signal.as_of_date} · {signal.rule_versions?.rules?.name}</small></div>)}{!signals.isLoading && !signals.data?.length && <p className="muted">Core Rules v1 sẽ có tín hiệu sau EOD kế tiếp.</p>}</article>
     </section>
     <section className="roadmap"><div className="section-heading"><div><span className="eyebrow">BUILD STATUS</span><h2>Lộ trình tinh gọn</h2></div><span className="phase-pill">Phase 3 · In progress</span></div>
       <div className="phase-list">{[

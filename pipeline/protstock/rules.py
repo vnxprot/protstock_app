@@ -17,7 +17,7 @@ class CompiledRule:
 
 def compile_rule(text: str) -> CompiledRule:
     normalized = " ".join(text.lower().replace(",", ".").split())
-    action = "SELL" if any(word in normalized for word in ("bán", "thoát", "stop-loss", "cắt lỗ")) else "BUY"
+    action = "WATCH" if "theo dõi" in normalized else "SELL" if any(word in normalized for word in ("bán", "thoát", "stop-loss", "cắt lỗ")) else "BUY"
     timeframe = "W" if "tuần" in normalized else "M" if "tháng" in normalized else "D"
     conditions: list[dict[str, Any]] = []
 
@@ -35,16 +35,23 @@ def compile_rule(text: str) -> CompiledRule:
     stop = re.search(r"(?:stop-loss|cắt lỗ)\s*(\d+(?:\.\d+)?)\s*%", normalized)
     if stop:
         conditions.append({"metric": "return_from_entry", "op": "<=", "value": -float(stop.group(1)) / 100})
+    pattern_names = {"nền tích lũy": "ACCUMULATION_BASE", "double bottom": "DOUBLE_BOTTOM", "hai đáy": "DOUBLE_BOTTOM", "double top": "DOUBLE_TOP", "hai đỉnh": "DOUBLE_TOP", "tam giác tăng": "ASCENDING_TRIANGLE", "cờ tăng": "BULL_FLAG"}
+    for name, pattern_type in pattern_names.items():
+        if name in normalized:
+            conditions.append({"metric": "pattern", "op": "ready" if "sẵn sàng" in normalized else "confirmed", "type": pattern_type})
+            break
     if not conditions:
         raise ValueError("Không nhận ra điều kiện. Hãy dùng breakout, volume, MA, RSI hoặc stop-loss.")
     return CompiledRule(action, timeframe, tuple(conditions))
 
 
-def evaluate_rule(rule: dict[str, Any], snapshot: dict[str, Any], bars: Sequence[dict]) -> tuple[bool, list[str]]:
+def evaluate_rule(rule: dict[str, Any], snapshot: dict[str, Any], bars: Sequence[dict], patterns: Sequence[dict] = ()) -> tuple[bool, list[str]]:
     results: list[tuple[bool, str]] = []
     for condition in rule.get("all", []):
         metric, op = condition["metric"], condition["op"]
-        if op == "breakout_high":
+        if metric == "pattern":
+            passed = any(p.get("pattern_type") == condition["type"] and p.get("state") == op.upper() for p in patterns)
+        elif op == "breakout_high":
             lookback = int(condition["lookback"])
             prior = [float(item["high"]) for item in bars[-lookback - 1:-1]]
             passed = bool(prior) and float(bars[-1]["close"]) > max(prior)
@@ -60,4 +67,3 @@ def evaluate_rule(rule: dict[str, Any], snapshot: dict[str, Any], bars: Sequence
             passed = value is not None and ((op == ">" and float(value) > target) or (op == "<=" and float(value) <= target))
         results.append((passed, f"{metric}:{'PASS' if passed else 'FAIL'}"))
     return all(item[0] for item in results), [item[1] for item in results]
-

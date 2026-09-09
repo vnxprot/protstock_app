@@ -175,7 +175,7 @@ def _write_analysis(
         dsl = version["dsl"]
         if dsl.get("timeframe", "D") != timeframe:
             continue
-        passed, reasons = evaluate_rule(dsl, result["indicators"], rows)
+        passed, reasons = evaluate_rule(dsl, result["indicators"], rows, result["patterns"])
         if passed:
             signal_rows.append({
                 "rule_version_id": version["id"], "symbol_id": symbol_id,

@@ -33,7 +33,7 @@ def test_indicator_snapshot_has_full_long_term_context() -> None:
 
 def test_analysis_is_explainable() -> None:
     result = analyze_bars(make_bars())
-    assert result["algorithm_version"] == "phase2.1"
+    assert result["algorithm_version"] == "core-rules-v1"
     assert result["reasons"][0] == "TREND_UP"
     assert result["signal_preview"] in {"WATCH", "PROBE_BUY", "REDUCE"}
 
