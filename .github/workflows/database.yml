@@ -14,6 +14,11 @@ on:
         required: true
         default: true
         type: boolean
+      reconcile_phase2_to_5:
+        description: Reapply Phase 2-5 when their migration history was marked applied after a rolled-back SQL attempt
+        required: true
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -43,9 +48,15 @@ jobs:
       - name: Bootstrap migration history
         if: inputs.bootstrap_existing
         run: supabase migration repair 20260909010000 20260909020000 --status applied --password "$SUPABASE_DB_PASSWORD"
+      - name: Reconcile rolled-back Phase 2-5 history
+        if: inputs.reconcile_phase2_to_5
+        run: supabase migration repair 20260909030000 20260909040000 20260909050000 20260909060000 --status reverted --password "$SUPABASE_DB_PASSWORD"
       - name: Review migration plan
         if: inputs.mode == 'dry-run'
         run: supabase db push --dry-run --include-all --password "$SUPABASE_DB_PASSWORD"
       - name: Apply migrations
         if: inputs.mode == 'deploy'
         run: supabase db push --include-all --password "$SUPABASE_DB_PASSWORD"
+      - name: Verify migration status
+        if: inputs.mode == 'deploy'
+        run: supabase migration list --password "$SUPABASE_DB_PASSWORD"
