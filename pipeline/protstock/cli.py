@@ -37,6 +37,7 @@ def main() -> None:
     eod.add_argument("--date", dest="trading_date", type=date.fromisoformat, default=date.today())
     eod.add_argument("--source", default="KBS", choices=("KBS", "VCI"))
     eod.add_argument("--lookback-days", type=int, default=10)
+    eod.add_argument("--symbol-offset", type=int, default=0)
     eod.add_argument("--symbol-limit", type=int)
     args = parser.parse_args()
     if args.command == "validate-universe":
@@ -45,8 +46,15 @@ def main() -> None:
         print(json.dumps(analyze_bars(json.loads(args.path.read_text(encoding="utf-8"))), ensure_ascii=False, indent=2))
         raise SystemExit(0)
     if args.command == "eod":
-        print(json.dumps(run_eod(args.trading_date, source=args.source, lookback_days=args.lookback_days, symbol_limit=args.symbol_limit), indent=2))
-        raise SystemExit(0)
+        result = run_eod(
+            args.trading_date,
+            source=args.source,
+            lookback_days=args.lookback_days,
+            symbol_offset=args.symbol_offset,
+            symbol_limit=args.symbol_limit,
+        )
+        print(json.dumps(result, indent=2))
+        raise SystemExit(0 if result["status"] == "SUCCEEDED" else 1)
 
 
 if __name__ == "__main__":

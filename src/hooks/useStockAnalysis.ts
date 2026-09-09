@@ -55,17 +55,20 @@ export function useSymbols(enabled: boolean) {
   })
 }
 
-export function useStockAnalysis(symbol: string | null, enabled: boolean) {
+export function useStockAnalysis(symbol: string | null, timeframe: 'D' | 'W' | 'M', enabled: boolean) {
   return useQuery({
-    queryKey: ['stock-analysis', symbol], enabled: enabled && Boolean(supabase) && Boolean(symbol), staleTime: 60_000,
+    queryKey: ['stock-analysis', symbol, timeframe], enabled: enabled && Boolean(supabase) && Boolean(symbol), staleTime: 60_000,
     queryFn: async () => {
       if (!supabase || !symbol) throw new Error('Symbol is required')
       const { data: symbolRow, error: symbolError } = await supabase.from('symbols').select('id,symbol,sector,exchange,company_name').eq('symbol', symbol).single()
       if (symbolError) throw symbolError
+      const priceQuery = timeframe === 'D'
+        ? supabase.from('daily_prices').select('trading_date,open,high,low,close,volume').eq('symbol_id', symbolRow.id).order('trading_date', { ascending: false }).limit(260)
+        : supabase.from('derived_bars').select('trading_date:source_last_date,open,high,low,close,volume').eq('symbol_id', symbolRow.id).eq('timeframe', timeframe).order('period_start', { ascending: false }).limit(260)
       const [prices, technical, patterns, disclosures] = await Promise.all([
-        supabase.from('daily_prices').select('trading_date,open,high,low,close,volume').eq('symbol_id', symbolRow.id).order('trading_date', { ascending: false }).limit(260),
-        supabase.from('technical_snapshots').select('*').eq('symbol_id', symbolRow.id).order('as_of_date', { ascending: false }).limit(3),
-        supabase.from('pattern_instances').select('*').eq('symbol_id', symbolRow.id).order('as_of_date', { ascending: false }).order('quality_score', { ascending: false }).limit(8),
+        priceQuery,
+        supabase.from('technical_snapshots').select('*').eq('symbol_id', symbolRow.id).eq('timeframe', timeframe).order('as_of_date', { ascending: false }).limit(1),
+        supabase.from('pattern_instances').select('*').eq('symbol_id', symbolRow.id).eq('timeframe', timeframe).order('as_of_date', { ascending: false }).order('quality_score', { ascending: false }).limit(8),
         supabase.from('disclosures').select('id,title,category,published_at,available_from,source,source_url').eq('symbol_id', symbolRow.id).order('published_at', { ascending: false }).limit(6),
       ])
       const failure = prices.error || technical.error || patterns.error || disclosures.error
@@ -80,4 +83,3 @@ export function useStockAnalysis(symbol: string | null, enabled: boolean) {
     },
   })
 }
-

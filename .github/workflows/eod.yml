@@ -13,6 +13,15 @@ on:
         description: Optional symbol limit for a controlled test
         required: false
         type: string
+      symbol_offset:
+        description: Optional zero-based offset for batched backfill
+        required: false
+        type: string
+      lookback_days:
+        description: Calendar days to fetch (10 daily, 900 initial backfill)
+        required: false
+        default: "10"
+        type: string
 
 permissions:
   contents: read
@@ -39,8 +48,11 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           TRADING_DATE: ${{ inputs.trading_date }}
           SYMBOL_LIMIT: ${{ inputs.symbol_limit }}
+          SYMBOL_OFFSET: ${{ inputs.symbol_offset }}
+          LOOKBACK_DAYS: ${{ inputs.lookback_days || '10' }}
         run: |
           args=()
           if [ -n "$TRADING_DATE" ]; then args+=(--date "$TRADING_DATE"); fi
           if [ -n "$SYMBOL_LIMIT" ]; then args+=(--symbol-limit "$SYMBOL_LIMIT"); fi
-          protstock eod "${args[@]}" --source KBS --lookback-days 10
+          if [ -n "$SYMBOL_OFFSET" ]; then args+=(--symbol-offset "$SYMBOL_OFFSET"); fi
+          protstock eod "${args[@]}" --source KBS --lookback-days "$LOOKBACK_DAYS"

@@ -8,6 +8,7 @@ from .analysis import ALGORITHM_VERSION, analyze_bars
 from .config import Settings
 from .provider_vnstock import VnstockProvider
 from .supabase_rest import SupabaseRestClient
+from .timeframes import aggregate_bars
 
 
 def run_eod(
@@ -15,6 +16,7 @@ def run_eod(
     *,
     source: str = "KBS",
     lookback_days: int = 10,
+    symbol_offset: int = 0,
     symbol_limit: int | None = None,
     pause_seconds: float = 0.25,
 ) -> dict[str, Any]:
@@ -25,10 +27,11 @@ def run_eod(
         "status": "RUNNING", "trigger_type": "SCHEDULED",
         "source_revision": ALGORITHM_VERSION,
     })
-    counts = {"symbols": 0, "prices": 0, "snapshots": 0, "patterns": 0, "failed": 0}
+    counts = {"symbols": 0, "prices": 0, "derived_bars": 0, "snapshots": 0, "patterns": 0, "failed": 0}
     warnings: list[str] = []
     try:
         symbols = client.active_symbols()
+        symbols = symbols[symbol_offset:]
         if symbol_limit:
             symbols = symbols[:symbol_limit]
         for symbol_row in symbols:
@@ -47,31 +50,23 @@ def run_eod(
                 history = client.price_history(symbol_row["id"])
                 analysis_rows = [{**row, "date": row["trading_date"]} for row in history]
                 if analysis_rows:
-                    result = analyze_bars(analysis_rows)
-                    indicators = result["indicators"]
-                    snapshot = {
-                        "symbol_id": symbol_row["id"], "timeframe": "D",
-                        "as_of_date": result["as_of_date"], "input_last_date": result["as_of_date"],
-                        "algorithm_version": ALGORITHM_VERSION, **indicators,
-                    }
-                    counts["snapshots"] += client.upsert(
-                        "technical_snapshots", [snapshot], "symbol_id,timeframe,as_of_date"
-                    )
-                    patterns = [{
-                        "symbol_id": symbol_row["id"], "timeframe": "D",
-                        "pattern_type": pattern["pattern_type"], "state": pattern["state"],
-                        "start_date": analysis_rows[pattern["start_index"]]["date"],
-                        "end_date": analysis_rows[pattern["end_index"]]["date"],
-                        "as_of_date": result["as_of_date"], "trigger_price": pattern["trigger_price"],
-                        "invalidation_price": pattern["invalidation_price"],
-                        "quality_score": pattern["quality_score"], "direction": pattern["direction"],
-                        "evidence": pattern["evidence"], "reasons": pattern["reasons"],
-                        "algorithm_version": ALGORITHM_VERSION,
-                    } for pattern in result["patterns"]]
-                    counts["patterns"] += client.upsert(
-                        "pattern_instances", patterns,
-                        "symbol_id,timeframe,pattern_type,start_date,as_of_date,algorithm_version",
-                    )
+                    timeframe_rows = {"D": analysis_rows}
+                    for timeframe in ("W", "M"):
+                        aggregated = aggregate_bars(analysis_rows, timeframe)
+                        timeframe_rows[timeframe] = aggregated
+                        derived_rows = [{
+                            "symbol_id": symbol_row["id"], "timeframe": timeframe,
+                            "period_start": bar["period_start"], "period_end": bar["period_end"],
+                            "open": bar["open"], "high": bar["high"], "low": bar["low"],
+                            "close": bar["close"], "volume": bar["volume"],
+                            "is_complete": bar["is_complete"],
+                            "source_last_date": bar["source_last_date"],
+                        } for bar in aggregated]
+                        counts["derived_bars"] += client.upsert(
+                            "derived_bars", derived_rows, "symbol_id,timeframe,period_start"
+                        )
+                    for timeframe, scoped_rows in timeframe_rows.items():
+                        _write_analysis(client, symbol_row["id"], timeframe, scoped_rows, counts)
                 counts["symbols"] += 1
                 client.create_job_item({
                     "job_run_id": job["id"], "symbol_id": symbol_row["id"],
@@ -101,3 +96,38 @@ def run_eod(
 def _now() -> str:
     from datetime import datetime, timezone
     return datetime.now(timezone.utc).isoformat()
+
+
+def _write_analysis(
+    client: SupabaseRestClient,
+    symbol_id: int,
+    timeframe: str,
+    rows: list[dict],
+    counts: dict[str, int],
+) -> None:
+    if not rows:
+        return
+    result = analyze_bars(rows)
+    snapshot = {
+        "symbol_id": symbol_id, "timeframe": timeframe,
+        "as_of_date": result["as_of_date"], "input_last_date": result["as_of_date"],
+        "algorithm_version": ALGORITHM_VERSION, **result["indicators"],
+    }
+    counts["snapshots"] += client.upsert(
+        "technical_snapshots", [snapshot], "symbol_id,timeframe,as_of_date"
+    )
+    patterns = [{
+        "symbol_id": symbol_id, "timeframe": timeframe,
+        "pattern_type": pattern["pattern_type"], "state": pattern["state"],
+        "start_date": rows[pattern["start_index"]]["date"],
+        "end_date": rows[pattern["end_index"]]["date"],
+        "as_of_date": result["as_of_date"], "trigger_price": pattern["trigger_price"],
+        "invalidation_price": pattern["invalidation_price"],
+        "quality_score": pattern["quality_score"], "direction": pattern["direction"],
+        "evidence": pattern["evidence"], "reasons": pattern["reasons"],
+        "algorithm_version": ALGORITHM_VERSION,
+    } for pattern in result["patterns"]]
+    counts["patterns"] += client.upsert(
+        "pattern_instances", patterns,
+        "symbol_id,timeframe,pattern_type,start_date,as_of_date,algorithm_version",
+    )

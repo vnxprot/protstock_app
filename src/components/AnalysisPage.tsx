@@ -13,11 +13,12 @@ const number = (value: number | null | undefined, digits = 2) => value == null ?
 export function AnalysisPage({ authenticated }: { authenticated: boolean }) {
   const symbols = useSymbols(authenticated)
   const [selected, setSelected] = useState<string | null>(null)
+  const [timeframe, setTimeframe] = useState<'D' | 'W' | 'M'>('D')
   useEffect(() => {
     if (!selected && symbols.data?.length) setSelected(symbols.data.find(item => item.symbol === 'FPT')?.symbol ?? symbols.data[0].symbol)
   }, [selected, symbols.data])
-  const analysis = useStockAnalysis(selected, authenticated)
-  const daily = analysis.data?.technical.find(item => item.timeframe === 'D')
+  const analysis = useStockAnalysis(selected, timeframe, authenticated)
+  const snapshot = analysis.data?.technical[0]
 
   return <section className="workspace-page">
     <div className="page-title-row">
@@ -28,19 +29,24 @@ export function AnalysisPage({ authenticated }: { authenticated: boolean }) {
         </select>
       </label>
     </div>
+    <div className="timeframe-tabs" aria-label="Khung thời gian">
+      {([['D', 'Ngày'], ['W', 'Tuần'], ['M', 'Tháng']] as const).map(([value, label]) =>
+        <button className={timeframe === value ? 'active' : ''} key={value} onClick={() => setTimeframe(value)}>{label}</button>
+      )}
+    </div>
 
     {analysis.isLoading && <div className="empty-state">Đang tải dữ liệu phân tích…</div>}
     {analysis.isError && <div className="empty-state warning">Chưa đọc được dữ liệu Phase 2. Kiểm tra migration và pipeline EOD.</div>}
     {analysis.data && <>
       <div className="stock-heading">
         <div><h2>{analysis.data.symbol.symbol}</h2><p>{analysis.data.symbol.company_name || analysis.data.symbol.sector} · {analysis.data.symbol.exchange}</p></div>
-        <div className={`trend-badge ${daily?.trend_state?.toLowerCase() ?? ''}`}>{daily?.trend_state ?? 'CHƯA CÓ SNAPSHOT'}</div>
+        <div className={`trend-badge ${snapshot?.trend_state?.toLowerCase() ?? ''}`}>{snapshot?.trend_state ?? 'CHƯA CÓ SNAPSHOT'}</div>
       </div>
       {analysis.data.prices.length ? <StockChart bars={analysis.data.prices} /> : <div className="empty-state">Chưa có OHLCV. Pipeline EOD sẽ điền dữ liệu sau phiên.</div>}
       <div className="metric-grid">
         {[
-          ['Đóng cửa', daily?.close], ['RSI 14', daily?.rsi14], ['MACD', daily?.macd], ['ATR 14', daily?.atr14],
-          ['MA 20', daily?.sma20], ['MA 50', daily?.sma50], ['MA 200', daily?.sma200], ['Volume / TB20', daily?.volume_ratio20],
+          ['Đóng cửa', snapshot?.close], ['RSI 14', snapshot?.rsi14], ['MACD', snapshot?.macd], ['ATR 14', snapshot?.atr14],
+          ['MA 20', snapshot?.sma20], ['MA 50', snapshot?.sma50], ['MA 200', snapshot?.sma200], ['Volume / TB20', snapshot?.volume_ratio20],
         ].map(([label, value]) => <article className="metric-card" key={label as string}><span>{label}</span><strong>{number(value as number | null)}</strong></article>)}
       </div>
       <div className="analysis-columns">
@@ -66,4 +72,3 @@ export function AnalysisPage({ authenticated }: { authenticated: boolean }) {
     </>}
   </section>
 }
-

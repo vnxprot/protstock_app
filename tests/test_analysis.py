@@ -3,6 +3,7 @@ from datetime import date, timedelta
 from protstock.analysis import analyze_bars
 from protstock.indicators import calculate_indicators
 from protstock.patterns import detect_double
+from protstock.timeframes import aggregate_bars
 
 
 def make_bars(count: int = 220, drift: float = 0.12) -> list[dict]:
@@ -47,3 +48,13 @@ def test_double_bottom_requires_neckline_break() -> None:
     assert candidate.pattern_type == "DOUBLE_BOTTOM"
     assert candidate.state in {"READY", "CONFIRMED"}
 
+
+def test_weekly_and_monthly_aggregation_preserves_ohlcv() -> None:
+    bars = make_bars(40)
+    weekly = aggregate_bars(bars, "W")
+    monthly = aggregate_bars(bars, "M")
+    assert sum(bar["volume"] for bar in weekly) == sum(bar["volume"] for bar in bars)
+    assert weekly[0]["open"] == bars[0]["open"]
+    assert weekly[-1]["close"] == bars[-1]["close"]
+    assert monthly[0]["high"] == max(bar["high"] for bar in bars[:31])
+    assert weekly[-1]["is_complete"] is False
