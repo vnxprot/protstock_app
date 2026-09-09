@@ -45,7 +45,7 @@ def compile_rule(text: str) -> CompiledRule:
     return CompiledRule(action, timeframe, tuple(conditions))
 
 
-def evaluate_rule(rule: dict[str, Any], snapshot: dict[str, Any], bars: Sequence[dict], patterns: Sequence[dict] = ()) -> tuple[bool, list[str]]:
+def evaluate_rule(rule: dict[str, Any], snapshot: dict[str, Any], bars: Sequence[dict], patterns: Sequence[dict] = (), context: dict[str, Any] | None = None) -> tuple[bool, list[str]]:
     results: list[tuple[bool, str]] = []
     for condition in rule.get("all", []):
         metric, op = condition["metric"], condition["op"]
@@ -67,3 +67,12 @@ def evaluate_rule(rule: dict[str, Any], snapshot: dict[str, Any], bars: Sequence
             passed = value is not None and ((op == ">" and float(value) > target) or (op == "<=" and float(value) <= target))
         results.append((passed, f"{metric}:{'PASS' if passed else 'FAIL'}"))
     return all(item[0] for item in results), [item[1] for item in results]
+
+
+def multi_timeframe_gate(context: dict[str, Any]) -> tuple[bool, list[str]]:
+    """Monthly trend -> weekly setup -> daily trigger, without look-ahead."""
+    monthly = context.get("monthly_snapshot", {})
+    weekly = context.get("weekly_patterns", [])
+    weekly_confirmed = any(p.get("direction") == "BULLISH" and p.get("state") in {"READY", "CONFIRMED"} for p in weekly)
+    monthly_ok = monthly.get("trend_state") != "DOWN"
+    return monthly_ok and weekly_confirmed, [f"MONTHLY_{monthly.get('trend_state', 'UNKNOWN')}", "WEEKLY_BULLISH_SETUP" if weekly_confirmed else "WEEKLY_SETUP_MISSING"]

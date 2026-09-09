@@ -8,7 +8,7 @@ from .analysis import ALGORITHM_VERSION, analyze_bars
 from .config import Settings
 from .indicators import relative_strength
 from .provider_vnstock import VnstockProvider
-from .rules import evaluate_rule
+from .rules import evaluate_rule, multi_timeframe_gate
 from .supabase_rest import SupabaseRestClient
 from .timeframes import aggregate_bars
 from .zones import detect_zones
@@ -87,8 +87,11 @@ def run_eod(
                         counts["derived_bars"] += client.upsert(
                             "derived_bars", derived_rows, "symbol_id,timeframe,period_start"
                         )
+                    results = {timeframe: analyze_bars(scoped_rows) for timeframe, scoped_rows in timeframe_rows.items() if scoped_rows}
+                    context = {"weekly_patterns": results.get("W", {}).get("patterns", []), "monthly_snapshot": results.get("M", {}).get("indicators", {})}
                     for timeframe, scoped_rows in timeframe_rows.items():
-                        _write_analysis(client, symbol_row["id"], timeframe, scoped_rows, benchmark_rows[timeframe], active_rules, counts)
+                        if timeframe in results:
+                            _write_analysis(client, symbol_row["id"], timeframe, scoped_rows, benchmark_rows[timeframe], active_rules, counts, results[timeframe], context)
                 counts["symbols"] += 1
                 client.create_job_item({
                     "job_run_id": job["id"], "symbol_id": symbol_row["id"],
@@ -127,11 +130,10 @@ def _write_analysis(
     rows: list[dict],
     benchmark_rows: list[dict],
     active_rules: list[dict],
-    counts: dict[str, int],
+    counts: dict[str, int], result: dict, context: dict[str, Any],
 ) -> None:
     if not rows:
         return
-    result = analyze_bars(rows)
     benchmark_by_date = {item["date"]: float(item["close"]) for item in benchmark_rows}
     aligned = [(float(item["close"]), benchmark_by_date[item["date"]]) for item in rows if item["date"] in benchmark_by_date]
     result["indicators"]["relative_strength_market"] = relative_strength(
@@ -177,12 +179,18 @@ def _write_analysis(
         dsl = version["dsl"]
         if dsl.get("timeframe", "D") != timeframe:
             continue
-        passed, reasons = evaluate_rule(dsl, result["indicators"], rows, result["patterns"])
+        passed, reasons = evaluate_rule(dsl, result["indicators"], rows, result["patterns"], context)
         if passed:
+            action = dsl.get("action", "WATCH")
+            if timeframe == "D" and action == "BUY":
+                gate_ok, gate_reasons = multi_timeframe_gate(context)
+                reasons.extend(gate_reasons)
+                if not gate_ok:
+                    action = "WATCH"
             signal_rows.append({
                 "rule_version_id": version["id"], "symbol_id": symbol_id,
                 "timeframe": timeframe, "as_of_date": result["as_of_date"],
-                "action": dsl.get("action", "WATCH"), "score": 100,
+                "action": action, "score": 100,
                 "reasons": reasons,
                 "evidence": {key: value for key, value in result["indicators"].items() if value is not None},
             })
