@@ -6,6 +6,7 @@ from datetime import date
 from pathlib import Path
 
 from .analysis import analyze_bars
+from .backtest_worker import process_backtests
 from .eod import run_eod
 from .universe import load_universe
 
@@ -39,6 +40,8 @@ def main() -> None:
     eod.add_argument("--lookback-days", type=int, default=10)
     eod.add_argument("--symbol-offset", type=int, default=0)
     eod.add_argument("--symbol-limit", type=int)
+    worker = subparsers.add_parser("backtest-worker")
+    worker.add_argument("--limit", type=int, default=3)
     args = parser.parse_args()
     if args.command == "validate-universe":
         raise SystemExit(validate_universe(args.path))
@@ -55,6 +58,10 @@ def main() -> None:
         )
         print(json.dumps(result, indent=2))
         raise SystemExit(0 if result["status"] == "SUCCEEDED" else 1)
+    if args.command == "backtest-worker":
+        result = process_backtests(args.limit)
+        print(json.dumps(result, indent=2))
+        raise SystemExit(0 if result["failed"] == 0 else 1)
 
 
 if __name__ == "__main__":

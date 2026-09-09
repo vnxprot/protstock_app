@@ -6,6 +6,7 @@ from typing import Any
 
 from .analysis import ALGORITHM_VERSION, analyze_bars
 from .config import Settings
+from .indicators import relative_strength
 from .provider_vnstock import VnstockProvider
 from .rules import evaluate_rule
 from .supabase_rest import SupabaseRestClient
@@ -34,6 +35,20 @@ def run_eod(
     try:
         symbols = client.active_symbols()
         active_rules = client.active_rule_versions()
+        benchmark_daily: list[dict] = []
+        try:
+            index = client.market_index("VNINDEX")
+            index_bars = provider.history("VNINDEX", trading_date - timedelta(days=lookback_days), trading_date)
+            index_rows = [{
+                "index_id": index["id"], "trading_date": bar.trading_date.isoformat(),
+                "open": float(bar.open), "high": float(bar.high), "low": float(bar.low),
+                "close": float(bar.close), "volume": bar.volume, "source": bar.source,
+                "collected_at": bar.collected_at.isoformat(),
+            } for bar in index_bars]
+            client.upsert("market_index_prices", index_rows, "index_id,trading_date")
+            benchmark_daily = [{**row, "date": row["trading_date"]} for row in client.index_price_history(index["id"])]
+        except Exception as exc:
+            warnings.append(f"VNINDEX: {type(exc).__name__}")
         symbols = symbols[symbol_offset:]
         if symbol_limit:
             symbols = symbols[:symbol_limit]
@@ -54,9 +69,11 @@ def run_eod(
                 analysis_rows = [{**row, "date": row["trading_date"]} for row in history]
                 if analysis_rows:
                     timeframe_rows = {"D": analysis_rows}
+                    benchmark_rows = {"D": benchmark_daily}
                     for timeframe in ("W", "M"):
                         aggregated = aggregate_bars(analysis_rows, timeframe)
                         timeframe_rows[timeframe] = aggregated
+                        benchmark_rows[timeframe] = aggregate_bars(benchmark_daily, timeframe)
                         derived_rows = [{
                             "symbol_id": symbol_row["id"], "timeframe": timeframe,
                             "period_start": bar["period_start"], "period_end": bar["period_end"],
@@ -69,7 +86,7 @@ def run_eod(
                             "derived_bars", derived_rows, "symbol_id,timeframe,period_start"
                         )
                     for timeframe, scoped_rows in timeframe_rows.items():
-                        _write_analysis(client, symbol_row["id"], timeframe, scoped_rows, active_rules, counts)
+                        _write_analysis(client, symbol_row["id"], timeframe, scoped_rows, benchmark_rows[timeframe], active_rules, counts)
                 counts["symbols"] += 1
                 client.create_job_item({
                     "job_run_id": job["id"], "symbol_id": symbol_row["id"],
@@ -106,12 +123,18 @@ def _write_analysis(
     symbol_id: int,
     timeframe: str,
     rows: list[dict],
+    benchmark_rows: list[dict],
     active_rules: list[dict],
     counts: dict[str, int],
 ) -> None:
     if not rows:
         return
     result = analyze_bars(rows)
+    benchmark_by_date = {item["date"]: float(item["close"]) for item in benchmark_rows}
+    aligned = [(float(item["close"]), benchmark_by_date[item["date"]]) for item in rows if item["date"] in benchmark_by_date]
+    result["indicators"]["relative_strength_market"] = relative_strength(
+        [item[0] for item in aligned], [item[1] for item in aligned]
+    ) if aligned else None
     snapshot = {
         "symbol_id": symbol_id, "timeframe": timeframe,
         "as_of_date": result["as_of_date"], "input_last_date": result["as_of_date"],

@@ -32,18 +32,37 @@ class SupabaseRestClient:
         response.raise_for_status()
         return response.json()
 
-    def price_history(self, symbol_id: int, limit: int = 260) -> list[dict[str, Any]]:
+    def market_index(self, code: str) -> dict[str, Any]:
+        response = self._client.get("/market_indices", params={"select": "id,code", "code": f"eq.{code}", "limit": "1"})
+        response.raise_for_status()
+        rows = response.json()
+        if not rows:
+            raise ValueError(f"unknown market index: {code}")
+        return rows[0]
+
+    def index_price_history(self, index_id: int, limit: int = 260) -> list[dict[str, Any]]:
         response = self._client.get(
-            "/daily_prices",
-            params={
-                "select": "trading_date,open,high,low,close,volume",
-                "symbol_id": f"eq.{symbol_id}",
-                "order": "trading_date.desc",
-                "limit": str(limit),
-            },
+            "/market_index_prices",
+            params={"select": "trading_date,open,high,low,close,volume", "index_id": f"eq.{index_id}", "order": "trading_date.desc", "limit": str(limit)},
         )
         response.raise_for_status()
         return list(reversed(response.json()))
+
+    def price_history(self, symbol_id: int, limit: int = 260) -> list[dict[str, Any]]:
+        rows: list[dict[str, Any]] = []
+        page_size = min(1000, limit)
+        for offset in range(0, limit, page_size):
+            response = self._client.get(
+                "/daily_prices",
+                params={"select": "trading_date,open,high,low,close,volume", "symbol_id": f"eq.{symbol_id}", "order": "trading_date.desc"},
+                headers={"Range": f"{offset}-{min(offset + page_size, limit) - 1}"},
+            )
+            response.raise_for_status()
+            page = response.json()
+            rows.extend(page)
+            if len(page) < page_size:
+                break
+        return list(reversed(rows))
 
     def active_rule_versions(self) -> list[dict[str, Any]]:
         response = self._client.get(
@@ -55,6 +74,15 @@ class SupabaseRestClient:
         )
         response.raise_for_status()
         return response.json()
+
+    def queued_backtests(self, limit: int = 3) -> list[dict[str, Any]]:
+        response = self._client.get("/backtest_runs", params={"select": "id,symbol_id,timeframe,date_from,date_to,assumptions,rule_versions(dsl)", "status": "eq.QUEUED", "order": "created_at.asc", "limit": str(limit)})
+        response.raise_for_status()
+        return response.json()
+
+    def update_backtest(self, run_id: str, payload: dict[str, Any]) -> None:
+        response = self._client.patch(f"/backtest_runs?id=eq.{run_id}", headers={"Prefer": "return=minimal"}, json=payload)
+        response.raise_for_status()
 
     def create_job_item(self, payload: dict[str, Any]) -> None:
         response = self._client.post(

@@ -56,3 +56,8 @@ jobs:
           if [ -n "$SYMBOL_LIMIT" ]; then args+=(--symbol-limit "$SYMBOL_LIMIT"); fi
           if [ -n "$SYMBOL_OFFSET" ]; then args+=(--symbol-offset "$SYMBOL_OFFSET"); fi
           protstock eod "${args[@]}" --source KBS --lookback-days "$LOOKBACK_DAYS"
+      - name: Process queued backtests
+        env:
+          SUPABASE_URL: https://kgglsqsvcofwhscakrtl.supabase.co
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: protstock backtest-worker --limit 3

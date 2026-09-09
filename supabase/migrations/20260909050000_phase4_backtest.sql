@@ -4,6 +4,8 @@ create table public.backtest_runs (
   id uuid primary key default extensions.gen_random_uuid(),
   user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
   rule_version_id uuid not null references public.rule_versions(id) on delete restrict,
+  symbol_id bigint not null references public.symbols(id) on delete restrict,
+  timeframe text not null default 'D' check (timeframe in ('D', 'W', 'M')),
   name text not null,
   date_from date not null,
   date_to date not null,
@@ -41,4 +43,3 @@ create policy owner_backtest_trades on public.backtest_trades for select to auth
   using (exists (select 1 from public.backtest_runs b where b.id = backtest_run_id and b.user_id = auth.uid()));
 grant select, insert, update, delete on public.backtest_runs to authenticated;
 grant select on public.backtest_trades to authenticated;
-
