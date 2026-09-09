@@ -43,6 +43,8 @@ export interface PatternInstance {
   evidence: Record<string, number | string | boolean>
 }
 
+export interface PriceZone { id: string; zone_type: 'SUPPORT' | 'RESISTANCE'; lower_price: number; upper_price: number; touches: number; strength: number }
+
 export function useSymbols(enabled: boolean) {
   return useQuery({
     queryKey: ['symbols'], enabled: enabled && Boolean(supabase), staleTime: 300_000,
@@ -65,19 +67,21 @@ export function useStockAnalysis(symbol: string | null, timeframe: 'D' | 'W' | '
       const priceQuery = timeframe === 'D'
         ? supabase.from('daily_prices').select('trading_date,open,high,low,close,volume').eq('symbol_id', symbolRow.id).order('trading_date', { ascending: false }).limit(260)
         : supabase.from('derived_bars').select('trading_date:source_last_date,open,high,low,close,volume').eq('symbol_id', symbolRow.id).eq('timeframe', timeframe).order('period_start', { ascending: false }).limit(260)
-      const [prices, technical, patterns, disclosures] = await Promise.all([
+      const [prices, technical, patterns, zones, disclosures] = await Promise.all([
         priceQuery,
         supabase.from('technical_snapshots').select('*').eq('symbol_id', symbolRow.id).eq('timeframe', timeframe).order('as_of_date', { ascending: false }).limit(1),
         supabase.from('pattern_instances').select('*').eq('symbol_id', symbolRow.id).eq('timeframe', timeframe).order('as_of_date', { ascending: false }).order('quality_score', { ascending: false }).limit(8),
+        supabase.from('support_resistance_zones').select('id,zone_type,lower_price,upper_price,touches,strength').eq('symbol_id', symbolRow.id).eq('timeframe', timeframe).eq('active', true).order('strength', { ascending: false }).limit(6),
         supabase.from('disclosures').select('id,title,category,published_at,available_from,source,source_url').eq('symbol_id', symbolRow.id).order('published_at', { ascending: false }).limit(6),
       ])
-      const failure = prices.error || technical.error || patterns.error || disclosures.error
+      const failure = prices.error || technical.error || patterns.error || zones.error || disclosures.error
       if (failure) throw failure
       return {
         symbol: symbolRow,
         prices: ((prices.data ?? []) as PriceBar[]).reverse(),
         technical: (technical.data ?? []) as TechnicalSnapshot[],
         patterns: (patterns.data ?? []) as PatternInstance[],
+        zones: (zones.data ?? []) as PriceZone[],
         disclosures: disclosures.data ?? [],
       }
     },

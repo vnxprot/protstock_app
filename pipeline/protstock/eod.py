@@ -10,6 +10,7 @@ from .provider_vnstock import VnstockProvider
 from .rules import evaluate_rule
 from .supabase_rest import SupabaseRestClient
 from .timeframes import aggregate_bars
+from .zones import detect_zones
 
 
 def run_eod(
@@ -28,7 +29,7 @@ def run_eod(
         "status": "RUNNING", "trigger_type": "SCHEDULED",
         "source_revision": ALGORITHM_VERSION,
     })
-    counts = {"symbols": 0, "prices": 0, "derived_bars": 0, "snapshots": 0, "patterns": 0, "signals": 0, "failed": 0}
+    counts = {"symbols": 0, "prices": 0, "derived_bars": 0, "snapshots": 0, "patterns": 0, "zones": 0, "signals": 0, "failed": 0}
     warnings: list[str] = []
     try:
         symbols = client.active_symbols()
@@ -133,6 +134,18 @@ def _write_analysis(
     counts["patterns"] += client.upsert(
         "pattern_instances", patterns,
         "symbol_id,timeframe,pattern_type,start_date,as_of_date,algorithm_version",
+    )
+    zones = [{
+        "symbol_id": symbol_id, "timeframe": timeframe,
+        "zone_type": zone["zone_type"], "start_date": rows[zone["start_index"]]["date"],
+        "as_of_date": result["as_of_date"], "lower_price": zone["lower_price"],
+        "upper_price": zone["upper_price"], "touches": zone["touches"],
+        "strength": zone["strength"], "evidence": zone["evidence"],
+        "algorithm_version": ALGORITHM_VERSION,
+    } for zone in detect_zones(rows)]
+    counts["zones"] += client.upsert(
+        "support_resistance_zones", zones,
+        "symbol_id,timeframe,as_of_date,zone_type,lower_price,upper_price",
     )
     signal_rows = []
     for version in active_rules:

@@ -66,6 +66,9 @@ export function AnalysisPage({ authenticated }: { authenticated: boolean }) {
           </ul>
         </article>
       </div>
+      <article className="panel"><div className="panel-title"><h3>Hỗ trợ · kháng cự</h3><span>{analysis.data.zones.length} vùng</span></div>
+        {analysis.data.zones.length ? analysis.data.zones.map(zone => <div className="rule-row" key={zone.id}><div><strong>{zone.zone_type === 'SUPPORT' ? 'Hỗ trợ' : 'Kháng cự'} · {number(zone.lower_price)}–{number(zone.upper_price)}</strong><small>{zone.touches} lần chạm · strength {number(zone.strength, 0)}</small></div><span>{timeframe}</span></div>) : <p className="muted">Chưa có cụm pivot đủ số lần chạm.</p>}
+      </article>
       <article className="panel"><div className="panel-title"><h3>Sự kiện & công bố</h3><span>Point-in-time safe</span></div>
         {analysis.data.disclosures.length ? analysis.data.disclosures.map(item => <a className="event-row" href={item.source_url} target="_blank" rel="noreferrer" key={item.id}><span>{new Date(item.published_at).toLocaleDateString('vi-VN')}</span><strong>{item.title}</strong><small>{item.source}</small></a>) : <p className="muted">Chưa có công bố chính thức được thu thập.</p>}
       </article>
