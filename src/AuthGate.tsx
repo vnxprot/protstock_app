@@ -10,7 +10,8 @@ interface AuthGateProps {
 export function AuthGate({ children }: AuthGateProps) {
   const [session, setSession] = useState<Session | null>(null)
   const [loading, setLoading] = useState(isSupabaseConfigured)
-  const [email, setEmail] = useState('')
+  const [username, setUsername] = useState('')
+  const [password, setPassword] = useState('')
   const [message, setMessage] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
@@ -27,16 +28,21 @@ export function AuthGate({ children }: AuthGateProps) {
     return () => data.subscription.unsubscribe()
   }, [])
 
-  async function requestMagicLink(event: FormEvent) {
+  async function signIn(event: FormEvent) {
     event.preventDefault()
-    if (!supabase || !email.trim()) return
+    if (!supabase || username.trim().toLowerCase() !== 'prot' || !password) {
+      setMessage('Tên đăng nhập hoặc mật khẩu không đúng.')
+      return
+    }
     setSubmitting(true)
     setMessage('')
-    const { error } = await supabase.auth.signInWithOtp({
-      email: email.trim(),
-      options: { shouldCreateUser: false, emailRedirectTo: window.location.origin },
+    const { error } = await supabase.auth.signInWithPassword({
+      // Supabase Auth requires an email identifier. This is a private internal alias,
+      // never shown in the UI and does not require access to an inbox.
+      email: 'prot@protstock.local',
+      password,
     })
-    setMessage(error ? 'Không thể gửi liên kết đăng nhập.' : 'Đã gửi liên kết đăng nhập. Kiểm tra email của Prot.')
+    setMessage(error ? 'Tên đăng nhập hoặc mật khẩu không đúng.' : '')
     setSubmitting(false)
   }
 
@@ -50,11 +56,13 @@ export function AuthGate({ children }: AuthGateProps) {
         <span className="brand-mark">P</span>
         <span className="eyebrow">PRIVATE ACCESS</span>
         <h1 id="login-title">Prot Stock</h1>
-        <p>Đăng nhập bằng liên kết một lần. App không lưu mật khẩu.</p>
-        <form onSubmit={requestMagicLink}>
-          <label htmlFor="email">Email của Prot</label>
-          <input id="email" type="email" autoComplete="email" required value={email} onChange={(event) => setEmail(event.target.value)} placeholder="prot@example.com" />
-          <button type="submit" disabled={submitting}>{submitting ? 'Đang gửi…' : 'Gửi liên kết đăng nhập'}</button>
+        <p>Khu vực riêng của Prot.</p>
+        <form onSubmit={signIn}>
+          <label htmlFor="username">Tên đăng nhập</label>
+          <input id="username" autoComplete="username" required value={username} onChange={(event) => setUsername(event.target.value)} placeholder="prot" />
+          <label htmlFor="password">Mật khẩu</label>
+          <input id="password" type="password" autoComplete="current-password" required value={password} onChange={(event) => setPassword(event.target.value)} />
+          <button type="submit" disabled={submitting}>{submitting ? 'Đang đăng nhập…' : 'Đăng nhập'}</button>
         </form>
         {message && <p className="auth-message" role="status">{message}</p>}
       </section>

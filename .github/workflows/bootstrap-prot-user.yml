@@ -1,0 +1,32 @@
+name: Bootstrap private Prot account
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  create-private-user:
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_URL: https://kgglsqsvcofwhscakrtl.supabase.co
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      PROT_STOCK_INITIAL_PASSWORD: ${{ secrets.PROT_STOCK_INITIAL_PASSWORD }}
+    steps:
+      - name: Create confirmed private account
+        shell: bash
+        run: |
+          test -n "$SUPABASE_SERVICE_ROLE_KEY" || (echo "Missing SUPABASE_SERVICE_ROLE_KEY" && exit 1)
+          test -n "$PROT_STOCK_INITIAL_PASSWORD" || (echo "Missing PROT_STOCK_INITIAL_PASSWORD" && exit 1)
+          payload=$(jq -n --arg password "$PROT_STOCK_INITIAL_PASSWORD" '{email: "prot@protstock.local", password: $password, email_confirm: true, user_metadata: {username: "prot"}}')
+          response=$(curl --silent --show-error --write-out '\n%{http_code}' --request POST "$SUPABASE_URL/auth/v1/admin/users" --header "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" --header "apikey: $SUPABASE_SERVICE_ROLE_KEY" --header "Content-Type: application/json" --data "$payload")
+          status=$(tail -n1 <<< "$response")
+          body=$(sed '$d' <<< "$response")
+          if [ "$status" = "200" ]; then
+            echo "Private Prot account created and email-confirmed."
+          else
+            echo "Account bootstrap failed (HTTP $status)."
+            echo "$body" | jq -r '.msg // .message // "Unknown error"'
+            exit 1
+          fi
