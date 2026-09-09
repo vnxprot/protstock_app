@@ -58,5 +58,8 @@ jobs:
         if: inputs.mode == 'deploy'
         run: supabase db push --include-all --password "$SUPABASE_DB_PASSWORD"
       - name: Verify migration status
-        if: inputs.mode == 'deploy'
-        run: supabase migration list --password "$SUPABASE_DB_PASSWORD"
+        if: always() && inputs.mode == 'deploy'
+        run: |
+          supabase migration list --password "$SUPABASE_DB_PASSWORD"
+          supabase db dump --linked --schema public --file remote_schema.sql
+          grep -E '^CREATE TABLE public\.(technical_snapshots|support_resistance_zones|pattern_instances|pattern_points|fundamental_periods|fundamental_metrics|rules|rule_versions|signals|backtest_runs|backtest_trades|portfolios|positions|journal_entries)' remote_schema.sql || true
