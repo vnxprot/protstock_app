@@ -1,0 +1,35 @@
+name: EOD pipeline
+
+on:
+  schedule:
+    - cron: "15 9 * * 1-5"
+  workflow_dispatch:
+    inputs:
+      trading_date:
+        description: Optional trading date (YYYY-MM-DD)
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: protstock-eod
+  cancel-in-progress: false
+
+jobs:
+  validate-foundation:
+    if: github.event_name == 'workflow_dispatch' || vars.EOD_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: python -m pip install -e ".[dev]"
+      - run: protstock validate-universe data/universe.csv
+      - name: Connector gate
+        run: |
+          echo "Phase 1 foundation is healthy."
+          echo "Live EOD ingestion remains gated until DATA_PROVIDER is configured."

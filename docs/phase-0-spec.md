@@ -264,7 +264,7 @@ The physical SQL schema is delivered in Phase 1 after this logical model is acce
 ## 15. Phase 0 acceptance criteria
 
 - Repository and local checkout are connected to the correct GitHub owner.
-- GitHub CLI is authenticated as `vnxprotstock`.
+- GitHub CLI is authenticated as `vnxprot`.
 - Vercel CLI is authenticated to Prot's Vercel account.
 - Initial universe contains exactly 205 unique symbols and TDC maps only to `BDS_KCN`.
 - Universe expansion behavior is specified.
@@ -274,4 +274,3 @@ The physical SQL schema is delivered in Phase 1 after this logical model is acce
 - Rule DSL security boundary is specified.
 - Backtest timing and anti-look-ahead conventions are specified.
 - No production credentials are committed.
-

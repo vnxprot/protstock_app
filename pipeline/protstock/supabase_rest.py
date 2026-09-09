@@ -1,0 +1,64 @@
+from __future__ import annotations
+
+from collections.abc import Iterable
+from typing import Any
+
+import httpx
+
+from .config import Settings
+
+
+class SupabaseRestClient:
+    def __init__(self, settings: Settings, transport: httpx.BaseTransport | None = None) -> None:
+        self._client = httpx.Client(
+            base_url=f"{settings.supabase_url}/rest/v1",
+            headers={
+                "apikey": settings.service_role_key,
+                "Authorization": f"Bearer {settings.service_role_key}",
+                "Content-Type": "application/json",
+            },
+            timeout=settings.timeout_seconds,
+            transport=transport,
+        )
+
+    def close(self) -> None:
+        self._client.close()
+
+    def active_symbols(self) -> list[dict[str, Any]]:
+        response = self._client.get(
+            "/symbols",
+            params={"select": "id,symbol,exchange,sector", "active": "eq.true", "order": "symbol.asc"},
+        )
+        response.raise_for_status()
+        return response.json()
+
+    def upsert(self, table: str, rows: Iterable[dict[str, Any]], on_conflict: str) -> int:
+        payload = list(rows)
+        if not payload:
+            return 0
+        response = self._client.post(
+            f"/{table}",
+            params={"on_conflict": on_conflict},
+            headers={"Prefer": "resolution=merge-duplicates,return=minimal"},
+            json=payload,
+        )
+        response.raise_for_status()
+        return len(payload)
+
+    def create_job(self, payload: dict[str, Any]) -> dict[str, Any]:
+        response = self._client.post(
+            "/job_runs",
+            headers={"Prefer": "return=representation"},
+            json=payload,
+        )
+        response.raise_for_status()
+        return response.json()[0]
+
+    def finish_job(self, job_id: str, payload: dict[str, Any]) -> None:
+        response = self._client.patch(
+            "/job_runs",
+            params={"id": f"eq.{job_id}"},
+            headers={"Prefer": "return=minimal"},
+            json=payload,
+        )
+        response.raise_for_status()

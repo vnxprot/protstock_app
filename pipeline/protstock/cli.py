@@ -1,0 +1,37 @@
+from __future__ import annotations
+
+import argparse
+import json
+from pathlib import Path
+
+from .universe import load_universe
+
+
+def validate_universe(path: Path) -> int:
+    result = load_universe(path)
+    tdc = [row for row in result.rows if row.symbol == "TDC"]
+    payload = {
+        "rows": len(result.rows),
+        "unique": len({row.symbol for row in result.rows}),
+        "duplicates": result.duplicates,
+        "invalid": result.invalid,
+        "active": sum(row.active for row in result.rows),
+        "tdc": [{"sector": row.sector, "active": row.active} for row in tdc],
+        "sha256": result.sha256,
+    }
+    print(json.dumps(payload, ensure_ascii=False, indent=2))
+    return 0 if result.is_valid else 1
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(prog="protstock")
+    subparsers = parser.add_subparsers(dest="command", required=True)
+    validate = subparsers.add_parser("validate-universe")
+    validate.add_argument("path", type=Path)
+    args = parser.parse_args()
+    if args.command == "validate-universe":
+        raise SystemExit(validate_universe(args.path))
+
+
+if __name__ == "__main__":
+    main()

@@ -9,12 +9,22 @@ const modules = [
 ]
 
 const phases = [
-  ['01', 'Nền tảng dữ liệu', 'Tiếp theo'],
-  ['02', 'Phân tích & mẫu hình', 'Đã lên kế hoạch'],
+  ['01', 'Nền tảng dữ liệu', 'Đã hoàn tất'],
+  ['02', 'Phân tích & mẫu hình', 'Tiếp theo'],
   ['03', 'Screener & rules', 'Đã lên kế hoạch'],
 ]
 
-function App() {
+function App({ authenticated = false }: { authenticated?: boolean }) {
+  const health = useDataHealth(authenticated)
+  const universeCount = health.data?.active_symbols ?? 205
+  const connectionLabel = !isSupabaseConfigured
+    ? 'Preview · chưa gắn Supabase'
+    : health.isLoading
+      ? 'Đang đồng bộ dữ liệu'
+      : health.isError
+        ? 'Dữ liệu chưa sẵn sàng'
+        : 'Supabase đã kết nối'
+
   return (
     <div className="app-shell">
       <aside className="sidebar">
@@ -44,12 +54,12 @@ function App() {
             <h1>Chào Prot.</h1>
             <p>Không gian phân tích riêng cho 205 cổ phiếu Việt Nam.</p>
           </div>
-          <div className="market-badge"><span /> Chờ dữ liệu cuối ngày</div>
+          <div className="market-badge"><span /> {connectionLabel}</div>
         </header>
 
         <section className="hero-grid" aria-label="Trạng thái hệ thống">
           <article className="feature-card">
-            <div className="card-top"><span>UNIVERSE</span><b>205</b></div>
+            <div className="card-top"><span>UNIVERSE</span><b>{universeCount}</b></div>
             <h2>Danh sách đã khóa</h2>
             <p>205 mã duy nhất · TDC thuộc BDS_KCN · có cơ chế mở rộng sau này.</p>
             <div className="ticker-line">
@@ -70,7 +80,7 @@ function App() {
         <section className="roadmap">
           <div className="section-heading">
             <div><span className="eyebrow">BUILD STATUS</span><h2>Lộ trình tinh gọn</h2></div>
-            <span className="phase-pill">Phase 1 sẵn sàng</span>
+            <span className="phase-pill">Phase 1 · Data live</span>
           </div>
           <div className="phase-list">
             {phases.map(([number, title, status]) => (
@@ -90,3 +100,5 @@ function App() {
 }
 
 export default App
+import { isSupabaseConfigured } from './lib/supabase'
+import { useDataHealth } from './hooks/useDataHealth'
