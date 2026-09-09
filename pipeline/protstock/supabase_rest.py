@@ -45,6 +45,17 @@ class SupabaseRestClient:
         response.raise_for_status()
         return list(reversed(response.json()))
 
+    def active_rule_versions(self) -> list[dict[str, Any]]:
+        response = self._client.get(
+            "/rule_versions",
+            params={
+                "select": "id,dsl,rules!inner(status)",
+                "rules.status": "eq.ACTIVE",
+            },
+        )
+        response.raise_for_status()
+        return response.json()
+
     def create_job_item(self, payload: dict[str, Any]) -> None:
         response = self._client.post(
             "/job_run_items",

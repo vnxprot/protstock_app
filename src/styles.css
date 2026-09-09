@@ -118,3 +118,16 @@ footer { margin-top: 54px; color: #50665c; font-size: 11px; text-align: center; 
 .timeframe-tabs { display: flex; gap: 8px; margin: -4px 0 18px; }
 .timeframe-tabs button { border: 1px solid #26372f; background: #0d1914; color: #8fa39a; border-radius: 999px; padding: 8px 14px; cursor: pointer; font: inherit; font-weight: 700; }
 .timeframe-tabs button.active { background: #d7ff52; border-color: #d7ff52; color: #07110e; }
+.rule-form { display: grid; gap: 15px; }
+.rule-form label { display: grid; gap: 7px; color: #8fa39a; font-size: 12px; font-weight: 700; }
+.rule-form input, .rule-form textarea { width: 100%; padding: 12px 13px; border: 1px solid #2c4036; border-radius: 10px; color: #ecf3ef; background: #07110e; font: inherit; resize: vertical; }
+.rule-form button { padding: 12px 14px; border: 0; border-radius: 10px; background: #d7ff52; color: #07110e; font: 700 13px inherit; cursor: pointer; }
+.rule-form button:disabled { opacity: .45; cursor: not-allowed; }
+.form-error { color: #ff8b8b; }
+.form-ok { color: #55e6b1; }
+.dsl-preview { min-height: 235px; padding: 14px; overflow: auto; border-radius: 10px; background: #07110e; color: #b8d1c5; font-size: 11px; line-height: 1.55; }
+.rule-row, .signal-row { display: grid; grid-template-columns: 1fr auto; gap: 7px 18px; padding: 13px 0; border-top: 1px solid #1e2d26; }
+.rule-row small, .signal-row small { color: #71887d; }
+.rule-row > span, .signal-row > span { color: #d7ff52; font-size: 11px; font-weight: 700; }
+.signal-row { grid-template-columns: 80px 1fr auto; }
+.signal-row small { grid-column: 1 / -1; }

@@ -7,6 +7,7 @@ from typing import Any
 from .analysis import ALGORITHM_VERSION, analyze_bars
 from .config import Settings
 from .provider_vnstock import VnstockProvider
+from .rules import evaluate_rule
 from .supabase_rest import SupabaseRestClient
 from .timeframes import aggregate_bars
 
@@ -27,10 +28,11 @@ def run_eod(
         "status": "RUNNING", "trigger_type": "SCHEDULED",
         "source_revision": ALGORITHM_VERSION,
     })
-    counts = {"symbols": 0, "prices": 0, "derived_bars": 0, "snapshots": 0, "patterns": 0, "failed": 0}
+    counts = {"symbols": 0, "prices": 0, "derived_bars": 0, "snapshots": 0, "patterns": 0, "signals": 0, "failed": 0}
     warnings: list[str] = []
     try:
         symbols = client.active_symbols()
+        active_rules = client.active_rule_versions()
         symbols = symbols[symbol_offset:]
         if symbol_limit:
             symbols = symbols[:symbol_limit]
@@ -66,7 +68,7 @@ def run_eod(
                             "derived_bars", derived_rows, "symbol_id,timeframe,period_start"
                         )
                     for timeframe, scoped_rows in timeframe_rows.items():
-                        _write_analysis(client, symbol_row["id"], timeframe, scoped_rows, counts)
+                        _write_analysis(client, symbol_row["id"], timeframe, scoped_rows, active_rules, counts)
                 counts["symbols"] += 1
                 client.create_job_item({
                     "job_run_id": job["id"], "symbol_id": symbol_row["id"],
@@ -103,6 +105,7 @@ def _write_analysis(
     symbol_id: int,
     timeframe: str,
     rows: list[dict],
+    active_rules: list[dict],
     counts: dict[str, int],
 ) -> None:
     if not rows:
@@ -130,4 +133,21 @@ def _write_analysis(
     counts["patterns"] += client.upsert(
         "pattern_instances", patterns,
         "symbol_id,timeframe,pattern_type,start_date,as_of_date,algorithm_version",
+    )
+    signal_rows = []
+    for version in active_rules:
+        dsl = version["dsl"]
+        if dsl.get("timeframe", "D") != timeframe:
+            continue
+        passed, reasons = evaluate_rule(dsl, result["indicators"], rows)
+        if passed:
+            signal_rows.append({
+                "rule_version_id": version["id"], "symbol_id": symbol_id,
+                "timeframe": timeframe, "as_of_date": result["as_of_date"],
+                "action": dsl.get("action", "WATCH"), "score": 100,
+                "reasons": reasons,
+                "evidence": {key: value for key, value in result["indicators"].items() if value is not None},
+            })
+    counts["signals"] += client.upsert(
+        "signals", signal_rows, "rule_version_id,symbol_id,timeframe,as_of_date,action"
     )
