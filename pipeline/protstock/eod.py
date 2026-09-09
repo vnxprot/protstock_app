@@ -21,7 +21,9 @@ def run_eod(
     lookback_days: int = 10,
     symbol_offset: int = 0,
     symbol_limit: int | None = None,
-    pause_seconds: float = 0.25,
+    # Vnstock guest access is limited to 20 requests/minute. 3.2s leaves
+    # headroom for the benchmark request and avoids terminating a full EOD job.
+    pause_seconds: float = 3.2,
 ) -> dict[str, Any]:
     client = SupabaseRestClient(Settings.from_env())
     provider = VnstockProvider(source)

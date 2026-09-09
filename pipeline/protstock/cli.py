@@ -40,6 +40,7 @@ def main() -> None:
     eod.add_argument("--lookback-days", type=int, default=10)
     eod.add_argument("--symbol-offset", type=int, default=0)
     eod.add_argument("--symbol-limit", type=int)
+    eod.add_argument("--pause-seconds", type=float, default=3.2)
     worker = subparsers.add_parser("backtest-worker")
     worker.add_argument("--limit", type=int, default=3)
     args = parser.parse_args()
@@ -55,6 +56,7 @@ def main() -> None:
             lookback_days=args.lookback_days,
             symbol_offset=args.symbol_offset,
             symbol_limit=args.symbol_limit,
+            pause_seconds=args.pause_seconds,
         )
         print(json.dumps(result, indent=2))
         raise SystemExit(0 if result["status"] == "SUCCEEDED" else 1)
