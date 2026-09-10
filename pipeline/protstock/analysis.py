@@ -22,7 +22,7 @@ def analyze_bars(bars: Sequence[dict], position: dict | None = None, weekly_patt
         snapshot_dict["relative_strength_market"] = relative_strength([float(item["close"]) for item in ordered], benchmark_closes)
     pattern_dicts = [{**item.to_dict(), "start_date": ordered[item.start_index]["date"]} for item in patterns]
     signal, reasons = resolve_signal(pattern_dicts, snapshot_dict, position)
-    if signal in {"PROBE_BUY", "ADD"}:
+    if signal in {"PROBE_BUY", "ADD"} and (weekly_patterns is not None or monthly_snapshot is not None):
         ok, gate_reasons = multi_timeframe_gate({"weekly_patterns": weekly_patterns or [], "monthly_snapshot": monthly_snapshot or {}})
         if not ok: signal, reasons = "WATCH", [*reasons, *gate_reasons]
     reasons = [f"TREND_{snapshot.trend_state}", *reasons]
