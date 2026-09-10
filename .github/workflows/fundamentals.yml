@@ -1,8 +1,5 @@
 name: Point-in-time fundamentals
 on:
-  schedule:
-    # 18:00 Asia/Ho_Chi_Minh, weekdays. One 10-symbol slice per run.
-    - cron: '0 11 * * 1-5'
   workflow_dispatch:
     inputs:
       symbol_limit: { required: true, default: '5', type: string }
@@ -17,13 +14,10 @@ jobs:
       - uses: actions/setup-python@v5
         with: { python-version: '3.12' }
       - run: python -m pip install -e '.[data]'
-      - name: Collect selected symbols or scheduled slice
+      - name: Collect selected symbols or an alphabetic slice
         run: |
           if [ -n "${{ inputs.symbols }}" ]; then
             protstock collect-fundamentals --limit '${{ inputs.symbol_limit }}' --symbols '${{ inputs.symbols }}'
-          elif [ "${{ github.event_name }}" = "schedule" ]; then
-            OFFSET=$(( (10#$(date -u +%j) % 21) * 10 ))
-            protstock collect-fundamentals --limit 10 --symbol-offset "$OFFSET"
           else
             protstock collect-fundamentals --limit '${{ inputs.symbol_limit }}' --symbol-offset '${{ inputs.symbol_offset }}'
           fi
