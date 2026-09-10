@@ -84,7 +84,7 @@ def _triangle_bars(volume=100):
 
 def _flag_bars(volume=100):
     pole = [_bar(100 + i * 1.5, 102 + i * 1.5, 99 + i * 1.5, 101.5 + i * 1.5, volume) for i in range(10)]
-    flag = [_bar(115 - i, 116 - i, 113 - i, 114 - i, volume) for i in range(10)]
+    flag = [_bar(115 - i * .7, 116 - i * .7, 113 - i * .7, 114 - i * .7, volume) for i in range(10)]
     return pole + flag + [_bar(104, 118, 103, 117, volume)]
 
 
