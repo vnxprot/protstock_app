@@ -1,84 +1,29 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { ChevronDown, Eye, Search, SlidersHorizontal } from 'lucide-react'
 import { useStockAnalysis, useSymbols } from '../hooks/useStockAnalysis'
+import { openCommandPalette } from './CommandPalette'
 import { StockChart } from './StockChart'
 
-const patternNames: Record<string, string> = {
-  ACCUMULATION_BASE: 'Nền tích lũy', DOUBLE_BOTTOM: 'Hai đáy', DOUBLE_TOP: 'Hai đỉnh',
-  ASCENDING_TRIANGLE: 'Tam giác tăng', DESCENDING_TRIANGLE: 'Tam giác giảm',
-  SYMMETRICAL_TRIANGLE: 'Tam giác cân', BULL_FLAG: 'Cờ tăng', BEAR_FLAG: 'Cờ giảm',
-}
+const patternNames:Record<string,string>={ACCUMULATION_BASE:'Nền tích lũy',DOUBLE_BOTTOM:'Hai đáy',DOUBLE_TOP:'Hai đỉnh',ASCENDING_TRIANGLE:'Tam giác tăng',DESCENDING_TRIANGLE:'Tam giác giảm',SYMMETRICAL_TRIANGLE:'Tam giác cân',BULL_FLAG:'Cờ tăng',BEAR_FLAG:'Cờ giảm'}
+const number=(value:number|null|undefined,digits=2)=>value==null?'—':Number(value).toLocaleString('vi-VN',{maximumFractionDigits:digits})
+const rangeSize:Record<string,number>={ '1M':22,'3M':66,'6M':132,'1Y':260,'3Y':780,ALL:9999 }
 
-const number = (value: number | null | undefined, digits = 2) => value == null ? '—' : Number(value).toLocaleString('vi-VN', { maximumFractionDigits: digits })
-
-export function AnalysisPage({ authenticated }: { authenticated: boolean }) {
-  const symbols = useSymbols(authenticated)
-  const [selected, setSelected] = useState<string | null>(null)
-  const [timeframe, setTimeframe] = useState<'D' | 'W' | 'M'>('D')
-  useEffect(() => {
-    if (!selected && symbols.data?.length) setSelected(symbols.data.find(item => item.symbol === 'FPT')?.symbol ?? symbols.data[0].symbol)
-  }, [selected, symbols.data])
-  const analysis = useStockAnalysis(selected, timeframe, authenticated)
-  const snapshot = analysis.data?.technical[0]
-
-  return <section className="workspace-page">
-    <div className="page-title-row">
-      <div><span className="eyebrow">PHASE 2 · CORE ANALYSIS</span><h1>Phân tích một mã</h1></div>
-      <label className="symbol-picker">Mã cổ phiếu
-        <select value={selected ?? ''} onChange={event => setSelected(event.target.value)}>
-          {(symbols.data ?? []).map(item => <option key={item.symbol} value={item.symbol}>{item.symbol} · {item.sector}</option>)}
-        </select>
-      </label>
-    </div>
-    <div className="timeframe-tabs" aria-label="Khung thời gian">
-      {([['D', 'Ngày'], ['W', 'Tuần'], ['M', 'Tháng']] as const).map(([value, label]) =>
-        <button className={timeframe === value ? 'active' : ''} key={value} onClick={() => setTimeframe(value)}>{label}</button>
-      )}
-    </div>
-
-    {analysis.isLoading && <div className="empty-state">Đang tải dữ liệu phân tích…</div>}
-    {analysis.isError && <div className="empty-state warning">Chưa đọc được dữ liệu Phase 2. Kiểm tra migration và pipeline EOD.</div>}
-    {analysis.data && <>
-      <div className="stock-heading">
-        <div><h2>{analysis.data.symbol.symbol}</h2><p>{analysis.data.symbol.company_name || analysis.data.symbol.sector} · {analysis.data.symbol.exchange}</p></div>
-        <div className={`trend-badge ${snapshot?.trend_state?.toLowerCase() ?? ''}`}>{snapshot?.trend_state ?? 'CHƯA CÓ SNAPSHOT'}</div>
-      </div>
-      {analysis.data.prices.length ? <StockChart bars={analysis.data.prices} /> : <div className="empty-state">Chưa có OHLCV. Pipeline EOD sẽ điền dữ liệu sau phiên.</div>}
-      <div className="metric-grid">
-        {[
-          ['Đóng cửa', snapshot?.close], ['RSI 14', snapshot?.rsi14], ['MACD', snapshot?.macd], ['ATR 14', snapshot?.atr14],
-          ['MA 20', snapshot?.sma20], ['MA 50', snapshot?.sma50], ['MA 200', snapshot?.sma200], ['Volume / TB20', snapshot?.volume_ratio20],
-        ].map(([label, value]) => <article className="metric-card" key={label as string}><span>{label}</span><strong>{number(value as number | null)}</strong></article>)}
-      </div>
-      <div className="analysis-columns">
-        <article className="panel"><div className="panel-title"><h3>Mẫu hình giá</h3><span>{analysis.data.patterns.length}</span></div>
-          {analysis.data.patterns.length ? analysis.data.patterns.map(pattern => <div className="pattern-row" key={pattern.id}>
-            <div><strong>{patternNames[pattern.pattern_type] ?? pattern.pattern_type}</strong><small>{pattern.timeframe} · {pattern.state} · {pattern.direction}</small></div>
-            <div className="score">{number(pattern.quality_score, 0)}</div>
-            <p>{pattern.reasons.join(' · ')}</p>
-            <small>Chất lượng: nền {number(Number(pattern.evidence.base_length_score), 0)} · biến động {number(Number(pattern.evidence.volatility_tightness_score), 0)} · test vùng {number(Number(pattern.evidence.boundary_tests_score), 0)} · co hẹp KL {number(Number(pattern.evidence.volume_contraction_score), 0)} · breakout {number(Number(pattern.evidence.breakout_confirmation_score), 0)}</small>
-          </div>) : <p className="muted">Chưa phát hiện mẫu hình đủ tiêu chuẩn.</p>}
-        </article>
-        <article className="panel"><div className="panel-title"><h3>Vì sao có tín hiệu này?</h3><span>Giải thích</span></div>
-          <ul className="reason-list">
-            <li>Xu hướng D/W/M được đánh giá độc lập trên bar đã hoàn tất.</li>
-            <li>Mẫu hình nến chỉ là bằng chứng bổ sung, không tự phát tín hiệu.</li>
-            <li>Breakout phải đóng cửa ngoài vùng cản và lưu snapshot bằng chứng.</li>
-            <li>Dữ liệu công bố chỉ dùng từ ngày <code>available_from</code>.</li>
-          </ul>
-        </article>
-      </div>
-      <article className="panel"><div className="panel-title"><h3>Hỗ trợ · kháng cự</h3><span>{analysis.data.zones.length} vùng</span></div>
-        {analysis.data.zones.length ? analysis.data.zones.map(zone => <div className="rule-row" key={zone.id}><div><strong>{zone.zone_type === 'SUPPORT' ? 'Hỗ trợ' : 'Kháng cự'} · {number(zone.lower_price)}–{number(zone.upper_price)}</strong><small>{zone.touches} lần chạm · strength {number(zone.strength, 0)}</small></div><span>{timeframe}</span></div>) : <p className="muted">Chưa có cụm pivot đủ số lần chạm.</p>}
-      </article>
-      <article className="panel"><div className="panel-title"><h3>Cơ bản · 4 kỳ gần nhất</h3><span>Point-in-time safe</span></div>
-        {analysis.data.fundamentals.length ? analysis.data.fundamentals.map(period => {
-          const metrics = period.fundamental_metrics[0]
-          return <div className="rule-row" key={period.id}><div><strong>Kỳ kết thúc {new Date(period.period_end).toLocaleDateString('vi-VN')}</strong><small>DT {number(metrics?.revenue, 0)} · EPS {number(metrics?.eps, 0)} · ROE {number(metrics?.roe)}% · Nợ/VCSH {number(metrics?.debt_to_equity)}</small><small>Có thể dùng từ {new Date(period.available_from).toLocaleDateString('vi-VN')} · {period.source}</small></div><span>Đã công bố</span></div>
-        }) : <p className="muted">Chưa có fundamentals đã thu thập cho mã này.</p>}
-      </article>
-      <article className="panel"><div className="panel-title"><h3>Sự kiện & công bố</h3><span>Point-in-time safe</span></div>
-        {analysis.data.disclosures.length ? analysis.data.disclosures.map(item => <a className="event-row" href={item.source_url} target="_blank" rel="noreferrer" key={item.id}><span>{new Date(item.published_at).toLocaleDateString('vi-VN')}</span><strong>{item.title}</strong><small>{item.source}</small></a>) : <p className="muted">Chưa có công bố chính thức được thu thập.</p>}
-      </article>
-    </>}
-  </section>
+export function AnalysisPage({authenticated}:{authenticated:boolean}) {
+  const symbols=useSymbols(authenticated); const [selected,setSelected]=useState<string|null>(()=>localStorage.getItem('protstock-symbol')); const [timeframe,setTimeframe]=useState<'D'|'W'|'M'>('D'); const [range,setRange]=useState('1Y'); const [indicators,setIndicators]=useState({ma20:true,ma50:true,ma200:false,bollinger:false,rsi:true,macd:false})
+  useEffect(()=>{ if(!selected&&symbols.data?.length)setSelected(symbols.data.find(x=>x.symbol==='FPT')?.symbol??symbols.data[0].symbol) },[selected,symbols.data])
+  useEffect(()=>{ const listener=(e:Event)=>setSelected((e as CustomEvent).detail); addEventListener('protstock:symbol',listener); return()=>removeEventListener('protstock:symbol',listener) },[])
+  const analysis=useStockAnalysis(selected,timeframe,authenticated); const snapshot=analysis.data?.technical[0]; const bars=useMemo(()=>analysis.data?.prices.slice(-rangeSize[range])??[],[analysis.data?.prices,range])
+  const toggle=(key:keyof typeof indicators)=>setIndicators(value=>({...value,[key]:!value[key]}))
+  return <section className="workspace-page"><div className="page-title-row"><div><span className="eyebrow">SMART CHART · ĐA KHUNG THỜI GIAN</span><h1>Phân tích mã</h1></div><label className="symbol-picker">Mã cổ phiếu<button onClick={()=>openCommandPalette('symbols')}><span><Search size={16}/> {selected??'Chọn mã'}</span><ChevronDown size={16}/></button></label></div>
+    <div className="chart-toolbar"><div className="chart-tools" aria-label="Khoảng thời gian">{['1M','3M','6M','1Y','3Y','ALL'].map(item=><button className={range===item?'active':''} onClick={()=>setRange(item)} key={item}>{item==='ALL'?'Tất cả':item}</button>)}</div><div className="chart-tools" aria-label="Khung nến">{([['D','Ngày'],['W','Tuần'],['M','Tháng']] as const).map(([v,l])=><button className={timeframe===v?'active':''} onClick={()=>setTimeframe(v)} key={v}>{l}</button>)}</div></div>
+    {analysis.isLoading&&<div className="skeleton-page"><div className="skeleton skeleton-card"/><div className="skeleton-grid">{[1,2,3,4].map(i=><div className="skeleton" key={i}/>)}</div></div>}{analysis.isError&&<div className="empty-state warning">Chưa đọc được dữ liệu phân tích. Kiểm tra migration và pipeline EOD.</div>}
+    {!authenticated&&!analysis.data&&<div className="empty-state"><Search size={25}/><h3>Workspace phân tích đã sẵn sàng</h3><p>Kết nối Supabase để xem chart, mẫu hình và vùng giá của 205 mã.</p></div>}
+    {analysis.data&&<><div className="stock-heading"><div><h2>{analysis.data.symbol.symbol}</h2><p>{analysis.data.symbol.company_name||analysis.data.symbol.sector} · {analysis.data.symbol.exchange}</p></div><div className={`trend-badge ${snapshot?.trend_state?.toLowerCase()??''}`}>{snapshot?.trend_state??'CHƯA CÓ SNAPSHOT'}</div></div>
+      <div className="chart-toolbar indicator-toolbar"><div className="chart-tools">{([['ma20','MA20'],['ma50','MA50'],['ma200','MA200'],['bollinger','Bollinger'],['rsi','RSI'],['macd','MACD']] as const).map(([key,label])=><button key={key} className={indicators[key]?'active':''} onClick={()=>toggle(key)}><Eye size={13}/> {label}</button>)}</div><button className="icon-button"><SlidersHorizontal size={16}/></button></div>
+      {bars.length?<StockChart bars={bars} zones={analysis.data.zones} patterns={analysis.data.patterns} indicators={indicators}/>:<div className="empty-state">Chưa có OHLCV. Pipeline EOD sẽ điền dữ liệu sau phiên.</div>}
+      {(indicators.rsi||indicators.macd)&&<div className="indicator-panels">{indicators.rsi&&<div className="indicator-panel"><span>RSI 14 · vùng cân bằng 45–70</span><b>{number(snapshot?.rsi14)}</b></div>}{indicators.macd&&<div className="indicator-panel"><span>MACD / Signal</span><b>{number(snapshot?.macd)} / {number(snapshot?.macd_signal)}</b></div>}</div>}
+      <div className="metric-grid">{[['Đóng cửa',snapshot?.close],['RSI 14',snapshot?.rsi14],['MACD',snapshot?.macd],['ATR 14',snapshot?.atr14],['MA 20',snapshot?.sma20],['MA 50',snapshot?.sma50],['MA 200',snapshot?.sma200],['Volume / TB20',snapshot?.volume_ratio20]].map(([label,value])=><article className="metric-card" key={label as string}><span>{label}</span><strong>{number(value as number|null)}</strong></article>)}</div>
+      <div className="analysis-columns"><article className="panel"><div className="panel-title"><h3>Mẫu hình trên chart</h3><span>{analysis.data.patterns.length}</span></div>{analysis.data.patterns.length?analysis.data.patterns.map(pattern=><div className="pattern-row" key={pattern.id}><div><strong>{patternNames[pattern.pattern_type]??pattern.pattern_type}</strong><small>{pattern.timeframe} · {pattern.state} · {pattern.direction}</small></div><div className="score">{number(pattern.quality_score,0)}</div><p>{pattern.reasons.join(' · ')}</p></div>):<p className="muted">Chưa phát hiện mẫu hình đủ tiêu chuẩn.</p>}</article><article className="panel"><div className="panel-title"><h3>Luận điểm hệ thống</h3><span>GIẢI THÍCH</span></div><ul className="reason-list"><li>Xu hướng D/W/M được đánh giá độc lập.</li><li>Mẫu hình là bằng chứng bổ sung, không tự phát tín hiệu.</li><li>Breakout cần đóng cửa ngoài vùng cản.</li><li>Dữ liệu chỉ dùng từ ngày <code>available_from</code>.</li></ul></article></div>
+      <article className="panel"><div className="panel-title"><h3>Hỗ trợ · kháng cự</h3><span>{analysis.data.zones.length} vùng</span></div>{analysis.data.zones.map(zone=><div className="rule-row" key={zone.id}><div><strong>{zone.zone_type==='SUPPORT'?'Hỗ trợ':'Kháng cự'} · {number(zone.lower_price)}–{number(zone.upper_price)}</strong><small>{zone.touches} lần chạm · strength {number(zone.strength,0)}</small></div><span>{timeframe}</span></div>)}</article>
+    </>}</section>
 }

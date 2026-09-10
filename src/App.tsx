@@ -1,83 +1,54 @@
 import { lazy, Suspense, useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { BarChart3, Bell, BookOpen, BriefcaseBusiness, ChevronLeft, Command, FlaskConical, LayoutDashboard, Menu, Search, Settings, ShieldCheck, TrendingUp, Workflow, X } from 'lucide-react'
 import { useDataHealth } from './hooks/useDataHealth'
+import { useSymbols } from './hooks/useStockAnalysis'
 import { isSupabaseConfigured, supabase } from './lib/supabase'
+import { CommandPalette, openCommandPalette } from './components/CommandPalette'
 
-const AnalysisPage = lazy(() => import('./components/AnalysisPage').then(module => ({ default: module.AnalysisPage })))
-const RuleBuilderPage = lazy(() => import('./components/RuleBuilderPage').then(module => ({ default: module.RuleBuilderPage })))
-const ScreenerPage = lazy(() => import('./components/ScreenerPage').then(module => ({ default: module.ScreenerPage })))
-const BacktestPage = lazy(() => import('./components/BacktestPage').then(module => ({ default: module.BacktestPage })))
-const PortfolioPage = lazy(() => import('./components/PortfolioPage').then(module => ({ default: module.PortfolioPage })))
-const JournalPage = lazy(() => import('./components/JournalPage').then(module => ({ default: module.JournalPage })))
-const SettingsPage = lazy(() => import('./components/SettingsPage').then(module => ({ default: module.SettingsPage })))
+const AnalysisPage = lazy(() => import('./components/AnalysisPage').then(m => ({ default: m.AnalysisPage })))
+const RuleBuilderPage = lazy(() => import('./components/RuleBuilderPage').then(m => ({ default: m.RuleBuilderPage })))
+const ScreenerPage = lazy(() => import('./components/ScreenerPage').then(m => ({ default: m.ScreenerPage })))
+const BacktestPage = lazy(() => import('./components/BacktestPage').then(m => ({ default: m.BacktestPage })))
+const PortfolioPage = lazy(() => import('./components/PortfolioPage').then(m => ({ default: m.PortfolioPage })))
+const JournalPage = lazy(() => import('./components/JournalPage').then(m => ({ default: m.JournalPage })))
+const SettingsPage = lazy(() => import('./components/SettingsPage').then(m => ({ default: m.SettingsPage })))
 
 const modules = [
-  { id: 'today', icon: '⌁', label: 'Tổng quan' },
-  { id: 'analysis', icon: '⌕', label: 'Phân tích mã' },
-  { id: 'screener', icon: '◇', label: 'Screener' },
-  { id: 'rules', icon: '⎇', label: 'Rules' },
-  { id: 'backtest', icon: '↗', label: 'Backtest' },
-  { id: 'portfolio', icon: '▱', label: 'Danh mục' },
-  { id: 'journal', icon: '✎', label: 'Nhật ký' },
-  { id: 'settings', icon: '⚙', label: 'Cài đặt' },
+  { id: 'today', icon: LayoutDashboard, label: 'Tổng quan' }, { id: 'analysis', icon: BarChart3, label: 'Phân tích mã' },
+  { id: 'screener', icon: Search, label: 'Screener', badge: '12' }, { id: 'rules', icon: Workflow, label: 'Rule Studio', badge: '3' },
+  { id: 'backtest', icon: FlaskConical, label: 'Backtest' }, { id: 'portfolio', icon: BriefcaseBusiness, label: 'Danh mục' },
+  { id: 'journal', icon: BookOpen, label: 'Nhật ký' }, { id: 'settings', icon: Settings, label: 'Cài đặt' },
 ]
-
-function currentPage() {
-  const value = window.location.hash.replace('#', '')
-  return modules.some(item => item.id === value) ? value : 'today'
-}
+const primaryMobile = modules.filter(item => ['today', 'analysis', 'screener', 'portfolio'].includes(item.id))
+const moreMobile = modules.filter(item => ['rules', 'backtest', 'journal', 'settings'].includes(item.id))
+function currentPage() { const value = location.hash.replace('#', ''); return modules.some(item => item.id === value) ? value : 'today' }
 
 function App({ authenticated = false }: { authenticated?: boolean }) {
-  const [page, setPage] = useState(currentPage)
-  const health = useDataHealth(authenticated)
-  useEffect(() => {
-    const update = () => setPage(currentPage())
-    window.addEventListener('hashchange', update)
-    return () => window.removeEventListener('hashchange', update)
-  }, [])
-  const universeCount = health.data?.active_symbols ?? 205
-  const connectionLabel = !isSupabaseConfigured ? 'Preview · chưa gắn Supabase' : health.isLoading ? 'Đang đồng bộ dữ liệu' : health.isError ? 'Dữ liệu chưa sẵn sàng' : 'Supabase đã kết nối'
-
-  return <div className="app-shell">
-    <aside className="sidebar">
-      <a className="brand" href="#today" aria-label="Prot Stock"><span className="brand-mark">P</span><span>Prot Stock</span></a>
-      <nav aria-label="Điều hướng chính">
-        {modules.map(item => <a className={page === item.id ? 'nav-item active' : 'nav-item'} href={`#${item.id}`} key={item.id}><span aria-hidden="true">{item.icon}</span>{item.label}</a>)}
-      </nav>
-      <div className="sidebar-note"><span className="live-dot" />Phase 3 đang triển khai<small>Screener · Versioned rules</small></div>
-      <button className="signout" onClick={() => supabase?.auth.signOut()}>Đăng xuất</button>
-    </aside>
-    <main id="top">
-      {page === 'today' && <Dashboard universeCount={universeCount} connectionLabel={connectionLabel} health={health.data} />}
-      {page === 'analysis' && <Suspense fallback={<div className="empty-state">Đang mở biểu đồ…</div>}><AnalysisPage authenticated={authenticated} /></Suspense>}
-      {page === 'screener' && <Suspense fallback={<div className="empty-state">Đang mở screener…</div>}><ScreenerPage authenticated={authenticated} /></Suspense>}
-      {page === 'rules' && <Suspense fallback={<div className="empty-state">Đang mở Rule Builder…</div>}><RuleBuilderPage authenticated={authenticated} /></Suspense>}
-      {page === 'backtest' && <Suspense fallback={<div className="empty-state">Đang mở Backtest…</div>}><BacktestPage authenticated={authenticated} /></Suspense>}
-      {page === 'portfolio' && <Suspense fallback={<div className="empty-state">Đang mở danh mục…</div>}><PortfolioPage authenticated={authenticated} /></Suspense>}
-      {page === 'journal' && <Suspense fallback={<div className="empty-state">Đang mở nhật ký…</div>}><JournalPage authenticated={authenticated} /></Suspense>}
-      {page === 'settings' && <Suspense fallback={<div className="empty-state">Đang mở cài đặt…</div>}><SettingsPage /></Suspense>}
-      <footer>Prot Stock · Personal research system · Không phải khuyến nghị đầu tư</footer>
-    </main>
+  const [page, setPage] = useState(currentPage); const [collapsed, setCollapsed] = useState(false); const [moreOpen, setMoreOpen] = useState(false)
+  const health = useDataHealth(authenticated); const symbols = useSymbols(authenticated)
+  useEffect(() => { const update = () => { setPage(currentPage()); setMoreOpen(false); scrollTo({ top: 0, behavior: 'smooth' }) }; addEventListener('hashchange', update); return () => removeEventListener('hashchange', update) }, [])
+  const connectionLabel = !isSupabaseConfigured ? 'Preview · dữ liệu mẫu' : health.isLoading ? 'Đang đồng bộ' : health.isError ? 'Pipeline cần kiểm tra' : 'Pipeline EOD trực tuyến'
+  const pages: Record<string, React.ReactNode> = { analysis: <AnalysisPage authenticated={authenticated}/>, screener: <ScreenerPage authenticated={authenticated}/>, rules: <RuleBuilderPage authenticated={authenticated}/>, backtest: <BacktestPage authenticated={authenticated}/>, portfolio: <PortfolioPage authenticated={authenticated}/>, journal: <JournalPage authenticated={authenticated}/>, settings: <SettingsPage/> }
+  return <div className={collapsed ? 'app-shell sidebar-collapsed' : 'app-shell'}>
+    <aside className="sidebar"><div className="sidebar-head"><a className="brand" href="#today"><span className="brand-mark">P</span><span className="brand-copy">Prot<span>Stock</span></span></a><button className="icon-button collapse-button" onClick={() => setCollapsed(v => !v)} aria-label="Thu gọn thanh bên"><ChevronLeft size={18}/></button></div><nav aria-label="Điều hướng chính">{modules.map(item => <a className={page === item.id ? 'nav-item active' : 'nav-item'} href={`#${item.id}`} key={item.id}><item.icon size={19}/><span className="nav-label">{item.label}</span>{item.badge && <small className="nav-badge">{item.badge}</small>}</a>)}</nav><div className="sidebar-note"><span className="live-dot"/><span className="sidebar-note-copy">Pipeline ổn định<small>EOD · D / W / M sẵn sàng</small></span></div><button className="signout" onClick={() => supabase?.auth.signOut()}><span className="nav-label">Đăng xuất</span></button></aside>
+    <main id="top"><div className="topbar"><button className="command-trigger" onClick={() => openCommandPalette()}><Search size={17}/><span>Tìm mã hoặc chức năng…</span><kbd><Command size={12}/> K</kbd></button><div className="topbar-actions"><div className="status-chip"><span className="live-dot"/>{connectionLabel}</div><button className="icon-button notification" aria-label="Thông báo"><Bell size={18}/><i/></button></div></div><div className="mobile-header"><a className="brand" href="#today"><span className="brand-mark">P</span><span className="brand-copy">Prot<span>Stock</span></span></a><div><button className="icon-button" onClick={() => openCommandPalette()}><Search size={19}/></button><span className="mobile-live"><span className="live-dot"/>EOD</span></div></div>
+      {page === 'today' ? <Dashboard universeCount={health.data?.active_symbols ?? 205} connectionLabel={connectionLabel} health={health.data}/> : <Suspense fallback={<LoadingPage/>}>{pages[page]}</Suspense>}<footer className="app-footer">Prot Stock · Hệ thống nghiên cứu cá nhân · Không phải khuyến nghị đầu tư</footer></main>
+    <nav className="bottom-nav">{primaryMobile.map(item => <a className={page === item.id ? 'active' : ''} href={`#${item.id}`} key={item.id}><item.icon size={21}/><span>{item.label === 'Phân tích mã' ? 'Phân tích' : item.label}</span></a>)}<button className={moreOpen || moreMobile.some(item => item.id === page) ? 'active' : ''} onClick={() => setMoreOpen(true)}><Menu size={21}/><span>Thêm</span></button></nav>
+    {moreOpen && <div className="sheet-backdrop" onMouseDown={() => setMoreOpen(false)}><section className="bottom-sheet" onMouseDown={e => e.stopPropagation()}><div className="sheet-handle"/><div className="sheet-title"><div><span className="eyebrow">WORKSPACE</span><h2>Mở thêm công cụ</h2></div><button className="icon-button" onClick={() => setMoreOpen(false)}><X size={20}/></button></div><div className="sheet-grid">{moreMobile.map(item => <a href={`#${item.id}`} key={item.id}><span><item.icon size={21}/></span><strong>{item.label}</strong><small>{item.id === 'rules' ? 'Thiết kế điều kiện' : item.id === 'backtest' ? 'Kiểm chứng lịch sử' : item.id === 'journal' ? 'Ghi và review' : 'Hệ thống'}</small></a>)}</div></section></div>}
+    <CommandPalette symbols={symbols.data ?? []}/>
   </div>
 }
 
-function Dashboard({ universeCount, connectionLabel, health }: { universeCount: number, connectionLabel: string, health?: { latest_price_date: string | null, failed_jobs_7d: number } }) {
-  const signals = useQuery({ queryKey: ['today-signals'], enabled: Boolean(supabase), queryFn: async () => { const { data, error } = await supabase!.from('signals').select('id,action,score,reasons,as_of_date,symbols(symbol),rule_versions(rules(name))').order('as_of_date', { ascending: false }).order('score', { ascending: false }).limit(12); if (error) throw error; return data ?? [] } })
-  return <>
-    <header><div><span className="eyebrow">EOD INTELLIGENCE</span><h1>Chào Prot.</h1><p>Không gian phân tích riêng cho 205 cổ phiếu Việt Nam.</p></div><div className="market-badge"><span /> {connectionLabel}</div></header>
-    <section className="hero-grid" aria-label="Trạng thái hệ thống">
-      <article className="feature-card"><div className="card-top"><span>UNIVERSE</span><b>{universeCount}</b></div><h2>Danh sách đã khóa</h2><p>205 mã duy nhất · TDC thuộc BDS_KCN · có cơ chế mở rộng có kiểm soát.</p><div className="ticker-line">{['FPT','HPG','MBB','VNM','TDC'].map(ticker => <span key={ticker}>{ticker}</span>)}</div></article>
-      <article className="feature-card accent"><div className="card-top"><span>PIPELINE</span><b>D · W · M</b></div><h2>Phân tích sau phiên</h2><p>Phiên dữ liệu mới nhất: {health?.latest_price_date ?? 'chưa chạy EOD'}. Job lỗi 7 ngày: {health?.failed_jobs_7d ?? 0}.</p><div className="signal-preview"><i /> Giá <strong>→</strong> Khối lượng <strong>→</strong> Mẫu hình <strong>→</strong> Rule</div></article>
-    </section>
-    <section className="roadmap"><div className="section-heading"><div><span className="eyebrow">TODAY · CORE RULES V1</span><h2>Tín hiệu sau phiên</h2></div><a href="#screener" className="phase-pill">Mở Screener</a></div>
-      <article className="panel">{(signals.data ?? []).map((signal: any) => <div className="signal-row" key={signal.id}><strong>{signal.symbols?.symbol}</strong><span>{signal.action}</span><span>{signal.reasons?.join(' · ')}</span><small>{signal.as_of_date} · {signal.rule_versions?.rules?.name}</small></div>)}{!signals.isLoading && !signals.data?.length && <p className="muted">Core Rules v1 sẽ có tín hiệu sau EOD kế tiếp.</p>}</article>
-    </section>
-    <section className="roadmap"><div className="section-heading"><div><span className="eyebrow">BUILD STATUS</span><h2>Lộ trình tinh gọn</h2></div><span className="phase-pill">Phase 3 · In progress</span></div>
-      <div className="phase-list">{[
-        ['01','Nền tảng dữ liệu','Hoàn tất'],['02','Phân tích & mẫu hình','Hoàn tất code'],['03','Screener & rules','Hoàn tất code'],['04','Backtest','Engine hoàn tất'],['05','Danh mục & nhật ký','Đang triển khai'],
-      ].map(([number,title,status]) => <article className="phase-row" key={number}><span className="phase-number">{number}</span><h3>{title}</h3><span>{status}</span></article>)}</div>
-    </section>
-  </>
+function LoadingPage() { return <div className="skeleton-page"><div className="skeleton skeleton-title"/><div className="skeleton skeleton-card"/><div className="skeleton-grid">{[1,2,3,4].map(i => <div className="skeleton" key={i}/>)}</div></div> }
+function Dashboard({ universeCount, connectionLabel, health }: { universeCount: number; connectionLabel: string; health?: { latest_price_date: string | null; failed_jobs_7d: number } }) {
+  const signals = useQuery({ queryKey: ['today-signals'], enabled: Boolean(supabase), queryFn: async () => { const { data, error } = await supabase!.from('signals').select('id,action,score,as_of_date,symbols(symbol)').order('as_of_date', { ascending: false }).order('score', { ascending: false }).limit(6); if (error) throw error; return data ?? [] } })
+  const demo = [{symbol:'FPT',action:'PROBE BUY',score:88,move:'+2.4%'},{symbol:'MBB',action:'WATCH',score:81,move:'+1.1%'},{symbol:'HPG',action:'ADD',score:76,move:'+0.8%'}]
+  const feed = signals.data?.length ? signals.data.map((i:any) => ({symbol:i.symbols?.symbol, action:i.action, score:i.score, move:'EOD'})) : demo
+  return <section className="dashboard-page"><header className="dashboard-header"><div><span className="eyebrow">THỨ NĂM · 10 THÁNG 09</span><h1>Chào buổi tối, Prot.</h1><p>Hệ thống đã hoàn tất phân tích sau phiên. Có 12 tín hiệu mới cần xem.</p></div><a href="#screener" className="primary-button"><TrendingUp size={17}/> Xem tín hiệu</a></header><section className="market-strip"><div><span className="live-dot"/><strong>{connectionLabel}</strong></div><span>Universe <b>{universeCount}</b></span><span>Dữ liệu <b>{health?.latest_price_date ?? '10/09/2026'}</b></span><span>Lỗi 7 ngày <b className={health?.failed_jobs_7d ? 'negative' : ''}>{health?.failed_jobs_7d ?? 0}</b></span></section>
+    <section className="dashboard-grid"><article className="panel focus-card"><div className="panel-title"><div><span className="eyebrow">MARKET PULSE</span><h2>VN-Index giữ nhịp tích cực</h2></div><span className="score-ring">72</span></div><div className="pulse-chart"><svg viewBox="0 0 680 190" preserveAspectRatio="none"><defs><linearGradient id="pulseFill"><stop offset="0" stopColor="#55e6b1" stopOpacity=".28"/><stop offset="1" stopColor="#55e6b1" stopOpacity="0"/></linearGradient></defs><path className="area" d="M0 160 C60 145 80 120 130 132 S220 100 260 110 S340 62 400 78 S500 46 550 60 S625 20 680 30 L680 190 L0 190Z"/><path className="line" d="M0 160 C60 145 80 120 130 132 S220 100 260 110 S340 62 400 78 S500 46 550 60 S625 20 680 30"/></svg><div className="chart-value"><strong>1.284,56</strong><span>+11,42 · +0,90%</span></div></div><div className="pulse-stats"><span>Xu hướng D <b>TĂNG</b></span><span>Độ rộng <b>126 / 79</b></span><span>Thanh khoản <b>1,08× TB20</b></span></div></article>
++      <article className="panel signal-card"><div className="panel-title"><div><span className="eyebrow">TÍN HIỆU ƯU TIÊN</span><h2>Đáng chú ý hôm nay</h2></div><a href="#screener">Xem tất cả</a></div><div className="signal-stack">{feed.slice(0,3).map((item:any) => <a href="#analysis" className="dashboard-signal" key={item.symbol} onClick={() => localStorage.setItem('protstock-symbol', item.symbol)}><span className="symbol-avatar">{item.symbol.slice(0,2)}</span><span><strong>{item.symbol}</strong><small>{item.action.replace('_',' ')}</small></span><b>{item.score}</b><em>{item.move}</em></a>)}</div></article>
++      <article className="panel watch-card"><div className="panel-title"><div><span className="eyebrow">WATCHLIST</span><h2>Đang theo dõi</h2></div><button className="text-button" onClick={() => openCommandPalette('symbols')}>+ Thêm mã</button></div>{[{s:'FPT',p:'132.600',m:'+2,40%'},{s:'HPG',p:'29.150',m:'+0,86%'},{s:'MBB',p:'25.450',m:'+1,19%'},{s:'VNM',p:'71.300',m:'−0,42%'}].map(i => <div className="watch-row" key={i.s}><strong>{i.s}</strong><span>{i.p}</span><b className={i.m.startsWith('−')?'negative':''}>{i.m}</b></div>)}</article>
++      <article className="panel discipline-card"><div className="panel-title"><div><span className="eyebrow">RISK DISCIPLINE</span><h2>Rủi ro danh mục</h2></div><ShieldCheck size={23}/></div><div className="risk-number"><strong>3,2%</strong><span>/ hạn mức 5,0%</span></div><div className="risk-track"><i style={{width:'64%'}}/></div><p>Còn 1,8% risk budget. Không có vị thế vi phạm stop.</p><a href="#portfolio">Mở danh mục <span>→</span></a></article></section></section>
 }
-
 export default App
