@@ -41,6 +41,21 @@ jobs:
       - name: Check required secrets
         run: |
           test -n "$SUPABASE_DB_URL" || (echo "Missing SUPABASE_DB_URL" && exit 1)
+          test -n "$SUPABASE_DB_PASSWORD" || (echo "Missing SUPABASE_DB_PASSWORD" && exit 1)
+      - name: Validate pooler URL password
+        run: |
+          python - <<'PY'
+          import os
+          import sys
+          from urllib.parse import unquote, urlsplit
+
+          parsed = urlsplit(os.environ["SUPABASE_DB_URL"])
+          if not parsed.hostname or parsed.password is None:
+              sys.exit("SUPABASE_DB_URL must be a complete PostgreSQL connection URL.")
+          if unquote(parsed.password) != os.environ["SUPABASE_DB_PASSWORD"]:
+              sys.exit("The password embedded in SUPABASE_DB_URL does not match SUPABASE_DB_PASSWORD.")
+          print("Pooler URL password matches SUPABASE_DB_PASSWORD.")
+          PY
       - name: Bootstrap migration history
         if: inputs.bootstrap_existing
         run: supabase migration repair 20260909010000 20260909020000 --status applied --db-url "$SUPABASE_DB_URL"
