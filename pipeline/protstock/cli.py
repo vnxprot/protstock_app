@@ -46,6 +46,7 @@ def main() -> None:
     eod.add_argument("--date", dest="trading_date", type=date.fromisoformat, default=date.today())
     eod.add_argument("--source", default="KBS", choices=("KBS", "VCI"))
     eod.add_argument("--lookback-days", type=int, default=10)
+    eod.add_argument("--benchmark-lookback-days", type=int, default=None)
     eod.add_argument("--symbol-offset", type=int, default=0)
     eod.add_argument("--symbol-limit", type=int)
     eod.add_argument("--pause-seconds", type=float, default=6.5)
@@ -75,6 +76,7 @@ def main() -> None:
             args.trading_date,
             source=args.source,
             lookback_days=args.lookback_days,
+            **({"benchmark_lookback_days": args.benchmark_lookback_days} if args.benchmark_lookback_days is not None else {}),
             symbol_offset=args.symbol_offset,
             symbol_limit=args.symbol_limit,
             pause_seconds=args.pause_seconds,

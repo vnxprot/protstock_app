@@ -12,12 +12,18 @@ from .supabase_rest import SupabaseRestClient
 from .timeframes import aggregate_bars
 from .zones import detect_zones
 
+# VNINDEX's first session was 28/07/2000. This keeps its benchmark history full
+# through the app's operational planning horizon without expanding symbol fetches.
+VNINDEX_HISTORY_START = date(2000, 7, 28)
+BENCHMARK_LOOKBACK_DAYS = (date(2050, 1, 1) - VNINDEX_HISTORY_START).days
+
 
 def run_eod(
     trading_date: date,
     *,
     source: str = "KBS",
     lookback_days: int = 10,
+    benchmark_lookback_days: int = BENCHMARK_LOOKBACK_DAYS,
     symbol_offset: int = 0,
     symbol_limit: int | None = None,
     # Shared GitHub Actions egress can consume multiple upstream requests per
@@ -39,7 +45,7 @@ def run_eod(
         benchmark_daily: list[dict] = []
         try:
             index = client.market_index("VNINDEX")
-            index_bars = provider.history("VNINDEX", trading_date - timedelta(days=lookback_days), trading_date)
+            index_bars = provider.history("VNINDEX", trading_date - timedelta(days=benchmark_lookback_days), trading_date)
             index_rows = [{
                 "index_id": index["id"], "trading_date": bar.trading_date.isoformat(),
                 "open": float(bar.open), "high": float(bar.high), "low": float(bar.low),
