@@ -12,6 +12,7 @@ from .disclosures import run_hnx_disclosures
 from .fundamentals import run_fundamentals
 from .alerts import send_eod_telegram_alerts
 from .universe import load_universe
+from .seed import seed_universe
 
 
 def validate_universe(path: Path) -> int:
@@ -35,6 +36,8 @@ def main() -> None:
     subparsers = parser.add_subparsers(dest="command", required=True)
     validate = subparsers.add_parser("validate-universe")
     validate.add_argument("path", type=Path)
+    seed = subparsers.add_parser("seed-universe")
+    seed.add_argument("path", type=Path)
     analyze = subparsers.add_parser("analyze-json")
     analyze.add_argument("path", type=Path)
     eod = subparsers.add_parser("eod")
@@ -56,6 +59,9 @@ def main() -> None:
     args = parser.parse_args()
     if args.command == "validate-universe":
         raise SystemExit(validate_universe(args.path))
+    if args.command == "seed-universe":
+        print(json.dumps(seed_universe(args.path), ensure_ascii=False))
+        raise SystemExit(0)
     if args.command == "analyze-json":
         print(json.dumps(analyze_bars(json.loads(args.path.read_text(encoding="utf-8"))), ensure_ascii=False, indent=2))
         raise SystemExit(0)
