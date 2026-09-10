@@ -96,6 +96,14 @@ class SupabaseRestClient:
         response.raise_for_status()
         return response.json()
 
+    def archive_old_pattern_evidence(self, cutoff_date) -> int:
+        response = self._client.post(
+            "/rpc/archive_old_pattern_evidence",
+            json={"p_cutoff_date": cutoff_date.isoformat()},
+        )
+        response.raise_for_status()
+        return len(response.json())
+
     def queued_backtests(self, limit: int = 3) -> list[dict[str, Any]]:
         response = self._client.get("/backtest_runs", params={"select": "id,symbol_id,timeframe,date_from,date_to,assumptions,rule_versions(dsl)", "status": "eq.QUEUED", "order": "created_at.asc", "limit": str(limit)})
         response.raise_for_status()

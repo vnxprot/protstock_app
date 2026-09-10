@@ -13,6 +13,7 @@ from .fundamentals import run_fundamentals
 from .alerts import send_eod_telegram_alerts
 from .calibrate import calibrate_patterns
 from .outcome_worker import evaluate_pending_outcomes
+from .pattern_archive import archive_pattern_evidence
 from .universe import load_universe
 from .seed import seed_universe
 from .exchanges import sync_exchanges
@@ -66,6 +67,9 @@ def main() -> None:
     calibrate = subparsers.add_parser("calibrate")
     calibrate.add_argument("bars_path", type=Path)
     calibrate.add_argument("--pattern-types", default="ACCUMULATION_BASE,DOUBLE_BOTTOM,ASCENDING_TRIANGLE,BULL_FLAG")
+    archive = subparsers.add_parser("archive-pattern-evidence")
+    archive.add_argument("--retention-days", type=int, default=180)
+    archive.add_argument("--date", dest="archive_date", type=date.fromisoformat, default=date.today())
     args = parser.parse_args()
     if args.command == "validate-universe":
         raise SystemExit(validate_universe(args.path))
@@ -110,6 +114,9 @@ def main() -> None:
     if args.command == "calibrate":
         bars = json.loads(args.bars_path.read_text(encoding="utf-8"))
         print(json.dumps(calibrate_patterns(bars, args.pattern_types.split(",")), ensure_ascii=False, indent=2))
+        raise SystemExit(0)
+    if args.command == "archive-pattern-evidence":
+        print(json.dumps(archive_pattern_evidence(args.retention_days, args.archive_date), ensure_ascii=False))
         raise SystemExit(0)
 
 
