@@ -45,9 +45,6 @@ def sync_exchanges() -> dict[str, int | str]:
                 "active": True,
                 "exchange": exchange,
             }
-            company_column = columns.get("organ_name")
-            if listing and company_column and listing.get(company_column):
-                payload["company_name"] = str(listing[company_column]).strip()
             rows.append(payload)
         written = client.upsert("symbols", rows, "symbol")
         return {"status": "SUCCEEDED", "updated": written, "unmatched": len(symbols) - written}
