@@ -229,6 +229,11 @@ kbd { display:inline-flex; align-items:center; gap:3px; padding:3px 7px; border:
 .watch-row b { text-align:right; color:var(--mint); }
 .text-button { padding:0; border:0; background:transparent; cursor:pointer; }
 .discipline-card { background:radial-gradient(circle at 95% 0,#1b4332,transparent 45%),#0a1612!important; }
+.today-health-card { grid-column:span 2; }
+.health-metrics { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:8px; margin:14px 0; }
+.health-metrics span { display:grid; gap:3px; padding:10px; border:1px solid #253a30; border-radius:10px; background:#0d1c16; color:var(--mint); }
+.health-metrics b { color:#e2f0e8; font-size:16px; }.health-metrics small { color:#789085; font-size:10px; }
+.health-errors,.health-ok { display:flex; gap:7px; align-items:center; margin-top:12px; font-size:12px; }.health-errors { color:#ffb3a4; }.health-ok { color:var(--mint); }
 .discipline-card .panel-title>svg { color:var(--mint); }
 .risk-number { display:flex; align-items:baseline; gap:8px; margin-top:26px; }
 .risk-number strong { font:600 38px 'Space Grotesk',sans-serif; }

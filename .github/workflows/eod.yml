@@ -22,6 +22,14 @@ on:
         required: false
         default: "10"
         type: string
+      source:
+        description: Free VNStock source (KBS default; VCI for a targeted fallback)
+        required: false
+        default: "KBS"
+        type: choice
+        options:
+          - KBS
+          - VCI
 
 permissions:
   contents: read
@@ -50,12 +58,13 @@ jobs:
           SYMBOL_LIMIT: ${{ inputs.symbol_limit }}
           SYMBOL_OFFSET: ${{ inputs.symbol_offset }}
           LOOKBACK_DAYS: ${{ inputs.lookback_days || '10' }}
+          SOURCE: ${{ inputs.source || 'KBS' }}
         run: |
           args=()
           if [ -n "$TRADING_DATE" ]; then args+=(--date "$TRADING_DATE"); fi
           if [ -n "$SYMBOL_LIMIT" ]; then args+=(--symbol-limit "$SYMBOL_LIMIT"); fi
           if [ -n "$SYMBOL_OFFSET" ]; then args+=(--symbol-offset "$SYMBOL_OFFSET"); fi
-          protstock eod "${args[@]}" --source KBS --lookback-days "$LOOKBACK_DAYS"
+          protstock eod "${args[@]}" --source "$SOURCE" --lookback-days "$LOOKBACK_DAYS"
       - name: Process queued backtests
         env:
           SUPABASE_URL: https://upmqxwktvvguegqeqibn.supabase.co
