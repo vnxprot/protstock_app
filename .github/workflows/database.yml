@@ -31,9 +31,7 @@ jobs:
   migrate:
     runs-on: ubuntu-latest
     env:
-      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
-      SUPABASE_PROJECT_ID: upmqxwktvvguegqeqibn
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
     steps:
       - uses: actions/checkout@v4
       - uses: supabase/setup-cli@v1
@@ -41,25 +39,22 @@ jobs:
           version: latest
       - name: Check required secrets
         run: |
-          test -n "$SUPABASE_ACCESS_TOKEN" || (echo "Missing SUPABASE_ACCESS_TOKEN" && exit 1)
-          test -n "$SUPABASE_DB_PASSWORD" || (echo "Missing SUPABASE_DB_PASSWORD" && exit 1)
-      - name: Link production project
-        run: supabase link --project-ref "$SUPABASE_PROJECT_ID" --password "$SUPABASE_DB_PASSWORD"
+          test -n "$SUPABASE_DB_URL" || (echo "Missing SUPABASE_DB_URL" && exit 1)
       - name: Bootstrap migration history
         if: inputs.bootstrap_existing
-        run: supabase migration repair 20260909010000 20260909020000 --status applied --password "$SUPABASE_DB_PASSWORD"
+        run: supabase migration repair 20260909010000 20260909020000 --status applied --db-url "$SUPABASE_DB_URL"
       - name: Reconcile rolled-back Phase 2-5 history
         if: inputs.reconcile_phase2_to_5
-        run: supabase migration repair 20260909030000 20260909040000 20260909050000 20260909060000 --status reverted --password "$SUPABASE_DB_PASSWORD"
+        run: supabase migration repair 20260909030000 20260909040000 20260909050000 20260909060000 --status reverted --db-url "$SUPABASE_DB_URL"
       - name: Review migration plan
         if: inputs.mode == 'dry-run'
-        run: supabase db push --dry-run --include-all --password "$SUPABASE_DB_PASSWORD"
+        run: supabase db push --dry-run --include-all --db-url "$SUPABASE_DB_URL"
       - name: Apply migrations
         if: inputs.mode == 'deploy'
-        run: supabase db push --include-all --password "$SUPABASE_DB_PASSWORD"
+        run: supabase db push --include-all --db-url "$SUPABASE_DB_URL"
       - name: Verify migration status
         if: always() && inputs.mode == 'deploy'
         run: |
-          supabase migration list --password "$SUPABASE_DB_PASSWORD"
-          supabase db dump --linked --schema public --file remote_schema.sql
+          supabase migration list --db-url "$SUPABASE_DB_URL"
+          supabase db dump --db-url "$SUPABASE_DB_URL" --schema public --file remote_schema.sql
           grep -E '^CREATE TABLE public\.(technical_snapshots|support_resistance_zones|pattern_instances|pattern_points|fundamental_periods|fundamental_metrics|rules|rule_versions|signals|backtest_runs|backtest_trades|portfolios|positions|journal_entries)' remote_schema.sql || true
