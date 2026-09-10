@@ -132,6 +132,14 @@ footer { margin-top: 54px; color: #50665c; font-size: 11px; text-align: center; 
 .rule-row > span, .signal-row > span { color: #d7ff52; font-size: 11px; font-weight: 700; }
 .signal-row { grid-template-columns: 80px 1fr auto; }
 .signal-row small { grid-column: 1 / -1; }
+.review-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:20px; }
+.review-grid > div > strong { color:#d7ff52; font-size:12px; }
+.journal-item { padding:6px 0 14px; border-top:1px solid #1e2d26; }
+.journal-item .rule-row { border-top:0; }
+.journal-close { display:grid; grid-template-columns:110px 90px 1fr auto; gap:7px; }
+.journal-close input,.journal-close select { min-width:0; padding:8px; border:1px solid #2c4036; border-radius:8px; color:#ecf3ef; background:#07110e; }
+.journal-close button { border:0; border-radius:8px; padding:8px 10px; background:#d7ff52; color:#07110e; font-weight:700; cursor:pointer; }
+@media (max-width:760px) { .review-grid { grid-template-columns:1fr; } .journal-close { grid-template-columns:1fr 1fr; } .journal-close input[placeholder] { grid-column:1 / -1; } }
 .guide-panel { max-width: 850px; }
 .guide-panel > h2 { margin-bottom: 12px; font: 600 24px 'Space Grotesk', sans-serif; }
 .guide-panel > p, .guide-panel section p, .guide-panel li { color: #9bb0a6; line-height: 1.7; font-size: 14px; }
