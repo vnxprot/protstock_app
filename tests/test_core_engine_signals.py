@@ -26,23 +26,22 @@ def _result(action: str, reasons: list[str]) -> dict:
     }
 
 
-def _write(client: RecordingClient, result: dict, monkeypatch) -> None:
-    monkeypatch.setattr("protstock.eod.detect_zones", lambda _rows: [])
+def _write(client: RecordingClient, result: dict) -> None:
     _write_analysis(
         client, 42, "D", [{"date": "2026-09-11"}], [], [],
         {"snapshots": 0, "patterns": 0, "zones": 0, "signals": 0}, result, {},
     )
 
 
-def test_core_engine_skips_generic_watch(monkeypatch) -> None:
+def test_core_engine_skips_generic_watch() -> None:
     client = RecordingClient()
-    _write(client, _result("WATCH", ["TREND_UP"]), monkeypatch)
+    _write(client, {**_result("WATCH", ["TREND_UP"]), "zones": []})
     assert client.core_signals == []
 
 
-def test_core_engine_persists_near_trigger_watch(monkeypatch) -> None:
+def test_core_engine_persists_near_trigger_watch() -> None:
     client = RecordingClient()
-    _write(client, _result("WATCH", ["TREND_UP", "NEAR_TRIGGER_ACCUMULATION_BASE"]), monkeypatch)
+    _write(client, {**_result("WATCH", ["TREND_UP", "NEAR_TRIGGER_ACCUMULATION_BASE"]), "zones": []})
     assert client.core_signals == [{
         "rule_version_id": None, "source": "CORE_ENGINE", "symbol_id": 42,
         "timeframe": "D", "as_of_date": "2026-09-11", "action": "WATCH",

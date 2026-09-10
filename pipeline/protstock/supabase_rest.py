@@ -75,6 +75,27 @@ class SupabaseRestClient:
         response.raise_for_status()
         return response.json()
 
+    def market_breadth_snapshot(self, trading_date) -> dict[str, Any] | None:
+        response = self._client.get(
+            "/market_breadth_snapshots",
+            params={"select": "trading_date,pct_above_sma50,sample_size,vnindex_trend_state", "trading_date": f"eq.{trading_date.isoformat()}", "limit": "1"},
+        )
+        response.raise_for_status()
+        rows = response.json()
+        return rows[0] if rows else None
+
+    def signals_missing_outcomes(self, cutoff_date) -> list[dict[str, Any]]:
+        response = self._client.get(
+            "/signals",
+            params={
+                "select": "id,symbol_id,as_of_date,action,evidence,signal_outcomes(horizon_days)",
+                "as_of_date": f"lte.{cutoff_date.isoformat()}",
+                "order": "as_of_date.asc",
+            },
+        )
+        response.raise_for_status()
+        return response.json()
+
     def queued_backtests(self, limit: int = 3) -> list[dict[str, Any]]:
         response = self._client.get("/backtest_runs", params={"select": "id,symbol_id,timeframe,date_from,date_to,assumptions,rule_versions(dsl)", "status": "eq.QUEUED", "order": "created_at.asc", "limit": str(limit)})
         response.raise_for_status()

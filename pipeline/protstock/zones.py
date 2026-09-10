@@ -3,6 +3,15 @@ from __future__ import annotations
 from typing import Sequence
 
 
+def zone_confluence_bonus(trigger_price: float, direction: str, zones: Sequence[dict], tolerance_pct: float = 0.02) -> tuple[float, str | None]:
+    kind = "RESISTANCE" if direction == "BULLISH" else "SUPPORT"
+    matches = [zone for zone in zones if zone.get("zone_type") == kind and float(zone["lower_price"]) * (1 - tolerance_pct) <= trigger_price <= float(zone["upper_price"]) * (1 + tolerance_pct)]
+    if not matches:
+        return 0.0, None
+    best = max(matches, key=lambda zone: float(zone["strength"]))
+    return min(8.0, float(best["strength"]) * 0.08), "ZONE_CONFLUENCE"
+
+
 def detect_zones(bars: Sequence[dict], window: int = 2, tolerance: float = 0.018) -> list[dict]:
     if len(bars) < window * 2 + 3:
         return []

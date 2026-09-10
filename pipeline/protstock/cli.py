@@ -11,6 +11,7 @@ from .eod import run_eod
 from .disclosures import run_hnx_disclosures
 from .fundamentals import run_fundamentals
 from .alerts import send_eod_telegram_alerts
+from .outcome_worker import evaluate_pending_outcomes
 from .universe import load_universe
 from .seed import seed_universe
 from .exchanges import sync_exchanges
@@ -59,6 +60,8 @@ def main() -> None:
     fundamentals.add_argument("--symbols", help="Comma-separated symbols; overrides --limit")
     alert = subparsers.add_parser("send-eod-alerts")
     alert.add_argument("--date", dest="trading_date", type=date.fromisoformat, default=date.today())
+    outcomes = subparsers.add_parser("evaluate-outcomes")
+    outcomes.add_argument("--date", dest="outcomes_date", type=date.fromisoformat, default=date.today())
     args = parser.parse_args()
     if args.command == "validate-universe":
         raise SystemExit(validate_universe(args.path))
@@ -96,6 +99,10 @@ def main() -> None:
         raise SystemExit(0 if result["failed"] == 0 and result["periods"] > 0 else 1)
     if args.command == "send-eod-alerts":
         print(json.dumps(send_eod_telegram_alerts(args.trading_date), ensure_ascii=False))
+        raise SystemExit(0)
+    if args.command == "evaluate-outcomes":
+        print(json.dumps(evaluate_pending_outcomes(args.outcomes_date), ensure_ascii=False))
+        raise SystemExit(0)
 
 
 if __name__ == "__main__":

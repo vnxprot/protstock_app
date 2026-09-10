@@ -6,11 +6,12 @@ from typing import Any
 
 from .analysis import ALGORITHM_VERSION, analyze_bars
 from .config import Settings
+from .indicators import calculate_indicators
+from .market_regime import compute_breadth
 from .provider_vnstock import VnstockProvider
 from .rules import evaluate_rule, multi_timeframe_gate
 from .supabase_rest import SupabaseRestClient
 from .timeframes import aggregate_bars
-from .zones import detect_zones
 
 # VNINDEX's first session was 28/07/2000. This keeps its benchmark history full
 # through the app's operational planning horizon without expanding symbol fetches.
@@ -37,11 +38,13 @@ def run_eod(
         "status": "RUNNING", "trigger_type": "SCHEDULED",
         "source_revision": ALGORITHM_VERSION,
     })
-    counts = {"symbols": 0, "prices": 0, "derived_bars": 0, "snapshots": 0, "patterns": 0, "zones": 0, "signals": 0, "failed": 0}
+    counts = {"symbols": 0, "prices": 0, "derived_bars": 0, "snapshots": 0, "patterns": 0, "zones": 0, "signals": 0, "breadth_snapshots": 0, "failed": 0}
     warnings: list[str] = []
     try:
         symbols = client.active_symbols()
         active_rules = client.active_rule_versions()
+        market_context = _prior_market_context(client, trading_date)
+        daily_snapshots: list[dict] = []
         benchmark_daily: list[dict] = []
         try:
             index = client.market_index("VNINDEX")
@@ -96,11 +99,13 @@ def run_eod(
                             "derived_bars", derived_rows, "symbol_id,timeframe,period_start"
                         )
                     preliminary = {timeframe: analyze_bars(scoped_rows) for timeframe, scoped_rows in timeframe_rows.items() if scoped_rows}
-                    results = {timeframe: analyze_bars(scoped_rows, weekly_patterns=preliminary.get("W", {}).get("patterns", []), monthly_snapshot=preliminary.get("M", {}).get("indicators", {}), benchmark_rows=benchmark_rows[timeframe]) for timeframe, scoped_rows in timeframe_rows.items() if scoped_rows}
+                    results = {timeframe: analyze_bars(scoped_rows, weekly_patterns=preliminary.get("W", {}).get("patterns", []), monthly_snapshot=preliminary.get("M", {}).get("indicators", {}), benchmark_rows=benchmark_rows[timeframe], market_context=market_context if timeframe == "D" else None) for timeframe, scoped_rows in timeframe_rows.items() if scoped_rows}
                     context = {"weekly_patterns": results.get("W", {}).get("patterns", []), "monthly_snapshot": results.get("M", {}).get("indicators", {})}
                     for timeframe, scoped_rows in timeframe_rows.items():
                         if timeframe in results:
                             _write_analysis(client, symbol_row["id"], timeframe, scoped_rows, benchmark_rows[timeframe], active_rules, counts, results[timeframe], context)
+                    if "D" in results:
+                        daily_snapshots.append(results["D"]["indicators"])
                 counts["symbols"] += 1
                 client.create_job_item({
                     "job_run_id": job["id"], "symbol_id": symbol_row["id"],
@@ -117,6 +122,13 @@ def run_eod(
                     "duration_ms": int((monotonic() - started) * 1000),
                 })
             sleep(pause_seconds)
+        if daily_snapshots:
+            breadth = compute_breadth(daily_snapshots)
+            vnindex_snapshot = calculate_indicators(benchmark_daily).to_dict() if benchmark_daily else {"trend_state": "UNKNOWN"}
+            counts["breadth_snapshots"] += client.upsert("market_breadth_snapshots", [{
+                "trading_date": trading_date.isoformat(), **breadth,
+                "vnindex_trend_state": vnindex_snapshot["trend_state"],
+            }], "trading_date")
         status = "SUCCEEDED" if counts["failed"] == 0 else "PARTIAL"
         client.finish_job(job["id"], {"status": status, "finished_at": _now(), "counts": counts, "warnings": warnings})
         return {"job_id": job["id"], "status": status, **counts}
@@ -149,6 +161,19 @@ def _fetch_history_with_retry(provider: VnstockProvider, symbol: str, start: dat
                 raise
             sleep(65 * (attempt + 1))
     raise RuntimeError("unreachable")
+
+
+def _prior_market_context(client: SupabaseRestClient, trading_date: date) -> dict[str, dict] | None:
+    getter = getattr(client, "market_breadth_snapshot", None)
+    if getter is None:
+        return None
+    snapshot = getter(trading_date - timedelta(days=1))
+    if not snapshot:
+        return None
+    return {
+        "breadth": {"pct_above_sma50": snapshot.get("pct_above_sma50"), "sample_size": snapshot.get("sample_size")},
+        "vnindex_snapshot": {"trend_state": snapshot.get("vnindex_trend_state", "UNKNOWN")},
+    }
 
 
 def _write_analysis(
@@ -192,7 +217,7 @@ def _write_analysis(
         "upper_price": zone["upper_price"], "touches": zone["touches"],
         "strength": zone["strength"], "evidence": zone["evidence"],
         "algorithm_version": ALGORITHM_VERSION,
-    } for zone in detect_zones(rows)]
+    } for zone in result["zones"]]
     counts["zones"] += client.upsert(
         "support_resistance_zones", zones,
         "symbol_id,timeframe,as_of_date,zone_type,lower_price,upper_price",
@@ -232,6 +257,13 @@ def _core_engine_signal_row(symbol_id: int, timeframe: str, result: dict[str, An
     reasons = result["reasons"]
     if action == "WATCH" and not any(reason.startswith("NEAR_TRIGGER_") for reason in reasons):
         return None
+    evidence = {key: value for key, value in result["indicators"].items() if value is not None}
+    pattern_reason = next((reason for reason in reasons if reason.startswith("PATTERN_") and reason.endswith("_CONFIRMED")), None)
+    if pattern_reason:
+        pattern_type = pattern_reason.removeprefix("PATTERN_").removesuffix("_CONFIRMED")
+        pattern = next((item for item in result["patterns"] if item.get("pattern_type") == pattern_type and item.get("state") == "CONFIRMED"), None)
+        if pattern:
+            evidence.update({key: pattern[key] for key in ("pattern_type", "quality_score", "invalidation_price") if pattern.get(key) is not None})
     return {
         "rule_version_id": None,
         "source": "CORE_ENGINE",
@@ -241,5 +273,5 @@ def _core_engine_signal_row(symbol_id: int, timeframe: str, result: dict[str, An
         "action": action,
         "score": 100,
         "reasons": reasons,
-        "evidence": {key: value for key, value in result["indicators"].items() if value is not None},
+        "evidence": evidence,
     }
