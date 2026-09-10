@@ -197,6 +197,10 @@ def _write_analysis(
         "support_resistance_zones", zones,
         "symbol_id,timeframe,as_of_date,zone_type,lower_price,upper_price",
     )
+    core_signal = _core_engine_signal_row(symbol_id, timeframe, result)
+    if core_signal:
+        counts["signals"] += client.upsert_core_engine_signal(core_signal)
+
     signal_rows = []
     for version in active_rules:
         dsl = version["dsl"]
@@ -213,10 +217,29 @@ def _write_analysis(
             signal_rows.append({
                 "rule_version_id": version["id"], "symbol_id": symbol_id,
                 "timeframe": timeframe, "as_of_date": result["as_of_date"],
-                "action": action, "score": 100,
+                "action": action, "source": "USER_RULE", "score": 100,
                 "reasons": reasons,
                 "evidence": {key: value for key, value in result["indicators"].items() if value is not None},
             })
     counts["signals"] += client.upsert(
         "signals", signal_rows, "rule_version_id,symbol_id,timeframe,as_of_date,action"
     )
+
+
+def _core_engine_signal_row(symbol_id: int, timeframe: str, result: dict[str, Any]) -> dict[str, Any] | None:
+    """Return a meaningful canonical signal, omitting an uninformative WATCH."""
+    action = result["signal_preview"]
+    reasons = result["reasons"]
+    if action == "WATCH" and not any(reason.startswith("NEAR_TRIGGER_") for reason in reasons):
+        return None
+    return {
+        "rule_version_id": None,
+        "source": "CORE_ENGINE",
+        "symbol_id": symbol_id,
+        "timeframe": timeframe,
+        "as_of_date": result["as_of_date"],
+        "action": action,
+        "score": 100,
+        "reasons": reasons,
+        "evidence": {key: value for key, value in result["indicators"].items() if value is not None},
+    }

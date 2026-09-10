@@ -9,6 +9,15 @@ from .config import Settings
 from .supabase_rest import SupabaseRestClient
 
 
+def build_telegram_message(signal: dict, trading_date: date) -> str:
+    """Render either a user-rule signal or a rule-less Core Engine decision."""
+    symbol = (signal.get("symbols") or {}).get("symbol", "?")
+    rule_data = (signal.get("rule_versions") or {}).get("rules") or {}
+    rule = rule_data.get("name") or "Prot Core Engine"
+    reasons = " · ".join(signal.get("reasons", [])[:3])
+    return f"Prot Stock EOD · {trading_date:%d/%m/%Y}\n{signal['action']} {symbol} · {rule}\n{reasons}"
+
+
 def send_eod_telegram_alerts(trading_date: date) -> dict:
     token, chat_id = os.getenv("TELEGRAM_BOT_TOKEN"), os.getenv("TELEGRAM_CHAT_ID")
     if not token or not chat_id:
@@ -24,10 +33,7 @@ def send_eod_telegram_alerts(trading_date: date) -> dict:
             exists.raise_for_status()
             if exists.json():
                 continue
-            symbol = signal.get("symbols", {}).get("symbol", "?")
-            rule = signal.get("rule_versions", {}).get("rules", {}).get("name", "Rule")
-            reasons = " · ".join(signal.get("reasons", [])[:3])
-            text = f"Prot Stock EOD · {trading_date:%d/%m/%Y}\n{signal['action']} {symbol} · {rule}\n{reasons}"
+            text = build_telegram_message(signal, trading_date)
             sent_response = httpx.post(f"https://api.telegram.org/bot{token}/sendMessage", json={"chat_id": chat_id, "text": text}, timeout=20)
             sent_response.raise_for_status()
             client.upsert("notification_deliveries", [{"signal_id": signal["id"], "channel": "TELEGRAM", "payload": {"message": text}}], "signal_id,channel")

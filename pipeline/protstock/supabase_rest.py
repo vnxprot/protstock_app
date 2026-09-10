@@ -105,6 +105,28 @@ class SupabaseRestClient:
         response.raise_for_status()
         return len(payload)
 
+    def upsert_core_engine_signal(self, payload: dict[str, Any]) -> int:
+        """Write the one canonical Core Engine decision for a symbol/date/frame.
+
+        The database function owns the partial-index conflict predicate. PostgREST's
+        generic ``on_conflict`` parameter cannot express that predicate safely.
+        """
+        response = self._client.post(
+            "/rpc/upsert_core_engine_signal",
+            headers={"Prefer": "return=minimal"},
+            json={
+                "p_symbol_id": payload["symbol_id"],
+                "p_timeframe": payload["timeframe"],
+                "p_as_of_date": payload["as_of_date"],
+                "p_action": payload["action"],
+                "p_score": payload["score"],
+                "p_reasons": payload["reasons"],
+                "p_evidence": payload["evidence"],
+            },
+        )
+        response.raise_for_status()
+        return 1
+
     def create_job(self, payload: dict[str, Any]) -> dict[str, Any]:
         response = self._client.post(
             "/job_runs",
