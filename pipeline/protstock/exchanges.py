@@ -3,6 +3,11 @@ from __future__ import annotations
 from .config import Settings
 from .supabase_rest import SupabaseRestClient
 
+MANUAL_EXCHANGE_OVERRIDES = {
+    # LTG was removed from the live Vnstock directory after its UPCOM
+    # deregistration; retain the last official board for the locked universe.
+    "LTG": "UPCOM",
+}
 
 def sync_exchanges() -> dict[str, int | str]:
     """Refresh exchange and issuer labels from the public Vnstock directory."""
@@ -27,8 +32,10 @@ def sync_exchanges() -> dict[str, int | str]:
         symbols = client.active_symbols()
         rows = []
         for symbol in symbols:
-            listing = listed.get(str(symbol["symbol"]).upper())
-            if not listing:
+            ticker = str(symbol["symbol"]).upper()
+            listing = listed.get(ticker)
+            exchange = str(listing[columns["exchange"]]).upper() if listing else MANUAL_EXCHANGE_OVERRIDES.get(ticker)
+            if not exchange:
                 continue
             # PostgREST validates the prospective insert before resolving a
             # conflict, so retain all non-null columns from the locked row.
@@ -36,10 +43,10 @@ def sync_exchanges() -> dict[str, int | str]:
                 "symbol": symbol["symbol"],
                 "sector": symbol["sector"],
                 "active": True,
-                "exchange": str(listing[columns["exchange"]]).upper(),
+                "exchange": exchange,
             }
             company_column = columns.get("organ_name")
-            if company_column and listing.get(company_column):
+            if listing and company_column and listing.get(company_column):
                 payload["company_name"] = str(listing[company_column]).strip()
             rows.append(payload)
         written = client.upsert("symbols", rows, "symbol")
