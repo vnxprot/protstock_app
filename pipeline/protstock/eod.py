@@ -87,7 +87,8 @@ def run_eod(
                         counts["derived_bars"] += client.upsert(
                             "derived_bars", derived_rows, "symbol_id,timeframe,period_start"
                         )
-                    results = {timeframe: analyze_bars(scoped_rows) for timeframe, scoped_rows in timeframe_rows.items() if scoped_rows}
+                    preliminary = {timeframe: analyze_bars(scoped_rows) for timeframe, scoped_rows in timeframe_rows.items() if scoped_rows}
+                    results = {timeframe: analyze_bars(scoped_rows, weekly_patterns=preliminary.get("W", {}).get("patterns", []), monthly_snapshot=preliminary.get("M", {}).get("indicators", {})) for timeframe, scoped_rows in timeframe_rows.items() if scoped_rows}
                     context = {"weekly_patterns": results.get("W", {}).get("patterns", []), "monthly_snapshot": results.get("M", {}).get("indicators", {})}
                     for timeframe, scoped_rows in timeframe_rows.items():
                         if timeframe in results:
@@ -195,7 +196,7 @@ def _write_analysis(
         passed, reasons = evaluate_rule(dsl, result["indicators"], rows, result["patterns"], context)
         if passed:
             action = dsl.get("action", "WATCH")
-            if timeframe == "D" and action == "BUY":
+            if timeframe == "D" and action in {"PROBE_BUY", "ADD"}:
                 gate_ok, gate_reasons = multi_timeframe_gate(context)
                 reasons.extend(gate_reasons)
                 if not gate_ok:

@@ -5,14 +5,14 @@ from protstock.rules import compile_rule, evaluate_rule
 
 def test_compile_vietnamese_buy_rule() -> None:
     rule = compile_rule("Mua khi giá đóng cửa vượt đỉnh 20 phiên và volume lớn hơn 1,5 lần; MA20 > MA50 > MA200; RSI từ 45 đến 70")
-    assert rule.action == "BUY"
+    assert rule.action == "PROBE_BUY"
     assert rule.timeframe == "D"
     assert [item["metric"] for item in rule.conditions] == ["close", "volume_ratio20", "ma_stack", "rsi14"]
 
 
 def test_compile_stop_loss_rule() -> None:
     rule = compile_rule("Bán cắt lỗ 7%")
-    assert rule.action == "SELL"
+    assert rule.action == "EXIT"
     assert rule.conditions[0]["value"] == -0.07
 
 

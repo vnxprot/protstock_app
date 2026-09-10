@@ -15,7 +15,7 @@ def send_eod_telegram_alerts(trading_date: date) -> dict:
         return {"status": "DISABLED", "reason": "Telegram secrets are not configured"}
     client = SupabaseRestClient(Settings.from_env())
     try:
-        response = client._client.get("/signals", params={"select": "id,action,score,reasons,symbols(symbol),rule_versions(rules(name))", "as_of_date": f"eq.{trading_date.isoformat()}", "action": "in.(BUY,SELL,STOP)"})
+        response = client._client.get("/signals", params={"select": "id,action,score,reasons,symbols(symbol),rule_versions(rules(name))", "as_of_date": f"eq.{trading_date.isoformat()}", "action": "in.(PROBE_BUY,ADD,REDUCE,EXIT)"})
         response.raise_for_status()
         signals = response.json()
         sent = 0

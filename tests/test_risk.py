@@ -1,6 +1,11 @@
 import pytest
 
-from protstock.risk import portfolio_exposure, position_size
+from protstock.risk import invalidation_width_warning, portfolio_exposure, position_size
+
+
+def test_invalidation_width_warning():
+    assert invalidation_width_warning(100, 90, 2) == "INVALIDATION_TOO_WIDE"
+    assert invalidation_width_warning(100, 96, 2) is None
 
 
 def test_atr_position_sizing_respects_risk_budget() -> None:

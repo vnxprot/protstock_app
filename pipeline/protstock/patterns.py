@@ -32,6 +32,13 @@ def _pivots(values: Sequence[float], radius: int, kind: str) -> list[int]:
     return result
 
 
+def _breakout_volume_ok(bars: Sequence[dict], multiplier: float, lookback: int = 20) -> bool:
+    if len(bars) < lookback + 1:
+        return False
+    avg = sum(float(x.get("volume", 0)) for x in bars[-lookback - 1:-1]) / lookback
+    return avg > 0 and float(bars[-1].get("volume", 0)) > avg * multiplier
+
+
 def _quality(bars: Sequence[dict], start: int, support: float, resistance: float, confirmed: bool, near_breakout: bool) -> tuple[float, dict]:
     """Score structure, not just proximity to a breakout.
 
@@ -78,7 +85,7 @@ def detect_accumulation_base(bars: Sequence[dict]) -> PatternCandidate | None:
     recent_range = (max(highs[-10:]) - min(lows[-10:])) / closes[-1]
     prior_range = (max(highs[:10]) - min(lows[:10])) / closes[9]
     dry_up = sum(volumes[-10:]) / 10 < sum(volumes[-20:-10]) / 10 if len(window) >= 20 else False
-    breakout_volume_ok = volumes[-1] > (sum(volumes[-21:-1]) / 20) * 1.5 if len(volumes) >= 21 else False
+    breakout_volume_ok = _breakout_volume_ok(window, 1.5)
     confirmed = closes[-1] > resistance and breakout_volume_ok
     near_breakout = closes[-1] >= resistance * 0.97
     if depth > 0.35 or recent_range > prior_range * 1.15:
@@ -87,7 +94,7 @@ def detect_accumulation_base(bars: Sequence[dict]) -> PatternCandidate | None:
     return PatternCandidate(
         "ACCUMULATION_BASE", "CONFIRMED" if confirmed else "READY" if near_breakout else "FORMING", "BULLISH",
         len(bars) - len(window), len(bars) - 1, resistance, support, score,
-        tuple(filter(None, ("RANGE_CONTRACTION", "VOLUME_DRY_UP" if dry_up else "", "BREAKOUT_VOLUME" if breakout_volume_ok else "", "NEAR_BREAKOUT" if near_breakout else ""))),
+        tuple(filter(None, ("RANGE_CONTRACTION", "VOLUME_DRY_UP" if dry_up else "", "BREAKOUT_VOLUME" if breakout_volume_ok else "", "NEEDS_VOLUME_CONFIRMATION" if closes[-1] > resistance and not breakout_volume_ok else "", "NEAR_BREAKOUT" if near_breakout else ""))),
         {"depth_pct": round(depth * 100, 2), "recent_range_pct": round(recent_range * 100, 2), "breakout_volume_ok": breakout_volume_ok, **quality},
     )
 
@@ -108,8 +115,7 @@ def detect_double(bars: Sequence[dict], kind: str) -> PatternCandidate | None:
     middle_slice = bars[first:second + 1]
     neckline = max(float(x["high"]) for x in middle_slice) if kind == "bottom" else min(float(x["low"]) for x in middle_slice)
     close = float(bars[-1]["close"])
-    avg_volume = sum(float(x.get("volume", 0)) for x in bars[-21:-1]) / 20 if len(bars) >= 21 else 0
-    volume_ok = float(bars[-1].get("volume", 0)) > avg_volume * 1.3 if avg_volume else False
+    volume_ok = _breakout_volume_ok(bars, 1.3)
     confirmed = (close > neckline if kind == "bottom" else close < neckline) and volume_ok
     pattern_type = "DOUBLE_BOTTOM" if kind == "bottom" else "DOUBLE_TOP"
     direction = "BULLISH" if kind == "bottom" else "BEARISH"
@@ -118,7 +124,7 @@ def detect_double(bars: Sequence[dict], kind: str) -> PatternCandidate | None:
     return PatternCandidate(
         pattern_type, "CONFIRMED" if confirmed else "READY", direction, first, len(bars) - 1,
         neckline, invalidation, score,
-        tuple(filter(None, ("TWO_CONFIRMED_PIVOTS", "NECKLINE_BREAK" if confirmed else "NEAR_NECKLINE", "BREAKOUT_VOLUME" if volume_ok else ""))),
+        tuple(filter(None, ("TWO_CONFIRMED_PIVOTS", "NECKLINE_BREAK" if confirmed else "NEAR_NECKLINE", "BREAKOUT_VOLUME" if volume_ok else "", "NEEDS_VOLUME_CONFIRMATION" if ((close > neckline) if kind == "bottom" else (close < neckline)) and not volume_ok else ""))),
         {"first_pivot": first, "second_pivot": second, "similarity_pct": round((1 - tolerance) * 100, 2), "breakout_volume_ok": volume_ok, **quality},
     )
 
@@ -145,11 +151,13 @@ def detect_triangle(bars: Sequence[dict]) -> PatternCandidate | None:
     upper, lower = max(highs[-10:]), min(lows[-10:])
     close = float(window[-1]["close"])
     state = "READY" if min(abs(upper - close), abs(close - lower)) / close < 0.03 else "FORMING"
-    confirmed = close > upper if direction == "BULLISH" else close < lower if direction == "BEARISH" else False
+    price_break = close > upper if direction == "BULLISH" else close < lower if direction == "BEARISH" else False
+    volume_ok = _breakout_volume_ok(window, 1.4)
+    confirmed = price_break and volume_ok
     score, quality = _quality(window, 0, lower, upper, confirmed, state == "READY")
     return PatternCandidate(ptype, "CONFIRMED" if confirmed else state, direction, len(bars) - len(window), len(bars) - 1, upper, lower, score,
-                            ("CONVERGING_BOUNDARIES", "RANGE_CONTRACTION"),
-                            {"upper_slope": high_slope, "lower_slope": low_slope, **quality})
+                            tuple(filter(None, ("CONVERGING_BOUNDARIES", "RANGE_CONTRACTION", "BREAKOUT_VOLUME" if volume_ok else "", "NEEDS_VOLUME_CONFIRMATION" if price_break and not volume_ok else ""))),
+                            {"upper_slope": high_slope, "lower_slope": low_slope, "breakout_volume_ok": volume_ok, **quality})
 
 
 def detect_flag(bars: Sequence[dict]) -> PatternCandidate | None:
@@ -165,12 +173,14 @@ def detect_flag(bars: Sequence[dict]) -> PatternCandidate | None:
     trigger = max(float(x["high"]) for x in flag) if bullish else min(float(x["low"]) for x in flag)
     invalidation = min(float(x["low"]) for x in flag) if bullish else max(float(x["high"]) for x in flag)
     close = float(flag[-1]["close"])
-    confirmed = close > trigger if bullish else close < trigger
+    price_break = close > trigger if bullish else close < trigger
+    volume_ok = _breakout_volume_ok(bars, 1.1)
+    confirmed = price_break and volume_ok
     score, quality = _quality(bars, len(bars) - 18, invalidation, trigger, confirmed, not confirmed)
     return PatternCandidate("BULL_FLAG" if bullish else "BEAR_FLAG", "CONFIRMED" if confirmed else "READY",
                             "BULLISH" if bullish else "BEARISH", len(bars) - 18, len(bars) - 1,
-                            trigger, invalidation, score, ("IMPULSE_POLE", "CONTROLLED_RETRACEMENT"),
-                            {"pole_return_pct": round(pole_return * 100, 2), "retracement_pct": round(flag_return * 100, 2), **quality})
+                            trigger, invalidation, score, tuple(filter(None, ("IMPULSE_POLE", "CONTROLLED_RETRACEMENT", "BREAKOUT_VOLUME" if volume_ok else "", "NEEDS_VOLUME_CONFIRMATION" if price_break and not volume_ok else ""))),
+                            {"pole_return_pct": round(pole_return * 100, 2), "retracement_pct": round(flag_return * 100, 2), "breakout_volume_ok": volume_ok, **quality})
 
 
 def detect_patterns(bars: Sequence[dict]) -> list[PatternCandidate]:

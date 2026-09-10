@@ -17,7 +17,7 @@ function compileText(input: string) {
   const stop = text.match(/(?:stop-loss|cắt lỗ)\s*(\d+(?:\.\d+)?)\s*%/)
   if (stop) all.push({ metric: 'return_from_entry', op: '<=', value: -Number(stop[1]) / 100 })
   if (!all.length) throw new Error('Chưa nhận ra điều kiện. Dùng breakout, volume, MA, RSI hoặc stop-loss.')
-  return { version: 1, action: /bán|thoát|stop-loss|cắt lỗ/.test(text) ? 'SELL' : 'BUY', timeframe: text.includes('tuần') ? 'W' : text.includes('tháng') ? 'M' : 'D', all }
+  return { version: 1, action: /stop-loss|cắt lỗ/.test(text) ? 'EXIT' : /bán|thoát/.test(text) ? 'REDUCE' : 'PROBE_BUY', timeframe: text.includes('tuần') ? 'W' : text.includes('tháng') ? 'M' : 'D', all }
 }
 
 async function sha256(value: string) {
@@ -68,4 +68,3 @@ export function RuleBuilderPage({ authenticated }: { authenticated: boolean }) {
     </article>
   </section>
 }
-

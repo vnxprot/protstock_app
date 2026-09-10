@@ -17,7 +17,7 @@ class CompiledRule:
 
 def compile_rule(text: str) -> CompiledRule:
     normalized = " ".join(text.lower().replace(",", ".").split())
-    action = "WATCH" if "theo dõi" in normalized else "SELL" if any(word in normalized for word in ("bán", "thoát", "stop-loss", "cắt lỗ")) else "BUY"
+    action = "WATCH" if "theo dõi" in normalized else "EXIT" if any(word in normalized for word in ("stop-loss", "cắt lỗ")) else "REDUCE" if any(word in normalized for word in ("bán", "thoát")) else "PROBE_BUY"
     timeframe = "W" if "tuần" in normalized else "M" if "tháng" in normalized else "D"
     conditions: list[dict[str, Any]] = []
 
