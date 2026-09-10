@@ -55,6 +55,7 @@ export function AnalysisPage({ authenticated }: { authenticated: boolean }) {
             <div><strong>{patternNames[pattern.pattern_type] ?? pattern.pattern_type}</strong><small>{pattern.timeframe} · {pattern.state} · {pattern.direction}</small></div>
             <div className="score">{number(pattern.quality_score, 0)}</div>
             <p>{pattern.reasons.join(' · ')}</p>
+            <small>Chất lượng: nền {number(Number(pattern.evidence.base_length_score), 0)} · biến động {number(Number(pattern.evidence.volatility_tightness_score), 0)} · test vùng {number(Number(pattern.evidence.boundary_tests_score), 0)} · co hẹp KL {number(Number(pattern.evidence.volume_contraction_score), 0)} · breakout {number(Number(pattern.evidence.breakout_confirmation_score), 0)}</small>
           </div>) : <p className="muted">Chưa phát hiện mẫu hình đủ tiêu chuẩn.</p>}
         </article>
         <article className="panel"><div className="panel-title"><h3>Vì sao có tín hiệu này?</h3><span>Giải thích</span></div>

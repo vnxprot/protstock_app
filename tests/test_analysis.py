@@ -47,6 +47,7 @@ def test_double_bottom_requires_neckline_break() -> None:
     assert candidate is not None
     assert candidate.pattern_type == "DOUBLE_BOTTOM"
     assert candidate.state in {"READY", "CONFIRMED"}
+    assert {"base_length_score", "volatility_tightness_score", "boundary_tests_score", "volume_contraction_score", "breakout_confirmation_score"} <= candidate.evidence.keys()
 
 
 def test_weekly_and_monthly_aggregation_preserves_ohlcv() -> None:
