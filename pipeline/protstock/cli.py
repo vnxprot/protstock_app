@@ -10,6 +10,7 @@ from .backtest_worker import process_backtests
 from .eod import run_eod
 from .disclosures import run_hnx_disclosures
 from .fundamentals import run_fundamentals
+from .alerts import send_eod_telegram_alerts
 from .universe import load_universe
 
 
@@ -50,6 +51,8 @@ def main() -> None:
     fundamentals.add_argument("--limit", type=int, default=5)
     fundamentals.add_argument("--symbol-offset", type=int, default=0)
     fundamentals.add_argument("--symbols", help="Comma-separated symbols; overrides --limit")
+    alert = subparsers.add_parser("send-eod-alerts")
+    alert.add_argument("--date", dest="trading_date", type=date.fromisoformat, default=date.today())
     args = parser.parse_args()
     if args.command == "validate-universe":
         raise SystemExit(validate_universe(args.path))
@@ -78,6 +81,8 @@ def main() -> None:
         result = run_fundamentals(args.limit, args.symbols.split(",") if args.symbols else None, args.symbol_offset)
         print(json.dumps(result, ensure_ascii=False))
         raise SystemExit(0 if result["failed"] == 0 and result["periods"] > 0 else 1)
+    if args.command == "send-eod-alerts":
+        print(json.dumps(send_eod_telegram_alerts(args.trading_date), ensure_ascii=False))
 
 
 if __name__ == "__main__":

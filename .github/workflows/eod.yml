@@ -61,3 +61,14 @@ jobs:
           SUPABASE_URL: https://kgglsqsvcofwhscakrtl.supabase.co
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: protstock backtest-worker --limit 3
+      - name: Send concise Telegram EOD alerts
+        env:
+          SUPABASE_URL: https://kgglsqsvcofwhscakrtl.supabase.co
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          TRADING_DATE: ${{ inputs.trading_date }}
+        run: |
+          args=()
+          if [ -n "$TRADING_DATE" ]; then args+=(--date "$TRADING_DATE"); fi
+          protstock send-eod-alerts "${args[@]}"
