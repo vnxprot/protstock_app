@@ -30,7 +30,14 @@ def sync_exchanges() -> dict[str, int | str]:
             listing = listed.get(str(symbol["symbol"]).upper())
             if not listing:
                 continue
-            payload = {"symbol": symbol["symbol"], "exchange": str(listing[columns["exchange"]]).upper()}
+            # PostgREST validates the prospective insert before resolving a
+            # conflict, so retain all non-null columns from the locked row.
+            payload = {
+                "symbol": symbol["symbol"],
+                "sector": symbol["sector"],
+                "active": True,
+                "exchange": str(listing[columns["exchange"]]).upper(),
+            }
             company_column = columns.get("organ_name")
             if company_column and listing.get(company_column):
                 payload["company_name"] = str(listing[company_column]).strip()
