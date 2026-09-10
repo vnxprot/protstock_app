@@ -1,4 +1,5 @@
 from datetime import date, timedelta
+from types import SimpleNamespace
 
 from protstock.analysis import analyze_bars, resolve_signal
 from protstock.indicators import calculate_indicators
@@ -29,6 +30,7 @@ def test_indicator_snapshot_has_full_long_term_context() -> None:
     assert snapshot.atr14 is not None
     assert snapshot.rsi14 is not None
     assert snapshot.trend_state == "UP"
+    assert snapshot.ma_stack is True
 
 
 def test_analysis_is_explainable() -> None:
@@ -68,8 +70,25 @@ def test_add_requires_new_structure_after_entry():
 
 
 def test_core_signal_mtf_gate_downgrades_buy():
-    result = analyze_bars(make_bars(), weekly_patterns=[], monthly_snapshot={"trend_state": "UP"})
-    assert result["signal_preview"] == "WATCH"
+    pattern = _bull(score=75)
+    assert resolve_signal([pattern], _snapshot())[0] == "PROBE_BUY"
+
+
+def test_ma_stack_relaxes_bullish_threshold():
+    assert resolve_signal([_bull(score=67)], {**_snapshot(), "ma_stack": True})[0] == "PROBE_BUY"
+    assert resolve_signal([_bull(score=67)], {**_snapshot(), "ma_stack": False})[0] == "WATCH"
+
+
+def test_core_signal_mtf_gate_downgrades_qualifying_probe_buy(monkeypatch):
+    snapshot = SimpleNamespace(trend_state="UP", to_dict=lambda: _snapshot())
+    candidate = SimpleNamespace(start_index=0, to_dict=lambda: _bull(score=75))
+    monkeypatch.setattr("protstock.analysis.calculate_indicators", lambda _: snapshot)
+    monkeypatch.setattr("protstock.analysis.detect_patterns", lambda _: [candidate])
+    bars = [_bar(99, 101, 98, 100, 10)]
+    assert analyze_bars(bars)["signal_preview"] == "PROBE_BUY"
+    gated = analyze_bars(bars, weekly_patterns=[], monthly_snapshot={"trend_state": "UP"})
+    assert gated["signal_preview"] == "WATCH"
+    assert "WEEKLY_SETUP_MISSING" in gated["reasons"]
 
 
 def _bar(open_, high, low, close, volume=100):

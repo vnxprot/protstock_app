@@ -74,9 +74,10 @@ class IndicatorSnapshot:
     atr14: float | None
     volume_avg20: float | None
     volume_ratio20: float | None
+    ma_stack: bool
     trend_state: str
 
-    def to_dict(self) -> dict[str, float | str | None]:
+    def to_dict(self) -> dict[str, float | str | bool | None]:
         return asdict(self)
 
 
@@ -115,6 +116,7 @@ def calculate_indicators(bars: Sequence[dict]) -> IndicatorSnapshot:
         bollinger_lower=(middle - 2 * deviation) if middle is not None and deviation is not None else None,
         atr14=_atr(highs, lows, closes), volume_avg20=volume_avg,
         volume_ratio20=(volumes[-1] / volume_avg) if volume_avg else None,
+        ma_stack=bool(sma20 is not None and sma50 is not None and sma200 is not None and sma20 > sma50 > sma200),
         trend_state=trend,
     )
 
@@ -126,4 +128,3 @@ def relative_strength(asset_closes: Sequence[float], benchmark_closes: Sequence[
     asset_return = asset_closes[-1] / asset_closes[-size] - 1
     benchmark_return = benchmark_closes[-1] / benchmark_closes[-size] - 1
     return asset_return - benchmark_return
-

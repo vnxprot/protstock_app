@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Sequence
 
-from .indicators import calculate_indicators
+from .indicators import calculate_indicators, relative_strength
 from .patterns import detect_patterns
 from .rules import multi_timeframe_gate
 from .risk import invalidation_width_warning
@@ -11,14 +11,17 @@ from .risk import invalidation_width_warning
 ALGORITHM_VERSION = "core-rules-v2"
 
 
-def analyze_bars(bars: Sequence[dict], position: dict | None = None, weekly_patterns: list[dict] | None = None, monthly_snapshot: dict | None = None) -> dict:
+def analyze_bars(bars: Sequence[dict], position: dict | None = None, weekly_patterns: list[dict] | None = None, monthly_snapshot: dict | None = None, benchmark_closes: Sequence[float] | None = None) -> dict:
     if not bars:
         raise ValueError("bars cannot be empty")
     ordered = sorted(bars, key=lambda item: item["date"])
     snapshot = calculate_indicators(ordered)
     patterns = detect_patterns(ordered)
+    snapshot_dict = snapshot.to_dict()
+    if benchmark_closes is not None:
+        snapshot_dict["relative_strength_market"] = relative_strength([float(item["close"]) for item in ordered], benchmark_closes)
     pattern_dicts = [{**item.to_dict(), "start_date": ordered[item.start_index]["date"]} for item in patterns]
-    signal, reasons = resolve_signal(pattern_dicts, snapshot.to_dict(), position)
+    signal, reasons = resolve_signal(pattern_dicts, snapshot_dict, position)
     if signal in {"PROBE_BUY", "ADD"}:
         ok, gate_reasons = multi_timeframe_gate({"weekly_patterns": weekly_patterns or [], "monthly_snapshot": monthly_snapshot or {}})
         if not ok: signal, reasons = "WATCH", [*reasons, *gate_reasons]
@@ -26,7 +29,7 @@ def analyze_bars(bars: Sequence[dict], position: dict | None = None, weekly_patt
     return {
         "algorithm_version": ALGORITHM_VERSION,
         "as_of_date": ordered[-1]["date"],
-        "indicators": snapshot.to_dict(),
+        "indicators": snapshot_dict,
         "patterns": pattern_dicts,
         "signal_preview": signal,
         "reasons": reasons,

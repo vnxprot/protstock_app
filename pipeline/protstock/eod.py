@@ -88,7 +88,7 @@ def run_eod(
                             "derived_bars", derived_rows, "symbol_id,timeframe,period_start"
                         )
                     preliminary = {timeframe: analyze_bars(scoped_rows) for timeframe, scoped_rows in timeframe_rows.items() if scoped_rows}
-                    results = {timeframe: analyze_bars(scoped_rows, weekly_patterns=preliminary.get("W", {}).get("patterns", []), monthly_snapshot=preliminary.get("M", {}).get("indicators", {})) for timeframe, scoped_rows in timeframe_rows.items() if scoped_rows}
+                    results = {timeframe: analyze_bars(scoped_rows, weekly_patterns=preliminary.get("W", {}).get("patterns", []), monthly_snapshot=preliminary.get("M", {}).get("indicators", {}), benchmark_closes=[float(item["close"]) for item in benchmark_rows[timeframe]]) for timeframe, scoped_rows in timeframe_rows.items() if scoped_rows}
                     context = {"weekly_patterns": results.get("W", {}).get("patterns", []), "monthly_snapshot": results.get("M", {}).get("indicators", {})}
                     for timeframe, scoped_rows in timeframe_rows.items():
                         if timeframe in results:

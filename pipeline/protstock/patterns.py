@@ -179,7 +179,7 @@ def detect_flag(bars: Sequence[dict]) -> PatternCandidate | None:
     price_break = close > trigger if bullish else close < trigger
     volume_ok = _breakout_volume_ok(bars, 1.1)
     confirmed = price_break and volume_ok
-    score, quality = _quality(bars, len(bars) - 18, invalidation, trigger, confirmed, not confirmed)
+    score, quality = _quality(bars, len(bars) - 21, invalidation, trigger, confirmed, not confirmed)
     return PatternCandidate("BULL_FLAG" if bullish else "BEAR_FLAG", "CONFIRMED" if confirmed else "READY",
                             "BULLISH" if bullish else "BEARISH", len(bars) - 21, len(bars) - 1,
                             trigger, invalidation, score, tuple(filter(None, ("IMPULSE_POLE", "CONTROLLED_RETRACEMENT", "BREAKOUT_VOLUME" if volume_ok else "", "NEEDS_VOLUME_CONFIRMATION" if price_break and not volume_ok else ""))),
