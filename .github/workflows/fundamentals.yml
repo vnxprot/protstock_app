@@ -22,5 +22,5 @@ jobs:
             protstock collect-fundamentals --limit '${{ inputs.symbol_limit }}' --symbol-offset '${{ inputs.symbol_offset }}'
           fi
         env:
-          SUPABASE_URL: https://kgglsqsvcofwhscakrtl.supabase.co
+          SUPABASE_URL: https://upmqxwktvvguegqeqibn.supabase.co
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}

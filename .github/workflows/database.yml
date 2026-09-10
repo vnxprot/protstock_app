@@ -33,7 +33,7 @@ jobs:
     env:
       SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
       SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
-      SUPABASE_PROJECT_ID: kgglsqsvcofwhscakrtl
+      SUPABASE_PROJECT_ID: upmqxwktvvguegqeqibn
     steps:
       - uses: actions/checkout@v4
       - uses: supabase/setup-cli@v1

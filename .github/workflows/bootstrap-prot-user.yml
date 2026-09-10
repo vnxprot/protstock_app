@@ -10,7 +10,7 @@ jobs:
   create-private-user:
     runs-on: ubuntu-latest
     env:
-      SUPABASE_URL: https://kgglsqsvcofwhscakrtl.supabase.co
+      SUPABASE_URL: https://upmqxwktvvguegqeqibn.supabase.co
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
       PROT_STOCK_INITIAL_PASSWORD: ${{ secrets.PROT_STOCK_INITIAL_PASSWORD }}
     steps:

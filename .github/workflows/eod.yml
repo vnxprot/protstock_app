@@ -44,7 +44,7 @@ jobs:
       - run: protstock validate-universe data/universe.csv
       - name: Run EOD ingestion and analysis
         env:
-          SUPABASE_URL: https://kgglsqsvcofwhscakrtl.supabase.co
+          SUPABASE_URL: https://upmqxwktvvguegqeqibn.supabase.co
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           TRADING_DATE: ${{ inputs.trading_date }}
           SYMBOL_LIMIT: ${{ inputs.symbol_limit }}
@@ -58,12 +58,12 @@ jobs:
           protstock eod "${args[@]}" --source KBS --lookback-days "$LOOKBACK_DAYS"
       - name: Process queued backtests
         env:
-          SUPABASE_URL: https://kgglsqsvcofwhscakrtl.supabase.co
+          SUPABASE_URL: https://upmqxwktvvguegqeqibn.supabase.co
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: protstock backtest-worker --limit 3
       - name: Send concise Telegram EOD alerts
         env:
-          SUPABASE_URL: https://kgglsqsvcofwhscakrtl.supabase.co
+          SUPABASE_URL: https://upmqxwktvvguegqeqibn.supabase.co
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}

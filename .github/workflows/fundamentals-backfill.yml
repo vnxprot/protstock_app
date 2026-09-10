@@ -21,7 +21,7 @@ jobs:
       - name: Process alphabetic batches of 10 sequentially
         shell: bash
         env:
-          SUPABASE_URL: https://kgglsqsvcofwhscakrtl.supabase.co
+          SUPABASE_URL: https://upmqxwktvvguegqeqibn.supabase.co
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
           set +e
