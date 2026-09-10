@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ChevronDown, Eye, Search, SlidersHorizontal } from 'lucide-react'
+import { ChevronDown, Eye, Search, SlidersHorizontal, Star } from 'lucide-react'
 import { useStockAnalysis, useSymbols } from '../hooks/useStockAnalysis'
 import { openCommandPalette } from './CommandPalette'
 import { StockChart } from './StockChart'
@@ -9,12 +9,12 @@ const number=(value:number|null|undefined,digits=2)=>value==null?'—':Number(va
 const rangeSize:Record<string,number>={ '1M':22,'3M':66,'6M':132,'1Y':260,'3Y':780,ALL:9999 }
 
 export function AnalysisPage({authenticated}:{authenticated:boolean}) {
-  const symbols=useSymbols(authenticated); const [selected,setSelected]=useState<string|null>(()=>localStorage.getItem('protstock-symbol')); const [timeframe,setTimeframe]=useState<'D'|'W'|'M'>('D'); const [range,setRange]=useState('1Y'); const [indicators,setIndicators]=useState({ma20:true,ma50:true,ma200:false,bollinger:false,rsi:true,macd:false})
+  const symbols=useSymbols(authenticated); const [selected,setSelected]=useState<string|null>(()=>localStorage.getItem('protstock-symbol')); const [favorites,setFavorites]=useState<string[]>(()=>{ try { return JSON.parse(localStorage.getItem('protstock-favorites') ?? '[]') } catch { return [] } }); const [timeframe,setTimeframe]=useState<'D'|'W'|'M'>('D'); const [range,setRange]=useState('1Y'); const [indicators,setIndicators]=useState({ma20:true,ma50:true,ma200:false,bollinger:false,rsi:true,macd:false})
   useEffect(()=>{ if(!selected&&symbols.data?.length)setSelected(symbols.data.find(x=>x.symbol==='FPT')?.symbol??symbols.data[0].symbol) },[selected,symbols.data])
-  useEffect(()=>{ const listener=(e:Event)=>setSelected((e as CustomEvent).detail); addEventListener('protstock:symbol',listener); return()=>removeEventListener('protstock:symbol',listener) },[])
+  useEffect(()=>{ const listener=(e:Event)=>setSelected((e as CustomEvent).detail); const favoriteListener=(e:Event)=>setFavorites((e as CustomEvent).detail); addEventListener('protstock:symbol',listener); addEventListener('protstock:favorites',favoriteListener); return()=>{removeEventListener('protstock:symbol',listener);removeEventListener('protstock:favorites',favoriteListener)} },[])
   const analysis=useStockAnalysis(selected,timeframe,authenticated); const snapshot=analysis.data?.technical[0]; const bars=useMemo(()=>analysis.data?.prices.slice(-rangeSize[range])??[],[analysis.data?.prices,range])
-  const toggle=(key:keyof typeof indicators)=>setIndicators(value=>({...value,[key]:!value[key]}))
-  return <section className="workspace-page"><div className="page-title-row"><div><span className="eyebrow">SMART CHART · ĐA KHUNG THỜI GIAN</span><h1>Phân tích mã</h1></div><label className="symbol-picker">Mã cổ phiếu<button onClick={()=>openCommandPalette('symbols')}><span><Search size={16}/> {selected??'Chọn mã'}</span><ChevronDown size={16}/></button></label></div>
+  const toggle=(key:keyof typeof indicators)=>setIndicators(value=>({...value,[key]:!value[key]})); const toggleFavorite=()=>{if(!selected)return; const next=favorites.includes(selected)?favorites.filter(item=>item!==selected):[selected,...favorites];setFavorites(next);localStorage.setItem('protstock-favorites',JSON.stringify(next));dispatchEvent(new CustomEvent('protstock:favorites',{detail:next}))}
+  return <section className="workspace-page"><div className="page-title-row"><div><span className="eyebrow">SMART CHART · ĐA KHUNG THỜI GIAN</span><h1>Phân tích mã</h1></div><div className="symbol-picker"><span>Mã cổ phiếu</span><div className="symbol-picker-actions"><button type="button" className={favorites.includes(selected??'')?'star quick-star active':'star quick-star'} aria-label="Thêm mã vào watchlist" onClick={toggleFavorite}><Star size={18} fill={favorites.includes(selected??'')?'currentColor':'none'}/></button><button type="button" onClick={()=>openCommandPalette('symbols')}><span><Search size={16}/> {selected??'Chọn mã'}</span><ChevronDown size={16}/></button></div></div></div>
     <div className="chart-toolbar"><div className="chart-tools" aria-label="Khoảng thời gian">{['1M','3M','6M','1Y','3Y','ALL'].map(item=><button className={range===item?'active':''} onClick={()=>setRange(item)} key={item}>{item==='ALL'?'Tất cả':item}</button>)}</div><div className="chart-tools" aria-label="Khung nến">{([['D','Ngày'],['W','Tuần'],['M','Tháng']] as const).map(([v,l])=><button className={timeframe===v?'active':''} onClick={()=>setTimeframe(v)} key={v}>{l}</button>)}</div></div>
     {analysis.isLoading&&<div className="skeleton-page"><div className="skeleton skeleton-card"/><div className="skeleton-grid">{[1,2,3,4].map(i=><div className="skeleton" key={i}/>)}</div></div>}{analysis.isError&&<div className="empty-state warning">Chưa đọc được dữ liệu phân tích. Kiểm tra migration và pipeline EOD.</div>}
     {!authenticated&&!analysis.data&&<div className="empty-state"><Search size={25}/><h3>Workspace phân tích đã sẵn sàng</h3><p>Kết nối Supabase để xem chart, mẫu hình và vùng giá của 205 mã.</p></div>}
@@ -27,3 +27,4 @@ export function AnalysisPage({authenticated}:{authenticated:boolean}) {
       <article className="panel"><div className="panel-title"><h3>Hỗ trợ · kháng cự</h3><span>{analysis.data.zones.length} vùng</span></div>{analysis.data.zones.map(zone=><div className="rule-row" key={zone.id}><div><strong>{zone.zone_type==='SUPPORT'?'Hỗ trợ':'Kháng cự'} · {number(zone.lower_price)}–{number(zone.upper_price)}</strong><small>{zone.touches} lần chạm · strength {number(zone.strength,0)}</small></div><span>{timeframe}</span></div>)}</article>
     </>}</section>
 }
+
