@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 
+DEFAULT_MAX_SECTOR_WEIGHT_PCT = 30.0
+
+
 def invalidation_width_warning(entry: float, invalidation_price: float, atr: float | None, atr_multiple: float = 2.0) -> str | None:
     if atr is None or atr <= 0:
         return None

@@ -11,6 +11,7 @@ from .eod import run_eod
 from .disclosures import run_hnx_disclosures
 from .fundamentals import run_fundamentals
 from .alerts import send_eod_telegram_alerts
+from .calibrate import calibrate_patterns
 from .outcome_worker import evaluate_pending_outcomes
 from .universe import load_universe
 from .seed import seed_universe
@@ -62,6 +63,9 @@ def main() -> None:
     alert.add_argument("--date", dest="trading_date", type=date.fromisoformat, default=date.today())
     outcomes = subparsers.add_parser("evaluate-outcomes")
     outcomes.add_argument("--date", dest="outcomes_date", type=date.fromisoformat, default=date.today())
+    calibrate = subparsers.add_parser("calibrate")
+    calibrate.add_argument("bars_path", type=Path)
+    calibrate.add_argument("--pattern-types", default="ACCUMULATION_BASE,DOUBLE_BOTTOM,ASCENDING_TRIANGLE,BULL_FLAG")
     args = parser.parse_args()
     if args.command == "validate-universe":
         raise SystemExit(validate_universe(args.path))
@@ -102,6 +106,10 @@ def main() -> None:
         raise SystemExit(0)
     if args.command == "evaluate-outcomes":
         print(json.dumps(evaluate_pending_outcomes(args.outcomes_date), ensure_ascii=False))
+        raise SystemExit(0)
+    if args.command == "calibrate":
+        bars = json.loads(args.bars_path.read_text(encoding="utf-8"))
+        print(json.dumps(calibrate_patterns(bars, args.pattern_types.split(",")), ensure_ascii=False, indent=2))
         raise SystemExit(0)
 
 
