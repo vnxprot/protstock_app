@@ -73,8 +73,9 @@ def main() -> None:
         print(json.dumps(run_hnx_disclosures(), ensure_ascii=False))
         raise SystemExit(0)
     if args.command == "collect-fundamentals":
-        print(json.dumps(run_fundamentals(args.limit), ensure_ascii=False))
-        raise SystemExit(0)
+        result = run_fundamentals(args.limit)
+        print(json.dumps(result, ensure_ascii=False))
+        raise SystemExit(0 if result["failed"] == 0 and result["periods"] > 0 else 1)
 
 
 if __name__ == "__main__":
