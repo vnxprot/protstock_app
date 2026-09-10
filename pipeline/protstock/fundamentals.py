@@ -27,13 +27,17 @@ def _json_safe(value):
     return value
 
 
-def run_fundamentals(limit: int = 5) -> dict:
+def run_fundamentals(limit: int = 5, symbols: list[str] | None = None) -> dict:
     from vnstock import Fundamental
     client, now = SupabaseRestClient(Settings.from_env()), datetime.now(timezone.utc)
     written = failed = 0
     errors: list[dict[str, str]] = []
     try:
-        for symbol in client.active_symbols()[:limit]:
+        active_symbols = client.active_symbols()
+        requested = {item.strip().upper() for item in symbols or [] if item.strip()}
+        selected_symbols = [row for row in active_symbols if row["symbol"] in requested] if requested else active_symbols[:limit]
+        missing = sorted(requested - {row["symbol"] for row in active_symbols})
+        for symbol in selected_symbols:
             try:
                 equity = Fundamental().equity(symbol['symbol'])
                 income = {str(row['period']): row for row in equity.income_statement(period='quarter', orient='time_series').to_dict(orient='records')}
@@ -52,6 +56,6 @@ def run_fundamentals(limit: int = 5) -> dict:
             except Exception as exc:
                 failed += 1
                 errors.append({"symbol": symbol["symbol"], "error": str(exc)[:300]})
-        return {"periods": written, "failed": failed, "errors": errors, "source": "VNSTOCK_VCI_PROVISIONAL"}
+        return {"periods": written, "failed": failed, "errors": errors, "missing_symbols": missing, "source": "VNSTOCK_VCI_PROVISIONAL"}
     finally:
         client.close()

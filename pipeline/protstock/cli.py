@@ -48,6 +48,7 @@ def main() -> None:
     subparsers.add_parser("collect-hnx-disclosures")
     fundamentals = subparsers.add_parser("collect-fundamentals")
     fundamentals.add_argument("--limit", type=int, default=5)
+    fundamentals.add_argument("--symbols", help="Comma-separated symbols; overrides --limit")
     args = parser.parse_args()
     if args.command == "validate-universe":
         raise SystemExit(validate_universe(args.path))
@@ -73,7 +74,7 @@ def main() -> None:
         print(json.dumps(run_hnx_disclosures(), ensure_ascii=False))
         raise SystemExit(0)
     if args.command == "collect-fundamentals":
-        result = run_fundamentals(args.limit)
+        result = run_fundamentals(args.limit, args.symbols.split(",") if args.symbols else None)
         print(json.dumps(result, ensure_ascii=False))
         raise SystemExit(0 if result["failed"] == 0 and result["periods"] > 0 else 1)
 

@@ -3,6 +3,7 @@ on:
   workflow_dispatch:
     inputs:
       symbol_limit: { required: true, default: '5', type: string }
+      symbols: { required: false, default: '', type: string }
 permissions: { contents: read }
 jobs:
   ingest:
@@ -12,7 +13,7 @@ jobs:
       - uses: actions/setup-python@v5
         with: { python-version: '3.12' }
       - run: python -m pip install -e '.[data]'
-      - run: protstock collect-fundamentals --limit '${{ inputs.symbol_limit }}'
+      - run: protstock collect-fundamentals --limit '${{ inputs.symbol_limit }}' ${{ inputs.symbols && format('--symbols {0}', inputs.symbols) || '' }}
         env:
           SUPABASE_URL: https://kgglsqsvcofwhscakrtl.supabase.co
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
