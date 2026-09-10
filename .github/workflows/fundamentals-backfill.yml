@@ -5,6 +5,7 @@ on:
     inputs:
       start_offset: { description: 'Alphabetic offset, normally 0', required: true, default: '0', type: string }
       end_offset: { description: 'Last offset inclusive, normally 200', required: true, default: '200', type: string }
+      offsets: { description: 'Optional comma-separated retry offsets, e.g. 20,70', required: false, default: '', type: string }
 
 permissions: { contents: read }
 
@@ -25,13 +26,15 @@ jobs:
         run: |
           set +e
           failures=0
-          for offset in $(seq ${{ inputs.start_offset }} 10 ${{ inputs.end_offset }}); do
+          OFFSETS="${{ inputs.offsets }}"
+          if [ -z "$OFFSETS" ]; then OFFSETS=$(seq ${{ inputs.start_offset }} 10 ${{ inputs.end_offset }} | tr '\n' ' '); fi
+          for offset in ${OFFSETS//,/ }; do
             echo "::group::Alphabetic batch offset=$offset"
             protstock collect-fundamentals --limit 10 --symbol-offset "$offset"
             status=$?
             echo "::endgroup::"
             if [ "$status" -ne 0 ]; then failures=$((failures + 1)); fi
-            sleep 75
+            sleep 180
           done
           echo "Completed with $failures failed batches. Review grouped logs for retry offsets."
           exit "$failures"
