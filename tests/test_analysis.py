@@ -2,7 +2,7 @@ from datetime import date, timedelta
 
 from protstock.analysis import analyze_bars, resolve_signal
 from protstock.indicators import calculate_indicators
-from protstock.patterns import detect_double
+from protstock.patterns import detect_double, detect_flag, detect_triangle
 from protstock.timeframes import aggregate_bars
 
 
@@ -70,6 +70,50 @@ def test_add_requires_new_structure_after_entry():
 def test_core_signal_mtf_gate_downgrades_buy():
     result = analyze_bars(make_bars(), weekly_patterns=[], monthly_snapshot={"trend_state": "UP"})
     assert result["signal_preview"] == "WATCH"
+
+
+def _bar(open_, high, low, close, volume=100):
+    return {"date": "2025-01-01", "open": open_, "high": high, "low": low, "close": close, "volume": volume}
+
+
+def _triangle_bars(volume=100):
+    bars = [_bar(99, 101, 90 + i * .6, 99, volume) for i in range(39)]
+    bars.append(_bar(100, 103, 100, 102, volume))
+    return bars
+
+
+def _flag_bars(volume=100):
+    pole = [_bar(100 + i * 1.5, 102 + i * 1.5, 99 + i * 1.5, 101.5 + i * 1.5, volume) for i in range(10)]
+    flag = [_bar(115 - i, 116 - i, 113 - i, 114 - i, volume) for i in range(10)]
+    return pole + flag + [_bar(104, 118, 103, 117, volume)]
+
+
+def test_triangle_price_break_without_volume_stays_ready():
+    candidate = detect_triangle(_triangle_bars())
+    assert candidate is not None and candidate.state == "READY"
+    assert candidate.evidence["breakout_volume_ok"] is False
+    assert "NEEDS_VOLUME_CONFIRMATION" in candidate.reasons
+
+
+def test_triangle_price_break_with_volume_confirms():
+    bars = _triangle_bars(); bars[-1]["volume"] = 200
+    candidate = detect_triangle(bars)
+    assert candidate is not None and candidate.state == "CONFIRMED"
+    assert candidate.evidence["breakout_volume_ok"] is True
+
+
+def test_flag_price_break_without_volume_stays_ready():
+    candidate = detect_flag(_flag_bars())
+    assert candidate is not None and candidate.state == "READY"
+    assert candidate.evidence["breakout_volume_ok"] is False
+    assert "NEEDS_VOLUME_CONFIRMATION" in candidate.reasons
+
+
+def test_flag_price_break_with_volume_confirms():
+    bars = _flag_bars(); bars[-1]["volume"] = 200
+    candidate = detect_flag(bars)
+    assert candidate is not None and candidate.state == "CONFIRMED"
+    assert candidate.evidence["breakout_volume_ok"] is True
 
 
 def test_weekly_and_monthly_aggregation_preserves_ohlcv() -> None:

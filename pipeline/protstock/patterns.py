@@ -148,7 +148,8 @@ def detect_triangle(bars: Sequence[dict]) -> PatternCandidate | None:
         ptype, direction = "SYMMETRICAL_TRIANGLE", "NEUTRAL"
     else:
         return None
-    upper, lower = max(highs[-10:]), min(lows[-10:])
+    # The final bar is the possible breakout; it must not define its own boundary.
+    upper, lower = max(highs[-11:-1]), min(lows[-11:-1])
     close = float(window[-1]["close"])
     state = "READY" if min(abs(upper - close), abs(close - lower)) / close < 0.03 else "FORMING"
     price_break = close > upper if direction == "BULLISH" else close < lower if direction == "BEARISH" else False
@@ -161,24 +162,26 @@ def detect_triangle(bars: Sequence[dict]) -> PatternCandidate | None:
 
 
 def detect_flag(bars: Sequence[dict]) -> PatternCandidate | None:
-    if len(bars) < 18:
+    if len(bars) < 21:
         return None
-    pole = bars[-18:-8]
-    flag = bars[-8:]
+    pole = bars[-21:-11]
+    # The final bar is evaluated separately as breakout, never as retracement.
+    flag = bars[-11:-1]
     pole_return = float(pole[-1]["close"]) / float(pole[0]["open"]) - 1
     flag_return = float(flag[-1]["close"]) / float(flag[0]["open"]) - 1
     if abs(pole_return) < 0.12 or pole_return * flag_return > 0 or abs(flag_return) > abs(pole_return) * 0.5:
         return None
     bullish = pole_return > 0
-    trigger = max(float(x["high"]) for x in flag) if bullish else min(float(x["low"]) for x in flag)
+    # Exclude the current breakout bar when deriving the flag channel boundary.
+    trigger = max(float(x["high"]) for x in flag[:-1]) if bullish else min(float(x["low"]) for x in flag[:-1])
     invalidation = min(float(x["low"]) for x in flag) if bullish else max(float(x["high"]) for x in flag)
-    close = float(flag[-1]["close"])
+    close = float(bars[-1]["close"])
     price_break = close > trigger if bullish else close < trigger
     volume_ok = _breakout_volume_ok(bars, 1.1)
     confirmed = price_break and volume_ok
     score, quality = _quality(bars, len(bars) - 18, invalidation, trigger, confirmed, not confirmed)
     return PatternCandidate("BULL_FLAG" if bullish else "BEAR_FLAG", "CONFIRMED" if confirmed else "READY",
-                            "BULLISH" if bullish else "BEARISH", len(bars) - 18, len(bars) - 1,
+                            "BULLISH" if bullish else "BEARISH", len(bars) - 21, len(bars) - 1,
                             trigger, invalidation, score, tuple(filter(None, ("IMPULSE_POLE", "CONTROLLED_RETRACEMENT", "BREAKOUT_VOLUME" if volume_ok else "", "NEEDS_VOLUME_CONFIRMATION" if price_break and not volume_ok else ""))),
                             {"pole_return_pct": round(pole_return * 100, 2), "retracement_pct": round(flag_return * 100, 2), "breakout_volume_ok": volume_ok, **quality})
 
