@@ -6,7 +6,6 @@ from typing import Any
 
 from .analysis import ALGORITHM_VERSION, analyze_bars
 from .config import Settings
-from .indicators import relative_strength
 from .provider_vnstock import VnstockProvider
 from .rules import evaluate_rule, multi_timeframe_gate
 from .supabase_rest import SupabaseRestClient
@@ -88,7 +87,7 @@ def run_eod(
                             "derived_bars", derived_rows, "symbol_id,timeframe,period_start"
                         )
                     preliminary = {timeframe: analyze_bars(scoped_rows) for timeframe, scoped_rows in timeframe_rows.items() if scoped_rows}
-                    results = {timeframe: analyze_bars(scoped_rows, weekly_patterns=preliminary.get("W", {}).get("patterns", []), monthly_snapshot=preliminary.get("M", {}).get("indicators", {}), benchmark_closes=[float(item["close"]) for item in benchmark_rows[timeframe]]) for timeframe, scoped_rows in timeframe_rows.items() if scoped_rows}
+                    results = {timeframe: analyze_bars(scoped_rows, weekly_patterns=preliminary.get("W", {}).get("patterns", []), monthly_snapshot=preliminary.get("M", {}).get("indicators", {}), benchmark_rows=benchmark_rows[timeframe]) for timeframe, scoped_rows in timeframe_rows.items() if scoped_rows}
                     context = {"weekly_patterns": results.get("W", {}).get("patterns", []), "monthly_snapshot": results.get("M", {}).get("indicators", {})}
                     for timeframe, scoped_rows in timeframe_rows.items():
                         if timeframe in results:
@@ -148,11 +147,6 @@ def _write_analysis(
 ) -> None:
     if not rows:
         return
-    benchmark_by_date = {item["date"]: float(item["close"]) for item in benchmark_rows}
-    aligned = [(float(item["close"]), benchmark_by_date[item["date"]]) for item in rows if item["date"] in benchmark_by_date]
-    result["indicators"]["relative_strength_market"] = relative_strength(
-        [item[0] for item in aligned], [item[1] for item in aligned]
-    ) if aligned else None
     snapshot = {
         "symbol_id": symbol_id, "timeframe": timeframe,
         "as_of_date": result["as_of_date"], "input_last_date": result["as_of_date"],

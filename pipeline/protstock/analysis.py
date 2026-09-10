@@ -11,15 +11,17 @@ from .risk import invalidation_width_warning
 ALGORITHM_VERSION = "core-rules-v2"
 
 
-def analyze_bars(bars: Sequence[dict], position: dict | None = None, weekly_patterns: list[dict] | None = None, monthly_snapshot: dict | None = None, benchmark_closes: Sequence[float] | None = None) -> dict:
+def analyze_bars(bars: Sequence[dict], position: dict | None = None, weekly_patterns: list[dict] | None = None, monthly_snapshot: dict | None = None, benchmark_rows: Sequence[dict] | None = None) -> dict:
     if not bars:
         raise ValueError("bars cannot be empty")
     ordered = sorted(bars, key=lambda item: item["date"])
     snapshot = calculate_indicators(ordered)
     patterns = detect_patterns(ordered)
     snapshot_dict = snapshot.to_dict()
-    if benchmark_closes is not None:
-        snapshot_dict["relative_strength_market"] = relative_strength([float(item["close"]) for item in ordered], benchmark_closes)
+    if benchmark_rows is not None:
+        benchmark_by_date = {item["date"]: float(item["close"]) for item in benchmark_rows}
+        aligned = [(float(item["close"]), benchmark_by_date[item["date"]]) for item in ordered if item["date"] in benchmark_by_date]
+        snapshot_dict["relative_strength_market"] = relative_strength([item[0] for item in aligned], [item[1] for item in aligned]) if aligned else None
     pattern_dicts = [{**item.to_dict(), "start_date": ordered[item.start_index]["date"]} for item in patterns]
     signal, reasons = resolve_signal(pattern_dicts, snapshot_dict, position)
     if signal in {"PROBE_BUY", "ADD"} and (weekly_patterns is not None or monthly_snapshot is not None):

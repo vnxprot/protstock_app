@@ -3,6 +3,7 @@ from types import SimpleNamespace
 
 from protstock.analysis import analyze_bars, resolve_signal
 from protstock.indicators import calculate_indicators
+from protstock.indicators import relative_strength
 from protstock.patterns import detect_double, detect_flag, detect_triangle
 from protstock.timeframes import aggregate_bars
 
@@ -77,6 +78,14 @@ def test_core_signal_mtf_gate_downgrades_buy():
 def test_ma_stack_relaxes_bullish_threshold():
     assert resolve_signal([_bull(score=67)], {**_snapshot(), "ma_stack": True})[0] == "PROBE_BUY"
     assert resolve_signal([_bull(score=67)], {**_snapshot(), "ma_stack": False})[0] == "WATCH"
+
+
+def test_relative_strength_uses_date_matched_benchmark_rows():
+    bars = [_bar(10, 10, 10, 10), _bar(20, 20, 20, 20), _bar(30, 30, 30, 30)]
+    bars[0]["date"], bars[1]["date"], bars[2]["date"] = "2025-01-01", "2025-01-02", "2025-01-03"
+    benchmark = [{"date": "2025-01-01", "close": 100}, {"date": "2025-01-03", "close": 110}]
+    result = analyze_bars(bars, benchmark_rows=benchmark)
+    assert result["indicators"]["relative_strength_market"] == relative_strength([10, 30], [100, 110])
 
 
 def test_core_signal_mtf_gate_downgrades_qualifying_probe_buy(monkeypatch):
