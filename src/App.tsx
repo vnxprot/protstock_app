@@ -9,6 +9,7 @@ const ScreenerPage = lazy(() => import('./components/ScreenerPage').then(module 
 const BacktestPage = lazy(() => import('./components/BacktestPage').then(module => ({ default: module.BacktestPage })))
 const PortfolioPage = lazy(() => import('./components/PortfolioPage').then(module => ({ default: module.PortfolioPage })))
 const JournalPage = lazy(() => import('./components/JournalPage').then(module => ({ default: module.JournalPage })))
+const SettingsPage = lazy(() => import('./components/SettingsPage').then(module => ({ default: module.SettingsPage })))
 
 const modules = [
   { id: 'today', icon: '⌁', label: 'Tổng quan' },
@@ -18,6 +19,7 @@ const modules = [
   { id: 'backtest', icon: '↗', label: 'Backtest' },
   { id: 'portfolio', icon: '▱', label: 'Danh mục' },
   { id: 'journal', icon: '✎', label: 'Nhật ký' },
+  { id: 'settings', icon: '⚙', label: 'Cài đặt' },
 ]
 
 function currentPage() {
@@ -53,6 +55,7 @@ function App({ authenticated = false }: { authenticated?: boolean }) {
       {page === 'backtest' && <Suspense fallback={<div className="empty-state">Đang mở Backtest…</div>}><BacktestPage authenticated={authenticated} /></Suspense>}
       {page === 'portfolio' && <Suspense fallback={<div className="empty-state">Đang mở danh mục…</div>}><PortfolioPage authenticated={authenticated} /></Suspense>}
       {page === 'journal' && <Suspense fallback={<div className="empty-state">Đang mở nhật ký…</div>}><JournalPage authenticated={authenticated} /></Suspense>}
+      {page === 'settings' && <Suspense fallback={<div className="empty-state">Đang mở cài đặt…</div>}><SettingsPage /></Suspense>}
       <footer>Prot Stock · Personal research system · Không phải khuyến nghị đầu tư</footer>
     </main>
   </div>
