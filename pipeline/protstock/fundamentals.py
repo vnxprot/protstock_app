@@ -27,7 +27,7 @@ def _json_safe(value):
     return value
 
 
-def run_fundamentals(limit: int = 5, symbols: list[str] | None = None) -> dict:
+def run_fundamentals(limit: int = 5, symbols: list[str] | None = None, symbol_offset: int = 0) -> dict:
     from vnstock import Fundamental
     client, now = SupabaseRestClient(Settings.from_env()), datetime.now(timezone.utc)
     written = failed = 0
@@ -35,7 +35,7 @@ def run_fundamentals(limit: int = 5, symbols: list[str] | None = None) -> dict:
     try:
         active_symbols = client.active_symbols()
         requested = {item.strip().upper() for item in symbols or [] if item.strip()}
-        selected_symbols = [row for row in active_symbols if row["symbol"] in requested] if requested else active_symbols[:limit]
+        selected_symbols = [row for row in active_symbols if row["symbol"] in requested] if requested else active_symbols[symbol_offset:symbol_offset + limit]
         missing = sorted(requested - {row["symbol"] for row in active_symbols})
         for symbol in selected_symbols:
             try:
