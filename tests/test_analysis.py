@@ -1,6 +1,6 @@
 from datetime import date, timedelta
 
-from protstock.analysis import analyze_bars
+from protstock.analysis import analyze_bars, resolve_signal
 from protstock.indicators import calculate_indicators
 from protstock.patterns import detect_double
 from protstock.timeframes import aggregate_bars
@@ -48,6 +48,28 @@ def test_double_bottom_requires_neckline_break() -> None:
     assert candidate.pattern_type == "DOUBLE_BOTTOM"
     assert candidate.state in {"READY", "CONFIRMED"}
     assert {"base_length_score", "volatility_tightness_score", "boundary_tests_score", "volume_contraction_score", "breakout_confirmation_score"} <= candidate.evidence.keys()
+
+
+def _snapshot(close=100):
+    return {"close": close, "trend_state": "UP", "volume_ratio20": 2, "volume_avg20": 5_000_000, "rsi14": 50, "atr14": 2}
+
+
+def _bull(start_date="2025-01-10", score=75):
+    return {"pattern_type": "DOUBLE_BOTTOM", "direction": "BULLISH", "state": "CONFIRMED", "quality_score": score, "start_date": start_date, "invalidation_price": 96}
+
+
+def test_exit_short_circuits_bullish_pattern():
+    assert resolve_signal([_bull()], _snapshot(90), {"entry_date": "5", "invalidation_price": 95}) == ("EXIT", ["INVALIDATION_BROKEN"])
+
+
+def test_add_requires_new_structure_after_entry():
+    assert resolve_signal([_bull("2025-01-10")], _snapshot(), {"entry_date": "2025-01-05", "invalidation_price": 90})[0] == "ADD"
+    assert resolve_signal([_bull("2025-01-03")], _snapshot(), {"entry_date": "2025-01-05", "invalidation_price": 90})[0] == "WATCH"
+
+
+def test_core_signal_mtf_gate_downgrades_buy():
+    result = analyze_bars(make_bars(), weekly_patterns=[], monthly_snapshot={"trend_state": "UP"})
+    assert result["signal_preview"] == "WATCH"
 
 
 def test_weekly_and_monthly_aggregation_preserves_ohlcv() -> None:

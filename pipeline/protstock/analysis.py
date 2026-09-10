@@ -17,7 +17,8 @@ def analyze_bars(bars: Sequence[dict], position: dict | None = None, weekly_patt
     ordered = sorted(bars, key=lambda item: item["date"])
     snapshot = calculate_indicators(ordered)
     patterns = detect_patterns(ordered)
-    signal, reasons = resolve_signal([item.to_dict() for item in patterns], snapshot.to_dict(), position)
+    pattern_dicts = [{**item.to_dict(), "start_date": ordered[item.start_index]["date"]} for item in patterns]
+    signal, reasons = resolve_signal(pattern_dicts, snapshot.to_dict(), position)
     if signal in {"PROBE_BUY", "ADD"}:
         ok, gate_reasons = multi_timeframe_gate({"weekly_patterns": weekly_patterns or [], "monthly_snapshot": monthly_snapshot or {}})
         if not ok: signal, reasons = "WATCH", [*reasons, *gate_reasons]
@@ -26,7 +27,7 @@ def analyze_bars(bars: Sequence[dict], position: dict | None = None, weekly_patt
         "algorithm_version": ALGORITHM_VERSION,
         "as_of_date": ordered[-1]["date"],
         "indicators": snapshot.to_dict(),
-        "patterns": [item.to_dict() for item in patterns],
+        "patterns": pattern_dicts,
         "signal_preview": signal,
         "reasons": reasons,
     }
@@ -48,6 +49,6 @@ def resolve_signal(patterns: list[dict], snapshot: dict, position: dict | None =
         warning = invalidation_width_warning(snapshot.get("close", 0), top.get("invalidation_price") or 0, snapshot.get("atr14"))
         if warning: reasons.append(warning)
         if not position: return "PROBE_BUY", reasons
-        return ("ADD", reasons) if str(top.get("start_index", "")) > str(position.get("entry_date", "")) else ("WATCH", reasons)
+        return ("ADD", reasons) if str(top.get("start_date", "")) > str(position.get("entry_date", "")) else ("WATCH", reasons)
     ready = [p for p in patterns if p["state"] == "READY"]
     return "WATCH", [f"NEAR_TRIGGER_{p['pattern_type']}" for p in ready[:2]]
