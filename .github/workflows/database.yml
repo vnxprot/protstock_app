@@ -31,7 +31,6 @@ jobs:
   migrate:
     runs-on: ubuntu-latest
     env:
-      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
       SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
     steps:
       - uses: actions/checkout@v4
@@ -40,21 +39,21 @@ jobs:
           version: latest
       - name: Check required secrets
         run: |
-          test -n "$SUPABASE_DB_URL" || (echo "Missing SUPABASE_DB_URL" && exit 1)
           test -n "$SUPABASE_DB_PASSWORD" || (echo "Missing SUPABASE_DB_PASSWORD" && exit 1)
-      - name: Validate pooler URL password
+      - name: Prepare IPv4 Session Pooler connection
         run: |
           python - <<'PY'
           import os
-          import sys
-          from urllib.parse import unquote, urlsplit
+          from urllib.parse import quote
 
-          parsed = urlsplit(os.environ["SUPABASE_DB_URL"])
-          if not parsed.hostname or parsed.password is None:
-              sys.exit("SUPABASE_DB_URL must be a complete PostgreSQL connection URL.")
-          if unquote(parsed.password) != os.environ["SUPABASE_DB_PASSWORD"]:
-              sys.exit("The password embedded in SUPABASE_DB_URL does not match SUPABASE_DB_PASSWORD.")
-          print("Pooler URL password matches SUPABASE_DB_PASSWORD.")
+          password = quote(os.environ["SUPABASE_DB_PASSWORD"], safe="")
+          url = (
+              "postgresql://postgres.upmqxwktvvguegqeqibn:"
+              f"{password}@aws-0-ap-southeast-1.pooler.supabase.com:5432/postgres"
+          )
+          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as env_file:
+              env_file.write(f"SUPABASE_DB_URL={url}\n")
+          print("Prepared Session Pooler connection for upmqxwktvvguegqeqibn.")
           PY
       - name: Bootstrap migration history
         if: inputs.bootstrap_existing
