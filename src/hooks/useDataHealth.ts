@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 
 import { supabase } from '../lib/supabase'
+import { formatDate } from '../lib/date'
 
 export interface DataHealth {
   active_symbols: number
@@ -20,7 +21,7 @@ export function useDataHealth(enabled: boolean) {
       if (!supabase) throw new Error('Supabase is not configured')
       const { data, error } = await supabase.from('data_health_summary').select('*').single()
       if (error) throw error
-      return data as DataHealth
+      return { ...(data as DataHealth), latest_price_date: formatDate(data.latest_price_date) }
     },
   })
 }

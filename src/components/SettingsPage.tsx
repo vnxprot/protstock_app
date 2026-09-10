@@ -1,24 +1,23 @@
 import { useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { supabase } from '../lib/supabase'
 
-export function SettingsPage() {
+export function SettingsPage({ authenticated }: { authenticated: boolean }) {
   const [tab, setTab] = useState<'guide' | 'account'>('guide')
+  const rules = useQuery({ queryKey: ['guide-rules'], enabled: authenticated && Boolean(supabase), queryFn: async () => { const { data, error } = await supabase!.from('rules').select('id,name,status,rule_versions(version)').order('name'); if (error) throw error; return data ?? [] } })
   return <section className="workspace-page settings-page">
     <div className="page-title-row"><div><span className="eyebrow">PERSONAL WORKSPACE</span><h1>Cài đặt</h1><p className="muted">Hướng dẫn nghiên cứu và thông tin tài khoản riêng của Prot.</p></div></div>
-    <div className="timeframe-tabs" role="tablist" aria-label="Cài đặt">
-      <button className={tab === 'guide' ? 'active' : ''} onClick={() => setTab('guide')}>Hướng dẫn</button>
-      <button className={tab === 'account' ? 'active' : ''} onClick={() => setTab('account')}>Tài khoản</button>
-    </div>
-    {tab === 'account' ? <article className="panel account-panel"><div className="panel-title"><h3>Tài khoản</h3><span>Private access</span></div><div className="rule-row"><div><strong>Prot</strong><small>Tài khoản cá nhân · đăng nhập bằng mật khẩu</small></div><span>Đang bảo vệ</span></div><p className="muted">Mật khẩu không hiển thị hoặc lưu trong giao diện. Dùng nút Đăng xuất ở sidebar khi cần kết thúc phiên.</p></article> : <Guide />}
+    <div className="timeframe-tabs" role="tablist" aria-label="Cài đặt"><button className={tab === 'guide' ? 'active' : ''} onClick={() => setTab('guide')}>Hướng dẫn</button><button className={tab === 'account' ? 'active' : ''} onClick={() => setTab('account')}>Tài khoản</button></div>
+    {tab === 'account' ? <article className="panel account-panel"><div className="panel-title"><h3>Tài khoản</h3><span>Private access</span></div><div className="rule-row"><div><strong>Prot</strong><small>Tài khoản cá nhân · đăng nhập bằng mật khẩu</small></div><span>Đang bảo vệ</span></div><p className="muted">Mật khẩu không hiển thị hoặc lưu trong giao diện. Dùng nút Đăng xuất ở sidebar khi cần kết thúc phiên.</p></article> : <Guide rules={rules.data ?? []} loading={rules.isLoading}/>} 
   </section>
 }
 
-function Guide() {
-  return <article className="panel guide-panel">
-    <div className="panel-title"><h3>Chiến lược phân tích & giao dịch</h3><span>Multi-timeframe</span></div>
-    <h2>Monthly trend → weekly setup → daily trigger</h2>
-    <p>Đây là chiến lược phân tích và giao dịch theo đa khung thời gian rất nổi tiếng trong trading. Chiến lược giúp bám theo xu hướng lớn nhưng vẫn tối ưu điểm vào lệnh để giảm rủi ro.</p>
-    <section><h3>📈 Monthly Trend — Xác định “Đại cục”</h3><p>Dùng biểu đồ nến tháng để xác định hướng đi chính: chỉ tìm cơ hội mua khi xu hướng tháng tăng và chỉ bán/giảm tỷ trọng khi xu hướng tháng giảm.</p><ul><li><strong>Cách xác định:</strong> cấu trúc đỉnh/đáy hoặc EMA 20, SMA 50.</li><li><strong>Mục tiêu:</strong> giao dịch cùng hướng dòng tiền lớn, không đi ngược xu hướng.</li></ul></section>
-    <section><h3>🗒 Weekly Setup — Chờ vùng giá đẹp</h3><p>Sau khi có hướng tháng, dùng khung tuần để chờ một setup: giá điều chỉnh về hỗ trợ/kháng cự, supply/demand, Fibonacci hoặc trendline.</p><ul><li><strong>Xu hướng tháng tăng:</strong> đợi pullback về hỗ trợ mạnh trên tuần.</li><li><strong>Ý nghĩa:</strong> tránh mua đuổi; mua giá tốt hơn trong xu hướng dài hạn.</li></ul></section>
-    <section><h3>🔎 Daily Trigger — Kích hoạt vào lệnh</h3><p>Khi giá vào vùng setup tuần, dùng khung ngày tìm xác nhận: Pin Bar, Engulfing, Morning Star, hai đáy, vai-đầu-vai ngược, RSI quá bán hoặc MACD cắt lên.</p><ul><li><strong>Vào lệnh:</strong> khi xuất hiện xác nhận dòng tiền quay lại.</li><li><strong>Quản trị rủi ro:</strong> đặt stop-loss dưới đáy nến ngày hoặc hỗ trợ gần nhất.</li><li><strong>Ý nghĩa:</strong> tối ưu R:R — rủi ro nhỏ, lợi nhuận bám theo xu hướng tháng.</li></ul></section>
-  </article>
+function Guide({ rules, loading }: { rules: any[]; loading: boolean }) {
+  const active = rules.filter(rule => rule.status === 'ACTIVE'); const core = active.filter(rule => String(rule.name).startsWith('Core v1')); const latestVersion = Math.max(0, ...core.flatMap(rule => rule.rule_versions ?? []).map((version: any) => Number(version.version)))
+  return <div className="guide-list">
+    <article className="panel guide-panel"><div className="panel-title"><h3>Chiến lược phân tích & giao dịch</h3><span>MULTI-TIMEFRAME</span></div><h2>Monthly trend → weekly setup → daily trigger</h2><p>Dùng tháng để xác định đại cục, tuần để chờ vùng giá đẹp và ngày để kích hoạt. Chỉ tìm cơ hội mua khi xu hướng tháng ủng hộ; đặt stop dưới vùng vô hiệu gần nhất.</p><section><h3>1. Monthly Trend</h3><p>Cấu trúc đỉnh/đáy, EMA 20 và SMA 50 xác định hướng chính. Không mua ngược xu hướng tháng.</p></section><section><h3>2. Weekly Setup</h3><p>Chờ pullback về hỗ trợ, supply/demand, Fibonacci hoặc trendline; không mua đuổi.</p></section><section><h3>3. Daily Trigger</h3><p>Chờ nến xác nhận, mẫu hình giá hoặc động lượng RSI/MACD trước khi vào lệnh.</p></section></article>
+    <article className="panel guide-panel"><div className="panel-title"><h3>Lịch vận hành EOD</h3><span>GIỜ VIỆT NAM</span></div><section><h3>EOD — 16:15, thứ Hai đến thứ Sáu</h3><p>GitHub Actions bắt đầu pipeline sau phiên; hệ thống tải dữ liệu giá, tính D/W/M, mẫu hình, vùng giá và rule. GitHub cron là best-effort nên có thể trễ vài phút.</p></section><section><h3>Signal — sau khi EOD hoàn tất</h3><p>Chỉ gửi Telegram khi có BUY/ADD/REDUCE/EXIT mới. Nếu không có tín hiệu hành động, app không spam.</p></section><section><h3>Backfill</h3><p>Chạy tuần tự theo lô 10 mã để tôn trọng rate-limit nguồn miễn phí. Không phải dữ liệu realtime.</p></section></article>
+    <article className="panel guide-panel"><div className="panel-title"><h3>Rule Studio</h3><span>{loading ? 'ĐANG TẢI' : `${active.length} ACTIVE`}</span></div><h2>Rule là điều kiện, không phải lời khuyên</h2><p>Prot mô tả bằng tiếng Việt; app biên dịch thành DSL được kiểm tra. Engine chỉ thực thi DSL hợp lệ, lưu version để backtest cũ không thay đổi khi rule được sửa.</p><section><h3>Core Rules hiện tại</h3><p><strong>{latestVersion ? `Core Rules v${latestVersion}` : 'Chưa có Core Rules'}</strong> · {core.length} rule core đang ACTIVE · tổng {active.length} rule ACTIVE.</p><ul>{core.map(rule => <li key={rule.id}>{rule.name}</li>)}{!core.length && <li>Chưa đọc được rule từ Supabase.</li>}</ul></section><section><h3>Các điều kiện hỗ trợ</h3><p>Breakout, volume, MA stack, RSI, thanh khoản, tăng trưởng cơ bản, sức mạnh tương đối, trạng thái VN-Index/ngành, stop-loss, trailing stop và time-stop.</p></section></article>
+    <article className="panel guide-panel"><div className="panel-title"><h3>Đọc tín hiệu đúng cách</h3><span>KỶ LUẬT</span></div><p>Tín hiệu là một giả thuyết có điều kiện. Luôn kiểm tra mẫu hình, vùng vô hiệu, thanh khoản, trạng thái thị trường và rủi ro vị thế trước khi quyết định.</p></article>
+  </div>
 }
