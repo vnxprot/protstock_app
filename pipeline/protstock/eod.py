@@ -47,7 +47,10 @@ def run_eod(
                 "collected_at": bar.collected_at.isoformat(),
             } for bar in index_bars]
             client.upsert("market_index_prices", index_rows, "index_id,trading_date")
-            benchmark_daily = [{**row, "date": row["trading_date"]} for row in client.index_price_history(index["id"])]
+            benchmark_daily = [
+                {**row, "date": row["trading_date"]}
+                for row in _rows_as_of(client.index_price_history(index["id"]), trading_date)
+            ]
         except Exception as exc:
             warnings.append(f"VNINDEX: {type(exc).__name__}")
         symbols = symbols[symbol_offset:]
@@ -66,7 +69,7 @@ def run_eod(
                     "collected_at": bar.collected_at.isoformat(), "quality_status": "VALID",
                 } for bar in fetched]
                 counts["prices"] += client.upsert("daily_prices", price_rows, "symbol_id,trading_date")
-                history = client.price_history(symbol_row["id"])
+                history = _rows_as_of(client.price_history(symbol_row["id"]), trading_date)
                 analysis_rows = [{**row, "date": row["trading_date"]} for row in history]
                 if analysis_rows:
                     timeframe_rows = {"D": analysis_rows}
@@ -121,6 +124,12 @@ def run_eod(
 def _now() -> str:
     from datetime import datetime, timezone
     return datetime.now(timezone.utc).isoformat()
+
+
+def _rows_as_of(rows: list[dict[str, Any]], trading_date: date) -> list[dict[str, Any]]:
+    """Keep only bars known at the requested EOD cutoff (ISO dates sort chronologically)."""
+    cutoff = trading_date.isoformat()
+    return [row for row in rows if row["trading_date"] <= cutoff]
 
 
 def _fetch_history_with_retry(provider: VnstockProvider, symbol: str, start: date, end: date) -> list:
