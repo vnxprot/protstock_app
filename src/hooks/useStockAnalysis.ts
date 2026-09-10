@@ -44,6 +44,14 @@ export interface PatternInstance {
 }
 
 export interface PriceZone { id: string; zone_type: 'SUPPORT' | 'RESISTANCE'; lower_price: number; upper_price: number; touches: number; strength: number }
+export interface FundamentalPeriod {
+  id: string
+  period_end: string
+  published_at: string
+  available_from: string
+  source: string
+  fundamental_metrics: Array<{ revenue: number | null; eps: number | null; roe: number | null; debt_to_equity: number | null; operating_cash_flow: number | null }>
+}
 
 export function useSymbols(enabled: boolean) {
   return useQuery({
@@ -67,14 +75,15 @@ export function useStockAnalysis(symbol: string | null, timeframe: 'D' | 'W' | '
       const priceQuery = timeframe === 'D'
         ? supabase.from('daily_prices').select('trading_date,open,high,low,close,volume').eq('symbol_id', symbolRow.id).order('trading_date', { ascending: false }).limit(260)
         : supabase.from('derived_bars').select('trading_date:source_last_date,open,high,low,close,volume').eq('symbol_id', symbolRow.id).eq('timeframe', timeframe).order('period_start', { ascending: false }).limit(260)
-      const [prices, technical, patterns, zones, disclosures] = await Promise.all([
+      const [prices, technical, patterns, zones, disclosures, fundamentals] = await Promise.all([
         priceQuery,
         supabase.from('technical_snapshots').select('*').eq('symbol_id', symbolRow.id).eq('timeframe', timeframe).order('as_of_date', { ascending: false }).limit(1),
         supabase.from('pattern_instances').select('*').eq('symbol_id', symbolRow.id).eq('timeframe', timeframe).order('as_of_date', { ascending: false }).order('quality_score', { ascending: false }).limit(8),
         supabase.from('support_resistance_zones').select('id,zone_type,lower_price,upper_price,touches,strength').eq('symbol_id', symbolRow.id).eq('timeframe', timeframe).eq('active', true).order('strength', { ascending: false }).limit(6),
         supabase.from('disclosures').select('id,title,category,published_at,available_from,source,source_url').eq('symbol_id', symbolRow.id).order('published_at', { ascending: false }).limit(6),
+        supabase.from('fundamental_periods').select('id,period_end,published_at,available_from,source,fundamental_metrics(revenue,eps,roe,debt_to_equity,operating_cash_flow)').eq('symbol_id', symbolRow.id).lte('available_from', new Date().toISOString().slice(0, 10)).order('period_end', { ascending: false }).limit(4),
       ])
-      const failure = prices.error || technical.error || patterns.error || zones.error || disclosures.error
+      const failure = prices.error || technical.error || patterns.error || zones.error || disclosures.error || fundamentals.error
       if (failure) throw failure
       return {
         symbol: symbolRow,
@@ -83,6 +92,7 @@ export function useStockAnalysis(symbol: string | null, timeframe: 'D' | 'W' | '
         patterns: (patterns.data ?? []) as PatternInstance[],
         zones: (zones.data ?? []) as PriceZone[],
         disclosures: disclosures.data ?? [],
+        fundamentals: (fundamentals.data ?? []) as FundamentalPeriod[],
       }
     },
   })
