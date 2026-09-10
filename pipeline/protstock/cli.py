@@ -9,6 +9,7 @@ from .analysis import analyze_bars
 from .backtest_worker import process_backtests
 from .eod import run_eod
 from .disclosures import run_hnx_disclosures
+from .fundamentals import run_fundamentals
 from .universe import load_universe
 
 
@@ -45,6 +46,8 @@ def main() -> None:
     worker = subparsers.add_parser("backtest-worker")
     worker.add_argument("--limit", type=int, default=3)
     subparsers.add_parser("collect-hnx-disclosures")
+    fundamentals = subparsers.add_parser("collect-fundamentals")
+    fundamentals.add_argument("--limit", type=int, default=5)
     args = parser.parse_args()
     if args.command == "validate-universe":
         raise SystemExit(validate_universe(args.path))
@@ -68,6 +71,9 @@ def main() -> None:
         raise SystemExit(0 if result["failed"] == 0 else 1)
     if args.command == "collect-hnx-disclosures":
         print(json.dumps(run_hnx_disclosures(), ensure_ascii=False))
+        raise SystemExit(0)
+    if args.command == "collect-fundamentals":
+        print(json.dumps(run_fundamentals(args.limit), ensure_ascii=False))
         raise SystemExit(0)
 
 
