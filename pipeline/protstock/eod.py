@@ -10,6 +10,7 @@ from .engines import evaluate_named_engine
 from .indicators import calculate_indicators
 from .market_regime import compute_breadth
 from .provider_vnstock import VnstockProvider
+from .resolution import resolve_consolidated_signal
 from .supabase_rest import SupabaseRestClient
 from .timeframes import aggregate_bars
 
@@ -45,7 +46,7 @@ def run_eod(
         "status": "RUNNING", "trigger_type": "SCHEDULED",
         "source_revision": ALGORITHM_VERSION,
     })
-    counts = {"symbols": 0, "prices": 0, "derived_bars": 0, "snapshots": 0, "patterns": 0, "zones": 0, "signals": 0, "breadth_snapshots": 0, "failed": 0}
+    counts = {"symbols": 0, "prices": 0, "derived_bars": 0, "snapshots": 0, "patterns": 0, "zones": 0, "signals": 0, "consolidated_signals": 0, "breadth_snapshots": 0, "failed": 0}
     warnings: list[str] = []
     try:
         symbols = client.active_symbols()
@@ -128,6 +129,7 @@ def run_eod(
                     results = {timeframe: analyze_bars(scoped_rows, weekly_patterns=preliminary.get("W", {}).get("patterns", []), monthly_snapshot=preliminary.get("M", {}).get("indicators", {}), benchmark_rows=benchmark_rows[timeframe], market_context=market_context if timeframe == "D" else None) for timeframe, scoped_rows in timeframe_rows.items() if scoped_rows}
                     context = {
                         "weekly_patterns": results.get("W", {}).get("patterns", []),
+                        "weekly_snapshot": results.get("W", {}).get("indicators", {}),
                         "monthly_snapshot": results.get("M", {}).get("indicators", {}),
                         "market_context": market_context,
                         "candidate_sector": symbol_row["sector"],
@@ -296,6 +298,7 @@ def _write_analysis(
         "symbol_id,timeframe,as_of_date,zone_type,lower_price,upper_price",
     )
     signal_rows = []
+    raw_evaluations = []
     for version in active_rules:
         dsl = version["dsl"]
         if dsl.get("timeframe", "D") != timeframe:
@@ -311,6 +314,7 @@ def _write_analysis(
             "market_context": context.get("market_context") if timeframe == "D" else None,
             "multi_timeframe_context": {
                 "weekly_patterns": context.get("weekly_patterns", []),
+                "weekly_snapshot": context.get("weekly_snapshot", {}),
                 "monthly_snapshot": context.get("monthly_snapshot", {}),
             },
             "portfolio_positions": context.get("portfolio_positions"),
@@ -320,13 +324,22 @@ def _write_analysis(
         }
         passed, action, reasons = evaluate_named_engine(dsl.get("engine"), dsl.get("overrides"), engine_context)
         if passed:
-            signal_rows.append({
+            raw_signal = {
                 "rule_version_id": version["id"], "symbol_id": symbol_id,
                 "timeframe": timeframe, "as_of_date": result["as_of_date"],
                 "action": action, "source": "CORE_PACK" if rule.get("kind") == "CORE_PACK" else "USER_RULE", "score": 100,
                 "reasons": reasons,
                 "evidence": {key: value for key, value in result["indicators"].items() if value is not None},
-            })
+            }
+            signal_rows.append(raw_signal)
+            raw_evaluations.append({**raw_signal, "engine": rule.get("name") or dsl.get("engine") or "Rule Studio"})
     counts["signals"] += client.upsert(
         "signals", signal_rows, "rule_version_id,symbol_id,timeframe,as_of_date,action"
     )
+    if raw_evaluations:
+        consolidated = resolve_consolidated_signal(raw_evaluations)
+        counts.setdefault("consolidated_signals", 0)
+        counts["consolidated_signals"] += client.upsert("consolidated_signals", [{
+            "symbol_id": symbol_id, "timeframe": timeframe, "as_of_date": result["as_of_date"],
+            **{key: consolidated[key] for key in ("composite_action", "confluence_score", "confluence_count", "consensus_engines", "reasons")},
+        }], "symbol_id,timeframe,as_of_date")

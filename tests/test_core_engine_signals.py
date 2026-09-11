@@ -7,11 +7,14 @@ from protstock.eod import _write_analysis
 class RecordingClient:
     def __init__(self) -> None:
         self.signal_rows: list[dict] = []
+        self.consolidated_rows: list[dict] = []
 
     def upsert(self, table, rows, _on_conflict):
         payload = list(rows)
         if table == "signals":
             self.signal_rows.extend(payload)
+        if table == "consolidated_signals":
+            self.consolidated_rows.extend(payload)
         return len(payload)
 
 
@@ -50,6 +53,11 @@ def test_core_v2_flows_through_active_rule_versions() -> None:
         "action": "WATCH", "source": "CORE_PACK", "score": 100,
         "reasons": ["TREND_UP", "NEAR_TRIGGER_ACCUMULATION_BASE"],
         "evidence": {"close": 100.0, "rsi14": 55.0, "trend_state": "UP", "volume_avg20": 5000000, "volume_ratio20": 1.0},
+    }]
+    assert client.consolidated_rows == [{
+        "symbol_id": 42, "timeframe": "D", "as_of_date": "2026-09-11", "composite_action": "WATCH",
+        "confluence_score": 70, "confluence_count": 1, "consensus_engines": ["core_ladder_v2"],
+        "reasons": ["TREND_UP", "NEAR_TRIGGER_ACCUMULATION_BASE"],
     }]
 
 
