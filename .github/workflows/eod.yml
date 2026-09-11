@@ -1,6 +1,9 @@
 name: EOD pipeline
 
 on:
+  # 09:15 UTC = 16:15 Asia/Ho_Chi_Minh, thứ Hai đến thứ Sáu.
+  schedule:
+    - cron: '15 9 * * 1-5'
   workflow_dispatch:
     inputs:
       trading_date:
