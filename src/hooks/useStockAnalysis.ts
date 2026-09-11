@@ -72,9 +72,15 @@ export function useStockAnalysis(symbol: string | null, timeframe: 'D' | 'W' | '
       if (!supabase || !symbol) throw new Error('Symbol is required')
       const { data: symbolRow, error: symbolError } = await supabase.from('symbols').select('id,symbol,sector,exchange,company_name').eq('symbol', symbol).single()
       if (symbolError) throw symbolError
+      // Supabase giới hạn mỗi REST response ở 1.000 dòng. Ghép hai trang để chart D
+      // nhận đủ 1.300 phiên (~5 năm) cho các lựa chọn 3Y/Tất cả.
+      const dailyPriceQuery = async () => {
+        const base = () => supabase!.from('daily_prices').select('trading_date,open,high,low,close,volume').eq('symbol_id', symbolRow.id).order('trading_date', { ascending: false })
+        const [recent, historical] = await Promise.all([base().range(0, 999), base().range(1000, 1299)])
+        return { data: [...(recent.data ?? []), ...(historical.data ?? [])], error: recent.error ?? historical.error }
+      }
       const priceQuery = timeframe === 'D'
-        // 1,300 phiên giao dịch bao phủ xấp xỉ 5 năm: cần cho các lựa chọn 3Y/Tất cả trên chart.
-        ? supabase.from('daily_prices').select('trading_date,open,high,low,close,volume').eq('symbol_id', symbolRow.id).order('trading_date', { ascending: false }).limit(1300)
+        ? dailyPriceQuery()
         : supabase.from('derived_bars').select('trading_date:source_last_date,open,high,low,close,volume').eq('symbol_id', symbolRow.id).eq('timeframe', timeframe).order('period_start', { ascending: false }).limit(260)
       const [prices, technical, patterns, zones, disclosures, fundamentals] = await Promise.all([
         priceQuery,
