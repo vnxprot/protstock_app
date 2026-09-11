@@ -14,7 +14,7 @@ export function TodayHealth() {
       const [{ count: priceRows, error: priceError }, { count: coveredSymbols, error: coverageError }, { data: signals, error: signalError }, { data: jobs, error: jobError }, { count: activeSymbols, error: universeError }] = await Promise.all([
         supabase.from('daily_prices').select('symbol_id', { count: 'exact', head: true }),
         supabase.from('latest_daily_prices').select('symbol_id', { count: 'exact', head: true }),
-        supabase.from('signals').select('source,action,as_of_date,created_at').order('as_of_date', { ascending: false }).order('created_at', { ascending: false }).limit(202),
+        supabase.from('signals').select('source,action,as_of_date,created_at').order('as_of_date', { ascending: false }).order('created_at', { ascending: false }).limit(1000),
         supabase.from('job_runs').select('id,status,trading_date,counts,warnings,started_at,finished_at').eq('job_type', 'EOD_INGEST').order('started_at', { ascending: false }).limit(8),
         supabase.from('symbols').select('id', { count: 'exact', head: true }).eq('active', true),
       ])
