@@ -43,7 +43,7 @@ export interface PatternInstance {
   evidence: Record<string, number | string | boolean>
 }
 
-export interface PriceZone { id: string; zone_type: 'SUPPORT' | 'RESISTANCE'; lower_price: number; upper_price: number; touches: number; strength: number }
+export interface PriceZone { id: string; zone_type: 'SUPPORT' | 'RESISTANCE'; lower_price: number; upper_price: number; touches: number; strength: number; as_of_date: string }
 export interface FundamentalPeriod {
   id: string
   period_end: string
@@ -79,7 +79,7 @@ export function useStockAnalysis(symbol: string | null, timeframe: 'D' | 'W' | '
         priceQuery,
         supabase.from('technical_snapshots').select('*').eq('symbol_id', symbolRow.id).eq('timeframe', timeframe).order('as_of_date', { ascending: false }).limit(1),
         supabase.from('pattern_instances').select('*').eq('symbol_id', symbolRow.id).eq('timeframe', timeframe).order('as_of_date', { ascending: false }).order('quality_score', { ascending: false }).limit(8),
-        supabase.from('support_resistance_zones').select('id,zone_type,lower_price,upper_price,touches,strength').eq('symbol_id', symbolRow.id).eq('timeframe', timeframe).eq('active', true).order('strength', { ascending: false }).limit(6),
+        supabase.from('support_resistance_zones').select('id,zone_type,lower_price,upper_price,touches,strength,as_of_date').eq('symbol_id', symbolRow.id).eq('timeframe', timeframe).eq('active', true).order('as_of_date', { ascending: false }).order('strength', { ascending: false }).limit(24),
         supabase.from('disclosures').select('id,title,category,published_at,available_from,source,source_url').eq('symbol_id', symbolRow.id).order('published_at', { ascending: false }).limit(6),
         supabase.from('fundamental_periods').select('id,period_end,published_at,available_from,source,fundamental_metrics(revenue,eps,roe,debt_to_equity,operating_cash_flow)').eq('symbol_id', symbolRow.id).lte('available_from', new Date().toISOString().slice(0, 10)).order('period_end', { ascending: false }).limit(4),
       ])
@@ -90,10 +90,22 @@ export function useStockAnalysis(symbol: string | null, timeframe: 'D' | 'W' | '
         prices: ((prices.data ?? []) as PriceBar[]).reverse(),
         technical: (technical.data ?? []) as TechnicalSnapshot[],
         patterns: (patterns.data ?? []) as PatternInstance[],
-        zones: (zones.data ?? []) as PriceZone[],
+        zones: latestUniqueZones((zones.data ?? []) as PriceZone[]),
         disclosures: disclosures.data ?? [],
         fundamentals: (fundamentals.data ?? []) as FundamentalPeriod[],
       }
     },
   })
+}
+
+function latestUniqueZones(rows: PriceZone[]): PriceZone[] {
+  const latestDate = rows[0]?.as_of_date
+  const seen = new Set<string>()
+  return rows.filter(zone => {
+    if (zone.as_of_date !== latestDate) return false
+    const key = `${zone.zone_type}:${Number(zone.lower_price).toFixed(3)}:${Number(zone.upper_price).toFixed(3)}`
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  }).slice(0, 6)
 }

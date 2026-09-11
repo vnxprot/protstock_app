@@ -33,7 +33,7 @@ jobs:
           - label: L–Z
             source: VCI
             offset: 103
-            limit: 102
+            limit: 101
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

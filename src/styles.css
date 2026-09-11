@@ -324,4 +324,10 @@ main { min-width:0; }
   .market-strip { display:grid; grid-template-columns:1fr 1fr; overflow:hidden; gap:8px; margin:0 0 12px; padding:0; white-space:normal; }
   .market-strip>* { min-width:0; overflow:hidden; text-overflow:ellipsis; }
   .chart-tools,.rule-mode-tabs { overflow-x:hidden; flex-wrap:wrap; }
+  .panel-title { gap:10px; }.panel-title>div { min-width:0; }.panel-title h2,.panel-title h3 { overflow-wrap:anywhere; }
+  .zone-card { display:grid; gap:12px; }.zone-card strong { overflow:visible; white-space:normal; overflow-wrap:anywhere; line-height:1.35; }
+  .zone-meta { display:grid; grid-template-columns:auto minmax(0,1fr) auto; justify-content:stretch; }.zone-meta span { min-width:0; white-space:normal; text-align:center; }
+  .pattern-row>div { min-width:0; }.pattern-row strong,.pattern-row p { overflow-wrap:anywhere; }
+  .dashboard-signal { grid-template-columns:38px minmax(0,1fr) auto; gap:8px; }.dashboard-signal em { grid-column:2/-1; overflow-wrap:anywhere; font-size:10px; }
+  .watch-row { grid-template-columns:minmax(0,1fr) auto; gap:5px; }.watch-row span { grid-column:1/-1; }.health-metrics { grid-template-columns:repeat(2,minmax(0,1fr)); }
 }

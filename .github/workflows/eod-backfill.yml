@@ -9,7 +9,7 @@ on:
         default: '10'
         type: string
       end_offset:
-        description: Final inclusive zero-based offset; use 200 for the 205-symbol locked universe
+        description: Final inclusive zero-based offset; use 200 for the 204-symbol locked universe
         required: true
         default: '200'
         type: string

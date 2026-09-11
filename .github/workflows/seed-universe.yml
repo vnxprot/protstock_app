@@ -15,7 +15,7 @@ jobs:
         with:
           python-version: '3.12'
       - run: python -m pip install -e '.[data]'
-      - name: Seed the locked 205-symbol universe
+      - name: Seed the locked 204-symbol universe
         run: protstock seed-universe data/universe.csv
         env:
           SUPABASE_URL: https://upmqxwktvvguegqeqibn.supabase.co
