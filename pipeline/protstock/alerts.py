@@ -17,7 +17,7 @@ def build_telegram_message(signal: dict, trading_date: date) -> str:
     name = signal.get("rule_name") or rule_data.get("name")
     pack_version = signal.get("pack_version") or rule_data.get("pack_version")
     if kind == "CORE_PACK" and name:
-        rule = f"{name} {pack_version}".strip()
+        rule = name if pack_version and str(name).endswith(str(pack_version)) else f"{name} {pack_version}".strip()
     elif kind == "USER_RULE" and name:
         rule = f"Rule Studio: {name}"
     elif name:
