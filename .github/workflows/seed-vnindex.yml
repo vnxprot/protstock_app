@@ -1,0 +1,51 @@
+name: Seed VNINDEX history
+
+on:
+  workflow_dispatch:
+    inputs:
+      start_date:
+        description: First VNINDEX date to upsert
+        required: true
+        default: "2018-01-01"
+        type: string
+      end_date:
+        description: Optional final VNINDEX date (YYYY-MM-DD)
+        required: false
+        type: string
+      source:
+        description: Primary free data source; the CLI automatically tries the other source on failure
+        required: true
+        default: KBS
+        type: choice
+        options:
+          - KBS
+          - VCI
+
+permissions:
+  contents: read
+
+concurrency:
+  group: protstock-vnindex-backfill
+  cancel-in-progress: false
+
+jobs:
+  seed:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: python -m pip install -e ".[data]"
+      - name: Backfill VNINDEX history
+        env:
+          SUPABASE_URL: https://upmqxwktvvguegqeqibn.supabase.co
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          START_DATE: ${{ inputs.start_date }}
+          END_DATE: ${{ inputs.end_date }}
+          SOURCE: ${{ inputs.source }}
+        run: |
+          args=(--start-date "$START_DATE" --source "$SOURCE")
+          if [ -n "$END_DATE" ]; then args+=(--end-date "$END_DATE"); fi
+          python -m protstock.cli seed-vnindex "${args[@]}"

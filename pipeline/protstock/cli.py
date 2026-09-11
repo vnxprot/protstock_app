@@ -15,7 +15,7 @@ from .calibrate import calibrate_patterns
 from .outcome_worker import evaluate_pending_outcomes
 from .pattern_archive import archive_pattern_evidence
 from .universe import load_universe
-from .seed import seed_universe
+from .seed import seed_universe, seed_vnindex_history
 from .exchanges import sync_exchanges
 
 
@@ -42,6 +42,10 @@ def main() -> None:
     validate.add_argument("path", type=Path)
     seed = subparsers.add_parser("seed-universe")
     seed.add_argument("path", type=Path)
+    seed_vnindex = subparsers.add_parser("seed-vnindex")
+    seed_vnindex.add_argument("--start-date", type=date.fromisoformat, default=date(2018, 1, 1))
+    seed_vnindex.add_argument("--end-date", type=date.fromisoformat, default=date.today())
+    seed_vnindex.add_argument("--source", default="KBS", choices=("KBS", "VCI"))
     subparsers.add_parser("sync-exchanges")
     analyze = subparsers.add_parser("analyze-json")
     analyze.add_argument("path", type=Path)
@@ -79,6 +83,9 @@ def main() -> None:
         raise SystemExit(validate_universe(args.path))
     if args.command == "seed-universe":
         print(json.dumps(seed_universe(args.path), ensure_ascii=False))
+        raise SystemExit(0)
+    if args.command == "seed-vnindex":
+        print(json.dumps(seed_vnindex_history(args.start_date, args.end_date, args.source), ensure_ascii=False))
         raise SystemExit(0)
     if args.command == "sync-exchanges":
         print(json.dumps(sync_exchanges(), ensure_ascii=False))
