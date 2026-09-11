@@ -208,6 +208,12 @@ def rebuild_signals(trading_date: date, *, symbol_offset: int = 0, symbol_limit:
         if symbol_limit:
             symbols = symbols[:symbol_limit]
         active_rules = client.active_rule_versions()
+        if not active_rules:
+            # A signal-only run has nothing meaningful to do without an enabled
+            # engine. Fail loudly rather than report a misleading success.
+            raise RuntimeError(
+                "No ACTIVE signal engines found. Enable a Core Engine or Rule Studio rule before rebuilding signals."
+            )
         counts["engine_stats"] = _initialize_engine_stats(active_rules)
         market_context = _prior_market_context(client, trading_date)
         index = client.market_index("VNINDEX")
