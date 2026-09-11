@@ -10,10 +10,21 @@ from .supabase_rest import SupabaseRestClient
 
 
 def build_telegram_message(signal: dict, trading_date: date) -> str:
-    """Render either a user-rule signal or a rule-less Core Engine decision."""
-    symbol = (signal.get("symbols") or {}).get("symbol", "?")
+    """Render the signal with its pack/rule provenance, including legacy rows."""
+    symbol = signal.get("symbol") or (signal.get("symbols") or {}).get("symbol", "?")
     rule_data = (signal.get("rule_versions") or {}).get("rules") or {}
-    rule = rule_data.get("name") or "Prot Core Engine"
+    kind = signal.get("kind") or rule_data.get("kind")
+    name = signal.get("rule_name") or rule_data.get("name")
+    pack_version = signal.get("pack_version") or rule_data.get("pack_version")
+    if kind == "CORE_PACK" and name:
+        rule = f"{name} {pack_version}".strip()
+    elif kind == "USER_RULE" and name:
+        rule = f"Rule Studio: {name}"
+    elif name:
+        # Pre-Tier-4 user-rule rows have no kind but retain their old label.
+        rule = name
+    else:
+        rule = "Prot Core Engine"
     reasons = " · ".join(signal.get("reasons", [])[:3])
     return f"Prot Stock EOD · {trading_date:%d/%m/%Y}\n{signal['action']} {symbol} · {rule}\n{reasons}"
 
@@ -40,12 +51,13 @@ def send_eod_telegram_alerts(trading_date: date, reduce_dedupe_days: int = 5) ->
         return {"status": "DISABLED", "reason": "Telegram secrets are not configured"}
     client = SupabaseRestClient(Settings.from_env())
     try:
-        response = client._client.get("/signals", params={"select": "id,symbol_id,action,score,reasons,symbols(symbol),rule_versions(rules(name))", "as_of_date": f"eq.{trading_date.isoformat()}", "action": "in.(PROBE_BUY,ADD,REDUCE,EXIT)"})
+        response = client._client.get("/effective_signals", params={"select": "signal_id,symbol_id,symbol,action,score,reasons,rule_name,pack_version,kind,notification_mode", "as_of_date": f"eq.{trading_date.isoformat()}", "action": "in.(PROBE_BUY,ADD,REDUCE,EXIT)", "notification_mode": "eq.TELEGRAM"})
         response.raise_for_status()
         signals = response.json()
         sent = deduped = 0
         for signal in signals:
-            exists = client._client.get("/notification_deliveries", params={"select": "id", "signal_id": f"eq.{signal['id']}", "channel": "eq.TELEGRAM", "limit": "1"})
+            signal_id = signal.get("signal_id") or signal["id"]
+            exists = client._client.get("/notification_deliveries", params={"select": "id", "signal_id": f"eq.{signal_id}", "channel": "eq.TELEGRAM", "limit": "1"})
             exists.raise_for_status()
             if exists.json():
                 continue
@@ -55,7 +67,7 @@ def send_eod_telegram_alerts(trading_date: date, reduce_dedupe_days: int = 5) ->
             text = build_telegram_message(signal, trading_date)
             sent_response = httpx.post(f"https://api.telegram.org/bot{token}/sendMessage", json={"chat_id": chat_id, "text": text}, timeout=20)
             sent_response.raise_for_status()
-            client.upsert("notification_deliveries", [{"signal_id": signal["id"], "channel": "TELEGRAM", "payload": {"message": text}}], "signal_id,channel")
+            client.upsert("notification_deliveries", [{"signal_id": signal_id, "channel": "TELEGRAM", "payload": {"message": text}}], "signal_id,channel")
             sent += 1
         return {"status": "SUCCEEDED", "sent": sent, "deduped": deduped, "eligible": len(signals)}
     finally:

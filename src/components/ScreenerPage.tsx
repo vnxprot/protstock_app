@@ -12,9 +12,9 @@ export function ScreenerPage({ authenticated }: { authenticated: boolean }) {
     enabled: authenticated && Boolean(supabase),
     queryFn: async () => {
       const { data, error } = await supabase!
-        .from("signals")
+        .from("effective_signals")
         .select(
-          "id,as_of_date,timeframe,action,score,reasons,symbols(symbol,sector),rule_versions(rules(name))",
+          "signal_id,symbol,sector,as_of_date,timeframe,action,score,reasons,rule_name,pack_version,kind",
         )
         .order("as_of_date", { ascending: false })
         .order("score", { ascending: false })
@@ -30,7 +30,7 @@ export function ScreenerPage({ authenticated }: { authenticated: boolean }) {
         .filter(
           (item) =>
             (!query ||
-              item.symbols?.symbol
+              item.symbol
                 .toLowerCase()
                 .includes(query.toLowerCase())) &&
             (action === "ALL" || item.action === action) &&
@@ -44,12 +44,12 @@ export function ScreenerPage({ authenticated }: { authenticated: boolean }) {
       "Mã,Hành động,Khung,Điểm,Ngày,Rule",
       ...rows.map((x) =>
         [
-          x.symbols?.symbol,
+          x.symbol,
           x.action,
           x.timeframe,
           x.score,
           x.as_of_date,
-          x.rule_versions?.rules?.name,
+          x.rule_name,
         ].join(","),
       ),
     ].join("\n");
@@ -127,21 +127,21 @@ export function ScreenerPage({ authenticated }: { authenticated: boolean }) {
             <a
               href="#analysis"
               className="position-row"
-              key={signal.id}
+              key={signal.signal_id}
               onClick={() =>
-                localStorage.setItem("protstock-symbol", signal.symbols?.symbol)
+                localStorage.setItem("protstock-symbol", signal.symbol)
               }
             >
               <strong>
-                {signal.symbols?.symbol}
-                <small>{signal.symbols?.sector}</small>
+                {signal.symbol}
+                <small>{signal.sector}</small>
               </strong>
               <span className="action-pill">{signal.action}</span>
               <span>{signal.timeframe}</span>
               <b>{signal.score}</b>
               <span>
                 {signal.reasons?.join(" · ") ||
-                  signal.rule_versions?.rules?.name}
+                  signal.rule_name}
               </span>
               <span>{signal.as_of_date}</span>
             </a>

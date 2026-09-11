@@ -1,19 +1,321 @@
-import { FormEvent, useMemo, useState } from 'react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { CheckCircle2, Code2, GripVertical, MessageSquareText, Plus, Sparkles } from 'lucide-react'
-import { supabase } from '../lib/supabase'
-type Condition=Record<string,string|number>
-function compileText(input:string){const text=input.toLowerCase().replace(',','.');const all:Condition[]=[];const breakout=text.match(/(?:vượt đỉnh|breakout)\s+(\d+)/);const volume=text.match(/(?:volume|khối lượng)\s+(?:lớn hơn|>)\s+(\d+(?:\.\d+)?)\s*lần/);const rsi=text.match(/rsi(?:\s*14)?\s*(?:từ|trong khoảng)\s*(\d+(?:\.\d+)?)\s*(?:đến|-)\s*(\d+(?:\.\d+)?)/);if(breakout)all.push({metric:'close',op:'breakout_high',lookback:+breakout[1]});if(volume)all.push({metric:'volume_ratio20',op:'>',value:+volume[1]});if(/ma\s*20\s*>\s*ma\s*50\s*>\s*ma\s*200/.test(text))all.push({metric:'ma_stack',op:'bullish'});if(rsi)all.push({metric:'rsi14',op:'between',min:+rsi[1],max:+rsi[2]});const stop=text.match(/(?:stop-loss|cắt lỗ)\s*(\d+(?:\.\d+)?)\s*%/);if(stop)all.push({metric:'return_from_entry',op:'<=',value:-+stop[1]/100});if(!all.length)throw new Error('Chưa nhận ra điều kiện. Dùng breakout, volume, MA, RSI hoặc stop-loss.');return{version:1,action:/stop-loss|cắt lỗ/.test(text)?'EXIT':/bán|thoát/.test(text)?'REDUCE':'PROBE_BUY',timeframe:text.includes('tuần')?'W':text.includes('tháng')?'M':'D',all}}
-async function sha256(value:string){const data=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(value));return Array.from(new Uint8Array(data)).map(b=>b.toString(16).padStart(2,'0')).join('')}
-const chips=['Breakout đỉnh 20 phiên','Volume > 1.5 lần','MA20 > MA50 > MA200','RSI từ 45 đến 70','Cắt lỗ 7%']
-const visual=[{tone:'price',title:'Điều kiện giá',text:'Giá đóng cửa · Vượt đỉnh · 20 phiên'},{tone:'volume',title:'Khối lượng xác nhận',text:'Volume · > · 1.5 × Trung bình 20 phiên'},{tone:'indicator',title:'Chỉ báo động lượng',text:'RSI 14 · Trong khoảng · 45–70'},{tone:'risk',title:'Quản trị rủi ro',text:'Stop Loss · 7% từ giá vốn'}]
+import { FormEvent, useMemo, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  CheckCircle2,
+  Code2,
+  GripVertical,
+  MessageSquareText,
+  Plus,
+  Sparkles,
+} from "lucide-react";
+import { supabase } from "../lib/supabase";
+type Condition = Record<string, string | number>;
+function compileText(input: string) {
+  const text = input.toLowerCase().replace(",", ".");
+  const all: Condition[] = [];
+  const breakout = text.match(/(?:vượt đỉnh|breakout)\s+(\d+)/);
+  const volume = text.match(
+    /(?:volume|khối lượng)\s+(?:lớn hơn|>)\s+(\d+(?:\.\d+)?)\s*lần/,
+  );
+  const rsi = text.match(
+    /rsi(?:\s*14)?\s*(?:từ|trong khoảng)\s*(\d+(?:\.\d+)?)\s*(?:đến|-)\s*(\d+(?:\.\d+)?)/,
+  );
+  if (breakout)
+    all.push({ metric: "close", op: "breakout_high", lookback: +breakout[1] });
+  if (volume)
+    all.push({ metric: "volume_ratio20", op: ">", value: +volume[1] });
+  if (/ma\s*20\s*>\s*ma\s*50\s*>\s*ma\s*200/.test(text))
+    all.push({ metric: "ma_stack", op: "bullish" });
+  if (rsi)
+    all.push({ metric: "rsi14", op: "between", min: +rsi[1], max: +rsi[2] });
+  const stop = text.match(/(?:stop-loss|cắt lỗ)\s*(\d+(?:\.\d+)?)\s*%/);
+  if (stop)
+    all.push({ metric: "return_from_entry", op: "<=", value: -+stop[1] / 100 });
+  if (!all.length)
+    throw new Error(
+      "Chưa nhận ra điều kiện. Dùng breakout, volume, MA, RSI hoặc stop-loss.",
+    );
+  return {
+    version: 1,
+    action: /stop-loss|cắt lỗ/.test(text)
+      ? "EXIT"
+      : /bán|thoát/.test(text)
+        ? "REDUCE"
+        : "PROBE_BUY",
+    timeframe: text.includes("tuần") ? "W" : text.includes("tháng") ? "M" : "D",
+    all,
+  };
+}
+async function sha256(value: string) {
+  const data = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(value),
+  );
+  return Array.from(new Uint8Array(data))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+const chips = [
+  "Breakout đỉnh 20 phiên",
+  "Volume > 1.5 lần",
+  "MA20 > MA50 > MA200",
+  "RSI từ 45 đến 70",
+  "Cắt lỗ 7%",
+];
+const visual = [
+  {
+    tone: "price",
+    title: "Điều kiện giá",
+    text: "Giá đóng cửa · Vượt đỉnh · 20 phiên",
+  },
+  {
+    tone: "volume",
+    title: "Khối lượng xác nhận",
+    text: "Volume · > · 1.5 × Trung bình 20 phiên",
+  },
+  {
+    tone: "indicator",
+    title: "Chỉ báo động lượng",
+    text: "RSI 14 · Trong khoảng · 45–70",
+  },
+  { tone: "risk", title: "Quản trị rủi ro", text: "Stop Loss · 7% từ giá vốn" },
+];
 
-export function RuleBuilderPage({authenticated}:{authenticated:boolean}){const client=useQueryClient();const[name,setName]=useState('Breakout có xác nhận');const[input,setInput]=useState('Mua khi giá đóng cửa vượt đỉnh 20 phiên, volume lớn hơn 1.5 lần, MA20 > MA50 > MA200 và RSI từ 45 đến 70');const[mode,setMode]=useState<'language'|'visual'>('language');const[message,setMessage]=useState('');const[toast,setToast]=useState('');const preview=useMemo(()=>{try{return{dsl:compileText(input),error:''}}catch(error){return{dsl:null,error:(error as Error).message}}},[input]);const rules=useQuery({queryKey:['rules'],enabled:authenticated&&Boolean(supabase),queryFn:async()=>{const{data,error}=await supabase!.from('rules').select('id,name,input_text,status,created_at').order('created_at',{ascending:false});if(error)throw error;return data??[]}})
-  async function save(event:FormEvent){event.preventDefault();setMessage('');if(!supabase||!preview.dsl){setToast('Kết nối Supabase để lưu rule');setTimeout(()=>setToast(''),2500);return}const{data:rule,error}=await supabase.from('rules').insert({name,input_text:input,status:'ACTIVE'}).select('id').single();if(error)return setMessage(error.message);const canonical=JSON.stringify(preview.dsl);const{error:versionError}=await supabase.from('rule_versions').insert({rule_id:rule.id,version:1,dsl:preview.dsl,compiled_hash:await sha256(canonical)});if(versionError)return setMessage(versionError.message);setMessage('Đã lưu rule version 1.');setToast('Rule đã được lưu và kích hoạt');setTimeout(()=>setToast(''),3000);client.invalidateQueries({queryKey:['rules']})}
-  function addChip(chip:string){setInput(value=>`${value.trim().replace(/[,.]$/, '')}, ${chip.charAt(0).toLowerCase()+chip.slice(1)}`)}
-  const highlighted=preview.dsl?JSON.stringify(preview.dsl,null,2).replace(/("[^"]+")(?=\s*:)/g,'<span class="dsl-key">$1</span>').replace(/:\s*("[^"]+")/g,': <span class="dsl-string">$1</span>').replace(/:\s*(-?\d+(?:\.\d+)?)/g,': <span class="dsl-number">$1</span>'):'—'
-  return <section className="workspace-page"><span className="eyebrow">RULE ENGINE · VERSIONED DSL</span><div className="page-title-row"><div><h1>Rule Studio</h1><p className="muted">Chuyển kỷ luật giao dịch thành điều kiện có thể kiểm chứng.</p></div><span className="trend-badge up"><CheckCircle2 size={14}/> DSL hợp lệ</span></div><div className="rule-mode-tabs"><button className={mode==='language'?'active':''} onClick={()=>setMode('language')}><MessageSquareText size={15}/> Ngôn ngữ tự nhiên</button><button className={mode==='visual'?'active':''} onClick={()=>setMode('visual')}><GripVertical size={15}/> Visual blocks</button></div>
-    <div className="analysis-columns"><form className="panel rule-form" onSubmit={save}><label>Tên rule<input value={name} onChange={e=>setName(e.target.value)}/></label>{mode==='language'?<><label>Mô tả bằng lời<textarea rows={8} value={input} onChange={e=>setInput(e.target.value)}/></label><div className="prompt-chips">{chips.map(chip=><button type="button" key={chip} onClick={()=>addChip(chip)}><Plus size={12}/> {chip}</button>)}</div></>:<div className="visual-builder">{visual.map((item,index)=><div className={`condition-card ${item.tone}`} draggable key={item.title}><span><GripVertical size={17}/></span><div><strong>{index+1}. {item.title}</strong><small>{item.text}</small></div></div>)}<button type="button" className="secondary-button"><Plus size={14}/> Thêm điều kiện</button></div>}<button disabled={!preview.dsl}><Sparkles size={15}/> Lưu và kích hoạt</button>{(message||preview.error)&&<p className={preview.error?'form-error':'form-ok'}>{preview.error||message}</p>}</form>
-      <article className="panel"><div className="panel-title"><h3><Code2 size={16}/> Bản dịch có kiểm soát</h3><span>DSL V1</span></div><pre className="dsl-preview" dangerouslySetInnerHTML={{__html:highlighted}}/><p className="muted">Engine chỉ chạy DSL đã kiểm tra, không thực thi code do AI tạo.</p></article></div>
-    <article className="panel"><div className="panel-title"><h3>Rules của Prot</h3><span>{rules.data?.length??0}</span></div>{(rules.data??[]).map(rule=><div className="rule-row" key={rule.id}><div><strong>{rule.name}</strong><small>{rule.input_text}</small></div><span>{rule.status}</span></div>)}{!rules.isLoading&&!rules.data?.length&&<p className="muted">Rule đầu tiên sẽ xuất hiện tại đây sau khi lưu.</p>}</article>{toast&&<div className="toast" role="status"><CheckCircle2 size={18}/>{toast}</div>}</section>
+export function RuleBuilderPage({ authenticated }: { authenticated: boolean }) {
+  const client = useQueryClient();
+  const [name, setName] = useState("Breakout có xác nhận");
+  const [input, setInput] = useState(
+    "Mua khi giá đóng cửa vượt đỉnh 20 phiên, volume lớn hơn 1.5 lần, MA20 > MA50 > MA200 và RSI từ 45 đến 70",
+  );
+  const [mode, setMode] = useState<"language" | "visual">("language");
+  const [message, setMessage] = useState("");
+  const [toast, setToast] = useState("");
+  const preview = useMemo(() => {
+    try {
+      return { dsl: compileText(input), error: "" };
+    } catch (error) {
+      return { dsl: null, error: (error as Error).message };
+    }
+  }, [input]);
+  const rules = useQuery({
+    queryKey: ["rules"],
+    enabled: authenticated && Boolean(supabase),
+    queryFn: async () => {
+      const { data, error } = await supabase!
+        .from("rules")
+        .select(
+          "id,name,input_text,status,kind,pack_version,notification_mode,created_at",
+        )
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+  async function save(event: FormEvent) {
+    event.preventDefault();
+    setMessage("");
+    if (!supabase || !preview.dsl) {
+      setToast("Kết nối Supabase để lưu rule");
+      setTimeout(() => setToast(""), 2500);
+      return;
+    }
+    const { data: rule, error } = await supabase
+      .from("rules")
+      .insert({ name, input_text: input, status: "ACTIVE", kind: "USER_RULE" })
+      .select("id")
+      .single();
+    if (error) return setMessage(error.message);
+    const canonical = JSON.stringify(preview.dsl);
+    const { error: versionError } = await supabase
+      .from("rule_versions")
+      .insert({
+        rule_id: rule.id,
+        version: 1,
+        dsl: preview.dsl,
+        compiled_hash: await sha256(canonical),
+      });
+    if (versionError) return setMessage(versionError.message);
+    setMessage("Đã lưu rule version 1.");
+    setToast("Rule đã được lưu và kích hoạt");
+    setTimeout(() => setToast(""), 3000);
+    client.invalidateQueries({ queryKey: ["rules"] });
+  }
+  function addChip(chip: string) {
+    setInput(
+      (value) =>
+        `${value.trim().replace(/[,.]$/, "")}, ${chip.charAt(0).toLowerCase() + chip.slice(1)}`,
+    );
+  }
+  async function toggleRule(rule: {
+    id: string;
+    status: string;
+    name: string;
+  }) {
+    if (!supabase) return;
+    const status = rule.status === "ACTIVE" ? "PAUSED" : "ACTIVE";
+    const { error } = await supabase
+      .from("rules")
+      .update({ status })
+      .eq("id", rule.id);
+    if (error) return setToast(error.message);
+    setToast(`${rule.name}: ${status === "ACTIVE" ? "đã bật" : "đã tắt"}`);
+    setTimeout(() => setToast(""), 3000);
+    client.invalidateQueries({ queryKey: ["rules"] });
+  }
+  const highlighted = preview.dsl
+    ? JSON.stringify(preview.dsl, null, 2)
+        .replace(/("[^"]+")(?=\s*:)/g, '<span class="dsl-key">$1</span>')
+        .replace(/:\s*("[^"]+")/g, ': <span class="dsl-string">$1</span>')
+        .replace(
+          /:\s*(-?\d+(?:\.\d+)?)/g,
+          ': <span class="dsl-number">$1</span>',
+        )
+    : "—";
+  return (
+    <section className="workspace-page">
+      <span className="eyebrow">RULE ENGINE · VERSIONED DSL</span>
+      <div className="page-title-row">
+        <div>
+          <h1>Rule Studio</h1>
+          <p className="muted">
+            Chuyển kỷ luật giao dịch thành điều kiện có thể kiểm chứng.
+          </p>
+        </div>
+        <span className="trend-badge up">
+          <CheckCircle2 size={14} /> DSL hợp lệ
+        </span>
+      </div>
+      <div className="rule-mode-tabs">
+        <button
+          className={mode === "language" ? "active" : ""}
+          onClick={() => setMode("language")}
+        >
+          <MessageSquareText size={15} /> Ngôn ngữ tự nhiên
+        </button>
+        <button
+          className={mode === "visual" ? "active" : ""}
+          onClick={() => setMode("visual")}
+        >
+          <GripVertical size={15} /> Visual blocks
+        </button>
+      </div>
+      <div className="analysis-columns">
+        <form className="panel rule-form" onSubmit={save}>
+          <label>
+            Tên rule
+            <input value={name} onChange={(e) => setName(e.target.value)} />
+          </label>
+          {mode === "language" ? (
+            <>
+              <label>
+                Mô tả bằng lời
+                <textarea
+                  rows={8}
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                />
+              </label>
+              <div className="prompt-chips">
+                {chips.map((chip) => (
+                  <button
+                    type="button"
+                    key={chip}
+                    onClick={() => addChip(chip)}
+                  >
+                    <Plus size={12} /> {chip}
+                  </button>
+                ))}
+              </div>
+            </>
+          ) : (
+            <div className="visual-builder">
+              {visual.map((item, index) => (
+                <div
+                  className={`condition-card ${item.tone}`}
+                  draggable
+                  key={item.title}
+                >
+                  <span>
+                    <GripVertical size={17} />
+                  </span>
+                  <div>
+                    <strong>
+                      {index + 1}. {item.title}
+                    </strong>
+                    <small>{item.text}</small>
+                  </div>
+                </div>
+              ))}
+              <button type="button" className="secondary-button">
+                <Plus size={14} /> Thêm điều kiện
+              </button>
+            </div>
+          )}
+          <button disabled={!preview.dsl}>
+            <Sparkles size={15} /> Lưu và kích hoạt
+          </button>
+          {(message || preview.error) && (
+            <p className={preview.error ? "form-error" : "form-ok"}>
+              {preview.error || message}
+            </p>
+          )}
+        </form>
+        <article className="panel">
+          <div className="panel-title">
+            <h3>
+              <Code2 size={16} /> Bản dịch có kiểm soát
+            </h3>
+            <span>DSL V1</span>
+          </div>
+          <pre
+            className="dsl-preview"
+            dangerouslySetInnerHTML={{ __html: highlighted }}
+          />
+          <p className="muted">
+            Engine chỉ chạy DSL đã kiểm tra, không thực thi code do AI tạo.
+          </p>
+        </article>
+      </div>
+      <article className="panel">
+        <div className="panel-title">
+          <h3>Rules của Prot</h3>
+          <span>{rules.data?.length ?? 0}</span>
+        </div>
+        {(rules.data ?? []).map((rule) => (
+          <div className="rule-row" key={rule.id}>
+            <div>
+              <strong>
+                {rule.name}
+                {rule.kind === "CORE_PACK" && (
+                  <small> · CORE PACK {rule.pack_version}</small>
+                )}
+              </strong>
+              <small>{rule.input_text}</small>
+            </div>
+            <div className="rule-row-actions">
+              <span>{rule.status}</span>
+              <button
+                type="button"
+                className="text-button"
+                onClick={() => toggleRule(rule)}
+              >
+                {rule.status === "ACTIVE" ? "Tắt" : "Bật"}
+              </button>
+            </div>
+          </div>
+        ))}
+        {!rules.isLoading && !rules.data?.length && (
+          <p className="muted">
+            Rule đầu tiên sẽ xuất hiện tại đây sau khi lưu.
+          </p>
+        )}
+      </article>
+      {toast && (
+        <div className="toast" role="status">
+          <CheckCircle2 size={18} />
+          {toast}
+        </div>
+      )}
+    </section>
+  );
 }

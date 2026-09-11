@@ -6,10 +6,10 @@ from typing import Any
 
 from .analysis import ALGORITHM_VERSION, analyze_bars
 from .config import Settings
+from .engines import evaluate_named_engine
 from .indicators import calculate_indicators
 from .market_regime import compute_breadth
 from .provider_vnstock import VnstockProvider
-from .rules import evaluate_rule, multi_timeframe_gate
 from .supabase_rest import SupabaseRestClient
 from .timeframes import aggregate_bars
 
@@ -118,7 +118,12 @@ def run_eod(
                         )
                     preliminary = {timeframe: analyze_bars(scoped_rows) for timeframe, scoped_rows in timeframe_rows.items() if scoped_rows}
                     results = {timeframe: analyze_bars(scoped_rows, weekly_patterns=preliminary.get("W", {}).get("patterns", []), monthly_snapshot=preliminary.get("M", {}).get("indicators", {}), benchmark_rows=benchmark_rows[timeframe], market_context=market_context if timeframe == "D" else None) for timeframe, scoped_rows in timeframe_rows.items() if scoped_rows}
-                    context = {"weekly_patterns": results.get("W", {}).get("patterns", []), "monthly_snapshot": results.get("M", {}).get("indicators", {})}
+                    context = {
+                        "weekly_patterns": results.get("W", {}).get("patterns", []),
+                        "monthly_snapshot": results.get("M", {}).get("indicators", {}),
+                        "market_context": market_context,
+                        "candidate_sector": symbol_row["sector"],
+                    }
                     for timeframe, scoped_rows in timeframe_rows.items():
                         if timeframe in results:
                             _write_analysis(client, symbol_row["id"], timeframe, scoped_rows, benchmark_rows[timeframe], active_rules, counts, results[timeframe], context)
@@ -263,56 +268,38 @@ def _write_analysis(
         "support_resistance_zones", zones,
         "symbol_id,timeframe,as_of_date,zone_type,lower_price,upper_price",
     )
-    core_signal = _core_engine_signal_row(symbol_id, timeframe, result)
-    if core_signal:
-        counts["signals"] += client.upsert_core_engine_signal(core_signal)
-
     signal_rows = []
     for version in active_rules:
         dsl = version["dsl"]
         if dsl.get("timeframe", "D") != timeframe:
             continue
-        passed, reasons = evaluate_rule(dsl, result["indicators"], rows, result["patterns"], context)
+        rule = version.get("rules") or {}
+        engine_context = {
+            "dsl": dsl,
+            "bars": rows,
+            "patterns": result["patterns"],
+            "snapshot": result["indicators"],
+            "zones": result["zones"],
+            "position": context.get("position"),
+            "market_context": context.get("market_context") if timeframe == "D" else None,
+            "multi_timeframe_context": {
+                "weekly_patterns": context.get("weekly_patterns", []),
+                "monthly_snapshot": context.get("monthly_snapshot", {}),
+            },
+            "portfolio_positions": context.get("portfolio_positions"),
+            "candidate_sector": context.get("candidate_sector"),
+            "capital": context.get("capital"),
+            "rule_context": context,
+        }
+        passed, action, reasons = evaluate_named_engine(dsl.get("engine"), dsl.get("overrides"), engine_context)
         if passed:
-            action = dsl.get("action", "WATCH")
-            if timeframe == "D" and action in {"PROBE_BUY", "ADD"}:
-                gate_ok, gate_reasons = multi_timeframe_gate(context)
-                reasons.extend(gate_reasons)
-                if not gate_ok:
-                    action = "WATCH"
             signal_rows.append({
                 "rule_version_id": version["id"], "symbol_id": symbol_id,
                 "timeframe": timeframe, "as_of_date": result["as_of_date"],
-                "action": action, "source": "USER_RULE", "score": 100,
+                "action": action, "source": "CORE_PACK" if rule.get("kind") == "CORE_PACK" else "USER_RULE", "score": 100,
                 "reasons": reasons,
                 "evidence": {key: value for key, value in result["indicators"].items() if value is not None},
             })
     counts["signals"] += client.upsert(
         "signals", signal_rows, "rule_version_id,symbol_id,timeframe,as_of_date,action"
     )
-
-
-def _core_engine_signal_row(symbol_id: int, timeframe: str, result: dict[str, Any]) -> dict[str, Any] | None:
-    """Return a meaningful canonical signal, omitting an uninformative WATCH."""
-    action = result["signal_preview"]
-    reasons = result["reasons"]
-    if action == "WATCH" and not any(reason.startswith("NEAR_TRIGGER_") for reason in reasons):
-        return None
-    evidence = {key: value for key, value in result["indicators"].items() if value is not None}
-    pattern_reason = next((reason for reason in reasons if reason.startswith("PATTERN_") and reason.endswith("_CONFIRMED")), None)
-    if pattern_reason:
-        pattern_type = pattern_reason.removeprefix("PATTERN_").removesuffix("_CONFIRMED")
-        pattern = next((item for item in result["patterns"] if item.get("pattern_type") == pattern_type and item.get("state") == "CONFIRMED"), None)
-        if pattern:
-            evidence.update({key: pattern[key] for key in ("pattern_type", "quality_score", "invalidation_price") if pattern.get(key) is not None})
-    return {
-        "rule_version_id": None,
-        "source": "CORE_ENGINE",
-        "symbol_id": symbol_id,
-        "timeframe": timeframe,
-        "as_of_date": result["as_of_date"],
-        "action": action,
-        "score": 100,
-        "reasons": reasons,
-        "evidence": evidence,
-    }

@@ -6,66 +6,69 @@ from protstock.eod import _write_analysis
 
 class RecordingClient:
     def __init__(self) -> None:
-        self.core_signals: list[dict] = []
+        self.signal_rows: list[dict] = []
 
-    def upsert(self, _table, rows, _on_conflict):
-        return len(list(rows))
+    def upsert(self, table, rows, _on_conflict):
+        payload = list(rows)
+        if table == "signals":
+            self.signal_rows.extend(payload)
+        return len(payload)
 
-    def upsert_core_engine_signal(self, payload):
-        self.core_signals.append(payload)
-        return 1
 
-
-def _result(action: str, reasons: list[str]) -> dict:
+def _result(patterns: list[dict], reasons: list[str]) -> dict:
     return {
         "as_of_date": "2026-09-11",
-        "indicators": {"close": 100.0, "rsi14": 55.0},
-        "patterns": [],
-        "signal_preview": action,
+        "indicators": {"close": 100.0, "rsi14": 55.0, "trend_state": "UP", "volume_avg20": 5_000_000, "volume_ratio20": 1.0},
+        "patterns": patterns,
+        "zones": [],
+        "signal_preview": "WATCH",
         "reasons": reasons,
     }
 
 
 def _write(client: RecordingClient, result: dict) -> None:
     _write_analysis(
-        client, 42, "D", [{"date": "2026-09-11"}], [], [],
-        {"snapshots": 0, "patterns": 0, "zones": 0, "signals": 0}, result, {},
+        client, 42, "D", [{"date": "2026-09-11"}], [],
+        [{"id": "v2", "dsl": {"engine": "core_ladder_v2", "timeframe": "D", "overrides": {}}, "rules": {"kind": "CORE_PACK"}}],
+        {"snapshots": 0, "patterns": 0, "zones": 0, "signals": 0}, result,
+        {"weekly_patterns": [], "monthly_snapshot": {}, "candidate_sector": "TECH"},
     )
 
 
-def test_core_engine_skips_generic_watch() -> None:
+def test_core_pack_skips_generic_watch() -> None:
     client = RecordingClient()
-    _write(client, {**_result("WATCH", ["TREND_UP"]), "zones": []})
-    assert client.core_signals == []
+    _write(client, _result([], ["TREND_UP"]))
+    assert client.signal_rows == []
 
 
-def test_core_engine_persists_near_trigger_watch() -> None:
+def test_core_v2_flows_through_active_rule_versions() -> None:
     client = RecordingClient()
-    _write(client, {**_result("WATCH", ["TREND_UP", "NEAR_TRIGGER_ACCUMULATION_BASE"]), "zones": []})
-    assert client.core_signals == [{
-        "rule_version_id": None, "source": "CORE_ENGINE", "symbol_id": 42,
-        "timeframe": "D", "as_of_date": "2026-09-11", "action": "WATCH",
-        "score": 100, "reasons": ["TREND_UP", "NEAR_TRIGGER_ACCUMULATION_BASE"],
-        "evidence": {"close": 100.0, "rsi14": 55.0},
+    ready = {"pattern_type": "ACCUMULATION_BASE", "state": "READY", "direction": "BULLISH", "quality_score": 50, "start_index": 0, "end_index": 0, "trigger_price": 101, "invalidation_price": 95, "evidence": {}, "reasons": []}
+    _write(client, _result([ready], ["TREND_UP", "NEAR_TRIGGER_ACCUMULATION_BASE"]))
+    assert client.signal_rows == [{
+        "rule_version_id": "v2", "symbol_id": 42, "timeframe": "D", "as_of_date": "2026-09-11",
+        "action": "WATCH", "source": "CORE_PACK", "score": 100,
+        "reasons": ["TREND_UP", "NEAR_TRIGGER_ACCUMULATION_BASE"],
+        "evidence": {"close": 100.0, "rsi14": 55.0, "trend_state": "UP", "volume_avg20": 5000000, "volume_ratio20": 1.0},
     }]
 
 
-def test_core_engine_alert_uses_fallback_label() -> None:
+def test_core_pack_alert_uses_versioned_label() -> None:
     text = build_telegram_message(
-        {"action": "PROBE_BUY", "symbols": {"symbol": "VNM"}, "rule_versions": None, "reasons": ["BREAKOUT"]},
+        {"action": "PROBE_BUY", "symbol": "VNM", "kind": "CORE_PACK", "rule_name": "Prot Core Engine", "pack_version": "v2.0", "reasons": ["BREAKOUT"]},
         date(2026, 9, 11),
     )
+    assert "PROBE_BUY VNM · Prot Core Engine v2.0" in text
+
+
+def test_user_rule_alert_uses_rule_studio_label() -> None:
+    signal = {"action": "ADD", "symbols": {"symbol": "FPT"}, "rule_versions": {"rules": {"kind": "USER_RULE", "name": "RSI pullback"}}, "reasons": ["RSI14_LOW"]}
+    assert "ADD FPT · Rule Studio: RSI pullback" in build_telegram_message(signal, date(2026, 9, 11))
+
+
+def test_legacy_null_fk_alert_uses_defensive_fallback() -> None:
+    text = build_telegram_message({"action": "PROBE_BUY", "symbols": {"symbol": "VNM"}, "rule_versions": None, "reasons": ["BREAKOUT"]}, date(2026, 9, 11))
     assert "PROBE_BUY VNM · Prot Core Engine" in text
-
-
-def test_user_rule_alert_message_is_unchanged() -> None:
-    signal = {
-        "action": "ADD", "symbols": {"symbol": "FPT"},
-        "rule_versions": {"rules": {"name": "RSI pullback"}}, "reasons": ["RSI14_LOW"],
-    }
-    assert build_telegram_message(signal, date(2026, 9, 11)) == (
-        "Prot Stock EOD · 11/09/2026\nADD FPT · RSI pullback\nRSI14_LOW"
-    )
 
 
 def test_core_engine_migration_keeps_rows_visible_under_owner_rls() -> None:

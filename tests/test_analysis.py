@@ -92,7 +92,7 @@ def test_core_signal_mtf_gate_downgrades_qualifying_probe_buy(monkeypatch):
     snapshot = SimpleNamespace(trend_state="UP", to_dict=lambda: _snapshot())
     candidate = SimpleNamespace(start_index=0, to_dict=lambda: _bull(score=75))
     monkeypatch.setattr("protstock.analysis.calculate_indicators", lambda _: snapshot)
-    monkeypatch.setattr("protstock.analysis.detect_patterns", lambda _: [candidate])
+    monkeypatch.setattr("protstock.analysis.detect_patterns", lambda *_: [candidate])
     bars = [_bar(99, 101, 98, 100, 10)]
     assert analyze_bars(bars)["signal_preview"] == "PROBE_BUY"
     gated = analyze_bars(bars, weekly_patterns=[], monthly_snapshot={"trend_state": "UP"})

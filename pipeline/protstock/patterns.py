@@ -4,6 +4,7 @@ from dataclasses import dataclass, asdict
 from typing import Sequence
 
 from .candles import is_bullish_engulfing, is_pin_bar
+from .indicators import calculate_indicators
 
 
 @dataclass(frozen=True)
@@ -201,6 +202,43 @@ def detect_flag(bars: Sequence[dict]) -> PatternCandidate | None:
                             {"pole_return_pct": round(pole_return * 100, 2), "retracement_pct": round(flag_return * 100, 2), "breakout_volume_ok": volume_ok, **quality})
 
 
-def detect_patterns(bars: Sequence[dict]) -> list[PatternCandidate]:
-    candidates = [detect_accumulation_base(bars), detect_double(bars, "bottom"), detect_double(bars, "top"), detect_triangle(bars), detect_flag(bars)]
+def detect_pullback_continuation(bars: Sequence[dict], snapshot: dict | None = None) -> PatternCandidate | None:
+    """Bullish trend pullback to EMA20/SMA50 with a light, confirmed turn bar."""
+    if len(bars) < 50:
+        return None
+    snapshot = snapshot or calculate_indicators(bars).to_dict()
+    if snapshot.get("trend_state") != "UP":
+        return None
+    close, ema20, sma50 = float(bars[-1]["close"]), snapshot.get("ema20"), snapshot.get("sma50")
+    if ema20 is None or sma50 is None:
+        return None
+    ema_near = abs(close - float(ema20)) / float(ema20) <= 0.02
+    sma_near = abs(close - float(sma50)) / float(sma50) <= 0.03
+    support = float(ema20) if ema_near else float(sma50)
+    near_support = ema_near or sma_near
+    trigger_candle = _candle_confirmation(bars, "BULLISH")
+    trigger_volume = float(snapshot.get("volume_ratio20") or 0) >= 1.0
+    green = float(bars[-1]["close"]) > float(bars[-1]["open"])
+    confirmed = near_support and green and (trigger_candle or trigger_volume)
+    state = "CONFIRMED" if confirmed else "READY" if near_support else "FORMING"
+    start = max(0, len(bars) - 20)
+    resistance = max(float(item["high"]) for item in bars[start:-1])
+    score, quality = _quality(bars, start, support, resistance, confirmed, near_support, confirmed and trigger_candle)
+    prior_trend_bonus = 5.0 if snapshot.get("sma200") is not None and close > float(snapshot["sma200"]) else 0.0
+    score = min(100.0, round(score + prior_trend_bonus, 1))
+    return PatternCandidate(
+        "PULLBACK_CONTINUATION", state, "BULLISH", start, len(bars) - 1,
+        float(bars[-1]["high"]), float(sma50) * 0.97, score,
+        tuple(filter(None, (
+            "EMA20_SUPPORT" if ema_near else "SMA50_SUPPORT" if sma_near else "PULLBACK_FORMING",
+            "BULLISH_TRIGGER" if confirmed else "WAITING_FOR_TRIGGER" if near_support else "",
+            "VOLUME_AT_LEAST_AVERAGE" if trigger_volume else "",
+            "CANDLESTICK_CONFIRMATION" if confirmed and trigger_candle else "",
+        ))),
+        {"ema20_distance_pct": round(abs(close - float(ema20)) / float(ema20) * 100, 2), "sma50_distance_pct": round(abs(close - float(sma50)) / float(sma50) * 100, 2), "volume_ratio20": snapshot.get("volume_ratio20"), "prior_trend_bonus": prior_trend_bonus, **quality},
+    )
+
+
+def detect_patterns(bars: Sequence[dict], snapshot: dict | None = None) -> list[PatternCandidate]:
+    candidates = [detect_accumulation_base(bars), detect_double(bars, "bottom"), detect_double(bars, "top"), detect_triangle(bars), detect_flag(bars), detect_pullback_continuation(bars, snapshot)]
     return sorted((candidate for candidate in candidates if candidate is not None), key=lambda item: item.quality_score, reverse=True)

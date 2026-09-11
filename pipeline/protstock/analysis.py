@@ -18,7 +18,7 @@ def analyze_bars(bars: Sequence[dict], position: dict | None = None, weekly_patt
         raise ValueError("bars cannot be empty")
     ordered = sorted(bars, key=lambda item: item["date"])
     snapshot = calculate_indicators(ordered)
-    patterns = detect_patterns(ordered)
+    patterns = detect_patterns(ordered, snapshot.to_dict())
     zones = detect_zones(ordered)
     snapshot_dict = snapshot.to_dict()
     if benchmark_rows is not None:

@@ -23,8 +23,8 @@ class _Rest:
     def __init__(self, action: str, prior_days: int):
         self.action, self.prior_days = action, prior_days
     def get(self, path, params=None):
-        if path == "/signals":
-            return _Response([{ "id": "new", "symbol_id": 7, "action": self.action, "reasons": [], "symbols": {"symbol": "FPT"}, "rule_versions": None }])
+        if path == "/effective_signals":
+            return _Response([{ "signal_id": "new", "symbol_id": 7, "symbol": "FPT", "action": self.action, "reasons": [], "kind": "CORE_PACK", "rule_name": "Test Pack", "pack_version": "v1.0", "notification_mode": "TELEGRAM" }])
         if params.get("signal_id") == "eq.new":
             return _Response([])
         # This is the REDUCE-only historical-delivery query.

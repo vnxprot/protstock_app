@@ -68,7 +68,7 @@ class SupabaseRestClient:
         response = self._client.get(
             "/rule_versions",
             params={
-                "select": "id,dsl,rules!inner(status)",
+                "select": "id,dsl,rules!inner(id,name,kind,pack_version,notification_mode,blocks_new_entries,status)",
                 "rules.status": "eq.ACTIVE",
             },
         )
