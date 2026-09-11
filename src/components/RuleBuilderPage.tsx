@@ -93,10 +93,11 @@ const corePackContents: Record<string, string[]> = {
     "Gates: đa khung D/W/M, market regime và tập trung ngành",
     "Mẫu hình, volume, thanh khoản, RSI, MA-stack và Relative Strength",
   ],
-  "Prot Core Pack · Pullback Continuation": [
-    "Xu hướng tăng, giá hồi về EMA20 hoặc SMA50",
-    "Nến trigger xanh và candlestick hoặc volume tối thiểu trung bình 20 phiên",
-    "Stop logic dưới SMA50 3% · đang tắt để Prot tự kích hoạt khi cần",
+  "Prot Core Pack · Hồi về hỗ trợ (Pullback Continuation, khung Ngày)": [
+    "Xu hướng: mã đang tăng trên khung Ngày (trend_state = UP tính từ các đường MA của chính mã)",
+    "Vùng hồi: giá đóng cửa Ngày nằm trong ±2% quanh EMA20 (Ngày) hoặc ±3% quanh SMA50 (Ngày)",
+    "Nến kích hoạt: nến Ngày gần nhất đóng cửa xanh, kèm nến đảo chiều tăng (nhấn chìm/pin bar) hoặc khối lượng Ngày ≥ trung bình 20 phiên — không cần đột biến như mẫu hình breakout khác",
+    "Dừng lỗ tham khảo: SMA50 (Ngày) trừ 3% — giá đóng cửa xuống dưới mức này coi như setup thất bại",
   ],
 };
 
