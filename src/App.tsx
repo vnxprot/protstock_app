@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { BarChart3, Bell, BookOpen, BriefcaseBusiness, ChevronLeft, Command, FlaskConical, LayoutDashboard, Menu, Search, Settings, ShieldCheck, TrendingUp, Workflow, X } from 'lucide-react'
+import { BarChart3, Bell, BookOpen, BriefcaseBusiness, ChevronDown, ChevronLeft, Command, FlaskConical, LayoutDashboard, Menu, Search, Settings, ShieldCheck, TrendingUp, Workflow, X } from 'lucide-react'
 import { useDataHealth } from './hooks/useDataHealth'
 import { useSymbols } from './hooks/useStockAnalysis'
 import { isSupabaseConfigured, supabase } from './lib/supabase'
@@ -45,12 +45,44 @@ function App({ authenticated = false }: { authenticated?: boolean }) {
 }
 
 function LoadingPage() { return <div className="skeleton-page"><div className="skeleton skeleton-title"/><div className="skeleton skeleton-card"/><div className="skeleton-grid">{[1,2,3,4].map(i => <div className="skeleton" key={i}/>)}</div></div> }
+function MarketContextCard() {
+  const market = useQuery({ queryKey: ['dashboard-vnindex'], enabled: Boolean(supabase), staleTime: 60_000, queryFn: async () => {
+    const { data: index, error: indexError } = await supabase!.from('market_indices').select('id').eq('code', 'VNINDEX').single()
+    if (indexError) throw indexError
+    const [{ data: prices, error: pricesError }, { data: breadth, error: breadthError }] = await Promise.all([
+      supabase!.from('market_index_prices').select('trading_date,close,source,collected_at').eq('index_id', index.id).order('trading_date', { ascending: false }).limit(2),
+      supabase!.from('market_breadth_snapshots').select('trading_date,pct_above_sma50,sample_size,vnindex_trend_state,calculated_at').order('trading_date', { ascending: false }).limit(1),
+    ])
+    if (pricesError || breadthError) throw pricesError || breadthError
+    const latest = prices?.[0]
+    const prior = prices?.[1]
+    const change = latest && prior ? ((Number(latest.close) - Number(prior.close)) / Number(prior.close)) * 100 : null
+    return { latest, change, breadth: breadth?.[0] }
+  } })
+  const data = market.data
+  const state = data?.breadth?.vnindex_trend_state ?? 'UNKNOWN'
+  const stateLabel = state === 'UP' ? 'UPTREND' : state === 'DOWN' ? 'DOWNTREND' : state === 'SIDEWAYS' ? 'NEUTRAL' : 'ĐANG ĐỒNG BỘ'
+  const isRiskOff = state === 'DOWN' || (data?.breadth?.pct_above_sma50 != null && Number(data.breadth.pct_above_sma50) < 35)
+  const breadthPct = data?.breadth?.pct_above_sma50 == null ? '—' : `${Number(data.breadth.pct_above_sma50).toFixed(1)}%`
+  return <details className="market-context-card panel">
+    <summary>
+      <div className="market-context-heading"><span className="eyebrow">THỊ TRƯỜNG · VNINDEX</span><strong>{market.isLoading ? 'Đang tải thị trường…' : formatDate(data?.latest?.trading_date ?? data?.breadth?.trading_date)}</strong><small>EOD · {data?.latest?.source?.replace('VNSTOCK_', '') ?? '—'}</small></div>
+      <div className="market-context-price"><b>{data?.latest ? Number(data.latest.close).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'}</b><span className={data?.change != null && data.change < 0 ? 'negative' : 'positive'}>{data?.change == null ? '—' : `${data.change >= 0 ? '+' : ''}${data.change.toFixed(2)}%`}</span></div>
+      <span className={`market-regime ${state.toLowerCase()}`}>{stateLabel}</span><ChevronDown className="market-context-chevron" size={18}/>
+    </summary>
+    <div className="market-context-detail">
+      <div><span>Breadth trên SMA50</span><strong>{breadthPct}</strong><small>{data?.breadth?.sample_size ?? 0} mã có dữ liệu</small></div>
+      <div><span>Market Gate</span><strong className={isRiskOff ? 'negative' : 'positive'}>{isRiskOff ? 'Thận trọng' : 'Cho phép setup'}</strong><small>{isRiskOff ? 'Tín hiệu mua có thể bị hạ xuống WATCH.' : 'Không có chặn mua từ bối cảnh thị trường.'}</small></div>
+      <p>Card này chỉ hiển thị bối cảnh dùng trực tiếp bởi Prot Core Engine; biểu đồ VNINDEX chuyên sâu vẫn nên xem tại FireAnt, 24HMoney hoặc TradingView.</p>
+    </div>
+  </details>
+}
 function Dashboard({ universeCount, connectionLabel, health }: { universeCount: number; connectionLabel: string; health?: { latest_price_date: string | null; failed_jobs_7d: number } }) {
   const signals = useQuery({ queryKey: ['today-signals'], enabled: Boolean(supabase), queryFn: async () => { const { data, error } = await supabase!.from('signals').select('id,action,score,as_of_date,reasons,symbols(symbol)').order('as_of_date', { ascending: false }).order('score', { ascending: false }).limit(6); if (error) throw error; return data ?? [] } })
   const [favorites,setFavorites]=useState<string[]>(()=>{try{return JSON.parse(localStorage.getItem('protstock-favorites')??'[]')}catch{return[]}})
   useEffect(()=>{const update=(event:Event)=>setFavorites((event as CustomEvent).detail);addEventListener('protstock:favorites',update);return()=>removeEventListener('protstock:favorites',update)},[])
   const feed=(signals.data??[]).map(item=>({...item,as_of_date:formatDate(item.as_of_date)}))
-  return <section className="dashboard-page"><header className="dashboard-header"><div><span className="eyebrow">EOD INTELLIGENCE</span><h1>Tổng quan</h1><p>Không gian phân tích và quản trị giao dịch cá nhân.</p></div><a href="#screener" className="primary-button"><TrendingUp size={17}/> Mở Screener</a></header><section className="market-strip"><div><span className="live-dot"/><strong>{connectionLabel}</strong></div><span>Universe <b>{universeCount}</b></span><span>Dữ liệu <b>{health?.latest_price_date??'Chưa có'}</b></span><span>Lỗi 7 ngày <b className={health?.failed_jobs_7d?'negative':''}>{health?.failed_jobs_7d??0}</b></span></section><section className="dashboard-grid"><article className="panel signal-card"><div className="panel-title"><div><span className="eyebrow">TÍN HIỆU SAU PHIÊN</span><h2>Tín hiệu mới</h2></div><a href="#screener">Xem tất cả</a></div><div className="signal-stack">{signals.isLoading?<p className="muted">Đang tải tín hiệu…</p>:feed.length?feed.map((item:any)=><a href="#analysis" className="dashboard-signal" key={item.id} onClick={()=>localStorage.setItem('protstock-symbol',item.symbols?.symbol)}><span className="symbol-avatar">{item.symbols?.symbol?.slice(0,2)}</span><span><strong>{item.symbols?.symbol}</strong><small>{item.action?.replace('_',' ')}</small></span><b>{item.score}</b><em>{item.as_of_date}</em></a>):<p className="muted">Chưa có tín hiệu sau phiên.</p>}</div></article><article className="panel watch-card"><div className="panel-title"><div><span className="eyebrow">WATCHLIST</span><h2>Đang theo dõi</h2></div><button className="text-button" onClick={()=>openCommandPalette('symbols')}>+ Thêm mã</button></div>{favorites.length?favorites.map(symbol=><a href="#analysis" className="watch-row" key={symbol} onClick={()=>localStorage.setItem('protstock-symbol',symbol)}><strong>{symbol}</strong><span>Đang theo dõi</span><b>→</b></a>):<p className="muted">Chưa có mã nào trong watchlist.</p>}</article><TodayHealth/><article className="panel discipline-card"><div className="panel-title"><div><span className="eyebrow">DATA HEALTH</span><h2>Trạng thái hệ thống</h2></div><ShieldCheck size={23}/></div><p>{connectionLabel}. Dữ liệu mới nhất: {health?.latest_price_date??'chưa có dữ liệu EOD'}.</p><a href="#settings">Mở cài đặt <span>→</span></a></article></section></section>
+  return <section className="dashboard-page"><header className="dashboard-header"><div><span className="eyebrow">EOD INTELLIGENCE</span><h1>Tổng quan</h1><p>Không gian phân tích và quản trị giao dịch cá nhân.</p></div><a href="#screener" className="primary-button"><TrendingUp size={17}/> Mở Screener</a></header><section className="market-strip"><div><span className="live-dot"/><strong>{connectionLabel}</strong></div><span>Universe <b>{universeCount}</b></span><span>Dữ liệu <b>{health?.latest_price_date??'Chưa có'}</b></span><span>Lỗi 7 ngày <b className={health?.failed_jobs_7d?'negative':''}>{health?.failed_jobs_7d??0}</b></span></section><MarketContextCard/><section className="dashboard-grid"><article className="panel signal-card"><div className="panel-title"><div><span className="eyebrow">TÍN HIỆU SAU PHIÊN</span><h2>Tín hiệu mới</h2></div><a href="#screener">Xem tất cả</a></div><div className="signal-stack">{signals.isLoading?<p className="muted">Đang tải tín hiệu…</p>:feed.length?feed.map((item:any)=><a href="#analysis" className="dashboard-signal" key={item.id} onClick={()=>localStorage.setItem('protstock-symbol',item.symbols?.symbol)}><span className="symbol-avatar">{item.symbols?.symbol?.slice(0,2)}</span><span><strong>{item.symbols?.symbol}</strong><small>{item.action?.replace('_',' ')}</small></span><b>{item.score}</b><em>{item.as_of_date}</em></a>):<p className="muted">Chưa có tín hiệu sau phiên.</p>}</div></article><article className="panel watch-card"><div className="panel-title"><div><span className="eyebrow">WATCHLIST</span><h2>Đang theo dõi</h2></div><button className="text-button" onClick={()=>openCommandPalette('symbols')}>+ Thêm mã</button></div>{favorites.length?favorites.map(symbol=><a href="#analysis" className="watch-row" key={symbol} onClick={()=>localStorage.setItem('protstock-symbol',symbol)}><strong>{symbol}</strong><span>Đang theo dõi</span><b>→</b></a>):<p className="muted">Chưa có mã nào trong watchlist.</p>}</article><TodayHealth/><article className="panel discipline-card"><div className="panel-title"><div><span className="eyebrow">DATA HEALTH</span><h2>Trạng thái hệ thống</h2></div><ShieldCheck size={23}/></div><p>{connectionLabel}. Dữ liệu mới nhất: {health?.latest_price_date??'chưa có dữ liệu EOD'}.</p><a href="#settings">Mở cài đặt <span>→</span></a></article></section></section>
 }
 export default App
 
