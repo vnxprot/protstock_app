@@ -65,15 +65,30 @@ class SupabaseRestClient:
         return list(reversed(rows))
 
     def active_rule_versions(self) -> list[dict[str, Any]]:
-        response = self._client.get(
-            "/rule_versions",
+        """Load enabled engines in two explicit queries; avoid fragile embedded filters."""
+        rules_response = self._client.get(
+            "/rules",
             params={
-                "select": "id,dsl,rules!inner(id,name,kind,pack_version,notification_mode,blocks_new_entries,status)",
-                "rules.status": "eq.ACTIVE",
+                "select": "id,name,kind,pack_version,notification_mode,blocks_new_entries,status",
+                "status": "eq.ACTIVE",
             },
         )
-        response.raise_for_status()
-        return response.json()
+        rules_response.raise_for_status()
+        rules = rules_response.json()
+        if not rules:
+            return []
+        rules_by_id = {rule["id"]: rule for rule in rules}
+        rule_ids = ",".join(rules_by_id)
+        versions_response = self._client.get(
+            "/rule_versions",
+            params={"select": "id,rule_id,dsl", "rule_id": f"in.({rule_ids})"},
+        )
+        versions_response.raise_for_status()
+        return [
+            {"id": version["id"], "dsl": version["dsl"], "rules": rules_by_id[version["rule_id"]]}
+            for version in versions_response.json()
+            if version["rule_id"] in rules_by_id
+        ]
 
     def market_breadth_snapshot(self, trading_date) -> dict[str, Any] | None:
         response = self._client.get(
