@@ -1,9 +1,6 @@
 name: EOD pipeline
 
 on:
-  # 09:15 UTC = 16:15 Asia/Ho_Chi_Minh, thứ Hai đến thứ Sáu.
-  schedule:
-    - cron: '15 9 * * 1-5'
   workflow_dispatch:
     inputs:
       trading_date:
@@ -52,6 +49,8 @@ jobs:
       - run: python -m pip install -e ".[dev,data]"
       - run: protstock validate-universe data/universe.csv
       - name: Run EOD ingestion and analysis
+        id: ingest
+        continue-on-error: true
         env:
           SUPABASE_URL: https://upmqxwktvvguegqeqibn.supabase.co
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
@@ -66,12 +65,17 @@ jobs:
           if [ -n "$SYMBOL_LIMIT" ]; then args+=(--symbol-limit "$SYMBOL_LIMIT"); fi
           if [ -n "$SYMBOL_OFFSET" ]; then args+=(--symbol-offset "$SYMBOL_OFFSET"); fi
           protstock eod "${args[@]}" --source "$SOURCE" --lookback-days "$LOOKBACK_DAYS"
+      - name: Report partial ingestion
+        if: steps.ingest.outcome == 'failure'
+        run: echo "::warning::EOD ingestion was partial or failed; backtests and Telegram alerts will still run for successfully stored signals."
       - name: Process queued backtests
+        if: always()
         env:
           SUPABASE_URL: https://upmqxwktvvguegqeqibn.supabase.co
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: protstock backtest-worker --limit 3
       - name: Send concise Telegram EOD alerts
+        if: always()
         env:
           SUPABASE_URL: https://upmqxwktvvguegqeqibn.supabase.co
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}

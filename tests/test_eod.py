@@ -1,6 +1,6 @@
 from datetime import date, timedelta
 
-from protstock.eod import FAST_LANE_BENCHMARK_FETCH_DAYS, _fetch_history_with_retry, _rows_as_of, finalize_fast_lane, run_eod
+from protstock.eod import FAST_LANE_BENCHMARK_FETCH_DAYS, _fetch_history_with_fallback, _fetch_history_with_retry, _rows_as_of, finalize_fast_lane, run_eod
 
 
 class RateLimitedProvider:
@@ -19,6 +19,26 @@ def test_rate_limit_is_retried(monkeypatch) -> None:
     provider = RateLimitedProvider()
     assert _fetch_history_with_retry(provider, "FPT", date(2026, 1, 1), date(2026, 1, 2)) == ["ok"]
     assert provider.calls == 2
+
+
+def test_symbol_fetch_falls_back_to_alternate_source_after_timeout() -> None:
+    class TimedOutProvider:
+        def history(self, *_args):
+            raise TimeoutError("Read timed out")
+
+    class WorkingProvider:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def history(self, *_args):
+            self.calls += 1
+            return ["fallback-bar"]
+
+    fallback = WorkingProvider()
+    bars, used_fallback = _fetch_history_with_fallback(
+        TimedOutProvider(), fallback, "TAR", date(2026, 9, 11), date(2026, 9, 11)
+    )
+    assert (bars, used_fallback, fallback.calls) == (["fallback-bar"], True, 1)
 
 
 def test_rows_as_of_excludes_future_bars() -> None:
