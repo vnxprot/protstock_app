@@ -222,7 +222,7 @@ def rebuild_signals(trading_date: date, *, symbol_offset: int = 0, symbol_limit:
                 context = {"weekly_patterns": results.get("W", {}).get("patterns", []), "weekly_snapshot": results.get("W", {}).get("indicators", {}), "monthly_snapshot": results.get("M", {}).get("indicators", {}), "market_context": market_context, "candidate_sector": symbol_row["sector"]}
                 for timeframe, rows in timeframe_rows.items():
                     if timeframe in results:
-                        _write_analysis(client, symbol_row["id"], timeframe, rows, benchmark_rows[timeframe], active_rules, counts, results[timeframe], context)
+                        _write_analysis(client, symbol_row["id"], timeframe, rows, benchmark_rows[timeframe], active_rules, counts, results[timeframe], context, persist_evidence=False)
                 counts["symbols"] += 1
                 client.create_job_item({"job_run_id": job["id"], "symbol_id": symbol_row["id"], "item_key": symbol_row["symbol"], "status": "SUCCEEDED", "rows_written": 0, "duration_ms": int((monotonic() - started) * 1000)})
             except Exception as exc:
@@ -301,45 +301,46 @@ def _write_analysis(
     rows: list[dict],
     benchmark_rows: list[dict],
     active_rules: list[dict],
-    counts: dict[str, int], result: dict, context: dict[str, Any],
+    counts: dict[str, int], result: dict, context: dict[str, Any], *, persist_evidence: bool = True,
 ) -> None:
     if not rows:
         return
-    snapshot = {
-        "symbol_id": symbol_id, "timeframe": timeframe,
-        "as_of_date": result["as_of_date"], "input_last_date": result["as_of_date"],
-        "algorithm_version": ALGORITHM_VERSION, **result["indicators"],
-    }
-    counts["snapshots"] += client.upsert(
-        "technical_snapshots", [snapshot], "symbol_id,timeframe,as_of_date"
-    )
-    patterns = [{
-        "symbol_id": symbol_id, "timeframe": timeframe,
-        "pattern_type": pattern["pattern_type"], "state": pattern["state"],
-        "start_date": rows[pattern["start_index"]]["date"],
-        "end_date": rows[pattern["end_index"]]["date"],
-        "as_of_date": result["as_of_date"], "trigger_price": pattern["trigger_price"],
-        "invalidation_price": pattern["invalidation_price"],
-        "quality_score": pattern["quality_score"], "direction": pattern["direction"],
-        "evidence": pattern["evidence"], "reasons": pattern["reasons"],
-        "algorithm_version": ALGORITHM_VERSION,
-    } for pattern in result["patterns"]]
-    counts["patterns"] += client.upsert(
-        "pattern_instances", patterns,
-        "symbol_id,timeframe,pattern_type,start_date,as_of_date,algorithm_version",
-    )
-    zones = [{
-        "symbol_id": symbol_id, "timeframe": timeframe,
-        "zone_type": zone["zone_type"], "start_date": rows[zone["start_index"]]["date"],
-        "as_of_date": result["as_of_date"], "lower_price": zone["lower_price"],
-        "upper_price": zone["upper_price"], "touches": zone["touches"],
-        "strength": zone["strength"], "evidence": zone["evidence"],
-        "algorithm_version": ALGORITHM_VERSION,
-    } for zone in result["zones"]]
-    counts["zones"] += client.upsert(
-        "support_resistance_zones", zones,
-        "symbol_id,timeframe,as_of_date,zone_type,lower_price,upper_price",
-    )
+    if persist_evidence:
+        snapshot = {
+            "symbol_id": symbol_id, "timeframe": timeframe,
+            "as_of_date": result["as_of_date"], "input_last_date": result["as_of_date"],
+            "algorithm_version": ALGORITHM_VERSION, **result["indicators"],
+        }
+        counts["snapshots"] += client.upsert(
+            "technical_snapshots", [snapshot], "symbol_id,timeframe,as_of_date"
+        )
+        patterns = [{
+            "symbol_id": symbol_id, "timeframe": timeframe,
+            "pattern_type": pattern["pattern_type"], "state": pattern["state"],
+            "start_date": rows[pattern["start_index"]]["date"],
+            "end_date": rows[pattern["end_index"]]["date"],
+            "as_of_date": result["as_of_date"], "trigger_price": pattern["trigger_price"],
+            "invalidation_price": pattern["invalidation_price"],
+            "quality_score": pattern["quality_score"], "direction": pattern["direction"],
+            "evidence": pattern["evidence"], "reasons": pattern["reasons"],
+            "algorithm_version": ALGORITHM_VERSION,
+        } for pattern in result["patterns"]]
+        counts["patterns"] += client.upsert(
+            "pattern_instances", patterns,
+            "symbol_id,timeframe,pattern_type,start_date,as_of_date,algorithm_version",
+        )
+        zones = [{
+            "symbol_id": symbol_id, "timeframe": timeframe,
+            "zone_type": zone["zone_type"], "start_date": rows[zone["start_index"]]["date"],
+            "as_of_date": result["as_of_date"], "lower_price": zone["lower_price"],
+            "upper_price": zone["upper_price"], "touches": zone["touches"],
+            "strength": zone["strength"], "evidence": zone["evidence"],
+            "algorithm_version": ALGORITHM_VERSION,
+        } for zone in result["zones"]]
+        counts["zones"] += client.upsert(
+            "support_resistance_zones", zones,
+            "symbol_id,timeframe,as_of_date,zone_type,lower_price,upper_price",
+        )
     signal_rows = []
     raw_evaluations = []
     core_signal = _core_engine_signal_row(symbol_id, timeframe, result)
