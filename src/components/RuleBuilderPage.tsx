@@ -81,6 +81,47 @@ const visual = [
   { tone: "risk", title: "Quản trị rủi ro", text: "Stop Loss · 7% từ giá vốn" },
 ];
 
+const corePackContents: Record<string, string[]> = {
+  "Prot Core Engine v1.0": [
+    "Mua nền tích lũy xác nhận · volume > 1,5× · RSI 40–75",
+    "Mua hai đáy xác nhận · volume > 1,3× · RSI 40–75",
+    "Theo dõi tam giác tăng khi setup sẵn sàng",
+    "Giảm tỷ trọng khi hai đỉnh bearish xác nhận",
+  ],
+  "Prot Core Engine v2.0": [
+    "Ladder ưu tiên: EXIT → REDUCE → ADD / PROBE BUY → WATCH",
+    "Gates: đa khung D/W/M, market regime và tập trung ngành",
+    "Mẫu hình, volume, thanh khoản, RSI, MA-stack và Relative Strength",
+  ],
+  "Prot Core Pack · Pullback Continuation": [
+    "Xu hướng tăng, giá hồi về EMA20 hoặc SMA50",
+    "Nến trigger xanh và candlestick hoặc volume tối thiểu trung bình 20 phiên",
+    "Stop logic dưới SMA50 3% · đang tắt để Prot tự kích hoạt khi cần",
+  ],
+};
+
+function statusCopy(status: string, kind: string) {
+  if (status === "ACTIVE")
+    return { label: "ĐANG BẬT", detail: "Được chạy trong EOD", tone: "on" };
+  if (status === "ARCHIVED" && kind === "CORE_PACK")
+    return {
+      label: "CHƯA KÍCH HOẠT",
+      detail: "Có sẵn nhưng chưa tham gia EOD",
+      tone: "off",
+    };
+  if (status === "ARCHIVED")
+    return {
+      label: "LƯU TRỮ",
+      detail: "Chỉ giữ lịch sử, không chạy",
+      tone: "archived",
+    };
+  return {
+    label: "ĐÃ TẮT",
+    detail: "Tạm dừng, giữ nguyên cấu hình",
+    tone: "off",
+  };
+}
+
 export function RuleBuilderPage({ authenticated }: { authenticated: boolean }) {
   const client = useQueryClient();
   const [name, setName] = useState("Breakout có xác nhận");
@@ -90,6 +131,7 @@ export function RuleBuilderPage({ authenticated }: { authenticated: boolean }) {
   const [mode, setMode] = useState<"language" | "visual">("language");
   const [message, setMessage] = useState("");
   const [toast, setToast] = useState("");
+  const [expandedPack, setExpandedPack] = useState<string | null>(null);
   const preview = useMemo(() => {
     try {
       return { dsl: compileText(input), error: "" };
@@ -162,6 +204,12 @@ export function RuleBuilderPage({ authenticated }: { authenticated: boolean }) {
     setTimeout(() => setToast(""), 3000);
     client.invalidateQueries({ queryKey: ["rules"] });
   }
+  const corePacks = (rules.data ?? []).filter(
+    (rule) => rule.kind === "CORE_PACK",
+  );
+  const userRules = (rules.data ?? []).filter(
+    (rule) => rule.kind !== "CORE_PACK",
+  );
   const highlighted = preview.dsl
     ? JSON.stringify(preview.dsl, null, 2)
         .replace(/("[^"]+")(?=\s*:)/g, '<span class="dsl-key">$1</span>')
@@ -199,6 +247,78 @@ export function RuleBuilderPage({ authenticated }: { authenticated: boolean }) {
           <GripVertical size={15} /> Visual blocks
         </button>
       </div>
+      <section className="core-engine-section" aria-label="Core Engines">
+        <div className="core-engine-heading">
+          <div>
+            <span className="eyebrow">TẦNG QUYẾT ĐỊNH CHÍNH</span>
+            <h2>Core Engines</h2>
+            <p>
+              Chỉ các engine ở đây tạo nhận định hệ thống. Rule Studio bên dưới
+              chỉ là lớp điều kiện bổ sung.
+            </p>
+          </div>
+          <span>
+            {corePacks.filter((pack) => pack.status === "ACTIVE").length}/
+            {corePacks.length} ĐANG BẬT
+          </span>
+        </div>
+        <div className="core-pack-list">
+          {corePacks.map((pack) => {
+            const state = statusCopy(pack.status, pack.kind);
+            const expanded = expandedPack === pack.id;
+            const details = corePackContents[pack.name] ?? [pack.input_text];
+            return (
+              <article className={`core-pack-card ${state.tone}`} key={pack.id}>
+                <div className="core-pack-main">
+                  <button
+                    type="button"
+                    className={`core-toggle ${pack.status === "ACTIVE" ? "is-on" : ""}`}
+                    role="switch"
+                    aria-checked={pack.status === "ACTIVE"}
+                    aria-label={`${pack.status === "ACTIVE" ? "Tắt" : "Bật"} ${pack.name}`}
+                    onClick={() => toggleRule(pack)}
+                  >
+                    <i />
+                  </button>
+                  <div className="core-pack-copy">
+                    <div>
+                      <strong>{pack.name}</strong>
+                      <em>{pack.pack_version}</em>
+                    </div>
+                    <small>{state.detail}</small>
+                  </div>
+                  <span className={`core-status ${state.tone}`}>
+                    {state.label}
+                  </span>
+                  <button
+                    type="button"
+                    className="core-expand"
+                    aria-expanded={expanded}
+                    onClick={() => setExpandedPack(expanded ? null : pack.id)}
+                  >
+                    {expanded ? "Thu gọn −" : "Xem logic +"}
+                  </button>
+                </div>
+                {expanded && (
+                  <div className="core-pack-details">
+                    <span>THÀNH PHẦN / LOGIC</span>
+                    <ul>
+                      {details.map((detail) => (
+                        <li key={detail}>{detail}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </article>
+            );
+          })}
+        </div>
+        {!rules.isLoading && !corePacks.length && (
+          <p className="muted">
+            Core Pack sẽ xuất hiện sau khi migration Tier 4 được áp dụng.
+          </p>
+        )}
+      </section>
       <div className="analysis-columns">
         <form className="panel rule-form" onSubmit={save}>
           <label>
@@ -278,35 +398,42 @@ export function RuleBuilderPage({ authenticated }: { authenticated: boolean }) {
       </div>
       <article className="panel">
         <div className="panel-title">
-          <h3>Rules của Prot</h3>
-          <span>{rules.data?.length ?? 0}</span>
-        </div>
-        {(rules.data ?? []).map((rule) => (
-          <div className="rule-row" key={rule.id}>
-            <div>
-              <strong>
-                {rule.name}
-                {rule.kind === "CORE_PACK" && (
-                  <small> · CORE PACK {rule.pack_version}</small>
-                )}
-              </strong>
-              <small>{rule.input_text}</small>
-            </div>
-            <div className="rule-row-actions">
-              <span>{rule.status}</span>
-              <button
-                type="button"
-                className="text-button"
-                onClick={() => toggleRule(rule)}
-              >
-                {rule.status === "ACTIVE" ? "Tắt" : "Bật"}
-              </button>
-            </div>
+          <div>
+            <span className="eyebrow">LỚP BỔ SUNG</span>
+            <h3>Rule Studio · Rules phụ</h3>
           </div>
-        ))}
-        {!rules.isLoading && !rules.data?.length && (
+          <span>{userRules.length} RULE</span>
+        </div>
+        <p className="muted">
+          Các rule này ghi nhận điều kiện riêng của Prot; chúng không thay thế
+          thứ tự ưu tiên hoặc risk gate của Core Engine.
+        </p>
+        {userRules.map((rule) => {
+          const state = statusCopy(rule.status, rule.kind);
+          return (
+            <div className="rule-row" key={rule.id}>
+              <div>
+                <strong>{rule.name}</strong>
+                <small>{rule.input_text}</small>
+              </div>
+              <div className="rule-row-actions">
+                <span className={`rule-status ${state.tone}`}>
+                  {state.label}
+                </span>
+                <button
+                  type="button"
+                  className="text-button"
+                  onClick={() => toggleRule(rule)}
+                >
+                  {rule.status === "ACTIVE" ? "Tắt" : "Bật"}
+                </button>
+              </div>
+            </div>
+          );
+        })}
+        {!rules.isLoading && !userRules.length && (
           <p className="muted">
-            Rule đầu tiên sẽ xuất hiện tại đây sau khi lưu.
+            Chưa có Rule Studio bổ sung. Core Engine vẫn hoạt động độc lập.
           </p>
         )}
       </article>
