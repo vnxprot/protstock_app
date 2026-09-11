@@ -84,6 +84,19 @@ class SupabaseRestClient:
         rows = response.json()
         return rows[0] if rows else None
 
+    def daily_snapshots_for_date(self, trading_date) -> list[dict[str, Any]]:
+        """One completed daily snapshot per symbol for Fast Lane completion checks."""
+        response = self._client.get(
+            "/technical_snapshots",
+            params={
+                "select": "symbol_id,close,sma50",
+                "timeframe": "eq.D",
+                "as_of_date": f"eq.{trading_date.isoformat()}",
+            },
+        )
+        response.raise_for_status()
+        return response.json()
+
     def signals_missing_outcomes(self, cutoff_date) -> list[dict[str, Any]]:
         response = self._client.get(
             "/signals",

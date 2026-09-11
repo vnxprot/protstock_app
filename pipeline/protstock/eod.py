@@ -17,6 +17,9 @@ from .timeframes import aggregate_bars
 # through the app's operational planning horizon without expanding symbol fetches.
 VNINDEX_HISTORY_START = date(2000, 7, 28)
 BENCHMARK_LOOKBACK_DAYS = (date(2050, 1, 1) - VNINDEX_HISTORY_START).days
+# Daily Fast Lane reuses the locally stored 260-session benchmark window. It only
+# asks the upstream source for a small overlap to capture the newly closed session.
+FAST_LANE_BENCHMARK_FETCH_DAYS = 14
 
 
 def run_eod(
@@ -30,6 +33,8 @@ def run_eod(
     # Shared GitHub Actions egress can consume multiple upstream requests per
     # symbol. Stay below 10 symbols/minute, comfortably inside guest limits.
     pause_seconds: float = 6.5,
+    fast_lane: bool = False,
+    write_breadth_snapshot: bool = True,
 ) -> dict[str, Any]:
     client = SupabaseRestClient(Settings.from_env())
     provider = VnstockProvider(source)
@@ -48,7 +53,8 @@ def run_eod(
         benchmark_daily: list[dict] = []
         try:
             index = client.market_index("VNINDEX")
-            index_bars = provider.history("VNINDEX", trading_date - timedelta(days=benchmark_lookback_days), trading_date)
+            benchmark_fetch_days = FAST_LANE_BENCHMARK_FETCH_DAYS if fast_lane else benchmark_lookback_days
+            index_bars = provider.history("VNINDEX", trading_date - timedelta(days=benchmark_fetch_days), trading_date)
             index_rows = [{
                 "index_id": index["id"], "trading_date": bar.trading_date.isoformat(),
                 "open": float(bar.open), "high": float(bar.high), "low": float(bar.low),
@@ -60,6 +66,18 @@ def run_eod(
                 {**row, "date": row["trading_date"]}
                 for row in _rows_as_of(client.index_price_history(index["id"]), trading_date)
             ]
+            # A fresh database has no cached benchmark window. Self-heal once; all
+            # later Fast Lane runs stay incremental.
+            if fast_lane and len(benchmark_daily) < 200:
+                index_bars = provider.history("VNINDEX", trading_date - timedelta(days=benchmark_lookback_days), trading_date)
+                index_rows = [{
+                    "index_id": index["id"], "trading_date": bar.trading_date.isoformat(),
+                    "open": float(bar.open), "high": float(bar.high), "low": float(bar.low),
+                    "close": float(bar.close), "volume": bar.volume, "source": bar.source,
+                    "collected_at": bar.collected_at.isoformat(),
+                } for bar in index_bars]
+                client.upsert("market_index_prices", index_rows, "index_id,trading_date")
+                benchmark_daily = [{**row, "date": row["trading_date"]} for row in _rows_as_of(client.index_price_history(index["id"]), trading_date)]
         except Exception as exc:
             warnings.append(f"VNINDEX: {type(exc).__name__}")
         symbols = symbols[symbol_offset:]
@@ -122,7 +140,7 @@ def run_eod(
                     "duration_ms": int((monotonic() - started) * 1000),
                 })
             sleep(pause_seconds)
-        if daily_snapshots:
+        if daily_snapshots and write_breadth_snapshot:
             breadth = compute_breadth(daily_snapshots)
             vnindex_snapshot = calculate_indicators(benchmark_daily).to_dict() if benchmark_daily else {"trend_state": "UNKNOWN"}
             counts["breadth_snapshots"] += client.upsert("market_breadth_snapshots", [{
@@ -135,6 +153,29 @@ def run_eod(
     except Exception as exc:
         client.finish_job(job["id"], {"status": "FAILED", "finished_at": _now(), "counts": counts, "error_summary": str(exc)[:500]})
         raise
+    finally:
+        client.close()
+
+
+def finalize_fast_lane(trading_date: date) -> dict[str, Any]:
+    """Gate final alerts on complete two-worker coverage, then publish D breadth."""
+    client = SupabaseRestClient(Settings.from_env())
+    try:
+        expected = {row["id"] for row in client.active_symbols()}
+        snapshots = client.daily_snapshots_for_date(trading_date)
+        covered = {row["symbol_id"] for row in snapshots}
+        missing = expected - covered
+        if missing:
+            raise RuntimeError(f"Fast Lane incomplete: {len(covered)}/{len(expected)} daily snapshots")
+        index = client.market_index("VNINDEX")
+        benchmark = _rows_as_of(client.index_price_history(index["id"]), trading_date)
+        vnindex_snapshot = calculate_indicators(benchmark).to_dict() if benchmark else {"trend_state": "UNKNOWN"}
+        breadth = compute_breadth(snapshots)
+        client.upsert("market_breadth_snapshots", [{
+            "trading_date": trading_date.isoformat(), **breadth,
+            "vnindex_trend_state": vnindex_snapshot["trend_state"],
+        }], "trading_date")
+        return {"status": "SUCCEEDED", "covered": len(covered), "expected": len(expected), "breadth": breadth}
     finally:
         client.close()
 

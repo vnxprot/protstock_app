@@ -1,8 +1,6 @@
 name: EOD pipeline
 
 on:
-  schedule:
-    - cron: "15 9 * * 1-5"
   workflow_dispatch:
     inputs:
       trading_date:

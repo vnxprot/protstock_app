@@ -7,7 +7,7 @@ from pathlib import Path
 
 from .analysis import analyze_bars
 from .backtest_worker import process_backtests
-from .eod import run_eod
+from .eod import finalize_fast_lane, run_eod
 from .disclosures import run_hnx_disclosures
 from .fundamentals import run_fundamentals
 from .alerts import send_eod_telegram_alerts
@@ -53,6 +53,10 @@ def main() -> None:
     eod.add_argument("--symbol-offset", type=int, default=0)
     eod.add_argument("--symbol-limit", type=int)
     eod.add_argument("--pause-seconds", type=float, default=6.5)
+    eod.add_argument("--fast-lane", action="store_true")
+    eod.add_argument("--skip-breadth-snapshot", action="store_true")
+    finalize_fast = subparsers.add_parser("finalize-fast-eod")
+    finalize_fast.add_argument("--date", dest="trading_date", type=date.fromisoformat, default=date.today())
     worker = subparsers.add_parser("backtest-worker")
     worker.add_argument("--limit", type=int, default=3)
     subparsers.add_parser("collect-hnx-disclosures")
@@ -91,9 +95,14 @@ def main() -> None:
             symbol_offset=args.symbol_offset,
             symbol_limit=args.symbol_limit,
             pause_seconds=args.pause_seconds,
+            fast_lane=args.fast_lane,
+            write_breadth_snapshot=not args.skip_breadth_snapshot,
         )
         print(json.dumps(result, indent=2))
         raise SystemExit(0 if result["status"] == "SUCCEEDED" else 1)
+    if args.command == "finalize-fast-eod":
+        print(json.dumps(finalize_fast_lane(args.trading_date), ensure_ascii=False))
+        raise SystemExit(0)
     if args.command == "backtest-worker":
         result = process_backtests(args.limit)
         print(json.dumps(result, indent=2))

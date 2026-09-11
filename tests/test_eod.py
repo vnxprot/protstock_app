@@ -1,6 +1,6 @@
 from datetime import date, timedelta
 
-from protstock.eod import _fetch_history_with_retry, _rows_as_of, run_eod
+from protstock.eod import FAST_LANE_BENCHMARK_FETCH_DAYS, _fetch_history_with_retry, _rows_as_of, finalize_fast_lane, run_eod
 
 
 class RateLimitedProvider:
@@ -53,3 +53,44 @@ def test_benchmark_fetch_uses_independent_lookback(monkeypatch) -> None:
     monkeypatch.setattr("protstock.eod.Settings.from_env", lambda: object())
     run_eod(date(2026, 9, 10), lookback_days=10, benchmark_lookback_days=9_999, pause_seconds=0)
     assert calls == [("VNINDEX", date(2026, 9, 10) - timedelta(days=9_999), date(2026, 9, 10))]
+
+
+def test_fast_lane_fetches_only_incremental_benchmark_when_cache_is_ready(monkeypatch) -> None:
+    calls = []
+
+    class Client:
+        def create_job(self, _payload): return {"id": "job"}
+        def active_symbols(self): return []
+        def active_rule_versions(self): return []
+        def market_index(self, _code): return {"id": 1}
+        def upsert(self, *_args): return 0
+        def index_price_history(self, *_args): return [{"trading_date": "2026-01-01", "close": 1}] * 260
+        def finish_job(self, *_args): pass
+        def close(self): pass
+
+    class Provider:
+        def history(self, symbol, start, end):
+            calls.append((symbol, start, end))
+            return []
+
+    monkeypatch.setattr("protstock.eod.SupabaseRestClient", lambda _settings: Client())
+    monkeypatch.setattr("protstock.eod.VnstockProvider", lambda _source: Provider())
+    monkeypatch.setattr("protstock.eod.Settings.from_env", lambda: object())
+    run_eod(date(2026, 9, 10), fast_lane=True, pause_seconds=0)
+    assert calls == [("VNINDEX", date(2026, 9, 10) - timedelta(days=FAST_LANE_BENCHMARK_FETCH_DAYS), date(2026, 9, 10))]
+
+
+def test_finalize_fast_lane_requires_all_active_symbols(monkeypatch) -> None:
+    class Client:
+        def active_symbols(self): return [{"id": 1}, {"id": 2}]
+        def daily_snapshots_for_date(self, _date): return [{"symbol_id": 1, "close": 10, "sma50": 9}]
+        def close(self): pass
+
+    monkeypatch.setattr("protstock.eod.SupabaseRestClient", lambda _settings: Client())
+    monkeypatch.setattr("protstock.eod.Settings.from_env", lambda: object())
+    try:
+        finalize_fast_lane(date(2026, 9, 10))
+    except RuntimeError as exc:
+        assert "1/2" in str(exc)
+    else:
+        raise AssertionError("incomplete Fast Lane must not finalize")
