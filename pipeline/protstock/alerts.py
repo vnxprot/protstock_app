@@ -53,7 +53,7 @@ def send_eod_telegram_alerts(trading_date: date, reduce_dedupe_days: int = 5) ->
     try:
         response = client._client.get("/effective_signals", params={"select": "signal_id,symbol_id,symbol,action,score,reasons,rule_name,pack_version,kind,notification_mode", "as_of_date": f"eq.{trading_date.isoformat()}", "action": "in.(PROBE_BUY,ADD,REDUCE,EXIT)", "notification_mode": "eq.TELEGRAM"})
         response.raise_for_status()
-        signals = response.json()
+        signals = [signal for signal in response.json() if signal.get("notification_mode") == "TELEGRAM"]
         sent = deduped = 0
         for signal in signals:
             signal_id = signal.get("signal_id") or signal["id"]

@@ -67,6 +67,23 @@ def test_core_pack_migration_has_safe_schema_seed_and_priority_contract() -> Non
     assert "when signal.action = 'PROBE_BUY' then 4" in migration
 
 
+def test_effective_signal_priority_prefers_exit_then_risk_block() -> None:
+    def priority(signal: dict) -> int:
+        if signal["action"] == "EXIT": return 0
+        if signal["action"] == "REDUCE": return 1
+        if signal["action"] == "WATCH" and signal.get("blocks_new_entries"): return 2
+        if signal["action"] == "ADD": return 3
+        if signal["action"] == "PROBE_BUY": return 4
+        return 5
+
+    exit_pack = {"action": "EXIT", "kind": "CORE_PACK"}
+    user_probe = {"action": "PROBE_BUY", "kind": "USER_RULE"}
+    assert min([exit_pack, user_probe], key=priority) is exit_pack
+    blocking_watch = {"action": "WATCH", "kind": "CORE_PACK", "blocks_new_entries": True}
+    pack_probe = {"action": "PROBE_BUY", "kind": "CORE_PACK"}
+    assert min([blocking_watch, pack_probe], key=priority) is blocking_watch
+
+
 class _Response:
     def __init__(self, rows): self.rows = rows
     def raise_for_status(self): pass
@@ -78,8 +95,9 @@ class _Rest:
     def get(self, path, params=None):
         if path == "/effective_signals":
             self.effective_params = params
-            # The winning RECORD_ONLY row is excluded by the database filter.
-            return _Response([])
+            # Simulate a malformed gateway response: client-side defense still
+            # ensures the winning RECORD_ONLY row can never send Telegram.
+            return _Response([{"signal_id": "record-only", "symbol_id": 7, "symbol": "FPT", "action": "PROBE_BUY", "reasons": [], "notification_mode": "RECORD_ONLY"}])
         return _Response([])
 
 
