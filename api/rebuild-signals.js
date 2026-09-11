@@ -3,14 +3,20 @@ const WORKFLOW_URL = 'https://api.github.com/repos/vnxprot/protstock_app/actions
 
 async function authenticatedOwner(request) {
   const token = request.headers.authorization?.replace(/^Bearer\s+/i, '')
-  const supabaseUrl = process.env.SUPABASE_URL
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-  if (!token || !supabaseUrl || !serviceRoleKey) return false
-  const user = await fetch(`${supabaseUrl}/auth/v1/user`, {
-    headers: { apikey: serviceRoleKey, Authorization: `Bearer ${token}` },
-  })
-  if (!user.ok) return false
-  return (await user.json()).email === OWNER_EMAIL
+  if (!token) return false
+  const candidates = [
+    [process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY],
+    [process.env.VITE_SUPABASE_URL, process.env.VITE_SUPABASE_PUBLISHABLE_KEY],
+  ]
+  for (const [supabaseUrl, apiKey] of candidates) {
+    if (!supabaseUrl || !apiKey) continue
+    const user = await fetch(`${supabaseUrl}/auth/v1/user`, {
+      headers: { apikey: apiKey, Authorization: `Bearer ${token}` },
+    })
+    console.info('rebuild-signals auth check', { host: new URL(supabaseUrl).host, status: user.status })
+    if (user.ok) return (await user.json()).email === OWNER_EMAIL
+  }
+  return false
 }
 
 export default async function handler(request, response) {
