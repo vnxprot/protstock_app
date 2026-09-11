@@ -78,7 +78,7 @@ function MarketContextCard() {
   </details>
 }
 function Dashboard({ universeCount, connectionLabel, health }: { universeCount: number; connectionLabel: string; health?: { latest_price_date: string | null; failed_jobs_7d: number } }) {
-  const signals = useQuery({ queryKey: ['today-signals'], enabled: Boolean(supabase), queryFn: async () => { const { data, error } = await supabase!.from('signals').select('id,action,score,as_of_date,reasons,symbols(symbol)').order('as_of_date', { ascending: false }).order('score', { ascending: false }).limit(6); if (error) throw error; return data ?? [] } })
+  const signals = useQuery({ queryKey: ['today-consolidated-signals'], enabled: Boolean(supabase), queryFn: async () => { const { data, error } = await supabase!.from('consolidated_signals').select('id,composite_action,confluence_score,as_of_date,reasons,symbols(symbol)').order('as_of_date', { ascending: false }).order('confluence_score', { ascending: false }).limit(6); if (error) throw error; return (data ?? []).map((item:any) => ({ ...item, action: item.composite_action, score: item.confluence_score })) } })
   const [favorites,setFavorites]=useState<string[]>(()=>{try{return JSON.parse(localStorage.getItem('protstock-favorites')??'[]')}catch{return[]}})
   useEffect(()=>{const update=(event:Event)=>setFavorites((event as CustomEvent).detail);addEventListener('protstock:favorites',update);return()=>removeEventListener('protstock:favorites',update)},[])
   const feed=(signals.data??[]).map(item=>({...item,as_of_date:formatDate(item.as_of_date)}))

@@ -8,7 +8,14 @@ export function SettingsPage({ authenticated }: { authenticated: boolean }) {
   return <section className="workspace-page settings-page">
     <div className="page-title-row"><div><span className="eyebrow">PERSONAL WORKSPACE</span><h1>Cài đặt</h1><p className="muted">Hướng dẫn nghiên cứu và thông tin tài khoản riêng của Prot.</p></div></div>
     <div className="timeframe-tabs" role="tablist" aria-label="Cài đặt"><button className={tab === 'guide' ? 'active' : ''} onClick={() => setTab('guide')}>Hướng dẫn</button><button className={tab === 'account' ? 'active' : ''} onClick={() => setTab('account')}>Tài khoản</button></div>
-    {tab === 'account' ? <article className="panel account-panel"><div className="panel-title"><h3>Tài khoản</h3><span>Private access</span></div><div className="rule-row"><div><strong>Prot</strong><small>Tài khoản cá nhân · đăng nhập bằng mật khẩu</small></div><span>Đang bảo vệ</span></div><p className="muted">Mật khẩu không hiển thị hoặc lưu trong giao diện. Dùng nút Đăng xuất ở sidebar khi cần kết thúc phiên.</p></article> : <Guide rules={rules.data ?? []} loading={rules.isLoading}/>} 
+    {tab === 'account' ? (
+      <article className="panel account-panel">
+        <div className="panel-title"><h3>Tài khoản</h3><span>Private access</span></div>
+        <div className="rule-row"><div><strong>Prot</strong><small>Tài khoản cá nhân · đăng nhập bằng mật khẩu</small></div><span>Đang bảo vệ</span></div>
+        <p className="muted">Mật khẩu không hiển thị hoặc lưu trong giao diện. Dùng nút Đăng xuất ở sidebar khi cần kết thúc phiên.</p>
+        <div className="rule-row"><div><strong>Vận hành tín hiệu</strong><small>Chạy lại từ dữ liệu đã có; không tải lại giá và Telegram mặc định tắt.</small></div><a className="secondary-button" href="https://github.com/vnxprot/protstock_app/actions/workflows/rebuild-signals.yml" target="_blank" rel="noreferrer">Chạy lại tín hiệu</a></div>
+      </article>
+    ) : <Guide rules={rules.data ?? []} loading={rules.isLoading}/>}
   </section>
 }
 

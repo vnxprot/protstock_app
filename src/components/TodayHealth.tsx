@@ -14,7 +14,7 @@ export function TodayHealth() {
       const [{ count: priceRows, error: priceError }, { count: coveredSymbols, error: coverageError }, { data: signals, error: signalError }, { data: jobs, error: jobError }, { count: activeSymbols, error: universeError }] = await Promise.all([
         supabase.from('daily_prices').select('symbol_id', { count: 'exact', head: true }),
         supabase.from('latest_daily_prices').select('symbol_id', { count: 'exact', head: true }),
-        supabase.from('signals').select('source,action,as_of_date,created_at').order('as_of_date', { ascending: false }).order('created_at', { ascending: false }).limit(1000),
+        supabase.from('consolidated_signals').select('composite_action,as_of_date,created_at').order('as_of_date', { ascending: false }).order('created_at', { ascending: false }).limit(1000),
         supabase.from('job_runs').select('id,status,trading_date,counts,warnings,started_at,finished_at').eq('job_type', 'EOD_INGEST').order('started_at', { ascending: false }).limit(8),
         supabase.from('symbols').select('id', { count: 'exact', head: true }).eq('active', true),
       ])
@@ -30,8 +30,8 @@ export function TodayHealth() {
       const latestSignalAt = todaySignals[0]?.created_at
       return {
         priceRows: priceRows ?? 0, coveredSymbols: coveredSymbols ?? 0, activeSymbols: activeSymbols ?? 0, newestDate,
-        coreActions: todaySignals.filter(signal => signal.source === 'CORE_ENGINE' && signal.action !== 'WATCH').length,
-        coreWatch: todaySignals.filter(signal => signal.source === 'CORE_ENGINE' && signal.action === 'WATCH').length,
+        coreActions: todaySignals.filter(signal => signal.composite_action !== 'WATCH').length,
+        coreWatch: todaySignals.filter(signal => signal.composite_action === 'WATCH').length,
         latestSignalAt, job, attentionJob, failedItems: failedItems ?? [],
       }
     },
@@ -40,7 +40,7 @@ export function TodayHealth() {
   return <article className="panel discipline-card today-health-card">
     <div className="panel-title"><div><span className="eyebrow">DATA HEALTH · HÔM NAY</span><h2>Dữ liệu và pipeline</h2></div><Activity size={23}/></div>
     {health.isLoading ? <p className="muted">Đang kiểm tra độ phủ dữ liệu…</p> : health.isError ? <p className="negative">Không tải được trạng thái dữ liệu.</p> : <>
-      <div className="health-metrics"><span><Database size={15}/><b>{data?.coveredSymbols ?? 0}/{data?.activeSymbols ?? 0}</b><small>Mã có giá</small></span><span><b>{(data?.priceRows ?? 0).toLocaleString('vi-VN')}</b><small>Bản ghi giá</small></span><span><b>{data?.coreActions ?? 0}</b><small>Action mới</small></span><span><b>{data?.coreWatch ?? 0}</b><small>Core WATCH</small></span></div>
+      <div className="health-metrics"><span><Database size={15}/><b>{data?.coveredSymbols ?? 0}/{data?.activeSymbols ?? 0}</b><small>Mã có giá</small></span><span><b>{(data?.priceRows ?? 0).toLocaleString('vi-VN')}</b><small>Bản ghi giá</small></span><span><b>{data?.coreActions ?? 0}</b><small>Action tổng hợp</small></span><span><b>{data?.coreWatch ?? 0}</b><small>WATCH tổng hợp</small></span></div>
       <p>Dữ liệu signal mới nhất: <strong>{data?.newestDate ? formatDate(data.newestDate) : 'chưa có'}</strong> · ghi nhận lúc <strong>{formatDateTime(data?.latestSignalAt)}</strong>.</p>
       <p>EOD gần nhất: <strong>{data?.job?.trading_date ? formatDate(data.job.trading_date) : 'chưa có'}</strong> · {data?.job?.status ?? '—'} · chạy lúc <strong>{formatDateTime(data?.job?.started_at)}</strong>{data?.job?.finished_at ? <> · hoàn tất <strong>{formatDateTime(data.job.finished_at)}</strong></> : null}.</p>
       {data?.failedItems.length ? <div className="health-errors"><ShieldAlert size={15}/><span>{data.failedItems.length} mã cần retry ({formatDate(data.attentionJob?.trading_date)}): {data.failedItems.map(item => item.item_key).join(', ')}</span></div> : <div className="health-ok">Không có mã lỗi trong các EOD gần đây.</div>}

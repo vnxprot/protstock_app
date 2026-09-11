@@ -195,6 +195,49 @@ def finalize_fast_lane(trading_date: date) -> dict[str, Any]:
         client.close()
 
 
+def rebuild_signals(trading_date: date, *, symbol_offset: int = 0, symbol_limit: int | None = None) -> dict[str, Any]:
+    """Re-evaluate stored EOD data only; this never calls an upstream price source."""
+    client = SupabaseRestClient(Settings.from_env())
+    job = client.create_job({"job_type": "DERIVE_BARS", "trading_date": trading_date.isoformat(), "status": "RUNNING", "trigger_type": "MANUAL", "source_revision": ALGORITHM_VERSION})
+    counts = {"symbols": 0, "snapshots": 0, "patterns": 0, "zones": 0, "signals": 0, "consolidated_signals": 0, "failed": 0}
+    warnings: list[str] = []
+    try:
+        symbols = client.active_symbols()[symbol_offset:]
+        if symbol_limit:
+            symbols = symbols[:symbol_limit]
+        active_rules = client.active_rule_versions()
+        market_context = _prior_market_context(client, trading_date)
+        index = client.market_index("VNINDEX")
+        benchmark_daily = [{**row, "date": row["trading_date"]} for row in _rows_as_of(client.index_price_history(index["id"]), trading_date)]
+        for symbol_row in symbols:
+            started = monotonic()
+            try:
+                analysis_rows = [{**row, "date": row["trading_date"]} for row in _rows_as_of(client.price_history(symbol_row["id"]), trading_date)]
+                if not analysis_rows:
+                    raise ValueError("no stored price history")
+                timeframe_rows = {"D": analysis_rows, "W": aggregate_bars(analysis_rows, "W"), "M": aggregate_bars(analysis_rows, "M")}
+                benchmark_rows = {"D": benchmark_daily, "W": aggregate_bars(benchmark_daily, "W"), "M": aggregate_bars(benchmark_daily, "M")}
+                preliminary = {timeframe: analyze_bars(rows) for timeframe, rows in timeframe_rows.items() if rows}
+                results = {timeframe: analyze_bars(rows, weekly_patterns=preliminary.get("W", {}).get("patterns", []), monthly_snapshot=preliminary.get("M", {}).get("indicators", {}), benchmark_rows=benchmark_rows[timeframe], market_context=market_context if timeframe == "D" else None) for timeframe, rows in timeframe_rows.items() if rows}
+                context = {"weekly_patterns": results.get("W", {}).get("patterns", []), "weekly_snapshot": results.get("W", {}).get("indicators", {}), "monthly_snapshot": results.get("M", {}).get("indicators", {}), "market_context": market_context, "candidate_sector": symbol_row["sector"]}
+                for timeframe, rows in timeframe_rows.items():
+                    if timeframe in results:
+                        _write_analysis(client, symbol_row["id"], timeframe, rows, benchmark_rows[timeframe], active_rules, counts, results[timeframe], context)
+                counts["symbols"] += 1
+                client.create_job_item({"job_run_id": job["id"], "symbol_id": symbol_row["id"], "item_key": symbol_row["symbol"], "status": "SUCCEEDED", "rows_written": 0, "duration_ms": int((monotonic() - started) * 1000)})
+            except Exception as exc:
+                counts["failed"] += 1; warnings.append(f"{symbol_row['symbol']}: {type(exc).__name__}")
+                client.create_job_item({"job_run_id": job["id"], "symbol_id": symbol_row["id"], "item_key": symbol_row["symbol"], "status": "FAILED", "error_code": type(exc).__name__, "error_message": str(exc)[:500], "duration_ms": int((monotonic() - started) * 1000)})
+        status = "SUCCEEDED" if not counts["failed"] else "PARTIAL"
+        client.finish_job(job["id"], {"status": status, "finished_at": _now(), "counts": counts, "warnings": warnings})
+        return {"job_id": job["id"], "status": status, **counts}
+    except Exception as exc:
+        client.finish_job(job["id"], {"status": "FAILED", "finished_at": _now(), "counts": counts, "error_summary": str(exc)[:500]})
+        raise
+    finally:
+        client.close()
+
+
 def _now() -> str:
     from datetime import datetime, timezone
     return datetime.now(timezone.utc).isoformat()

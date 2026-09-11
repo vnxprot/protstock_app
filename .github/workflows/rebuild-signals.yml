@@ -1,0 +1,43 @@
+name: Rebuild consolidated signals
+
+on:
+  workflow_dispatch:
+    inputs:
+      trading_date:
+        description: Stored EOD date to re-evaluate (YYYY-MM-DD)
+        required: true
+        type: string
+      send_telegram:
+        description: Send the newly consolidated actions to Telegram
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: protstock-signal-rebuild
+  cancel-in-progress: false
+
+jobs:
+  rebuild:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12", cache: pip }
+      - run: python -m pip install -e ".[data]"
+      - name: Rebuild signals from stored prices
+        env:
+          SUPABASE_URL: https://upmqxwktvvguegqeqibn.supabase.co
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: python -m protstock.cli rebuild-signals --date "${{ inputs.trading_date }}"
+      - name: Send Telegram only when explicitly requested
+        if: inputs.send_telegram
+        env:
+          SUPABASE_URL: https://upmqxwktvvguegqeqibn.supabase.co
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python -m protstock.cli send-eod-alerts --date "${{ inputs.trading_date }}"

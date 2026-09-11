@@ -33,11 +33,11 @@ def _reduce_recently_notified(client: SupabaseRestClient, symbol_id: int, tradin
     response = client._client.get(
         "/notification_deliveries",
         params={
-            "select": "id,signals!inner(symbol_id,action)",
+            "select": "id,consolidated_signals!inner(symbol_id,composite_action)",
             "channel": "eq.TELEGRAM",
             "delivered_at": f"gte.{(trading_date - timedelta(days=dedupe_days)).isoformat()}",
-            "signals.symbol_id": f"eq.{symbol_id}",
-            "signals.action": "eq.REDUCE",
+            "consolidated_signals.symbol_id": f"eq.{symbol_id}",
+            "consolidated_signals.composite_action": "eq.REDUCE",
             "limit": "1",
         },
     )
@@ -51,13 +51,13 @@ def send_eod_telegram_alerts(trading_date: date, reduce_dedupe_days: int = 5) ->
         return {"status": "DISABLED", "reason": "Telegram secrets are not configured"}
     client = SupabaseRestClient(Settings.from_env())
     try:
-        response = client._client.get("/effective_signals", params={"select": "signal_id,symbol_id,symbol,action,score,reasons,rule_name,pack_version,kind,notification_mode", "as_of_date": f"eq.{trading_date.isoformat()}", "action": "in.(PROBE_BUY,ADD,REDUCE,EXIT)", "notification_mode": "eq.TELEGRAM"})
+        response = client._client.get("/consolidated_signals", params={"select": "id,symbol_id,composite_action,confluence_score,confluence_count,consensus_engines,reasons,symbols!inner(symbol)", "as_of_date": f"eq.{trading_date.isoformat()}", "composite_action": "in.(PROBE_BUY,ADD,REDUCE,EXIT)"})
         response.raise_for_status()
-        signals = [signal for signal in response.json() if signal.get("notification_mode") == "TELEGRAM"]
+        signals = [{**signal, "signal_id": signal.get("id") or signal.get("signal_id"), "action": signal.get("composite_action") or signal.get("action"), "symbol": signal.get("symbol") or (signal.get("symbols") or {}).get("symbol", "?"), "rule_name": "Prot Consensus", "kind": "CORE_PACK"} for signal in response.json() if signal.get("notification_mode", "TELEGRAM") == "TELEGRAM"]
         sent = deduped = 0
         for signal in signals:
             signal_id = signal.get("signal_id") or signal["id"]
-            exists = client._client.get("/notification_deliveries", params={"select": "id", "signal_id": f"eq.{signal_id}", "channel": "eq.TELEGRAM", "limit": "1"})
+            exists = client._client.get("/notification_deliveries", params={"select": "id", "consolidated_signal_id": f"eq.{signal_id}", "channel": "eq.TELEGRAM", "limit": "1"})
             exists.raise_for_status()
             if exists.json():
                 continue
@@ -67,7 +67,7 @@ def send_eod_telegram_alerts(trading_date: date, reduce_dedupe_days: int = 5) ->
             text = build_telegram_message(signal, trading_date)
             sent_response = httpx.post(f"https://api.telegram.org/bot{token}/sendMessage", json={"chat_id": chat_id, "text": text}, timeout=20)
             sent_response.raise_for_status()
-            client.upsert("notification_deliveries", [{"signal_id": signal_id, "channel": "TELEGRAM", "payload": {"message": text}}], "signal_id,channel")
+            client.upsert("notification_deliveries", [{"consolidated_signal_id": signal_id, "channel": "TELEGRAM", "payload": {"message": text}}], "consolidated_signal_id,channel")
             sent += 1
         return {"status": "SUCCEEDED", "sent": sent, "deduped": deduped, "eligible": len(signals)}
     finally:

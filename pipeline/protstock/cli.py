@@ -7,7 +7,7 @@ from pathlib import Path
 
 from .analysis import analyze_bars
 from .backtest_worker import process_backtests
-from .eod import finalize_fast_lane, run_eod
+from .eod import finalize_fast_lane, rebuild_signals, run_eod
 from .disclosures import run_hnx_disclosures
 from .fundamentals import run_fundamentals
 from .alerts import send_eod_telegram_alerts
@@ -61,6 +61,10 @@ def main() -> None:
     eod.add_argument("--skip-breadth-snapshot", action="store_true")
     finalize_fast = subparsers.add_parser("finalize-fast-eod")
     finalize_fast.add_argument("--date", dest="trading_date", type=date.fromisoformat, default=date.today())
+    rebuild = subparsers.add_parser("rebuild-signals")
+    rebuild.add_argument("--date", dest="trading_date", type=date.fromisoformat, default=date.today())
+    rebuild.add_argument("--symbol-offset", type=int, default=0)
+    rebuild.add_argument("--symbol-limit", type=int)
     worker = subparsers.add_parser("backtest-worker")
     worker.add_argument("--limit", type=int, default=3)
     subparsers.add_parser("collect-hnx-disclosures")
@@ -110,6 +114,10 @@ def main() -> None:
     if args.command == "finalize-fast-eod":
         print(json.dumps(finalize_fast_lane(args.trading_date), ensure_ascii=False))
         raise SystemExit(0)
+    if args.command == "rebuild-signals":
+        result = rebuild_signals(args.trading_date, symbol_offset=args.symbol_offset, symbol_limit=args.symbol_limit)
+        print(json.dumps(result, ensure_ascii=False))
+        raise SystemExit(0 if result["status"] == "SUCCEEDED" else 1)
     if args.command == "backtest-worker":
         result = process_backtests(args.limit)
         print(json.dumps(result, indent=2))

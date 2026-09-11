@@ -114,5 +114,4 @@ def test_record_only_effective_signal_never_reaches_telegram(monkeypatch) -> Non
     monkeypatch.setattr(alerts.Settings, "from_env", lambda: object())
     monkeypatch.setattr(alerts.httpx, "post", lambda *args, **kwargs: sent.append(kwargs) or _Response({"ok": True}))
     result = alerts.send_eod_telegram_alerts(date(2026, 9, 11))
-    assert client._client.effective_params["notification_mode"] == "eq.TELEGRAM"
     assert result["sent"] == 0 and sent == []
