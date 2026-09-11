@@ -4,6 +4,8 @@ import { supabase } from '../lib/supabase'
 
 export function SettingsPage({ authenticated }: { authenticated: boolean }) {
   const [tab, setTab] = useState<'guide' | 'account'>('guide')
+  const [rebuildDate, setRebuildDate] = useState(() => new Date().toISOString().slice(0, 10))
+  const [rebuildState, setRebuildState] = useState<'idle' | 'running' | 'queued' | 'error'>('idle')
   const rules = useQuery({ queryKey: ['guide-rules'], enabled: authenticated && Boolean(supabase), queryFn: async () => { const { data, error } = await supabase!.from('rules').select('id,name,status,rule_versions(version)').order('name'); if (error) throw error; return data ?? [] } })
   return <section className="workspace-page settings-page">
     <div className="page-title-row"><div><span className="eyebrow">PERSONAL WORKSPACE</span><h1>Cài đặt</h1><p className="muted">Hướng dẫn nghiên cứu và thông tin tài khoản riêng của Prot.</p></div></div>
@@ -13,7 +15,7 @@ export function SettingsPage({ authenticated }: { authenticated: boolean }) {
         <div className="panel-title"><h3>Tài khoản</h3><span>Private access</span></div>
         <div className="rule-row"><div><strong>Prot</strong><small>Tài khoản cá nhân · đăng nhập bằng mật khẩu</small></div><span>Đang bảo vệ</span></div>
         <p className="muted">Mật khẩu không hiển thị hoặc lưu trong giao diện. Dùng nút Đăng xuất ở sidebar khi cần kết thúc phiên.</p>
-        <div className="rule-row"><div><strong>Vận hành tín hiệu</strong><small>Chạy lại từ dữ liệu đã có; không tải lại giá và Telegram mặc định tắt.</small></div><a className="secondary-button" href="https://github.com/vnxprot/protstock_app/actions/workflows/rebuild-signals.yml" target="_blank" rel="noreferrer">Chạy lại tín hiệu</a></div>
+        <div className="rule-row"><div><strong>Vận hành tín hiệu</strong><small>Chạy lại từ dữ liệu đã có; không tải lại giá và Telegram mặc định tắt.</small>{rebuildState === 'queued' && <small className="positive">Đã đưa vào hàng đợi xử lý.</small>}{rebuildState === 'error' && <small className="negative">Không thể đưa vào hàng đợi. Thử lại sau.</small>}</div><div className="inline-actions"><input aria-label="Ngày chạy lại tín hiệu" type="date" value={rebuildDate} onChange={event => setRebuildDate(event.target.value)}/><button className="secondary-button" type="button" disabled={rebuildState === 'running'} onClick={async () => { const { data } = await supabase!.auth.getSession(); if (!data.session) return; setRebuildState('running'); try { const result = await fetch('/api/rebuild-signals', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${data.session.access_token}` }, body: JSON.stringify({ tradingDate: rebuildDate, sendTelegram: false }) }); if (!result.ok) throw new Error('dispatch failed'); setRebuildState('queued') } catch { setRebuildState('error') } }}> {rebuildState === 'running' ? 'Đang đưa vào hàng đợi…' : 'Chạy lại tín hiệu'}</button></div></div>
       </article>
     ) : <Guide rules={rules.data ?? []} loading={rules.isLoading}/>}
   </section>
