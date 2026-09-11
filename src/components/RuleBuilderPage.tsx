@@ -154,6 +154,19 @@ export function RuleBuilderPage({ authenticated }: { authenticated: boolean }) {
       return data ?? [];
     },
   });
+  const engineRuns = useQuery({
+    queryKey: ["engine-run-summaries"],
+    enabled: authenticated && Boolean(supabase),
+    queryFn: async () => {
+      const { data, error } = await supabase!
+        .from("engine_run_summaries")
+        .select("rule_id,evaluated_count,emitted_count,contributed_count,trading_date,created_at")
+        .order("created_at", { ascending: false })
+        .limit(100);
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
   async function save(event: FormEvent) {
     event.preventDefault();
     setMessage("");
@@ -211,6 +224,10 @@ export function RuleBuilderPage({ authenticated }: { authenticated: boolean }) {
   const userRules = (rules.data ?? []).filter(
     (rule) => rule.kind !== "CORE_PACK",
   );
+  const latestRunByRule = useMemo(
+    () => Object.fromEntries((engineRuns.data ?? []).map((run: any) => [run.rule_id, run])),
+    [engineRuns.data],
+  );
   const highlighted = preview.dsl
     ? JSON.stringify(preview.dsl, null, 2)
         .replace(/("[^"]+")(?=\s*:)/g, '<span class="dsl-key">$1</span>')
@@ -251,11 +268,11 @@ export function RuleBuilderPage({ authenticated }: { authenticated: boolean }) {
       <section className="core-engine-section" aria-label="Core Engines">
         <div className="core-engine-heading">
           <div>
-            <span className="eyebrow">TẦNG QUYẾT ĐỊNH CHÍNH</span>
+            <span className="eyebrow">CÁC NGUỒN TÍN HIỆU</span>
             <h2>Core Engines</h2>
             <p>
-              Chỉ các engine ở đây tạo nhận định hệ thống. Rule Studio bên dưới
-              chỉ là lớp điều kiện bổ sung.
+              Mỗi engine là một nguồn đánh giá độc lập. Toggle quyết định engine
+              nào được chạy; resolver chỉ phân xử kết quả của các engine đang bật.
             </p>
           </div>
           <span>
@@ -268,6 +285,7 @@ export function RuleBuilderPage({ authenticated }: { authenticated: boolean }) {
             const state = statusCopy(pack.status, pack.kind);
             const expanded = expandedPack === pack.id;
             const details = corePackContents[pack.name] ?? [pack.input_text];
+            const run = latestRunByRule[pack.id] as any;
             return (
               <article className={`core-pack-card ${state.tone}`} key={pack.id}>
                 <div className="core-pack-main">
@@ -287,6 +305,7 @@ export function RuleBuilderPage({ authenticated }: { authenticated: boolean }) {
                       <em>{pack.pack_version}</em>
                     </div>
                     <small>{state.detail}</small>
+                    <span className="engine-run-summary">{run ? `Lần ${run.trading_date}: đánh giá ${run.evaluated_count} · setup ${run.emitted_count} · đóng góp ${run.contributed_count}` : "Chưa có lượt chạy theo cơ chế toggle mới"}</span>
                   </div>
                   <span className={`core-status ${state.tone}`}>
                     {state.label}

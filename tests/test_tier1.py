@@ -36,24 +36,22 @@ def test_bad_market_downgrades_long_but_never_exit() -> None:
 
 class _RecordingClient:
     def __init__(self) -> None:
-        self.core: list[dict] = []
+        self.deleted: list[tuple[int, str, str]] = []
 
     def upsert(self, _table, rows, _conflict):
         return len(list(rows))
 
-    def upsert_core_engine_signal(self, payload):
-        self.core.append(payload)
-        return 1
+    def delete_consolidated_signal(self, symbol_id, timeframe, as_of_date):
+        self.deleted.append((symbol_id, timeframe, as_of_date))
 
 
-def test_market_downgrade_reaches_core_engine_storage() -> None:
+def test_no_enabled_engine_clears_stale_consolidated_storage() -> None:
     action, reasons = resolve_signal([_bull()], _snapshot(), market_context=_bad_market())
     client = _RecordingClient()
     _write_analysis(client, 7, "D", [{"date": "2026-09-10"}], [], [], {"snapshots": 0, "patterns": 0, "zones": 0, "signals": 0}, {
         "as_of_date": "2026-09-10", "indicators": _snapshot(), "patterns": [], "zones": [], "signal_preview": action, "reasons": reasons,
     }, {})
-    # A market-gated generic WATCH is deliberately omitted from CORE_ENGINE storage.
-    assert client.core == []
+    assert client.deleted == [(7, "D", "2026-09-10")]
 
 
 def test_zone_confluence_increases_quality_and_caps_bonus() -> None:

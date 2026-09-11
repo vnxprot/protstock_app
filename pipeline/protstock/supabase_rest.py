@@ -169,6 +169,14 @@ class SupabaseRestClient:
         response.raise_for_status()
         return 1
 
+    def delete_consolidated_signal(self, symbol_id: int, timeframe: str, as_of_date: str) -> None:
+        """Remove a current resolved result when every enabled engine is silent."""
+        response = self._client.delete(
+            "/consolidated_signals",
+            params={"symbol_id": f"eq.{symbol_id}", "timeframe": f"eq.{timeframe}", "as_of_date": f"eq.{as_of_date}"},
+        )
+        response.raise_for_status()
+
     def create_job(self, payload: dict[str, Any]) -> dict[str, Any]:
         response = self._client.post(
             "/job_runs",

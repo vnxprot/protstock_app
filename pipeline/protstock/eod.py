@@ -51,6 +51,7 @@ def run_eod(
     try:
         symbols = client.active_symbols()
         active_rules = client.active_rule_versions()
+        counts["engine_stats"] = _initialize_engine_stats(active_rules)
         market_context = _prior_market_context(client, trading_date)
         daily_snapshots: list[dict] = []
         benchmark_daily: list[dict] = []
@@ -163,6 +164,7 @@ def run_eod(
                 "vnindex_trend_state": vnindex_snapshot["trend_state"],
             }], "trading_date")
         status = "SUCCEEDED" if counts["failed"] == 0 else "PARTIAL"
+        _persist_engine_stats(client, job["id"], trading_date, counts)
         client.finish_job(job["id"], {"status": status, "finished_at": _now(), "counts": counts, "warnings": warnings})
         return {"job_id": job["id"], "status": status, **counts}
     except Exception as exc:
@@ -206,6 +208,7 @@ def rebuild_signals(trading_date: date, *, symbol_offset: int = 0, symbol_limit:
         if symbol_limit:
             symbols = symbols[:symbol_limit]
         active_rules = client.active_rule_versions()
+        counts["engine_stats"] = _initialize_engine_stats(active_rules)
         market_context = _prior_market_context(client, trading_date)
         index = client.market_index("VNINDEX")
         benchmark_daily = [{**row, "date": row["trading_date"]} for row in _rows_as_of(client.index_price_history(index["id"]), trading_date)]
@@ -229,6 +232,7 @@ def rebuild_signals(trading_date: date, *, symbol_offset: int = 0, symbol_limit:
                 counts["failed"] += 1; warnings.append(f"{symbol_row['symbol']}: {type(exc).__name__}")
                 client.create_job_item({"job_run_id": job["id"], "symbol_id": symbol_row["id"], "item_key": symbol_row["symbol"], "status": "FAILED", "error_code": type(exc).__name__, "error_message": str(exc)[:500], "duration_ms": int((monotonic() - started) * 1000)})
         status = "SUCCEEDED" if not counts["failed"] else "PARTIAL"
+        _persist_engine_stats(client, job["id"], trading_date, counts)
         client.finish_job(job["id"], {"status": status, "finished_at": _now(), "counts": counts, "warnings": warnings})
         return {"job_id": job["id"], "status": status, **counts}
     except Exception as exc:
@@ -343,15 +347,14 @@ def _write_analysis(
         )
     signal_rows = []
     raw_evaluations = []
-    core_signal = _core_engine_signal_row(symbol_id, timeframe, result)
-    if core_signal:
-        counts["signals"] += client.upsert_core_engine_signal(core_signal)
-        raw_evaluations.append({**core_signal, "engine": "Prot Core Engine v2.0"})
     for version in active_rules:
         dsl = version["dsl"]
         if dsl.get("timeframe", "D") != timeframe:
             continue
         rule = version.get("rules") or {}
+        stats = counts.get("engine_stats", {}).get(version["id"])
+        if stats is not None:
+            stats["evaluated_count"] += 1
         engine_context = {
             "dsl": dsl,
             "bars": rows,
@@ -372,6 +375,8 @@ def _write_analysis(
         }
         passed, action, reasons = evaluate_named_engine(dsl.get("engine"), dsl.get("overrides"), engine_context)
         if passed:
+            if stats is not None:
+                stats["emitted_count"] += 1
             raw_signal = {
                 "rule_version_id": version["id"], "symbol_id": symbol_id,
                 "timeframe": timeframe, "as_of_date": result["as_of_date"],
@@ -386,27 +391,34 @@ def _write_analysis(
     )
     if raw_evaluations:
         consolidated = resolve_consolidated_signal(raw_evaluations)
+        winners = {item["rule_version_id"] for item in raw_evaluations if item["action"] == consolidated["composite_action"]}
+        for version_id in winners:
+            stats = counts.get("engine_stats", {}).get(version_id)
+            if stats is not None:
+                stats["contributed_count"] += 1
         counts.setdefault("consolidated_signals", 0)
         counts["consolidated_signals"] += client.upsert("consolidated_signals", [{
             "symbol_id": symbol_id, "timeframe": timeframe, "as_of_date": result["as_of_date"],
             **{key: consolidated[key] for key in ("composite_action", "confluence_score", "confluence_count", "consensus_engines", "reasons")},
         }], "symbol_id,timeframe,as_of_date")
+    else:
+        client.delete_consolidated_signal(symbol_id, timeframe, result["as_of_date"])
 
 
-def _core_engine_signal_row(symbol_id: int, timeframe: str, result: dict[str, Any]) -> dict[str, Any] | None:
-    """Persist the meaningful decision from the canonical Core Engine ladder."""
-    action = result["signal_preview"]
-    reasons = result["reasons"]
-    if action == "WATCH" and not any(reason.startswith("NEAR_TRIGGER_") for reason in reasons):
-        return None
+def _initialize_engine_stats(active_rules: list[dict]) -> dict[str, dict[str, Any]]:
     return {
-        "rule_version_id": None,
-        "source": "CORE_ENGINE",
-        "symbol_id": symbol_id,
-        "timeframe": timeframe,
-        "as_of_date": result["as_of_date"],
-        "action": action,
-        "score": 100,
-        "reasons": reasons,
-        "evidence": {key: value for key, value in result["indicators"].items() if value is not None},
+        version["id"]: {
+            "rule_id": version["rules"]["id"], "rule_version_id": version["id"],
+            "engine_name": version["rules"].get("name") or version["dsl"].get("engine") or "Rule Studio",
+            "timeframe": version["dsl"].get("timeframe", "D"),
+            "evaluated_count": 0, "emitted_count": 0, "contributed_count": 0,
+        }
+        for version in active_rules
     }
+
+
+def _persist_engine_stats(client: SupabaseRestClient, job_id: str, trading_date: date, counts: dict[str, Any]) -> None:
+    stats = counts.get("engine_stats", {})
+    rows = [{"job_run_id": job_id, "trading_date": trading_date.isoformat(), **value} for value in stats.values()]
+    if rows:
+        client.upsert("engine_run_summaries", rows, "job_run_id,rule_version_id,timeframe")
