@@ -4,10 +4,10 @@ const WORKFLOW_URL = 'https://api.github.com/repos/vnxprot/protstock_app/actions
 async function authenticatedOwner(request) {
   const token = request.headers.authorization?.replace(/^Bearer\s+/i, '')
   const supabaseUrl = process.env.SUPABASE_URL
-  const publishableKey = process.env.VITE_SUPABASE_PUBLISHABLE_KEY
-  if (!token || !supabaseUrl || !publishableKey) return false
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (!token || !supabaseUrl || !serviceRoleKey) return false
   const user = await fetch(`${supabaseUrl}/auth/v1/user`, {
-    headers: { apikey: publishableKey, Authorization: `Bearer ${token}` },
+    headers: { apikey: serviceRoleKey, Authorization: `Bearer ${token}` },
   })
   if (!user.ok) return false
   return (await user.json()).email === OWNER_EMAIL
