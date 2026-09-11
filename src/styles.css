@@ -304,3 +304,24 @@ kbd { display:inline-flex; align-items:center; gap:3px; padding:3px 7px; border:
 .symbol-picker { display:grid; gap:6px; color:#758b80; font-size:11px; font-weight:700; letter-spacing:.08em; }
 .symbol-picker-actions { display:flex; align-items:center; gap:7px; }.symbol-picker-actions>button:last-child { min-width:220px; }.quick-star { flex:0 0 44px; height:46px; display:grid; place-items:center; border:1px solid var(--line-bright); border-radius:11px; background:#0b1813; }.quick-star.active { color:var(--lime); border-color:#4f6a39; background:#172019; }
 @media(max-width:760px){.stock-chart .zone-band { right:48px; left:5px; }.symbol-picker-actions>button:last-child { min-width:0; flex:1; }.quick-star { min-height:48px; flex-basis:48px; }}
+
+/* Final mobile containment and clear support/resistance hierarchy. */
+html, body, #root { overflow-x:clip; }
+*, *::before, *::after { box-sizing:border-box; }
+.app-shell { grid-template-columns:248px minmax(0,1fr); overflow-x:clip; }
+.app-shell.sidebar-collapsed { grid-template-columns:82px minmax(0,1fr); }
+main { min-width:0; }
+.zone-card.support,.zone-card.resistance { border-color:var(--line); border-top-width:1px; }
+.zone-card.support strong { color:var(--mint); }
+.zone-card.resistance strong { color:var(--red); }
+.zone-meta .zone-touches { display:flex; align-items:baseline; gap:4px; padding:2px 7px; color:var(--lime); background:#d7ff5214; }
+.zone-touches b { color:#d7ff52; font:700 19px 'Space Grotesk',sans-serif; line-height:1; }
+.zone-touches small { color:#d7ff52; font-size:10px; font-weight:700; }
+@media(max-width:760px){
+  body { overscroll-behavior-x:none; }
+  .app-shell,.app-shell.sidebar-collapsed,main,.workspace-page,.dashboard-page,.analysis-page { width:100%; max-width:100%; min-width:0; }
+  main { overflow-x:hidden; touch-action:pan-y; }
+  .market-strip { display:grid; grid-template-columns:1fr 1fr; overflow:hidden; gap:8px; margin:0 0 12px; padding:0; white-space:normal; }
+  .market-strip>* { min-width:0; overflow:hidden; text-overflow:ellipsis; }
+  .chart-tools,.rule-mode-tabs { overflow-x:hidden; flex-wrap:wrap; }
+}
