@@ -29,10 +29,10 @@ jobs:
           - label: A–K
             source: KBS
             offset: 0
-            limit: 103
+            limit: 101
           - label: L–Z
             source: VCI
-            offset: 103
+            offset: 101
             limit: 101
     steps:
       - uses: actions/checkout@v4
