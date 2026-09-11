@@ -342,6 +342,10 @@ def _write_analysis(
     )
     signal_rows = []
     raw_evaluations = []
+    core_signal = _core_engine_signal_row(symbol_id, timeframe, result)
+    if core_signal:
+        counts["signals"] += client.upsert_core_engine_signal(core_signal)
+        raw_evaluations.append({**core_signal, "engine": "Prot Core Engine v2.0"})
     for version in active_rules:
         dsl = version["dsl"]
         if dsl.get("timeframe", "D") != timeframe:
@@ -386,3 +390,22 @@ def _write_analysis(
             "symbol_id": symbol_id, "timeframe": timeframe, "as_of_date": result["as_of_date"],
             **{key: consolidated[key] for key in ("composite_action", "confluence_score", "confluence_count", "consensus_engines", "reasons")},
         }], "symbol_id,timeframe,as_of_date")
+
+
+def _core_engine_signal_row(symbol_id: int, timeframe: str, result: dict[str, Any]) -> dict[str, Any] | None:
+    """Persist the meaningful decision from the canonical Core Engine ladder."""
+    action = result["signal_preview"]
+    reasons = result["reasons"]
+    if action == "WATCH" and not any(reason.startswith("NEAR_TRIGGER_") for reason in reasons):
+        return None
+    return {
+        "rule_version_id": None,
+        "source": "CORE_ENGINE",
+        "symbol_id": symbol_id,
+        "timeframe": timeframe,
+        "as_of_date": result["as_of_date"],
+        "action": action,
+        "score": 100,
+        "reasons": reasons,
+        "evidence": {key: value for key, value in result["indicators"].items() if value is not None},
+    }

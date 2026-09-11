@@ -17,6 +17,10 @@ class RecordingClient:
             self.consolidated_rows.extend(payload)
         return len(payload)
 
+    def upsert_core_engine_signal(self, payload):
+        self.signal_rows.append(payload)
+        return 1
+
 
 def _result(patterns: list[dict], reasons: list[str]) -> dict:
     return {
@@ -44,19 +48,28 @@ def test_core_pack_skips_generic_watch() -> None:
     assert client.signal_rows == []
 
 
+def test_core_engine_writes_meaningful_watch_and_consolidates_it() -> None:
+    client = RecordingClient()
+    ready = {"pattern_type": "ACCUMULATION_BASE", "state": "READY", "direction": "BULLISH", "quality_score": 50, "start_index": 0, "end_index": 0, "trigger_price": 101, "invalidation_price": 95, "evidence": {}, "reasons": []}
+    _write(client, _result([ready], ["TREND_UP", "NEAR_TRIGGER_ACCUMULATION_BASE"]))
+    assert client.signal_rows[0]["source"] == "CORE_ENGINE"
+    assert "Prot Core Engine v2.0" in client.consolidated_rows[0]["consensus_engines"]
+
+
 def test_core_v2_flows_through_active_rule_versions() -> None:
     client = RecordingClient()
     ready = {"pattern_type": "ACCUMULATION_BASE", "state": "READY", "direction": "BULLISH", "quality_score": 50, "start_index": 0, "end_index": 0, "trigger_price": 101, "invalidation_price": 95, "evidence": {}, "reasons": []}
     _write(client, _result([ready], ["TREND_UP", "NEAR_TRIGGER_ACCUMULATION_BASE"]))
-    assert client.signal_rows == [{
+    assert client.signal_rows[0]["source"] == "CORE_ENGINE"
+    assert client.signal_rows[1] == {
         "rule_version_id": "v2", "symbol_id": 42, "timeframe": "D", "as_of_date": "2026-09-11",
         "action": "WATCH", "source": "CORE_PACK", "score": 100,
         "reasons": ["TREND_UP", "NEAR_TRIGGER_ACCUMULATION_BASE"],
         "evidence": {"close": 100.0, "rsi14": 55.0, "trend_state": "UP", "volume_avg20": 5000000, "volume_ratio20": 1.0},
-    }]
+    }
     assert client.consolidated_rows == [{
         "symbol_id": 42, "timeframe": "D", "as_of_date": "2026-09-11", "composite_action": "WATCH",
-        "confluence_score": 70, "confluence_count": 1, "consensus_engines": ["core_ladder_v2"],
+        "confluence_score": 90, "confluence_count": 2, "consensus_engines": ["Prot Core Engine v2.0", "core_ladder_v2"],
         "reasons": ["TREND_UP", "NEAR_TRIGGER_ACCUMULATION_BASE"],
     }]
 
