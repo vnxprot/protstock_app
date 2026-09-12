@@ -82,6 +82,11 @@ const visual = [
 ];
 
 const corePackContents: Record<string, string[]> = {
+  "Prot Core Engine v0.0": [
+    "Research-first: chỉ tạo evidence rõ ràng; mặc định không gửi Telegram",
+    "Một cấu trúc chỉ có một mẫu hình chủ đạo để tránh trùng tín hiệu",
+    "Confluence chỉ tính bằng chứng độc lập, không cộng điểm khi trùng v2.0",
+  ],
   "Prot Core Engine v1.0": [
     "Mua nền tích lũy xác nhận · volume > 1,5× · RSI 40–75",
     "Mua hai đáy xác nhận · volume > 1,3× · RSI 40–75",
@@ -101,6 +106,13 @@ const corePackContents: Record<string, string[]> = {
   ],
 };
 
+const classicalModels = [
+  { id: "flat_base", label: "Breakout nền phẳng", detail: "Nền chặt, volume co hẹp, breakout xác nhận" },
+  { id: "flag_pennant", label: "Cờ tăng / Pennant", detail: "Cột cờ rõ, điều chỉnh nông, breakout có volume" },
+  { id: "double_bottom", label: "Hai đáy", detail: "Đảo chiều tăng khi vượt neckline" },
+  { id: "double_top", label: "Hai đỉnh", detail: "Cảnh báo giảm tỷ trọng khi thủng neckline" },
+  { id: "head_shoulders", label: "Vai đầu vai / Ngược", detail: "Neckline, cấu trúc ba pivot và volume xác nhận" },
+];
 function statusCopy(status: string, kind: string) {
   if (status === "ACTIVE")
     return { label: "ĐANG BẬT", detail: "Được chạy trong EOD", tone: "on" };
@@ -147,7 +159,7 @@ export function RuleBuilderPage({ authenticated }: { authenticated: boolean }) {
       const { data, error } = await supabase!
         .from("rules")
         .select(
-          "id,name,input_text,status,kind,pack_version,notification_mode,created_at",
+          "id,name,input_text,status,kind,pack_version,notification_mode,created_at,rule_versions(id,dsl)",
         )
         .order("created_at", { ascending: false });
       if (error) throw error;
@@ -215,6 +227,18 @@ export function RuleBuilderPage({ authenticated }: { authenticated: boolean }) {
       .eq("id", rule.id);
     if (error) return setToast(error.message);
     setToast(`${rule.name}: ${status === "ACTIVE" ? "đã bật" : "đã tắt"}`);
+    setTimeout(() => setToast(""), 3000);
+    client.invalidateQueries({ queryKey: ["rules"] });
+  }
+  async function toggleClassicalModel(pack: any, model: string) {
+    const version = pack.rule_versions?.[0];
+    if (!supabase || !version) return setToast("Chưa tìm thấy cấu hình v0.0");
+    const models = version.dsl?.overrides?.models ?? {};
+    const dsl = { ...version.dsl, overrides: { ...(version.dsl?.overrides ?? {}), models: { ...models, [model]: models[model] === false } } };
+    const { error } = await supabase.from("rule_versions").update({ dsl }).eq("id", version.id);
+    if (error) return setToast(error.message);
+    const label = classicalModels.find((item) => item.id === model)?.label ?? model;
+    setToast(`${label}: ${dsl.overrides.models[model] ? "đã bật" : "đã tắt"}`);
     setTimeout(() => setToast(""), 3000);
     client.invalidateQueries({ queryKey: ["rules"] });
   }
@@ -286,6 +310,8 @@ export function RuleBuilderPage({ authenticated }: { authenticated: boolean }) {
             const expanded = expandedPack === pack.id;
             const details = corePackContents[pack.name] ?? [pack.input_text];
             const run = latestRunByRule[pack.id] as any;
+            const version = (pack as any).rule_versions?.[0];
+            const modelStates = version?.dsl?.overrides?.models ?? {};
             return (
               <article className={`core-pack-card ${state.tone}`} key={pack.id}>
                 <div className="core-pack-main">
@@ -327,6 +353,18 @@ export function RuleBuilderPage({ authenticated }: { authenticated: boolean }) {
                         <li key={detail}>{detail}</li>
                       ))}
                     </ul>
+                    {pack.name === "Prot Core Engine v0.0" && (
+                      <div className="classical-model-list">
+                        <span>MÔ HÌNH ĐANG THAM GIA</span>
+                        {classicalModels.map((model) => {
+                          const enabled = modelStates[model.id] !== false;
+                          return <div className="classical-model-row" key={model.id}>
+                            <div><strong>{model.label}</strong><small>{model.detail}</small></div>
+                            <button type="button" className={`core-toggle ${enabled ? "is-on" : ""}`} role="switch" aria-checked={enabled} aria-label={`${enabled ? "Tắt" : "Bật"} ${model.label}`} onClick={() => toggleClassicalModel(pack, model.id)}><i /></button>
+                          </div>;
+                        })}
+                      </div>
+                    )}
                   </div>
                 )}
               </article>

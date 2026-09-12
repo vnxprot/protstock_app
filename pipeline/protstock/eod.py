@@ -388,7 +388,11 @@ def _write_analysis(
                 "timeframe": timeframe, "as_of_date": result["as_of_date"],
                 "action": action, "source": "CORE_PACK" if rule.get("kind") == "CORE_PACK" else "USER_RULE", "score": 100,
                 "reasons": reasons,
-                "evidence": {key: value for key, value in result["indicators"].items() if value is not None},
+                "evidence": {
+                    **{key: value for key, value in result["indicators"].items() if value is not None},
+                    **(engine_context.get("engine_evidence") or {}),
+                    **({"evidence_cluster": _pattern_evidence_cluster(reasons)} if _pattern_evidence_cluster(reasons) else {}),
+                },
             }
             signal_rows.append(raw_signal)
             raw_evaluations.append({**raw_signal, "engine": rule.get("name") or dsl.get("engine") or "Rule Studio"})
@@ -410,6 +414,17 @@ def _write_analysis(
     else:
         client.delete_consolidated_signal(symbol_id, timeframe, result["as_of_date"])
 
+
+def _pattern_evidence_cluster(reasons: list[str]) -> str | None:
+    """Group engines that merely restate the same confirmed chart pattern."""
+    for reason in reasons:
+        for prefix in ("V0_", "PATTERN_", "CORE_V1_"):
+            if reason.startswith(prefix):
+                token = reason[len(prefix):]
+                for suffix in ("_CONFIRMED", "_READY"):
+                    if token.endswith(suffix):
+                        return token[:-len(suffix)]
+    return None
 
 def _initialize_engine_stats(active_rules: list[dict]) -> dict[str, dict[str, Any]]:
     return {

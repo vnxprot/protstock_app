@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from .analysis import resolve_signal
+from .classical_patterns import MODEL_LABELS, detect_classical_patterns
 from .rules import evaluate_rule, multi_timeframe_gate
 
 
@@ -58,6 +59,8 @@ def evaluate_named_engine(engine: str | None, overrides: dict[str, Any] | None, 
         return meaningful, action, reasons
     if engine == "core_ladder_v1":
         return evaluate_core_v1(context)
+    if engine == "classical_patterns_v0":
+        return evaluate_classical_patterns_v0(context, overrides)
     if engine == "pullback_continuation_v1":
         return evaluate_pullback_continuation_v1(context)
     if engine == "vcp_breakout_v1":
@@ -68,6 +71,63 @@ def evaluate_named_engine(engine: str | None, overrides: dict[str, Any] | None, 
         return evaluate_relative_strength_leader_v1(context)
     raise ValueError(f"unknown signal engine: {engine}")
 
+
+def evaluate_classical_patterns_v0(context: dict[str, Any], overrides: dict[str, Any] | None = None) -> tuple[bool, str, list[str]]:
+    """Evaluate the strict, research-first five-family classical engine.
+
+    One strongest valid candidate is selected so a single chart structure never
+    becomes several independent votes in the consolidated signal resolver.
+    """
+    overrides = overrides or {}
+    enabled_models = {
+        "flat_base": True, "flag_pennant": True, "double_bottom": True,
+        "double_top": True, "head_shoulders": True,
+        **(overrides.get("models") or {}),
+    }
+    candidates = context.get("classical_patterns") or detect_classical_patterns(
+        context.get("bars", []), context.get("snapshot", {}),
+    )
+    candidates = [candidate for candidate in candidates if enabled_models.get(candidate["model"], True)]
+    snapshot = context.get("snapshot", {})
+    position = context.get("position")
+    confirmed = [candidate for candidate in candidates if candidate["state"] == "CONFIRMED"]
+    bears = [candidate for candidate in confirmed if candidate["direction"] == "BEARISH" and candidate["quality_score"] >= 75]
+    if bears:
+        top = max(bears, key=lambda candidate: candidate["quality_score"])
+        _attach_v0_evidence(context, top)
+        return True, "REDUCE" if position else "WATCH", [f"V0_{top['pattern_type']}_CONFIRMED", *top["reasons"]]
+
+    threshold = {"DOUBLE_BOTTOM": 80, "INVERSE_HEAD_SHOULDERS": 80}
+    bulls = [candidate for candidate in confirmed if candidate["direction"] == "BULLISH" and candidate["quality_score"] >= threshold.get(candidate["pattern_type"], 75)]
+    if bulls:
+        top = max(bulls, key=lambda candidate: candidate["quality_score"])
+        _attach_v0_evidence(context, top)
+        action, gate_reasons = resolve_signal(
+            [top], snapshot, position,
+            market_context=context.get("market_context"),
+            multi_timeframe_context=context.get("multi_timeframe_context"),
+            portfolio_positions=context.get("portfolio_positions"),
+            candidate_sector=context.get("candidate_sector"), capital=context.get("capital"),
+        )
+        return True, action, [f"V0_{top['pattern_type']}_CONFIRMED", *top["reasons"], *gate_reasons]
+
+    ready = [candidate for candidate in candidates if candidate["state"] == "READY"]
+    if ready:
+        top = max(ready, key=lambda candidate: candidate["quality_score"])
+        _attach_v0_evidence(context, top)
+        return True, "WATCH", [f"V0_NEAR_{top['pattern_type']}", *top["reasons"]]
+    return False, "WATCH", []
+
+
+def _attach_v0_evidence(context: dict[str, Any], candidate: dict[str, Any]) -> None:
+    context["engine_evidence"] = {
+        "engine_version": "v0.0", "model": candidate["model"],
+        "model_label": MODEL_LABELS[candidate["model"]], "pattern_type": candidate["pattern_type"],
+        "quality_score": candidate["quality_score"], "trigger_price": candidate["trigger_price"],
+        "invalidation_price": candidate["invalidation_price"],
+        "evidence_cluster": candidate["pattern_type"],
+        "pattern_evidence": candidate["evidence"],
+    }
 
 def evaluate_core_v1(context: dict[str, Any]) -> tuple[bool, str, list[str]]:
     """Consolidated equivalent of the four archived original Core v1 DSL rules."""
