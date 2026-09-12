@@ -37,14 +37,14 @@ def repair_missing_history(
         if symbol_limit is not None:
             symbols = symbols[:symbol_limit]
         for symbol in symbols:
-            existing = set(client.symbol_price_dates(symbol["id"], start_date, end_date))
-            missing = calendar - existing
             counts["symbols"] += 1
-            if not missing:
-                counts["already_complete"] += 1
-                continue
-            counts["missing_sessions"] += len(missing)
             try:
+                existing = set(client.symbol_price_dates(symbol["id"], start_date, end_date))
+                missing = calendar - existing
+                if not missing:
+                    counts["already_complete"] += 1
+                    continue
+                counts["missing_sessions"] += len(missing)
                 bars = _fetch_with_fallback(
                     symbol["symbol"], min(map(date.fromisoformat, missing)), max(map(date.fromisoformat, missing)), source
                 )
@@ -56,8 +56,8 @@ def repair_missing_history(
                     counts["unresolved_sessions"] += remaining
             except Exception:
                 counts["failed"] += 1
-                unresolved[symbol["symbol"]] = len(missing)
-                counts["unresolved_sessions"] += len(missing)
+                unresolved[symbol["symbol"]] = len(calendar)
+                counts["unresolved_sessions"] += len(calendar)
             sleep(pause_seconds)
         return {"status": "SUCCEEDED" if counts["failed"] == 0 else "PARTIAL", "start_date": start_date.isoformat(), "end_date": end_date.isoformat(), "vnindex": {"sessions": len(calendar), "missing_sessions": len(missing_index_dates), "rows_written": index_rows_written}, **counts, "unresolved": unresolved}
     finally:

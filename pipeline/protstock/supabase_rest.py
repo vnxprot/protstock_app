@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
+from time import sleep
 from typing import Any
 
 import httpx
@@ -61,11 +62,15 @@ class SupabaseRestClient:
     def _date_rows(self, table: str, filters: list[tuple[str, str]]) -> list[str]:
         rows: list[dict[str, Any]] = []
         for offset in range(0, 10_000, 1_000):
-            response = self._client.get(
-                f"/{table}",
-                params=[("select", "trading_date"), ("order", "trading_date.asc"), *filters],
-                headers={"Range": f"{offset}-{offset + 999}"},
-            )
+            for attempt in range(3):
+                response = self._client.get(
+                    f"/{table}",
+                    params=[("select", "trading_date"), ("order", "trading_date.asc"), *filters],
+                    headers={"Range": f"{offset}-{offset + 999}"},
+                )
+                if response.status_code < 500 or attempt == 2:
+                    break
+                sleep(attempt + 1)
             response.raise_for_status()
             page = response.json()
             rows.extend(page)

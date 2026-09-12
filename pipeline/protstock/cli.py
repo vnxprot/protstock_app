@@ -102,7 +102,7 @@ def main() -> None:
     if args.command == "repair-history":
         result = repair_missing_history(args.start_date, args.end_date, source=args.source, symbol_offset=args.symbol_offset, symbol_limit=args.symbol_limit, pause_seconds=args.pause_seconds)
         print(json.dumps(result, ensure_ascii=False))
-        raise SystemExit(0 if result["status"] == "SUCCEEDED" else 1)
+        raise SystemExit(0 if result["status"] in {"SUCCEEDED", "PARTIAL"} else 1)
     if args.command == "sync-exchanges":
         print(json.dumps(sync_exchanges(), ensure_ascii=False))
         raise SystemExit(0)
@@ -122,14 +122,14 @@ def main() -> None:
             write_breadth_snapshot=not args.skip_breadth_snapshot,
         )
         print(json.dumps(result, indent=2))
-        raise SystemExit(0 if result["status"] == "SUCCEEDED" else 1)
+        raise SystemExit(0 if result["status"] in {"SUCCEEDED", "PARTIAL"} else 1)
     if args.command == "finalize-fast-eod":
         print(json.dumps(finalize_fast_lane(args.trading_date), ensure_ascii=False))
         raise SystemExit(0)
     if args.command == "rebuild-signals":
         result = rebuild_signals(args.trading_date, symbol_offset=args.symbol_offset, symbol_limit=args.symbol_limit)
         print(json.dumps(result, ensure_ascii=False))
-        raise SystemExit(0 if result["status"] == "SUCCEEDED" else 1)
+        raise SystemExit(0 if result["status"] in {"SUCCEEDED", "PARTIAL"} else 1)
     if args.command == "backtest-worker":
         result = process_backtests(args.limit)
         print(json.dumps(result, indent=2))
