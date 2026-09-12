@@ -16,6 +16,7 @@ from .outcome_worker import evaluate_pending_outcomes
 from .pattern_archive import archive_pattern_evidence
 from .universe import load_universe
 from .seed import seed_universe, seed_vnindex_history
+from .repair_history import repair_missing_history
 from .exchanges import sync_exchanges
 
 
@@ -46,6 +47,13 @@ def main() -> None:
     seed_vnindex.add_argument("--start-date", type=date.fromisoformat, default=date(2018, 1, 1))
     seed_vnindex.add_argument("--end-date", type=date.fromisoformat, default=date.today())
     seed_vnindex.add_argument("--source", default="KBS", choices=("KBS", "VCI"))
+    repair = subparsers.add_parser("repair-history")
+    repair.add_argument("--start-date", type=date.fromisoformat, default=date(2021, 1, 1))
+    repair.add_argument("--end-date", type=date.fromisoformat, default=date.today())
+    repair.add_argument("--source", default="KBS", choices=("KBS", "VCI"))
+    repair.add_argument("--symbol-offset", type=int, default=0)
+    repair.add_argument("--symbol-limit", type=int)
+    repair.add_argument("--pause-seconds", type=float, default=3.0)
     subparsers.add_parser("sync-exchanges")
     analyze = subparsers.add_parser("analyze-json")
     analyze.add_argument("path", type=Path)
@@ -91,6 +99,10 @@ def main() -> None:
     if args.command == "seed-vnindex":
         print(json.dumps(seed_vnindex_history(args.start_date, args.end_date, args.source), ensure_ascii=False))
         raise SystemExit(0)
+    if args.command == "repair-history":
+        result = repair_missing_history(args.start_date, args.end_date, source=args.source, symbol_offset=args.symbol_offset, symbol_limit=args.symbol_limit, pause_seconds=args.pause_seconds)
+        print(json.dumps(result, ensure_ascii=False))
+        raise SystemExit(0 if result["status"] == "SUCCEEDED" else 1)
     if args.command == "sync-exchanges":
         print(json.dumps(sync_exchanges(), ensure_ascii=False))
         raise SystemExit(0)

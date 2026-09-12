@@ -48,6 +48,31 @@ class SupabaseRestClient:
         response.raise_for_status()
         return list(reversed(response.json()))
 
+    def index_price_dates(self, index_id: int, start_date, end_date) -> list[str]:
+        return self._date_rows(
+            "market_index_prices", [("index_id", f"eq.{index_id}"), ("trading_date", f"gte.{start_date.isoformat()}"), ("trading_date", f"lte.{end_date.isoformat()}")]
+        )
+
+    def symbol_price_dates(self, symbol_id: int, start_date, end_date) -> list[str]:
+        return self._date_rows(
+            "daily_prices", [("symbol_id", f"eq.{symbol_id}"), ("trading_date", f"gte.{start_date.isoformat()}"), ("trading_date", f"lte.{end_date.isoformat()}")]
+        )
+
+    def _date_rows(self, table: str, filters: list[tuple[str, str]]) -> list[str]:
+        rows: list[dict[str, Any]] = []
+        for offset in range(0, 10_000, 1_000):
+            response = self._client.get(
+                f"/{table}",
+                params=[("select", "trading_date"), ("order", "trading_date.asc"), *filters],
+                headers={"Range": f"{offset}-{offset + 999}"},
+            )
+            response.raise_for_status()
+            page = response.json()
+            rows.extend(page)
+            if len(page) < 1_000:
+                break
+        return [str(row["trading_date"]) for row in rows]
+
     def price_history(self, symbol_id: int, limit: int = 260) -> list[dict[str, Any]]:
         rows: list[dict[str, Any]] = []
         page_size = min(1000, limit)
