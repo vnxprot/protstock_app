@@ -21,6 +21,9 @@ BENCHMARK_LOOKBACK_DAYS = (date(2050, 1, 1) - VNINDEX_HISTORY_START).days
 # Daily Fast Lane reuses the locally stored 260-session benchmark window. It only
 # asks the upstream source for a small overlap to capture the newly closed session.
 FAST_LANE_BENCHMARK_FETCH_DAYS = 14
+# Daily, weekly and monthly analysis must share enough stored bars for SMA50 on monthly bars.
+# 2,600 daily sessions cover roughly ten Vietnamese trading years without an upstream fetch.
+MULTI_TIMEFRAME_HISTORY_LIMIT = 2600
 
 
 def run_eod(
@@ -68,7 +71,7 @@ def run_eod(
             client.upsert("market_index_prices", index_rows, "index_id,trading_date")
             benchmark_daily = [
                 {**row, "date": row["trading_date"]}
-                for row in _rows_as_of(client.index_price_history(index["id"]), trading_date)
+                for row in _rows_as_of(client.index_price_history(index["id"], MULTI_TIMEFRAME_HISTORY_LIMIT), trading_date)
             ]
             # A fresh database has no cached benchmark window. Self-heal once; all
             # later Fast Lane runs stay incremental.
@@ -81,7 +84,7 @@ def run_eod(
                     "collected_at": bar.collected_at.isoformat(),
                 } for bar in index_bars]
                 client.upsert("market_index_prices", index_rows, "index_id,trading_date")
-                benchmark_daily = [{**row, "date": row["trading_date"]} for row in _rows_as_of(client.index_price_history(index["id"]), trading_date)]
+                benchmark_daily = [{**row, "date": row["trading_date"]} for row in _rows_as_of(client.index_price_history(index["id"], MULTI_TIMEFRAME_HISTORY_LIMIT), trading_date)]
         except Exception as exc:
             warnings.append(f"VNINDEX: {type(exc).__name__}")
         symbols = symbols[symbol_offset:]
@@ -106,7 +109,7 @@ def run_eod(
                     "collected_at": bar.collected_at.isoformat(), "quality_status": "VALID",
                 } for bar in fetched]
                 counts["prices"] += client.upsert("daily_prices", price_rows, "symbol_id,trading_date")
-                history = _rows_as_of(client.price_history(symbol_row["id"]), trading_date)
+                history = _rows_as_of(client.price_history(symbol_row["id"], MULTI_TIMEFRAME_HISTORY_LIMIT), trading_date)
                 analysis_rows = [{**row, "date": row["trading_date"]} for row in history]
                 if analysis_rows:
                     timeframe_rows = {"D": analysis_rows}
@@ -185,7 +188,7 @@ def finalize_fast_lane(trading_date: date) -> dict[str, Any]:
         if missing:
             raise RuntimeError(f"Fast Lane incomplete: {len(covered)}/{len(expected)} daily snapshots")
         index = client.market_index("VNINDEX")
-        benchmark = _rows_as_of(client.index_price_history(index["id"]), trading_date)
+        benchmark = _rows_as_of(client.index_price_history(index["id"], MULTI_TIMEFRAME_HISTORY_LIMIT), trading_date)
         vnindex_snapshot = calculate_indicators(benchmark).to_dict() if benchmark else {"trend_state": "UNKNOWN"}
         breadth = compute_breadth(snapshots)
         client.upsert("market_breadth_snapshots", [{
@@ -217,11 +220,11 @@ def rebuild_signals(trading_date: date, *, symbol_offset: int = 0, symbol_limit:
         counts["engine_stats"] = _initialize_engine_stats(active_rules)
         market_context = _prior_market_context(client, trading_date)
         index = client.market_index("VNINDEX")
-        benchmark_daily = [{**row, "date": row["trading_date"]} for row in _rows_as_of(client.index_price_history(index["id"]), trading_date)]
+        benchmark_daily = [{**row, "date": row["trading_date"]} for row in _rows_as_of(client.index_price_history(index["id"], MULTI_TIMEFRAME_HISTORY_LIMIT), trading_date)]
         for symbol_row in symbols:
             started = monotonic()
             try:
-                analysis_rows = [{**row, "date": row["trading_date"]} for row in _rows_as_of(client.price_history(symbol_row["id"]), trading_date)]
+                analysis_rows = [{**row, "date": row["trading_date"]} for row in _rows_as_of(client.price_history(symbol_row["id"], MULTI_TIMEFRAME_HISTORY_LIMIT), trading_date)]
                 if not analysis_rows:
                     raise ValueError("no stored price history")
                 timeframe_rows = {"D": analysis_rows, "W": aggregate_bars(analysis_rows, "W"), "M": aggregate_bars(analysis_rows, "M")}
