@@ -72,12 +72,13 @@ export function useStockAnalysis(symbol: string | null, timeframe: 'D' | 'W' | '
       if (!supabase || !symbol) throw new Error('Symbol is required')
       const { data: symbolRow, error: symbolError } = await supabase.from('symbols').select('id,symbol,sector,exchange,company_name').eq('symbol', symbol).single()
       if (symbolError) throw symbolError
-      // Supabase giới hạn mỗi REST response ở 1.000 dòng. Ghép hai trang để chart D
-      // nhận đủ 1.300 phiên (~5 năm) cho các lựa chọn 3Y/Tất cả.
+      // Supabase giới hạn mỗi REST response ở 1.000 dòng. Ghép ba trang để chart D
+      // chứa tới 2.600 phiên (~10 năm), đủ hiển thị toàn bộ lịch sử từ 01/01/2021.
       const dailyPriceQuery = async () => {
         const base = () => supabase!.from('daily_prices').select('trading_date,open,high,low,close,volume').eq('symbol_id', symbolRow.id).order('trading_date', { ascending: false })
-        const [recent, historical] = await Promise.all([base().range(0, 999), base().range(1000, 1299)])
-        return { data: [...(recent.data ?? []), ...(historical.data ?? [])], error: recent.error ?? historical.error }
+        const pages = await Promise.all([base().range(0, 999), base().range(1000, 1999), base().range(2000, 2599)])
+        const failed = pages.find(page => page.error)
+        return { data: pages.flatMap(page => page.data ?? []), error: failed?.error ?? null }
       }
       const priceQuery = timeframe === 'D'
         ? dailyPriceQuery()
