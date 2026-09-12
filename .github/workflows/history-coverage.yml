@@ -1,0 +1,47 @@
+name: Historical data coverage report
+
+on:
+  workflow_dispatch:
+    inputs:
+      start_date:
+        description: First session to audit
+        required: true
+        default: "2021-01-01"
+        type: string
+      end_date:
+        description: Last session to audit
+        required: true
+        default: "2026-09-11"
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: python -m pip install -e ".[data]"
+      - name: Audit stored VNINDEX and symbol sessions
+        env:
+          SUPABASE_URL: https://upmqxwktvvguegqeqibn.supabase.co
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: >-
+          protstock history-coverage
+          --start-date "${{ inputs.start_date }}"
+          --end-date "${{ inputs.end_date }}"
+          > history-coverage.json
+      - name: Publish concise summary
+        run: |
+          python -c "import json; r=json.load(open('history-coverage.json', encoding='utf-8')); print('## Historical data coverage'); print(); print(f\"- VNINDEX: {r['vnindex']['first_session']} -> {r['vnindex']['last_session']} ({r['vnindex']['sessions']} sessions)\"); print(f\"- Symbols: {r['symbols']}; complete after coverage start: {r['complete_after_coverage_start']}\"); print(f\"- Repairable gaps: {r['repairable_missing_sessions']} across {r['symbols_with_repairable_gaps']} symbols\"); print(f\"- Before first observed bar, listing date unknown: {r['unclassified_before_first_observation_sessions']} sessions\")" >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: history-coverage-${{ inputs.start_date }}-to-${{ inputs.end_date }}
+          path: history-coverage.json
+          retention-days: 30

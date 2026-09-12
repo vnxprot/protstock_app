@@ -28,7 +28,7 @@ class SupabaseRestClient:
     def active_symbols(self) -> list[dict[str, Any]]:
         response = self._client.get(
             "/symbols",
-            params={"select": "id,symbol,exchange,sector", "active": "eq.true", "order": "symbol.asc"},
+            params={"select": "id,symbol,exchange,sector,listed_from", "active": "eq.true", "order": "symbol.asc"},
         )
         response.raise_for_status()
         return response.json()

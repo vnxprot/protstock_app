@@ -5,6 +5,7 @@ from time import sleep
 from typing import Any, Iterable
 
 from .config import Settings
+from .history_coverage import assess_symbol_coverage
 from .provider_vnstock import VnstockProvider
 from .supabase_rest import SupabaseRestClient
 
@@ -20,7 +21,7 @@ def repair_missing_history(
 ) -> dict[str, Any]:
     """Fill only missing daily sessions using VNINDEX as the trading calendar."""
     client = SupabaseRestClient(Settings.from_env())
-    counts = {"symbols": 0, "already_complete": 0, "missing_sessions": 0, "rows_written": 0, "unresolved_sessions": 0, "failed": 0}
+    counts = {"symbols": 0, "already_complete": 0, "missing_sessions": 0, "rows_written": 0, "unresolved_sessions": 0, "pre_listing_sessions": 0, "unclassified_before_first_observation_sessions": 0, "failed": 0}
     unresolved: dict[str, int] = {}
     try:
         index = client.market_index("VNINDEX")
@@ -38,9 +39,14 @@ def repair_missing_history(
             symbols = symbols[:symbol_limit]
         for symbol in symbols:
             counts["symbols"] += 1
+            missing_for_symbol = 0
             try:
                 existing = set(client.symbol_price_dates(symbol["id"], start_date, end_date))
-                missing = calendar - existing
+                coverage = assess_symbol_coverage(symbol, calendar, existing, start_date)
+                counts["pre_listing_sessions"] += coverage["pre_listing_session_count"]
+                counts["unclassified_before_first_observation_sessions"] += coverage["unclassified_before_first_observation_count"]
+                missing = set(coverage["missing_after_coverage_start"])
+                missing_for_symbol = len(missing)
                 if not missing:
                     counts["already_complete"] += 1
                     continue
@@ -56,8 +62,8 @@ def repair_missing_history(
                     counts["unresolved_sessions"] += remaining
             except Exception:
                 counts["failed"] += 1
-                unresolved[symbol["symbol"]] = len(calendar)
-                counts["unresolved_sessions"] += len(calendar)
+                unresolved[symbol["symbol"]] = missing_for_symbol
+                counts["unresolved_sessions"] += missing_for_symbol
             sleep(pause_seconds)
         return {"status": "SUCCEEDED" if counts["failed"] == 0 else "PARTIAL", "start_date": start_date.isoformat(), "end_date": end_date.isoformat(), "vnindex": {"sessions": len(calendar), "missing_sessions": len(missing_index_dates), "rows_written": index_rows_written}, **counts, "unresolved": unresolved}
     finally:
