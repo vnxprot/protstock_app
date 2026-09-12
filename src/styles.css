@@ -393,3 +393,28 @@ main { min-width:0; }
   .sheet-backdrop { overscroll-behavior:contain; touch-action:none; }
   .journal-sheet .sheet-handle { touch-action:pan-y; cursor:grab; }
 }
+
+/* Compact signal metadata: date stays visible, including narrow mobile cards. */
+.signal-compact-meta { display:contents; }
+.signal-visual-date { grid-column:3; grid-row:2; justify-self:end; color:var(--mint); font-size:10px; font-style:normal; white-space:nowrap; }
+.signal-visual-meta { display:flex; align-items:center; gap:7px; min-width:0; }
+.signal-visual-meta .confluence-badge { margin:0; }
+@media (max-width:760px) {
+  .dashboard-signal { grid-template-columns:38px minmax(0,1fr) auto auto; gap:6px; }
+  .dashboard-signal>b { width:32px; height:32px; }
+  .dashboard-signal em { grid-column:auto; justify-self:end; color:var(--mint); font-size:10px; white-space:nowrap; }
+  .screener-table .position-row { grid-template-columns:minmax(0,1fr) auto; grid-template-areas:'symbol date' 'meta meta' 'rule rule'; gap:8px; }
+  .screener-table .screener-symbol { grid-area:symbol; }
+  .screener-table .signal-date { grid-area:date; align-self:start; justify-self:end; color:var(--mint); font-size:10px; white-space:nowrap; }
+  .screener-table .signal-compact-meta { grid-area:meta; display:flex; align-items:center; gap:6px; min-width:0; overflow:hidden; }
+  .screener-table .signal-timeframe { flex:0 0 auto; padding:4px 6px; border:1px solid #355343; border-radius:999px; color:#b9cec3; font-size:10px; font-weight:800; }
+  .screener-table .signal-confluence { min-width:0; margin-left:auto; display:flex; align-items:center; gap:5px; }
+  .screener-table .signal-confluence .confluence-badge { flex:0 1 auto; min-width:0; margin:0; overflow:hidden; text-overflow:ellipsis; }
+  .screener-table .signal-confluence small { flex:0 0 auto; color:#a8bdb2; font-size:10px; white-space:nowrap; }
+  .screener-table .signal-rule-detail { grid-area:rule; min-width:0; }
+  .screener-table .signal-rule-detail b,.screener-table .signal-rule-detail small { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .signal-visual-card { gap:8px; }
+  .signal-visual-head { grid-template-columns:34px minmax(0,1fr) auto; }
+  .signal-visual-meta { justify-content:space-between; }
+  .signal-visual-meta .confluence-badge { max-width:calc(100% - 105px); overflow:hidden; text-overflow:ellipsis; }
+}
