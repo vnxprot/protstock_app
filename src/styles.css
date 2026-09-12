@@ -418,3 +418,17 @@ main { min-width:0; }
   .signal-visual-meta { justify-content:space-between; }
   .signal-visual-meta .confluence-badge { max-width:calc(100% - 105px); overflow:hidden; text-overflow:ellipsis; }
 }
+
+/* Desktop Screener: size compact columns by their content and reserve width for explanations. */
+@media (min-width:761px) {
+  .screener-table .table-head,.screener-table .position-row {
+    grid-template-columns:minmax(96px,.7fr) max-content max-content max-content minmax(260px,1.6fr) max-content;
+    column-gap:14px;
+  }
+  .screener-table .position-row { min-width:0; }
+  .screener-table .signal-confluence { display:flex; align-items:center; gap:6px; white-space:nowrap; }
+  .screener-table .signal-confluence .confluence-badge { margin:0; }
+  .screener-table .signal-confluence small { color:#a8bdb2; font-size:10px; white-space:nowrap; }
+  .screener-table .signal-date { justify-self:end; white-space:nowrap; }
+  .screener-table .signal-rule-detail { min-width:0; }
+}
