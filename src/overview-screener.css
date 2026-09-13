@@ -9,15 +9,15 @@
   line-height: 1.5;
 }
 .overview-page .overview-header { margin: 0 0 4px; align-items: center; gap: 16px; }
-.overview-page .overview-header h1 { margin: 0 0 6px; font: 700 32px/1.2 'Space Grotesk', sans-serif; }
+.overview-page .overview-header h1 { margin: 0 0 6px; font: 800 32px/1.2 'Be Vietnam Pro', sans-serif; }
 .overview-page .overview-header p { margin: 0; font-size: 14px; color: #94aa9e; }
-.overview-page .eyebrow { margin: 0 0 6px; font-size: 11px; line-height: 1.3; letter-spacing: .09em; }
+.overview-page .eyebrow { margin: 0 0 6px; font-size:12px; line-height: 1.3; letter-spacing: .09em; }
 .overview-page .panel { margin: 0; min-width: 0; padding: 18px; border: 1px solid #263b30; border-radius: 16px; background: #0b1712; box-shadow: none; }
-.overview-page .panel h2 { margin: 0; font: 600 18px/1.35 'Space Grotesk', sans-serif; color: #e4eee8; }
+.overview-page .panel h2 { margin: 0; font: 700 22px/1.3 'Be Vietnam Pro', sans-serif; color: #e4eee8; }
 .overview-page .overview-card-heading,
 .overview-page .today-health-card .panel-title { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 0 0 14px; }
 .overview-card-heading > div, .overview-page .panel-title > div { min-width: 0; }
-.overview-card-heading a, .overview-card-heading button { flex-shrink: 0; color: #d7ff52; font: 600 12px/1.4 'DM Sans', sans-serif; }
+.overview-card-heading a, .overview-card-heading button { flex-shrink: 0; color: #d7ff52; font: 600 12px/1.4 'Be Vietnam Pro', sans-serif; }
 .overview-page .overview-layout { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; align-items: start; }
 .overview-side { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; min-width: 0; }
 @container (min-width: 960px) {
@@ -29,7 +29,7 @@
 .overview-page .market-context-heading .eyebrow { margin: 0; }
 .overview-page .market-context-heading strong { font-size: 14px; line-height: 1.4; }
 .overview-page .market-context-heading small { font-size: 12px; line-height: 1.4; }
-.overview-page .market-context-price b { font: 600 24px/1.2 'Space Grotesk', sans-serif; }
+.overview-page .market-context-price b { font: 600 24px/1.2 'Be Vietnam Pro', sans-serif; }
 .overview-page .market-context-price span { font-size: 13px; }
 .overview-page .market-regime { font-size: 12px; letter-spacing: .02em; }
 .overview-page .market-context-detail { padding: 16px 18px; }
@@ -43,10 +43,10 @@
 .overview-signal-row:last-child { padding-bottom: 2px; }
 .overview-signal-top, .overview-signal-bottom { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-width: 0; }
 .overview-signal-identity { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; min-width: 0; }
-.overview-signal-identity > strong { font: 700 17px/1.3 'Space Grotesk', sans-serif; }
+.overview-signal-identity > strong { font: 700 17px/1.3 'Be Vietnam Pro', sans-serif; }
 .overview-page .action-pill { margin: 0; padding: 4px 9px; font-size: 12px; line-height: 1.4; letter-spacing: 0; }
 .overview-signal-values { display: flex; align-items: center; gap: 16px; flex-shrink: 0; font-variant-numeric: tabular-nums; }
-.overview-signal-values > b { color: #d7ff52; font: 600 16px/1.3 'Space Grotesk', sans-serif; }
+.overview-signal-values > b { color: #d7ff52; font: 600 16px/1.3 'Be Vietnam Pro', sans-serif; }
 .overview-signal-values > b > small { margin-left: 2px; color: #8da797; font-size: 12px; font-weight: 500; }
 .overview-signal-values time { color: #b7cec1; font-size: 12px; white-space: nowrap; }
 .overview-signal-bottom { color: #94aa9e; font-size: 12px; line-height: 1.5; }
@@ -59,14 +59,14 @@
 .overview-watch-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 0; border-top: 1px solid #24372d; font-size: 13px; }
 .overview-watch-row:first-child { border-top: 0; padding-top: 2px; }
 .overview-watch-row:last-child { padding-bottom: 2px; }
-.overview-watch-row strong { font: 600 15px/1.4 'Space Grotesk', sans-serif; }
+.overview-watch-row strong { font: 600 15px/1.4 'Be Vietnam Pro', sans-serif; }
 .overview-watch-row span { color: #91aa9b; font-size: 12px; }
 .overview-empty { margin: 0; padding: 14px 0 2px; color: #95aa9e; font-size: 13px; line-height: 1.5; }
 .overview-page .today-health-card { grid-column: auto; background: #0b1712 !important; }
 .overview-page .today-health-card .panel-title > svg { width: 19px; height: 19px; flex-shrink: 0; color: #91baa0; }
 .overview-page .health-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 0 0 14px; }
 .overview-page .health-metrics > span { gap: 4px; padding: 12px; background: #101f17; border-color: #263d2f; }
-.overview-page .health-metrics b { font: 600 20px/1.2 'Space Grotesk', sans-serif; font-variant-numeric: tabular-nums; }
+.overview-page .health-metrics b { font: 600 20px/1.2 'Be Vietnam Pro', sans-serif; font-variant-numeric: tabular-nums; }
 .overview-page .health-metrics small { font-size: 12px; line-height: 1.4; }
 .overview-page .health-details { display: grid; gap: 10px; margin: 0; }
 .overview-page .health-details > div { display: grid; gap: 3px; }
@@ -77,7 +77,7 @@
 
 .screener-filter-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 16px; padding: 12px; margin: 16px 0; border: 1px solid #2b4134; border-radius: 12px; background: #0b1712; }
 .screener-filter-fields { flex: 1 1 546px; display: grid; grid-template-columns: minmax(120px, 1fr) minmax(158px, 1.2fr) 104px 144px; gap: 8px; min-width: 0; }
-.screener-field { display: flex; align-items: center; justify-content: center; gap: 6px; min-height: 38px; min-width: 0; margin: 0; padding: 0 8px; border: 1px solid #354e3e; border-radius: 8px; background: #101e17; color: #d1e2d7; font: 500 12px/1.4 'DM Sans', sans-serif; white-space: nowrap; }
+.screener-field { display: flex; align-items: center; justify-content: center; gap: 6px; min-height: 38px; min-width: 0; margin: 0; padding: 0 8px; border: 1px solid #354e3e; border-radius: 8px; background: #101e17; color: #d1e2d7; font: 500 12px/1.4 'Be Vietnam Pro', sans-serif; white-space: nowrap; }
 .screener-field svg { flex: 0 0 15px; color: #8fae99; }
 .screener-field input, .screener-field select { width: 100%; min-width: 0; height: 36px; border: 0; outline: 0; background: transparent; color: #e3eee7; font: inherit; text-align: center; }
 .screener-field select { padding-right: 2px; cursor: pointer; }
@@ -88,7 +88,7 @@
 .screener-field:focus-within { border-color: #9bba57; box-shadow: 0 0 0 2px #d7ff5210; }
 .screener-sort:hover { border-color: #7d9853; color: #d7ff52; }
 .screener-toolbar-chips { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 8px; max-width: 100%; }
-.screener-toolbar-chips button { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; min-height: 38px; padding: 0 11px; border: 1px solid #354e3e; border-radius: 8px; background: #101e17; color: #b7d0c0; font: 600 12px/1.4 'DM Sans', sans-serif; white-space: nowrap; cursor: pointer; }
+.screener-toolbar-chips button { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; min-height: 38px; padding: 0 11px; border: 1px solid #354e3e; border-radius: 8px; background: #101e17; color: #b7d0c0; font: 600 12px/1.4 'Be Vietnam Pro', sans-serif; white-space: nowrap; cursor: pointer; }
 .screener-toolbar-chips button.active { border-color: #d7ff52; color: #142013; background: #d7ff52; }
 .screener-toolbar-chips button:hover:not(.active) { color: #e3eee7; border-color: #749365; }
 .screener-results-heading { flex-wrap: wrap; align-items: center; gap: 12px; }
@@ -117,3 +117,32 @@
   .overview-signal-top { flex-wrap: wrap; gap: 6px; }
   .overview-signal-values { margin-left: auto; }
 }
+/* Four executive cards share the same real market/health context as the detail views. */
+.overview-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.overview-kpi { display: grid; align-content: start; gap: 10px; padding: 16px; min-width: 0; border: 1px solid #2b4033; border-radius: 12px; background: #0c1913; }
+.overview-kpi-label { color: #98b1a1; font-size: 11px; font-weight: 700; letter-spacing: .05em; }
+.overview-kpi > strong { font-size: 22px; line-height: 1.3; font-weight: 700; font-variant-numeric: tabular-nums; }
+.overview-kpi > small { color: #a8c1b2; font-size: 12px; line-height: 1.5; }
+.overview-kpi-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; font-size: 12px; }
+.overview-kpi-meta .market-regime { min-width: 0; padding: 3px 6px; font-size: 11px; }
+@container (max-width: 900px) { .overview-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 760px) { .overview-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }.overview-kpi{padding:12px}.overview-kpi > strong{font-size:20px} }
+/* Bento workspace follows available content width, including a collapsed sidebar. */
+.overview-page { gap: 20px; }
+.overview-page .overview-header p { font-size: 15px; }
+.overview-main { display: grid; gap: 16px; min-width: 0; align-content: start; }
+@container (min-width: 960px) {
+  .overview-page .overview-layout { grid-template-columns: minmax(0, 1.35fr) minmax(340px, .65fr); }
+}
+.overview-ticker-avatar { display: grid; place-items: center; flex: 0 0 38px; width: 38px; height: 38px; color: #b8d2c2; background: #15271c; border: 1px solid #365440; border-radius: 9px; font-size: 12px; font-weight: 700; }
+.overview-signal-values > .overview-score-gauge { display: inline-flex; align-items: baseline; justify-content: center; padding: 5px 8px; border: 1px solid #4e6537; border-radius: 8px; background: #d7ff5209; }
+.overview-page .overview-consensus { margin: 0; padding: 3px 7px; font-size: 12px; line-height: 1.4; letter-spacing: 0; }
+@media (min-width: 761px) {
+  .overview-chart-link { padding: 4px 7px; border: 1px solid #405a3f; border-radius: 6px; opacity: 0; transition: opacity 140ms ease; }
+  .overview-signal-row:hover .overview-chart-link, .overview-signal-row:focus-visible .overview-chart-link { opacity: 1; }
+}
+@media (max-width: 760px) { .overview-ticker-avatar{display:none} }
+.screener-toolbar-view { display: flex; flex: 0 0 auto; align-items: center; gap: 4px; margin: 0; }
+.screener-toolbar-view button { min-height: 38px; padding: 0 11px; font-size: 12px; }
+.overview-kpi-meta .market-regime { font-size: 12px; }
+.overview-page .eyebrow { font-size: 11px; font-weight: 700; text-transform: uppercase; }
