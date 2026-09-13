@@ -785,3 +785,25 @@ input + svg,
   .screener-table .signal-confluence { justify-self: center; align-items: center; text-align: center; }
   .screener-table .signal-confluence small { text-align: center; }
 }
+
+/* Screener table symmetry and single-row desktop toolbar. */
+@media (min-width: 1100px) {
+  .screener-toolbar { display: grid; grid-template-columns: minmax(430px, 470px) minmax(0, 1fr); align-items: center; gap: var(--space-3); }
+  .screener-toolbar .filter-bar { display: grid; grid-template-columns: minmax(110px, 132px) 132px 76px minmax(112px, 1fr); align-items: center; gap: var(--space-2); min-width: 0; }
+  .screener-toolbar .filter-bar label { min-width: 0; }
+  .screener-toolbar .filter-bar label:first-child { min-width: 0; }
+  .screener-toolbar .screener-controls { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: var(--space-2); }
+  .screener-toolbar .filter-pills { justify-content: flex-end; min-width: 0; }
+}
+@media (min-width: 761px) {
+  .executive-kpi-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .screener-table .table-head > span,
+  .screener-table .position-row > * { justify-self: stretch; text-align: center; }
+  .screener-table .screener-symbol { display: grid; justify-items: center; }
+  .screener-table .screener-symbol small { text-align: center; }
+  .screener-table .action-pill, .screener-table .signal-timeframe { justify-self: center; }
+  .screener-table .signal-confluence { justify-self: stretch; align-items: center; text-align: center; }
+  .screener-table .signal-rule-detail { text-align: justify; text-justify: inter-word; }
+  .screener-table .signal-rule-detail b { text-align: center; }
+  .screener-table .signal-date { text-align: center; }
+}
