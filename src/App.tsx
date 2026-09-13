@@ -37,7 +37,7 @@ function App({ authenticated = false }: { authenticated?: boolean }) {
   return <div className={collapsed ? 'app-shell sidebar-collapsed' : 'app-shell'}>
     <aside className="sidebar"><div className="sidebar-head"><a className="brand" href="#today"><span className="brand-mark">P</span><span className="brand-copy">Prot<span>Stock</span></span></a><button className="icon-button collapse-button" onClick={() => setCollapsed(v => !v)} aria-label="Thu gọn thanh bên"><ChevronLeft size={18}/></button></div><nav aria-label="Điều hướng chính">{navigation.map(item => <a className={page === item.id ? 'nav-item active' : 'nav-item'} data-tooltip={item.label} href={`#${item.id}`} key={item.id}><item.icon size={19}/><span className="nav-label">{item.label}</span>{item.badge != null && <small className="nav-badge">{item.badge}</small>}</a>)}</nav><div className="sidebar-note"><span className="live-dot"/><span className="sidebar-note-copy">Pipeline EOD ổn định</span></div><button className="signout" onClick={() => supabase?.auth.signOut()}><span className="nav-label">Đăng xuất</span></button></aside>
     <main id="top"><div className="topbar"><button className="command-trigger" onClick={() => openCommandPalette()}><Search size={17}/><span>Tìm mã hoặc chức năng…</span><kbd><Command size={12}/> K</kbd></button><div className="topbar-actions"><div className="status-chip"><span className="live-dot"/>{connectionLabel}</div><button className="icon-button notification" aria-label="Thông báo"><Bell size={18}/><i/></button></div></div><div className="mobile-header"><a className="brand" href="#today"><span className="brand-mark">P</span><span className="brand-copy">Prot<span>Stock</span></span></a><div><button className="icon-button" onClick={() => openCommandPalette()}><Search size={19}/></button><span className="mobile-live"><span className="live-dot"/>EOD</span></div></div>
-      {page === 'today' ? <Dashboard universeCount={health.data?.active_symbols ?? 202} connectionLabel={connectionLabel} health={health.data}/> : <Suspense fallback={<LoadingPage/>}>{pages[page]}</Suspense>}<footer className="app-footer">Prot Stock · Hệ thống nghiên cứu cá nhân · Không phải khuyến nghị đầu tư</footer></main>
+      {page === 'today' ? <Dashboard/> : <Suspense fallback={<LoadingPage/>}>{pages[page]}</Suspense>}<footer className="app-footer">Prot Stock · Hệ thống nghiên cứu cá nhân · Không phải khuyến nghị đầu tư</footer></main>
     <nav className="bottom-nav">{primaryMobile.map(item => <a className={page === item.id ? 'active' : ''} href={`#${item.id}`} key={item.id}><item.icon size={21}/><span>{item.label === 'Phân tích mã' ? 'Phân tích' : item.label}</span></a>)}<button className={moreOpen || moreMobile.some(item => item.id === page) ? 'active' : ''} onClick={() => setMoreOpen(true)}><Menu size={21}/><span>Thêm</span></button></nav>
     {moreOpen && <div className="sheet-backdrop" onMouseDown={() => setMoreOpen(false)}><section className="bottom-sheet" onMouseDown={e => e.stopPropagation()}><div className="sheet-handle"/><div className="sheet-title"><div><span className="eyebrow">WORKSPACE</span><h2>Mở thêm công cụ</h2></div><button className="icon-button" onClick={() => setMoreOpen(false)}><X size={20}/></button></div><div className="sheet-grid">{moreMobile.map(item => <a href={`#${item.id}`} key={item.id}><span><item.icon size={21}/></span><strong>{item.label}</strong><small>{item.id === 'rules' ? 'Thiết kế điều kiện' : item.id === 'backtest' ? 'Kiểm chứng lịch sử' : item.id === 'journal' ? 'Ghi và review' : 'Hệ thống'}</small></a>)}</div></section></div>}
     <CommandPalette symbols={symbols.data ?? []}/>
@@ -77,14 +77,62 @@ function MarketContextCard() {
     </div>
   </details>
 }
-function Dashboard({ universeCount, connectionLabel, health }: { universeCount: number; connectionLabel: string; health?: { latest_price_date: string | null; failed_jobs_7d: number } }) {
-  const signals = useQuery({ queryKey: ['today-consolidated-signals'], enabled: Boolean(supabase), queryFn: async () => { const { data, error } = await supabase!.from('consolidated_signals').select('id,composite_action,confluence_score,confluence_count,as_of_date,reasons,symbols(symbol)').order('as_of_date', { ascending: false }).order('confluence_score', { ascending: false }).limit(6); if (error) throw error; return (data ?? []).map((item:any) => ({ ...item, action: item.composite_action, score: item.confluence_score })) } })
-  const [favorites,setFavorites]=useState<string[]>(()=>{try{return JSON.parse(localStorage.getItem('protstock-favorites')??'[]')}catch{return[]}})
-  useEffect(()=>{const update=(event:Event)=>setFavorites((event as CustomEvent).detail);addEventListener('protstock:favorites',update);return()=>removeEventListener('protstock:favorites',update)},[])
-  const feed=(signals.data??[]).map(item=>({...item,as_of_date:formatDate(item.as_of_date)}))
-  const highConfluence=feed.filter((item:any)=>Number(item.confluence_count)>=2).length
-  const openChart=(symbol:string)=>{localStorage.setItem('protstock-symbol',symbol);location.hash='analysis'}
-  return <section className="dashboard-page"><header className="dashboard-header"><div><span className="eyebrow">EOD INTELLIGENCE</span><h1>Tổng quan</h1><p>Không gian phân tích và quản trị giao dịch cá nhân.</p></div><a href="#screener" className="primary-button"><TrendingUp size={17}/> Mở Screener</a></header><section className="dashboard-grid"><div className="dashboard-main-column"><MarketContextCard/><article className="panel signal-card"><div className="panel-title"><div><span className="eyebrow">TÍN HIỆU SAU PHIÊN</span><h2>Tín hiệu mới</h2></div><a href="#screener">Xem tất cả</a></div><div className="signal-stack">{signals.isLoading?<p className="muted">Đang tải tín hiệu…</p>:feed.length?feed.map((item:any)=><article className="dashboard-signal" key={item.id}><span className="dashboard-signal-symbol"><strong>{item.symbols?.symbol}</strong><small>{item.symbols?.symbol}</small></span><span className={`action-pill ${item.action?.toLowerCase()}`}>{item.action?.replace('_',' ')}</span><span className="confluence-badge">{Number(item.confluence_count)>=2?'HIGH CONFLUENCE':'STANDARD'} · {item.confluence_count} engine</span><b>{item.score}/100</b><em>{item.as_of_date}</em><button type="button" onClick={()=>openChart(item.symbols?.symbol)} aria-label={`Xem chart ${item.symbols?.symbol}`}>Xem Chart →</button></article>):<p className="muted">Chưa có tín hiệu sau phiên.</p>}</div></article></div><aside className="dashboard-side-column"><article className="panel watch-card"><div className="panel-title"><div><span className="eyebrow">WATCHLIST</span><h2>Đang theo dõi</h2></div><button className="text-button" onClick={()=>openCommandPalette('symbols')}>+ Thêm mã</button></div>{favorites.length?favorites.map(symbol=><a href="#analysis" className="watch-row" key={symbol} onClick={()=>localStorage.setItem('protstock-symbol',symbol)}><strong>{symbol}</strong><span>Đang theo dõi</span><b>→</b></a>):<p className="muted">Chưa có mã nào trong watchlist.</p>}</article><TodayHealth/></aside></section></section>
+function Dashboard() {
+  const signals = useQuery({
+    queryKey: ['today-consolidated-signals'], enabled: Boolean(supabase),
+    queryFn: async () => {
+      const { data, error } = await supabase!.from('consolidated_signals')
+        .select('id,composite_action,confluence_score,confluence_count,timeframe,as_of_date,reasons,symbols(symbol,sector)')
+        .order('as_of_date', { ascending: false }).order('confluence_score', { ascending: false }).limit(6)
+      if (error) throw error
+      return (data ?? []).map((item: any) => {
+        const symbol = Array.isArray(item.symbols) ? item.symbols[0] : item.symbols
+        return { ...item, symbol: symbol?.symbol ?? '—', sector: symbol?.sector, action: item.composite_action, score: Number(item.confluence_score), count: Number(item.confluence_count) }
+      })
+    },
+  })
+  const [favorites, setFavorites] = useState<string[]>(() => { try { return JSON.parse(localStorage.getItem('protstock-favorites') ?? '[]') } catch { return [] } })
+  useEffect(() => {
+    const update = (event: Event) => setFavorites((event as CustomEvent<string[]>).detail)
+    addEventListener('protstock:favorites', update)
+    return () => removeEventListener('protstock:favorites', update)
+  }, [])
+  const feed = signals.data ?? []
+  const actionLabels: Record<string, string> = { PROBE_BUY: 'Mua thăm dò', ADD: 'Mua thêm', REDUCE: 'Giảm tỷ trọng', EXIT: 'Thoát lệnh', WATCH: 'Theo dõi' }
+  const selectSymbol = (symbol: string) => {
+    localStorage.setItem('protstock-symbol', symbol)
+    dispatchEvent(new CustomEvent('protstock:symbol', { detail: symbol }))
+  }
+  return <section className="dashboard-page overview-page">
+    <header className="dashboard-header overview-header">
+      <div><span className="eyebrow">EOD INTELLIGENCE</span><h1>Tổng quan</h1><p>Thị trường, tín hiệu và danh sách đang theo dõi.</p></div>
+      <a href="#screener" className="primary-button"><TrendingUp size={16}/> Mở Screener</a>
+    </header>
+    <MarketContextCard/>
+    <section className="overview-layout">
+      <article className="panel overview-signals-card">
+        <div className="overview-card-heading"><div><span className="eyebrow">TÍN HIỆU SAU PHIÊN</span><h2>Tín hiệu gần nhất</h2></div><a href="#screener">Xem tất cả →</a></div>
+        <div className="overview-signal-list">
+          {signals.isLoading ? <p className="overview-empty">Đang tải tín hiệu…</p> : signals.isError ? <p className="overview-empty negative">Chưa tải được tín hiệu. Vui lòng thử lại.</p> : feed.length ? feed.map(item =>
+            <a href="#analysis" className="overview-signal-row" key={item.id} onClick={() => selectSymbol(item.symbol)}>
+              <div className="overview-signal-top">
+                <div className="overview-signal-identity"><strong>{item.symbol}</strong><span className={`action-pill ${item.action.toLowerCase()}`}>{actionLabels[item.action] ?? item.action}</span></div>
+                <div className="overview-signal-values"><b>{item.score}<small>/100</small></b><time>{formatDate(item.as_of_date)}</time></div>
+              </div>
+              <div className="overview-signal-bottom"><span>{item.sector ?? 'Chưa phân ngành'} · {item.timeframe} · {item.count} engine<span className="overview-consensus">{item.count >= 3 ? 'Đồng thuận mạnh' : item.count === 2 ? 'Đồng thuận cao' : 'Tiêu chuẩn'}</span></span><span className="overview-chart-link">Xem chart →</span></div>
+            </a>
+          ) : <p className="overview-empty">Chưa có tín hiệu sau phiên.</p>}
+        </div>
+      </article>
+      <aside className="overview-side">
+        <TodayHealth/>
+        <article className="panel overview-watch-card">
+          <div className="overview-card-heading"><div><span className="eyebrow">WATCHLIST · {favorites.length} MÃ</span><h2>Đang theo dõi</h2></div><button type="button" className="text-button" onClick={() => openCommandPalette('symbols')}>+ Thêm mã</button></div>
+          <div className="overview-watch-list">{favorites.length ? favorites.map(symbol => <a href="#analysis" className="overview-watch-row" key={symbol} onClick={() => selectSymbol(symbol)}><strong>{symbol}</strong><span>Xem phân tích →</span></a>) : <p className="overview-empty">Chưa có mã nào trong watchlist.</p>}</div>
+        </article>
+      </aside>
+    </section>
+  </section>
 }
 export default App
 

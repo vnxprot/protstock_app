@@ -1,4 +1,4 @@
-import { Activity, Database, ShieldAlert } from 'lucide-react'
+import { Activity, ShieldAlert } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 
 import { formatDate, formatDateTime } from '../lib/date'
@@ -40,9 +40,12 @@ export function TodayHealth() {
   return <article className="panel discipline-card today-health-card">
     <div className="panel-title"><div><span className="eyebrow">DATA HEALTH · HÔM NAY</span><h2>Dữ liệu và pipeline</h2></div><Activity size={23}/></div>
     {health.isLoading ? <p className="muted">Đang kiểm tra độ phủ dữ liệu…</p> : health.isError ? <p className="negative">Không tải được trạng thái dữ liệu.</p> : <>
-      <div className="health-metrics"><span><Database size={15}/><b>{data?.coveredSymbols ?? 0}/{data?.activeSymbols ?? 0}</b><small>Mã có giá</small></span><span><b>{(data?.priceRows ?? 0).toLocaleString('vi-VN')}</b><small>Bản ghi giá</small></span><span><b>{data?.coreActions ?? 0}</b><small>Action tổng hợp</small></span><span><b>{data?.coreWatch ?? 0}</b><small>WATCH tổng hợp</small></span></div>
-      <p>Dữ liệu signal mới nhất: <strong>{data?.newestDate ? formatDate(data.newestDate) : 'chưa có'}</strong> · ghi nhận lúc <strong>{formatDateTime(data?.latestSignalAt)}</strong>.</p>
-      <p>EOD gần nhất: <strong>{data?.job?.trading_date ? formatDate(data.job.trading_date) : 'chưa có'}</strong> · {data?.job?.status ?? '—'} · chạy lúc <strong>{formatDateTime(data?.job?.started_at)}</strong>{data?.job?.finished_at ? <> · hoàn tất <strong>{formatDateTime(data.job.finished_at)}</strong></> : null}.</p>
+      <div className="health-metrics"><span><b>{data?.coveredSymbols ?? 0}/{data?.activeSymbols ?? 0}</b><small>Mã có giá</small></span><span><b>{(data?.priceRows ?? 0).toLocaleString('vi-VN')}</b><small>Bản ghi giá</small></span><span><b>{data?.coreActions ?? 0}</b><small>Action tổng hợp</small></span><span><b>{data?.coreWatch ?? 0}</b><small>WATCH tổng hợp</small></span></div>
+      <dl className="health-details">
+        <div><dt>Signal mới nhất</dt><dd>{formatDate(data?.newestDate)} · {formatDateTime(data?.latestSignalAt)}</dd></div>
+        <div><dt>EOD gần nhất · {data?.job?.status ?? '—'}</dt><dd>{formatDate(data?.job?.trading_date)}</dd></div>
+        <div><dt>Bắt đầu / Hoàn tất</dt><dd>{formatDateTime(data?.job?.started_at)} / {formatDateTime(data?.job?.finished_at)}</dd></div>
+      </dl>
       {data?.failedItems.length ? <div className="health-errors"><ShieldAlert size={15}/><span>{data.failedItems.length} mã cần retry ({formatDate(data.attentionJob?.trading_date)}): {data.failedItems.map(item => item.item_key).join(', ')}</span></div> : <div className="health-ok">Không có mã lỗi trong các EOD gần đây.</div>}
     </>}
   </article>
