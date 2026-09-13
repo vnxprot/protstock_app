@@ -560,7 +560,7 @@ input + svg,
   .screener-table .table-head,
   .screener-table .position-row {
     display: grid;
-    grid-template-columns: 100px 115px 65px 175px minmax(280px, 1fr) 110px;
+    grid-template-columns: 100px 96px 58px 162px minmax(300px, 1fr) 102px;
     column-gap: var(--space-3);
     align-items: center;
     min-width: 0;
@@ -687,6 +687,19 @@ input + svg,
     justify-self: end;
     color: #80f0c0;
     font-size: var(--text-xs);
+    white-space: nowrap;
+  }
+}
+/* Screener density pass: keep consensus metadata inside its own column. */
+@media (min-width: 761px) {
+  .screener-table .signal-confluence {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-1);
+    white-space: normal;
+  }
+  .screener-table .signal-confluence small {
+    line-height: 1.25;
     white-space: nowrap;
   }
 }
