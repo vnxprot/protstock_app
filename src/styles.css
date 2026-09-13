@@ -763,3 +763,25 @@ input + svg,
   .dashboard-signal > .action-pill, .dashboard-signal > .confluence-badge { display: none; }
   .dashboard-signal > button { display: none; }
 }
+/* Dashboard balance pass: one VNINDEX context, one compact Pipeline KPI. */
+@media (min-width: 761px) {
+  .executive-kpi-strip { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .executive-kpi-card { min-height: 104px; align-content: center; }
+  .dashboard-side-column { grid-template-rows: auto auto; }
+  .dashboard-side-column > .panel { grid-column: auto; min-width: 0; padding: var(--space-4); }
+  .watch-card { min-height: 0; }
+  .watch-card .panel-title { margin-bottom: var(--space-2); }
+  .watch-row { grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: var(--space-3); padding: var(--space-3) 0; }
+  .watch-row b { display: none; }
+  .dashboard-signal { grid-template-columns: minmax(76px, 1fr) auto auto auto auto auto; }
+  .dashboard-signal .symbol-avatar { display: none; }
+  .screener-toolbar { flex-wrap: nowrap; }
+  .screener-toolbar .filter-bar { flex: 0 1 440px; gap: var(--space-2); }
+  .screener-toolbar .filter-bar label:first-child { flex: 0 1 150px; min-width: 130px; }
+  .screener-toolbar .filter-bar label:first-child input { min-width: 0; width: 100%; }
+  .screener-toolbar .screener-controls { justify-content: flex-end; min-width: 0; }
+  .screener-toolbar .filter-pills { flex-wrap: nowrap; }
+  .screener-table .table-head > span { justify-self: center; text-align: center; }
+  .screener-table .signal-confluence { justify-self: center; align-items: center; text-align: center; }
+  .screener-table .signal-confluence small { text-align: center; }
+}
