@@ -807,3 +807,34 @@ input + svg,
   .screener-table .signal-rule-detail b { text-align: center; }
   .screener-table .signal-date { text-align: center; }
 }
+/* Responsive safety: prevent panel collision in narrow desktop windows. */
+@media (min-width: 761px) {
+  .screener-table .table-head > :nth-child(6),
+  .screener-table .signal-date {
+    justify-self: stretch;
+    display: flex;
+    justify-content: center;
+    text-align: center;
+  }
+}
+@media (max-width: 1250px) and (min-width: 761px) {
+  main { padding-inline: 24px; }
+  .dashboard-grid { grid-template-columns: minmax(0, 1fr); }
+  .dashboard-main-column, .dashboard-side-column { min-width: 0; }
+  .screener-toolbar { display: flex; flex-wrap: wrap; }
+  .screener-toolbar .filter-bar { flex: 1 1 420px; }
+  .screener-toolbar .screener-controls { flex: 1 1 420px; justify-content: space-between; }
+  .signal-visual-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .analysis-columns, .analytics-grid { grid-template-columns: minmax(0, 1fr); }
+  .workspace-page, .dashboard-page, .panel, .analytic-card { min-width: 0; }
+}
+@media (max-width: 980px) and (min-width: 761px) {
+  .app-shell { grid-template-columns: 76px minmax(0, 1fr); }
+  .sidebar { width: 76px; }
+  .sidebar .brand-copy, .sidebar .nav-label, .sidebar .nav-badge, .sidebar-note-copy { display: none; }
+  .sidebar-head { justify-content: center; }
+  .collapse-button { display: none; }
+  main { grid-column: 2; padding-inline: 18px; }
+  .screener-toolbar .filter-pills { overflow-x: auto; max-width: 100%; padding-bottom: 2px; }
+  .screener-table { overflow-x: auto; }
+}
