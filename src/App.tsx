@@ -39,7 +39,7 @@ function App({ authenticated = false }: { authenticated?: boolean }) {
     <main id="top"><div className="topbar"><button className="command-trigger" onClick={() => openCommandPalette()}><Search size={17}/><span>Tìm mã hoặc chức năng…</span><kbd><Command size={12}/> K</kbd></button><div className="topbar-actions"><div className="status-chip"><span className="live-dot"/>{connectionLabel}</div><button className="icon-button notification" aria-label="Thông báo"><Bell size={18}/><i/></button></div></div><div className="mobile-header"><a className="brand" href="#today"><span className="brand-mark">P</span><span className="brand-copy">Prot<span>Stock</span></span></a><div><button className="icon-button" onClick={() => openCommandPalette()}><Search size={19}/></button><span className="mobile-live"><span className="live-dot"/>EOD</span></div></div>
       {page === 'today' ? <Dashboard connectionLabel={connectionLabel} health={health.data}/> : <Suspense fallback={<LoadingPage/>}>{pages[page]}</Suspense>}<footer className="app-footer">Prot Stock · Hệ thống nghiên cứu cá nhân · Không phải khuyến nghị đầu tư</footer></main>
     <nav className="bottom-nav">{primaryMobile.map(item => <a className={page === item.id ? 'active' : ''} href={`#${item.id}`} key={item.id}><item.icon size={21}/><span>{item.label === 'Phân tích mã' ? 'Phân tích' : item.label}</span></a>)}<button className={moreOpen || moreMobile.some(item => item.id === page) ? 'active' : ''} onClick={() => setMoreOpen(true)}><Menu size={21}/><span>Thêm</span></button></nav>
-    {moreOpen && <div className="sheet-backdrop" onMouseDown={() => setMoreOpen(false)}><section className="bottom-sheet" onMouseDown={e => e.stopPropagation()}><div className="sheet-handle"/><div className="sheet-title"><div><span className="eyebrow">WORKSPACE</span><h2>Mở thêm công cụ</h2></div><button className="icon-button" onClick={() => setMoreOpen(false)}><X size={20}/></button></div><div className="sheet-grid">{moreMobile.map(item => <a href={`#${item.id}`} key={item.id}><span><item.icon size={21}/></span><strong>{item.label}</strong><small>{item.id === 'rules' ? 'Thiết kế điều kiện' : item.id === 'backtest' ? 'Kiểm chứng lịch sử' : item.id === 'journal' ? 'Ghi và review' : 'Hệ thống'}</small></a>)}</div></section></div>}
+    {moreOpen && <div className="sheet-backdrop" onMouseDown={() => setMoreOpen(false)}><section className="bottom-sheet" onMouseDown={e => e.stopPropagation()}><div className="sheet-handle"/><div className="sheet-title"><div><h2>Mở thêm công cụ</h2></div><button className="icon-button" onClick={() => setMoreOpen(false)}><X size={20}/></button></div><div className="sheet-grid">{moreMobile.map(item => <a href={`#${item.id}`} key={item.id}><span><item.icon size={21}/></span><strong>{item.label}</strong><small>{item.id === 'rules' ? 'Thiết kế điều kiện' : item.id === 'backtest' ? 'Kiểm chứng lịch sử' : item.id === 'journal' ? 'Ghi và review' : 'Hệ thống'}</small></a>)}</div></section></div>}
     <CommandPalette symbols={symbols.data ?? []}/>
   </div>
 }
@@ -69,7 +69,7 @@ function MarketContextCard() {
   const breadthPct = data?.breadth?.pct_above_sma50 == null ? '—' : `${Number(data.breadth.pct_above_sma50).toFixed(1)}%`
   return <details className="market-context-card panel">
     <summary>
-      <div className="market-context-heading"><span className="eyebrow">THỊ TRƯỜNG · VNINDEX</span><strong>{market.isLoading ? 'Đang tải thị trường…' : formatDate(data?.latest?.trading_date ?? data?.breadth?.trading_date)}</strong><small>EOD · {data?.latest?.source?.replace('VNSTOCK_', '') ?? '—'}</small></div>
+      <div className="market-context-heading"><strong>VN-Index · {market.isLoading ? 'Đang tải…' : formatDate(data?.latest?.trading_date ?? data?.breadth?.trading_date)}</strong><small>EOD · {data?.latest?.source?.replace('VNSTOCK_', '') ?? '—'}</small></div>
       <div className="market-context-price"><b>{data?.latest ? Number(data.latest.close).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'}</b><span className={data?.change != null && data.change < 0 ? 'negative' : 'positive'}>{data?.change == null ? '—' : `${data.change >= 0 ? '+' : ''}${data.change.toFixed(2)}%`}</span></div>
       <span className={`market-regime ${state.toLowerCase()}`}>{stateLabel}</span><ChevronDown className="market-context-chevron" size={18}/>
     </summary>
@@ -81,7 +81,6 @@ function MarketContextCard() {
   </details>
 }
 function ExecutiveKpiStrip({ favorites, connectionLabel, health }: { favorites: string[]; connectionLabel: string; health?: DataHealth }) {
-  const market = useMarketContext()
   const summary = useQuery({
     queryKey: ['overview-signal-summary', favorites.join(',')], enabled: Boolean(supabase), staleTime: 60_000,
     queryFn: async () => {
@@ -98,11 +97,7 @@ function ExecutiveKpiStrip({ favorites, connectionLabel, health }: { favorites: 
       return { total: total.count ?? 0, high: high.count ?? 0, watched: tracked.size, date: latest.as_of_date }
     },
   })
-  const state = market.data?.breadth?.vnindex_trend_state ?? 'UNKNOWN'
-  const trendLabel = state === 'UP' ? 'UPTREND' : state === 'DOWN' ? 'DOWNTREND' : state === 'SIDEWAYS' ? 'NEUTRAL' : 'CHƯA ĐỦ DỮ LIỆU'
-  const change = market.data?.change
   return <section className="overview-kpis" aria-label="Tóm tắt phiên gần nhất">
-    <article className="overview-kpi"><span className="overview-kpi-label">VNINDEX</span><strong>{market.data?.latest ? Number(market.data.latest.close).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'}</strong><div className="overview-kpi-meta"><span className={change != null && change < 0 ? 'negative' : 'positive'}>{change == null ? '—' : `${change >= 0 ? '+' : ''}${change.toFixed(2)}%`}</span><span className={`market-regime ${state.toLowerCase()}`}>{trendLabel}</span></div></article>
     <article className="overview-kpi"><span className="overview-kpi-label">TÍN HIỆU EOD</span><strong>{summary.data?.total ?? '—'}</strong><small>{summary.data ? `${summary.data.high} đồng thuận cao · ${formatDate(summary.data.date)}` : summary.isError ? 'Chưa tải được tín hiệu' : 'Đang tải…'}</small></article>
     <article className="overview-kpi"><span className="overview-kpi-label">PIPELINE</span><strong className={connectionLabel.includes('trực tuyến') ? 'positive' : ''}>{connectionLabel.includes('trực tuyến') ? 'ONLINE' : connectionLabel.includes('Đang') ? 'ĐANG TẢI' : 'CẦN KIỂM TRA'}</strong><small>{health ? `${health.active_symbols} mã · ${formatDate(health.latest_price_date)}` : connectionLabel}</small></article>
     <article className="overview-kpi"><span className="overview-kpi-label">WATCHLIST</span><strong>{favorites.length}</strong><small>{summary.data ? `${summary.data.watched} mã có tín hiệu hành động` : 'Đang tải tín hiệu watchlist…'}</small></article>
@@ -136,13 +131,13 @@ function Dashboard({ connectionLabel, health }: { connectionLabel: string; healt
   }
   return <section className="dashboard-page overview-page">
     <header className="dashboard-header overview-header">
-      <div><span className="eyebrow">EOD INTELLIGENCE</span><h1>Tổng quan</h1><p>Thị trường, tín hiệu và danh sách đang theo dõi.</p></div>
+      <div><h1>Tổng quan</h1><p>Thị trường, tín hiệu và danh sách đang theo dõi.</p></div>
       <a href="#screener" className="primary-button"><TrendingUp size={16}/> Mở Screener</a>
     </header>
     <ExecutiveKpiStrip favorites={favorites} connectionLabel={connectionLabel} health={health}/>
     <section className="overview-layout dashboard-grid"><div className="overview-main"><MarketContextCard/>
       <article className="panel overview-signals-card">
-        <div className="overview-card-heading"><div><span className="eyebrow">TÍN HIỆU SAU PHIÊN</span><h2>Tín hiệu gần nhất</h2></div><a href="#screener">Xem tất cả →</a></div>
+        <div className="overview-card-heading"><div><h2>Tín hiệu gần nhất</h2></div><a href="#screener">Xem tất cả</a></div>
         <div className="overview-signal-list">
           {signals.isLoading ? <p className="overview-empty">Đang tải tín hiệu…</p> : signals.isError ? <p className="overview-empty negative">Chưa tải được tín hiệu. Vui lòng thử lại.</p> : feed.length ? feed.map(item =>
             <a href="#analysis" className="overview-signal-row" key={item.id} onClick={() => selectSymbol(item.symbol)}>
@@ -150,7 +145,7 @@ function Dashboard({ connectionLabel, health }: { connectionLabel: string; healt
                 <div className="overview-signal-identity"><span className="overview-ticker-avatar" aria-hidden="true">{item.symbol.slice(0, 2)}</span><strong>{item.symbol}</strong><span className={`action-pill ${item.action.toLowerCase()}`}>{actionLabels[item.action] ?? item.action}</span></div>
                 <div className="overview-signal-values"><b className="overview-score-gauge">{item.score}<small>/100</small></b><time>{formatDate(item.as_of_date)}</time></div>
               </div>
-              <div className="overview-signal-bottom"><span>{item.sector ?? 'Chưa phân ngành'} · {item.timeframe} · {item.count} engine<span className={`overview-consensus confluence-badge ${item.count >= 3 ? 'strong_aligned' : item.count === 2 ? 'high_confluence' : 'standard'}`}>{item.count >= 3 ? 'Đồng thuận mạnh' : item.count === 2 ? 'Đồng thuận cao' : 'Tiêu chuẩn'}</span></span><span className="overview-chart-link">Xem chart →</span></div>
+              <div className="overview-signal-bottom"><span>{item.sector ?? 'Chưa phân ngành'} · {item.timeframe} · {item.count} engine<span className={`overview-consensus confluence-badge ${item.count >= 3 ? 'strong_aligned' : item.count === 2 ? 'high_confluence' : 'standard'}`}>{item.count >= 3 ? 'Đồng thuận mạnh' : item.count === 2 ? 'Đồng thuận cao' : 'Tiêu chuẩn'}</span></span><span className="overview-chart-link">Xem chart</span></div>
             </a>
           ) : <p className="overview-empty">Chưa có tín hiệu sau phiên.</p>}
         </div>
@@ -158,8 +153,8 @@ function Dashboard({ connectionLabel, health }: { connectionLabel: string; healt
       </div><aside className="overview-side">
         <TodayHealth/>
         <article className="panel overview-watch-card">
-          <div className="overview-card-heading"><div><span className="eyebrow">WATCHLIST · {favorites.length} MÃ</span><h2>Đang theo dõi</h2></div><button type="button" className="text-button" onClick={() => openCommandPalette('symbols')}>+ Thêm mã</button></div>
-          <div className="overview-watch-list">{favorites.length ? favorites.map(symbol => <a href="#analysis" className="overview-watch-row" key={symbol} onClick={() => selectSymbol(symbol)}><strong>{symbol}</strong><span>Xem phân tích →</span></a>) : <p className="overview-empty">Chưa có mã nào trong watchlist.</p>}</div>
+          <div className="overview-card-heading"><div><h2>Đang theo dõi <small>{favorites.length} mã</small></h2></div><button type="button" className="text-button" onClick={() => openCommandPalette('symbols')}>+ Thêm mã</button></div>
+          <div className="overview-watch-list">{favorites.length ? favorites.map(symbol => <a href="#analysis" className="overview-watch-row" key={symbol} onClick={() => selectSymbol(symbol)}><strong>{symbol}</strong><span>Xem phân tích</span></a>) : <p className="overview-empty">Chưa có mã nào trong watchlist.</p>}</div>
         </article>
       </aside>
     </section>

@@ -38,7 +38,7 @@ export function TodayHealth() {
   })
   const data = health.data
   return <article className="panel discipline-card today-health-card">
-    <div className="panel-title"><div><span className="eyebrow">DATA HEALTH · HÔM NAY</span><h2>Dữ liệu và pipeline</h2></div><Activity size={23}/></div>
+    <div className="panel-title"><div><h2>Dữ liệu và pipeline</h2></div><Activity size={23}/></div>
     {health.isLoading ? <p className="muted">Đang kiểm tra độ phủ dữ liệu…</p> : health.isError ? <p className="negative">Không tải được trạng thái dữ liệu.</p> : <>
       <div className="health-metrics"><span><b>{data?.coveredSymbols ?? 0}/{data?.activeSymbols ?? 0}</b><small>Mã có giá</small></span><span><b>{(data?.priceRows ?? 0).toLocaleString('vi-VN')}</b><small>Bản ghi giá</small></span><span><b>{data?.coreActions ?? 0}</b><small>Action tổng hợp</small></span><span><b>{data?.coreWatch ?? 0}</b><small>WATCH tổng hợp</small></span></div>
       <dl className="health-details">

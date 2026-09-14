@@ -263,7 +263,7 @@ export function RuleBuilderPage({ authenticated }: { authenticated: boolean }) {
     : "—";
   return (
     <section className="workspace-page">
-      <span className="eyebrow">RULE ENGINE · VERSIONED DSL</span>
+
       <div className="page-title-row">
         <div>
           <h1>Rule Studio</h1>
@@ -292,7 +292,7 @@ export function RuleBuilderPage({ authenticated }: { authenticated: boolean }) {
       <section className="core-engine-section" aria-label="Core Engines">
         <div className="core-engine-heading">
           <div>
-            <span className="eyebrow">CÁC NGUỒN TÍN HIỆU</span>
+
             <h2>Core Engines</h2>
             <p>
               Mỗi engine là một nguồn đánh giá độc lập. Toggle quyết định engine
@@ -457,7 +457,7 @@ export function RuleBuilderPage({ authenticated }: { authenticated: boolean }) {
       <article className="panel">
         <div className="panel-title">
           <div>
-            <span className="eyebrow">LỚP BỔ SUNG</span>
+
             <h3>Rule Studio · Rules phụ</h3>
           </div>
           <span>{userRules.length} RULE</span>
