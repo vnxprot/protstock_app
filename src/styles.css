@@ -367,6 +367,10 @@ main { min-width:0; }
 @media (max-width:760px){.position-sheet{padding-bottom:calc(78px + env(safe-area-inset-bottom))}.form-sticky-actions{position:sticky;z-index:8;bottom:-18px;display:block!important;margin:8px -16px -22px;padding:11px 16px calc(10px + env(safe-area-inset-bottom));border-top:1px solid var(--line);background:#0a1511}.form-sticky-actions button{width:100%;min-height:46px}.sidebar-collapsed .nav-item::after{display:none!important}}
 
 .engine-run-summary{color:#b8d47a;font-size:12px;line-height:1.35}
+.engine-run-summary b { color: var(--text); font-weight: 600; }
+.engine-run-summary i { font-style: normal; color: var(--muted); }
+.visual-builder { display: grid; gap: 8px; }
+.visual-builder .secondary-button { margin-top: 4px; }
 
 /* Screener readability and deliberate double-click navigation. */
 .filter-bar label,.filter-bar button { color:#d7e5de; }

@@ -301,7 +301,7 @@ export function RuleBuilderPage({ authenticated }: { authenticated: boolean }) {
           </div>
           <span>
             {corePacks.filter((pack) => pack.status === "ACTIVE").length}/
-            {corePacks.length} ĐANG BẬT
+            {corePacks.length} đang bật
           </span>
         </div>
         <div className="core-pack-list">
@@ -331,7 +331,16 @@ export function RuleBuilderPage({ authenticated }: { authenticated: boolean }) {
                       <em>{pack.pack_version}</em>
                     </div>
                     <small>{state.detail}</small>
-                    <span className="engine-run-summary">{run ? `Lần ${run.trading_date}: đánh giá ${run.evaluated_count} · setup ${run.emitted_count} · đóng góp ${run.contributed_count}` : "Chưa có lượt chạy theo cơ chế toggle mới"}</span>
+                    {run ? (
+                      <span className="engine-run-summary">
+                        <b>{run.evaluated_count}</b> đánh giá · <b>{run.emitted_count}</b> setup ·{" "}
+                        <b>{run.contributed_count}</b> đóng góp <i>({run.trading_date})</i>
+                      </span>
+                    ) : (
+                      <span className="engine-run-summary muted">
+                        Chưa có lượt chạy theo cơ chế toggle mới
+                      </span>
+                    )}
                   </div>
                   <span className={`core-status ${state.tone}`}>
                     {state.label}
@@ -347,7 +356,7 @@ export function RuleBuilderPage({ authenticated }: { authenticated: boolean }) {
                 </div>
                 {expanded && (
                   <div className="core-pack-details">
-                    <span>THÀNH PHẦN / LOGIC</span>
+                    <span>Thành phần / logic</span>
                     <ul>
                       {details.map((detail) => (
                         <li key={detail}>{detail}</li>
@@ -355,7 +364,7 @@ export function RuleBuilderPage({ authenticated }: { authenticated: boolean }) {
                     </ul>
                     {pack.name === "Prot Core Engine v0.0" && (
                       <div className="classical-model-list">
-                        <span>MÔ HÌNH ĐANG THAM GIA</span>
+                        <span>Mô hình đang tham gia</span>
                         {classicalModels.map((model) => {
                           const enabled = modelStates[model.id] !== false;
                           return <div className="classical-model-row" key={model.id}>
@@ -443,7 +452,6 @@ export function RuleBuilderPage({ authenticated }: { authenticated: boolean }) {
             <h3>
               <Code2 size={16} /> Bản dịch có kiểm soát
             </h3>
-            <span>DSL V1</span>
           </div>
           <pre
             className="dsl-preview"
