@@ -369,6 +369,8 @@ main { min-width:0; }
 .engine-run-summary{color:#b8d47a;font-size:12px;line-height:1.35}
 .engine-run-summary b { color: var(--text); font-weight: 600; }
 .engine-run-summary i { font-style: normal; color: var(--muted); }
+.core-role { color: var(--muted); font-size: 11px; line-height: 1.35; }
+.core-role b { color: var(--lime); font-weight: 600; }
 .visual-builder { display: grid; gap: 8px; }
 .visual-builder .secondary-button { margin-top: 4px; }
 

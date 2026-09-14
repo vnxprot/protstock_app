@@ -113,6 +113,24 @@ const classicalModels = [
   { id: "double_top", label: "Hai đỉnh", detail: "Cảnh báo giảm tỷ trọng khi thủng neckline" },
   { id: "head_shoulders", label: "Vai đầu vai / Ngược", detail: "Neckline, cấu trúc ba pivot và volume xác nhận" },
 ];
+const coreEngineOrder = [
+  "Prot Core Engine v0.0",
+  "Prot Core Engine v1.0",
+  "Prot Core Engine v2.0",
+];
+const corePackOrder = [
+  "Prot Core Pack · Pullback Continuation",
+  "Prot Core Pack · Hồi về hỗ trợ (Pullback Continuation, khung Ngày)",
+  "Prot Core Pack · VCP Breakout",
+  "Prot Core Pack · RSI MACD Divergence",
+  "Prot Core Pack · Relative Strength Leader",
+];
+const coreEngineLabels: Record<string, string> = {
+  core_ladder_v1: "Prot Core Engine v1.0",
+  core_ladder_v2: "Prot Core Engine v2.0",
+  classical_patterns_v0: "Prot Core Engine v0.0",
+};
+const coreEngineNames = new Set(coreEngineOrder);
 function statusCopy(status: string, kind: string) {
   if (status === "ACTIVE")
     return { label: "ĐANG BẬT", detail: "Được chạy trong EOD", tone: "on" };
@@ -245,6 +263,12 @@ export function RuleBuilderPage({ authenticated }: { authenticated: boolean }) {
   const corePacks = (rules.data ?? []).filter(
     (rule) => rule.kind === "CORE_PACK",
   );
+  const sortedCorePacks = [...corePacks].sort((a, b) => {
+    const aEngine = coreEngineNames.has(a.name), bEngine = coreEngineNames.has(b.name);
+    if (aEngine !== bEngine) return aEngine ? -1 : 1;
+    const order = aEngine ? coreEngineOrder : corePackOrder;
+    return (order.indexOf(a.name) < 0 ? 999 : order.indexOf(a.name)) - (order.indexOf(b.name) < 0 ? 999 : order.indexOf(b.name));
+  });
   const userRules = (rules.data ?? []).filter(
     (rule) => rule.kind !== "CORE_PACK",
   );
@@ -305,13 +329,15 @@ export function RuleBuilderPage({ authenticated }: { authenticated: boolean }) {
           </span>
         </div>
         <div className="core-pack-list">
-          {corePacks.map((pack) => {
+          {sortedCorePacks.map((pack) => {
             const state = statusCopy(pack.status, pack.kind);
             const expanded = expandedPack === pack.id;
             const details = corePackContents[pack.name] ?? [pack.input_text];
             const run = latestRunByRule[pack.id] as any;
             const version = (pack as any).rule_versions?.[0];
             const modelStates = version?.dsl?.overrides?.models ?? {};
+            const isEngine = coreEngineNames.has(pack.name);
+            const supportingEngine = isEngine ? null : coreEngineLabels[version?.dsl?.engine] ?? "Prot Core Engine v2.0";
             return (
               <article className={`core-pack-card ${state.tone}`} key={pack.id}>
                 <div className="core-pack-main">
@@ -331,6 +357,9 @@ export function RuleBuilderPage({ authenticated }: { authenticated: boolean }) {
                       <em>{pack.pack_version}</em>
                     </div>
                     <small>{state.detail}</small>
+                    <span className="core-role">
+                      {isEngine ? "Engine chính · lớp quyết định" : <>Hỗ trợ <b>{supportingEngine}</b></>}
+                    </span>
                     {run ? (
                       <span className="engine-run-summary">
                         <b>{run.evaluated_count}</b> đánh giá · <b>{run.emitted_count}</b> setup ·{" "}
