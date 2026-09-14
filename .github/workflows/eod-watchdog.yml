@@ -1,0 +1,143 @@
+name: EOD Watchdog
+
+on:
+  workflow_dispatch:
+    inputs:
+      stage:
+        description: Recovery stage requested by Supabase Cron
+        required: true
+        type: choice
+        options: [early, final]
+      trading_date:
+        description: Optional completed trading date (YYYY-MM-DD)
+        required: false
+        type: string
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    outputs:
+      action: ${{ steps.coverage.outputs.action }}
+      retry_vci_offsets: ${{ steps.coverage.outputs.retry_vci_offsets }}
+      retry_kbs_offsets: ${{ steps.coverage.outputs.retry_kbs_offsets }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install httpx
+      - id: coverage
+        env:
+          SUPABASE_URL: https://upmqxwktvvguegqeqibn.supabase.co
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          STAGE: ${{ inputs.stage }}
+          TRADING_DATE: ${{ inputs.trading_date }}
+        run: |
+          python - <<'PY'
+          import json, os
+          from datetime import date
+          import httpx
+
+          day = os.environ.get("TRADING_DATE") or date.today().isoformat()
+          base = os.environ["SUPABASE_URL"].rstrip("/") + "/rest/v1"
+          headers = {"apikey": os.environ["SUPABASE_SERVICE_ROLE_KEY"], "Authorization": "Bearer " + os.environ["SUPABASE_SERVICE_ROLE_KEY"]}
+          with httpx.Client(base_url=base, headers=headers, timeout=30) as client:
+              active = client.get("/symbols", params={"select":"id,symbol", "active":"eq.true", "order":"symbol.asc"}).json()
+              snapshots = client.get("/technical_snapshots", params={"select":"symbol_id", "timeframe":"eq.D", "as_of_date":f"eq.{day}"}).json()
+              running = client.get("/job_runs", params={"select":"id", "job_type":"eq.EOD_INGEST", "trading_date":f"eq.{day}", "status":"eq.RUNNING", "limit":"1"}).json()
+          covered = {row["symbol_id"] for row in snapshots}
+          missing = [row for row in active if row["id"] not in covered]
+          if not missing:
+              action = "COMPLETE" if os.environ["STAGE"] == "early" else "FINALIZE"
+          elif running:
+              action = "IN_PROGRESS"
+          else:
+              action = "DISPATCH_FAST_LANE" if os.environ["STAGE"] == "early" else "RETRY_MISSING"
+          midpoint = (len(active) + 1) // 2
+          retry_vci = [str(i) for i, row in enumerate(active) if i < midpoint and row in missing]
+          retry_kbs = [str(i) for i, row in enumerate(active) if i >= midpoint and row in missing]
+          print(json.dumps({"date":day, "action":action, "covered":len(covered), "expected":len(active), "missing":[row["symbol"] for row in missing]}, ensure_ascii=False))
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+              output.write(f"action={action}\nretry_vci_offsets={','.join(retry_vci)}\nretry_kbs_offsets={','.join(retry_kbs)}\n")
+          PY
+
+  early-dispatch:
+    needs: inspect
+    if: inputs.stage == 'early' && needs.inspect.outputs.action == 'DISPATCH_FAST_LANE'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dispatch the primary Fast Lane only when no EOD worker has started
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TRADING_DATE: ${{ inputs.trading_date }}
+        run: |
+          args=(--ref main)
+          if [ -n "$TRADING_DATE" ]; then args+=(-f "trading_date=$TRADING_DATE"); fi
+          gh workflow run eod-fast.yml "${args[@]}"
+
+  final-recovery:
+    needs: inspect
+    if: inputs.stage == 'final' && needs.inspect.outputs.action != 'IN_PROGRESS'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: python -m pip install -e ".[data]"
+      - name: Retry only missing A-K symbols through VCI
+        if: needs.inspect.outputs.action == 'RETRY_MISSING' && needs.inspect.outputs.retry_vci_offsets != ''
+        env:
+          SUPABASE_URL: https://upmqxwktvvguegqeqibn.supabase.co
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          OFFSETS: ${{ needs.inspect.outputs.retry_vci_offsets }}
+          TRADING_DATE: ${{ inputs.trading_date }}
+        run: |
+          for offset in ${OFFSETS//,/ }; do
+            args=(--fast-lane --skip-breadth-snapshot --source VCI --symbol-offset "$offset" --symbol-limit 1)
+            if [ -n "$TRADING_DATE" ]; then args+=(--date "$TRADING_DATE"); fi
+            protstock eod "${args[@]}"
+          done
+      - name: Retry only missing L-Z symbols through KBS
+        if: needs.inspect.outputs.action == 'RETRY_MISSING' && needs.inspect.outputs.retry_kbs_offsets != ''
+        env:
+          SUPABASE_URL: https://upmqxwktvvguegqeqibn.supabase.co
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          OFFSETS: ${{ needs.inspect.outputs.retry_kbs_offsets }}
+          TRADING_DATE: ${{ inputs.trading_date }}
+        run: |
+          for offset in ${OFFSETS//,/ }; do
+            args=(--fast-lane --skip-breadth-snapshot --source KBS --symbol-offset "$offset" --symbol-limit 1)
+            if [ -n "$TRADING_DATE" ]; then args+=(--date "$TRADING_DATE"); fi
+            protstock eod "${args[@]}"
+          done
+      - name: Finalize, send eligible signals, and label incomplete coverage
+        env:
+          SUPABASE_URL: https://upmqxwktvvguegqeqibn.supabase.co
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          TRADING_DATE: ${{ inputs.trading_date }}
+        run: |
+          args=()
+          if [ -n "$TRADING_DATE" ]; then args+=(--date "$TRADING_DATE"); fi
+          set +e
+          finalized=$(protstock finalize-fast-eod "${args[@]}" 2>&1)
+          finalized_status=$?
+          set -e
+          printf '%s\n' "$finalized"
+          protstock send-eod-alerts "${args[@]}"
+          if [ "$finalized_status" -ne 0 ]; then
+            coverage=$(printf '%s' "$finalized" | grep -oE '[0-9]+/[0-9]+ daily snapshots' | head -1 | sed 's/ daily snapshots//')
+            if [ -n "$coverage" ]; then
+              day=${TRADING_DATE:-$(TZ=Asia/Ho_Chi_Minh date +%d/%m/%Y)}
+              curl --fail --silent --show-error -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+                -d "chat_id=${TELEGRAM_CHAT_ID}" \
+                --data-urlencode "text=Prot Stock EOD · ${day}\nDữ liệu tạm thời: ${coverage}. Các tín hiệu hợp lệ vẫn đã được gửi; hệ thống sẽ tự retry mã thiếu ở phiên kế tiếp."
+            fi
+          fi
