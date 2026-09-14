@@ -34,6 +34,13 @@ html[data-theme="light"] ::selection { background: #d7ff52; color: #172d23; }
 html[data-theme="light"] :is(h1,h2,h3,h4) { color: var(--text) !important; }
 html[data-theme="light"] :is(.panel,.analytic-card,.metric-card,.overview-kpi,.auth-card,.core-engine-section,.core-pack-card,.signal-visual-card,.market-context-card,.guide-group,.guide-card,.settings-card,.condition-card) { background: #fff !important; border-color: var(--line) !important; box-shadow: var(--elevation-1); color: var(--text); }
 html[data-theme="light"] :is(.sidebar,.mobile-header,.bottom-nav) { background: #fffffffa !important; border-color: var(--line); color: var(--text); box-shadow: var(--elevation-1); }
+@media (max-width: 760px) {
+  html[data-theme="light"] .bottom-nav {
+    background: #f8fcf9bd !important;
+    border-color: #bfd1c5cc !important;
+    box-shadow: 0 14px 36px #173e2118, inset 0 1px 0 #ffffffc7;
+  }
+}
 html[data-theme="light"] :is(.brand,.brand-copy,.brand-copy span,.stock-heading p,.symbol-picker > span,.nav-label) { color: var(--text); }
 html[data-theme="light"] :is(.nav-item,.bottom-nav a,.bottom-nav button) { color: #4d6658; }
 html[data-theme="light"] :is(.nav-item.active,.nav-item:hover,.bottom-nav .active) { background: #e7f0e9; color: #315200; }
