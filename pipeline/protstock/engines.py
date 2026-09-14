@@ -4,6 +4,7 @@ from typing import Any
 
 from .analysis import resolve_signal
 from .classical_patterns import MODEL_LABELS, detect_classical_patterns
+from .fibonacci import enrich_pattern_fibonacci, matching_fibonacci
 from .rules import evaluate_rule, multi_timeframe_gate
 
 
@@ -56,6 +57,9 @@ def evaluate_named_engine(engine: str | None, overrides: dict[str, Any] | None, 
         )
         reasons = [f"TREND_{context['snapshot'].get('trend_state', 'UNKNOWN')}", *reasons]
         meaningful = action != "WATCH" or any(reason.startswith("NEAR_TRIGGER_") for reason in reasons)
+        matches = [match for pattern in context.get("patterns", []) if "FIB_CONFLUENCE" in pattern.get("reasons", []) for match in (pattern.get("evidence") or {}).get("fibonacci", [])]
+        if "FIB_CONFLUENCE" in reasons and matches:
+            context["engine_evidence"] = {**(context.get("engine_evidence") or {}), "fibonacci": matches}
         return meaningful, action, reasons
     if engine == "core_ladder_v1":
         return evaluate_core_v1(context)
@@ -88,6 +92,7 @@ def evaluate_classical_patterns_v0(context: dict[str, Any], overrides: dict[str,
         context.get("bars", []), context.get("snapshot", {}),
     )
     candidates = [candidate for candidate in candidates if enabled_models.get(candidate["model"], True)]
+    candidates = [enrich_pattern_fibonacci(candidate, context.get("fibonacci_context") or {}, context.get("zones", [])) for candidate in candidates]
     snapshot = context.get("snapshot", {})
     position = context.get("position")
     confirmed = [candidate for candidate in candidates if candidate["state"] == "CONFIRMED"]
@@ -174,7 +179,12 @@ def evaluate_pullback_continuation_v1(context: dict[str, Any]) -> tuple[bool, st
     reversal = float(bar["close"]) > float(bar["open"])
     if not touched or not reversal:
         return False, "WATCH", []
-    return True, "PROBE_BUY", ["PULLBACK_EMA20_OR_SMA50", "LOW_VOLUME_PULLBACK", "BULLISH_REVERSAL", "MONTHLY_UP", "WEEKLY_UP"]
+    reasons = ["PULLBACK_EMA20_OR_SMA50", "LOW_VOLUME_PULLBACK", "BULLISH_REVERSAL", "MONTHLY_UP", "WEEKLY_UP"]
+    matches = matching_fibonacci(float(bar["close"]), context.get("fibonacci_context") or {}, context.get("zones", []), pullback=True)
+    if matches:
+        reasons.append("FIB_CONFLUENCE")
+        context["engine_evidence"] = {**(context.get("engine_evidence") or {}), "fibonacci": matches}
+    return True, "PROBE_BUY", reasons
 
 
 def evaluate_pullback_continuation(context: dict[str, Any]) -> tuple[bool, str, list[str]]:

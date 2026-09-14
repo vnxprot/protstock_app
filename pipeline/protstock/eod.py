@@ -5,6 +5,7 @@ from time import monotonic, sleep
 from typing import Any
 
 from .analysis import ALGORITHM_VERSION, analyze_bars
+from .fibonacci import build_fibonacci_context
 from .config import Settings
 from .engines import evaluate_named_engine
 from .indicators import calculate_indicators
@@ -113,6 +114,7 @@ def run_eod(
                 analysis_rows = [{**row, "date": row["trading_date"]} for row in history]
                 if analysis_rows:
                     timeframe_rows = {"D": analysis_rows}
+                    fibonacci_context = build_fibonacci_context(analysis_rows)
                     benchmark_rows = {"D": benchmark_daily}
                     for timeframe in ("W", "M"):
                         aggregated = aggregate_bars(analysis_rows, timeframe)
@@ -129,8 +131,8 @@ def run_eod(
                         counts["derived_bars"] += client.upsert(
                             "derived_bars", derived_rows, "symbol_id,timeframe,period_start"
                         )
-                    preliminary = {timeframe: analyze_bars(scoped_rows) for timeframe, scoped_rows in timeframe_rows.items() if scoped_rows}
-                    results = {timeframe: analyze_bars(scoped_rows, weekly_patterns=preliminary.get("W", {}).get("patterns", []), monthly_snapshot=preliminary.get("M", {}).get("indicators", {}), benchmark_rows=benchmark_rows[timeframe], market_context=market_context if timeframe == "D" else None) for timeframe, scoped_rows in timeframe_rows.items() if scoped_rows}
+                    preliminary = {timeframe: analyze_bars(scoped_rows, fibonacci_context=fibonacci_context) for timeframe, scoped_rows in timeframe_rows.items() if scoped_rows}
+                    results = {timeframe: analyze_bars(scoped_rows, weekly_patterns=preliminary.get("W", {}).get("patterns", []), monthly_snapshot=preliminary.get("M", {}).get("indicators", {}), benchmark_rows=benchmark_rows[timeframe], market_context=market_context if timeframe == "D" else None, fibonacci_context=fibonacci_context) for timeframe, scoped_rows in timeframe_rows.items() if scoped_rows}
                     context = {
                         "weekly_patterns": results.get("W", {}).get("patterns", []),
                         "weekly_snapshot": results.get("W", {}).get("indicators", {}),
@@ -228,9 +230,10 @@ def rebuild_signals(trading_date: date, *, symbol_offset: int = 0, symbol_limit:
                 if not analysis_rows:
                     raise ValueError("no stored price history")
                 timeframe_rows = {"D": analysis_rows, "W": aggregate_bars(analysis_rows, "W"), "M": aggregate_bars(analysis_rows, "M")}
+                fibonacci_context = build_fibonacci_context(analysis_rows)
                 benchmark_rows = {"D": benchmark_daily, "W": aggregate_bars(benchmark_daily, "W"), "M": aggregate_bars(benchmark_daily, "M")}
-                preliminary = {timeframe: analyze_bars(rows) for timeframe, rows in timeframe_rows.items() if rows}
-                results = {timeframe: analyze_bars(rows, weekly_patterns=preliminary.get("W", {}).get("patterns", []), monthly_snapshot=preliminary.get("M", {}).get("indicators", {}), benchmark_rows=benchmark_rows[timeframe], market_context=market_context if timeframe == "D" else None) for timeframe, rows in timeframe_rows.items() if rows}
+                preliminary = {timeframe: analyze_bars(rows, fibonacci_context=fibonacci_context) for timeframe, rows in timeframe_rows.items() if rows}
+                results = {timeframe: analyze_bars(rows, weekly_patterns=preliminary.get("W", {}).get("patterns", []), monthly_snapshot=preliminary.get("M", {}).get("indicators", {}), benchmark_rows=benchmark_rows[timeframe], market_context=market_context if timeframe == "D" else None, fibonacci_context=fibonacci_context) for timeframe, rows in timeframe_rows.items() if rows}
                 context = {"weekly_patterns": results.get("W", {}).get("patterns", []), "weekly_snapshot": results.get("W", {}).get("indicators", {}), "monthly_snapshot": results.get("M", {}).get("indicators", {}), "market_context": market_context, "candidate_sector": symbol_row["sector"]}
                 for timeframe, rows in timeframe_rows.items():
                     if timeframe in results:
@@ -347,13 +350,17 @@ def _write_analysis(
             "zone_type": zone["zone_type"], "start_date": rows[zone["start_index"]]["date"],
             "as_of_date": result["as_of_date"], "lower_price": zone["lower_price"],
             "upper_price": zone["upper_price"], "touches": zone["touches"],
-            "strength": zone["strength"], "evidence": zone["evidence"],
+            "active": True, "strength": zone["strength"], "evidence": zone["evidence"],
             "algorithm_version": ALGORITHM_VERSION,
         } for zone in result["zones"]]
-        counts["zones"] += client.upsert(
-            "support_resistance_zones", zones,
-            "symbol_id,timeframe,as_of_date,zone_type,lower_price,upper_price",
-        )
+        replacer = getattr(client, "replace_zone_snapshot", None)
+        if replacer is not None:
+            counts["zones"] += replacer(symbol_id, timeframe, result["as_of_date"], zones)
+        else:
+            counts["zones"] += client.upsert(
+                "support_resistance_zones", zones,
+                "symbol_id,timeframe,as_of_date,zone_type,lower_price,upper_price",
+            )
     signal_rows = []
     raw_evaluations = []
     for version in active_rules:
@@ -370,6 +377,7 @@ def _write_analysis(
             "patterns": result["patterns"],
             "snapshot": result["indicators"],
             "zones": result["zones"],
+            "fibonacci_context": result.get("fibonacci_context", {}),
             "position": context.get("position"),
             "market_context": context.get("market_context") if timeframe == "D" else None,
             "multi_timeframe_context": {

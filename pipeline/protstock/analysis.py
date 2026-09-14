@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Sequence
 
 from .indicators import calculate_indicators, relative_strength
+from .fibonacci import enrich_pattern_fibonacci
 from .market_regime import regime_ok
 from .patterns import detect_patterns
 from .rules import multi_timeframe_gate
@@ -13,19 +14,20 @@ from .zones import detect_zones, zone_confluence_bonus
 ALGORITHM_VERSION = "core-rules-v2"
 
 
-def analyze_bars(bars: Sequence[dict], position: dict | None = None, weekly_patterns: list[dict] | None = None, monthly_snapshot: dict | None = None, benchmark_rows: Sequence[dict] | None = None, market_context: dict | None = None, portfolio_positions: list[dict] | None = None, candidate_sector: str | None = None, capital: float | None = None) -> dict:
+def analyze_bars(bars: Sequence[dict], position: dict | None = None, weekly_patterns: list[dict] | None = None, monthly_snapshot: dict | None = None, benchmark_rows: Sequence[dict] | None = None, market_context: dict | None = None, portfolio_positions: list[dict] | None = None, candidate_sector: str | None = None, capital: float | None = None, fibonacci_context: dict | None = None) -> dict:
     if not bars:
         raise ValueError("bars cannot be empty")
     ordered = sorted(bars, key=lambda item: item["date"])
     snapshot = calculate_indicators(ordered)
     patterns = detect_patterns(ordered, snapshot.to_dict())
-    zones = detect_zones(ordered)
+    zones = detect_zones(ordered, fibonacci_context=fibonacci_context)
     snapshot_dict = snapshot.to_dict()
     if benchmark_rows is not None:
         benchmark_by_date = {item["date"]: float(item["close"]) for item in benchmark_rows}
         aligned = [(float(item["close"]), benchmark_by_date[item["date"]]) for item in ordered if item["date"] in benchmark_by_date]
         snapshot_dict["relative_strength_market"] = relative_strength([item[0] for item in aligned], [item[1] for item in aligned]) if aligned else None
     pattern_dicts = _apply_zone_confluence([{**item.to_dict(), "start_date": ordered[item.start_index]["date"]} for item in patterns], zones)
+    pattern_dicts = [enrich_pattern_fibonacci(pattern, fibonacci_context or {}, zones) for pattern in pattern_dicts]
     multi_timeframe_context = {"weekly_patterns": weekly_patterns or [], "monthly_snapshot": monthly_snapshot or {}} if weekly_patterns is not None or monthly_snapshot is not None else None
     signal, reasons = resolve_signal(pattern_dicts, snapshot_dict, position, market_context=market_context, multi_timeframe_context=multi_timeframe_context, portfolio_positions=portfolio_positions, candidate_sector=candidate_sector, capital=capital)
     reasons = [f"TREND_{snapshot.trend_state}", *reasons]
@@ -37,6 +39,7 @@ def analyze_bars(bars: Sequence[dict], position: dict | None = None, weekly_patt
         "zones": zones,
         "signal_preview": signal,
         "reasons": reasons,
+        "fibonacci_context": fibonacci_context or {},
     }
 
 
@@ -55,6 +58,7 @@ def resolve_signal(patterns: list[dict], snapshot: dict, position: dict | None =
     threshold = 65 if bonus else 70
     if top and top["quality_score"] >= threshold and snapshot.get("trend_state") in ("UP", "SIDEWAYS") and (snapshot.get("volume_ratio20") or 0) >= 1.3 and (snapshot.get("rsi14") or 100) < 75 and liquid:
         reasons = [f"PATTERN_{top['pattern_type']}_CONFIRMED", "VOLUME_CONFIRMED", "LIQUIDITY_OK"]
+        reasons.extend(reason for reason in top.get("reasons", []) if reason in {"ZONE_CONFLUENCE", "FIB_CONFLUENCE"})
         warning = invalidation_width_warning(snapshot.get("close", 0), top.get("invalidation_price") or 0, snapshot.get("atr14"))
         if warning: reasons.append(warning)
         action = "PROBE_BUY" if not position else ("ADD" if str(top.get("start_date", "")) > str(position.get("entry_date", "")) else "WATCH")

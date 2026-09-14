@@ -22,6 +22,22 @@ class SupabaseRestClient:
             transport=transport,
         )
 
+    def replace_zone_snapshot(self, symbol_id: int, timeframe: str, as_of_date: str, rows: list[dict]) -> int:
+        """Upsert first, then deactivate obsolete same-day bounds; preserve history."""
+        filters = {"symbol_id": f"eq.{symbol_id}", "timeframe": f"eq.{timeframe}", "as_of_date": f"eq.{as_of_date}"}
+        response = self._client.get("/support_resistance_zones", params={**filters, "select": "id,zone_type,lower_price,upper_price"})
+        response.raise_for_status()
+        existing = response.json()
+        def key(row):
+            return row["zone_type"], round(float(row["lower_price"]), 4), round(float(row["upper_price"]), 4)
+        count = self.upsert("support_resistance_zones", [{**row, "active": True} for row in rows], "symbol_id,timeframe,as_of_date,zone_type,lower_price,upper_price")
+        current = {key(row) for row in rows}
+        obsolete = [str(row["id"]) for row in existing if key(row) not in current]
+        if obsolete:
+            response = self._client.patch("/support_resistance_zones", params={**filters, "id": f"in.({','.join(obsolete)})"}, json={"active": False})
+            response.raise_for_status()
+        return count
+
     def close(self) -> None:
         self._client.close()
 
