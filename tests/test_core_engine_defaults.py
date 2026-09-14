@@ -12,5 +12,6 @@ def test_default_core_catalog_migration_enables_every_core_pack_once():
 def test_rule_builder_has_explicit_engine_first_order_and_pack_targets():
     source = Path("src/components/RuleBuilderPage.tsx").read_text(encoding="utf-8")
     assert source.index('"Prot Core Engine v0.0"') < source.index('"Prot Core Engine v1.0"') < source.index('"Prot Core Engine v2.0"')
-    assert 'coreEngineLabels' in source and 'supportingEngine' in source
-    assert 'Hỗ trợ <b>{supportingEngine}</b>' in source
+    assert 'sort(compareEngines)' in source
+    assert 'Pack độc lập · qua bộ lọc chung' in source
+    assert 'compareEngines' in Path('src/components/BacktestPage.tsx').read_text(encoding='utf-8')

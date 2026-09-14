@@ -7,7 +7,7 @@ def evaluate_signal_outcome(signal: dict, price_history: Sequence[dict], horizon
     """Evaluate one already-known signal without changing live signal thresholds."""
     ordered = sorted(price_history, key=lambda row: row.get("trading_date", row.get("date", "")))
     as_of_date = signal["as_of_date"]
-    entry_bar = next((row for row in reversed(ordered) if row.get("trading_date", row.get("date")) <= as_of_date), None)
+    entry_bar = next((row for row in reversed(ordered) if row.get("trading_date", row.get("date")) == as_of_date), None)
     future = [row for row in ordered if row.get("trading_date", row.get("date")) > as_of_date][:horizon_days]
     if entry_bar is None or len(future) < horizon_days:
         return None

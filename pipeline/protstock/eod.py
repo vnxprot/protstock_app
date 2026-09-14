@@ -14,6 +14,8 @@ from .provider_vnstock import VnstockProvider
 from .resolution import resolve_consolidated_signal
 from .supabase_rest import SupabaseRestClient
 from .timeframes import aggregate_bars
+from .signal_policy import STOCK_PRICE_TO_VND, apply_signal_policy
+from .period_signals import monthly_trend, evaluate_period_signal
 
 # VNINDEX's first session was 28/07/2000. This keeps its benchmark history full
 # through the app's operational planning horizon without expanding symbol fetches.
@@ -55,6 +57,7 @@ def run_eod(
     try:
         symbols = client.active_symbols()
         active_rules = client.active_rule_versions()
+        portfolios = _load_portfolios(client, active_rules, trading_date)
         counts["engine_stats"] = _initialize_engine_stats(active_rules)
         market_context = _prior_market_context(client, trading_date)
         daily_snapshots: list[dict] = []
@@ -142,6 +145,8 @@ def run_eod(
                     }
                     for timeframe, scoped_rows in timeframe_rows.items():
                         if timeframe in results:
+                            if "period_events" not in context:
+                                context.update(_decision_context(analysis_rows, trading_date, portfolios))
                             _write_analysis(client, symbol_row["id"], timeframe, scoped_rows, benchmark_rows[timeframe], active_rules, counts, results[timeframe], context)
                     if "D" in results:
                         daily_snapshots.append(results["D"]["indicators"])
@@ -213,6 +218,7 @@ def rebuild_signals(trading_date: date, *, symbol_offset: int = 0, symbol_limit:
         if symbol_limit:
             symbols = symbols[:symbol_limit]
         active_rules = client.active_rule_versions()
+        portfolios = _load_portfolios(client, active_rules, trading_date)
         if not active_rules:
             # A signal-only run has nothing meaningful to do without an enabled
             # engine. Fail loudly rather than report a misleading success.
@@ -237,6 +243,8 @@ def rebuild_signals(trading_date: date, *, symbol_offset: int = 0, symbol_limit:
                 context = {"weekly_patterns": results.get("W", {}).get("patterns", []), "weekly_snapshot": results.get("W", {}).get("indicators", {}), "monthly_snapshot": results.get("M", {}).get("indicators", {}), "market_context": market_context, "candidate_sector": symbol_row["sector"]}
                 for timeframe, rows in timeframe_rows.items():
                     if timeframe in results:
+                        if "period_events" not in context:
+                            context.update(_decision_context(analysis_rows, trading_date, portfolios))
                         _write_analysis(client, symbol_row["id"], timeframe, rows, benchmark_rows[timeframe], active_rules, counts, results[timeframe], context, persist_evidence=False)
                 counts["symbols"] += 1
                 client.create_job_item({"job_run_id": job["id"], "symbol_id": symbol_row["id"], "item_key": symbol_row["symbol"], "status": "SUCCEEDED", "rows_written": 0, "duration_ms": int((monotonic() - started) * 1000)})
@@ -304,6 +312,8 @@ def _prior_market_context(client: SupabaseRestClient, trading_date: date) -> dic
     snapshot = getter(trading_date - timedelta(days=1))
     if not snapshot:
         return None
+    if snapshot.get("trading_date") and (trading_date - date.fromisoformat(snapshot["trading_date"])).days > 7:
+        return None
     return {
         "breadth": {"pct_above_sma50": snapshot.get("pct_above_sma50"), "sample_size": snapshot.get("sample_size")},
         "vnindex_snapshot": {"trend_state": snapshot.get("vnindex_trend_state", "UNKNOWN")},
@@ -363,12 +373,20 @@ def _write_analysis(
             )
     signal_rows = []
     raw_evaluations = []
+    evaluations = []
     for version in active_rules:
         dsl = version["dsl"]
-        if dsl.get("timeframe", "D") != timeframe:
+        if timeframe not in dsl.get("timeframes", [dsl.get("timeframe", "D")]):
             continue
         rule = version.get("rules") or {}
-        stats = counts.get("engine_stats", {}).get(version["id"])
+        owner = (context.get("portfolios") or {}).get(rule.get("user_id"), {})
+        positions = owner.get("positions", [])
+        held = [p for p in positions if p["symbol_id"] == symbol_id]
+        position = None
+        if held:
+            stops = [float(p["stop_price"]) / STOCK_PRICE_TO_VND for p in held if p.get("stop_price")]
+            position = {"invalidation_price": max(stops) if stops else None, "entry_date": max(p["opened_at"] for p in held)}
+        stats = counts.get("engine_stats", {}).get(_stats_key(version["id"], timeframe))
         if stats is not None:
             stats["evaluated_count"] += 1
         engine_context = {
@@ -378,25 +396,48 @@ def _write_analysis(
             "snapshot": result["indicators"],
             "zones": result["zones"],
             "fibonacci_context": result.get("fibonacci_context", {}),
-            "position": context.get("position"),
-            "market_context": context.get("market_context") if timeframe == "D" else None,
+            "position": position or context.get("position"),
+            "market_context": context.get("market_context"),
             "multi_timeframe_context": {
                 "weekly_patterns": context.get("weekly_patterns", []),
                 "weekly_snapshot": context.get("weekly_snapshot", {}),
                 "monthly_snapshot": context.get("monthly_snapshot", {}),
             },
-            "portfolio_positions": context.get("portfolio_positions"),
+            "portfolio_positions": owner.get("valued_positions", context.get("portfolio_positions")),
             "candidate_sector": context.get("candidate_sector"),
-            "capital": context.get("capital"),
+            "capital": owner.get("capital", context.get("capital")),
+            "risk_pct": owner.get("risk_pct", 1),
+            "portfolio_error": owner.get("error"),
+            "daily_snapshot": context.get("daily_snapshot", result["indicators"]),
+            "data_date": context.get("data_date", result["as_of_date"]),
+            "evaluation_date": context.get("evaluation_date", result["as_of_date"]),
+            "period_event": context.get("period_events", {}).get(timeframe, False),
             "rule_context": context,
         }
-        passed, action, reasons = evaluate_named_engine(dsl.get("engine"), dsl.get("overrides"), engine_context)
+        if timeframe in {"W", "M"} and dsl.get("engine") == "core_ladder_v2":
+            passed, action, reasons = evaluate_period_signal(timeframe, engine_context)
+        else:
+            # Portfolio sizing is applied once, in VND, by the shared policy below.
+            proposal_context = {**engine_context, "portfolio_positions": None}
+            passed, action, reasons = evaluate_named_engine(dsl.get("engine"), dsl.get("overrides"), proposal_context)
+            engine_context["engine_evidence"] = proposal_context.get("engine_evidence", {})
+        proposed_action = action
+        evidence = engine_context.setdefault("engine_evidence", {})
+        matched = [p for p in result["patterns"] if p.get("state") == "CONFIRMED" and any(p.get("pattern_type", "?") in reason for reason in reasons)]
+        if matched and not evidence.get("invalidation_price"):
+            top = max(matched, key=lambda p: p.get("quality_score", 0))
+            evidence.update({key: top.get(key) for key in ("pattern_type", "quality_score", "invalidation_price", "trigger_price")})
+        if passed or (timeframe == "D" and engine_context.get("position")):
+            action, reasons = apply_signal_policy(action, reasons, engine_context)
+            passed = passed or action == "EXIT"
+        evaluation_date = context.get("evaluation_date", result["as_of_date"])
+        if passed or reasons: evaluations.append({"rule_version_id": version["id"], "symbol_id": symbol_id, "timeframe": timeframe, "as_of_date": evaluation_date, "proposed_action": proposed_action, "action": action, "emitted": passed, "reasons": reasons or ["NO_MATCHING_SETUP"], "evidence": engine_context.get("engine_evidence") or {}})
         if passed:
             if stats is not None:
                 stats["emitted_count"] += 1
             raw_signal = {
                 "rule_version_id": version["id"], "symbol_id": symbol_id,
-                "timeframe": timeframe, "as_of_date": result["as_of_date"],
+                "timeframe": timeframe, "as_of_date": evaluation_date,
                 "action": action, "source": "CORE_PACK" if rule.get("kind") == "CORE_PACK" else "USER_RULE", "score": 100,
                 "reasons": reasons,
                 "evidence": {
@@ -410,20 +451,60 @@ def _write_analysis(
     counts["signals"] += client.upsert(
         "signals", signal_rows, "rule_version_id,symbol_id,timeframe,as_of_date,action"
     )
+    if evaluations:
+        client.upsert("signal_evaluations", evaluations, "rule_version_id,symbol_id,timeframe,as_of_date")
     if raw_evaluations:
         consolidated = resolve_consolidated_signal(raw_evaluations)
         winners = {item["rule_version_id"] for item in raw_evaluations if item["action"] == consolidated["composite_action"]}
         for version_id in winners:
-            stats = counts.get("engine_stats", {}).get(version_id)
+            stats = counts.get("engine_stats", {}).get(_stats_key(version_id, timeframe))
             if stats is not None:
                 stats["contributed_count"] += 1
         counts.setdefault("consolidated_signals", 0)
         counts["consolidated_signals"] += client.upsert("consolidated_signals", [{
-            "symbol_id": symbol_id, "timeframe": timeframe, "as_of_date": result["as_of_date"],
+            "symbol_id": symbol_id, "timeframe": timeframe, "as_of_date": context.get("evaluation_date", result["as_of_date"]),
             **{key: consolidated[key] for key in ("composite_action", "confluence_score", "confluence_count", "consensus_engines", "reasons")},
         }], "symbol_id,timeframe,as_of_date")
     else:
-        client.delete_consolidated_signal(symbol_id, timeframe, result["as_of_date"])
+        client.delete_consolidated_signal(symbol_id, timeframe, context.get("evaluation_date", result["as_of_date"]))
+
+
+def _load_portfolios(client, active_rules: list[dict], trading_date: date) -> dict:
+    getter = getattr(client, "portfolio_context", None)
+    if getter is None:
+        return {}
+    owners = {version.get("rules", {}).get("user_id") for version in active_rules} - {None}
+    result = {}
+    for owner in owners:
+        try:
+            item = getter(owner)
+            item["valued_positions"] = []
+            for position in item["positions"]:
+                rows = _rows_as_of(client.price_history(position["symbol_id"], MULTI_TIMEFRAME_HISTORY_LIMIT), trading_date)
+                if not rows or (trading_date - date.fromisoformat(rows[-1]["trading_date"])).days > 7:
+                    item["error"] = "POSITION_PRICE_UNAVAILABLE"
+                price = float(rows[-1]["close"]) * STOCK_PRICE_TO_VND if rows else float(position["average_cost"])
+                item["valued_positions"].append({"market_price": price, "quantity": position["quantity"], "sector": (position.get("symbols") or {}).get("sector", "UNKNOWN")})
+            # positions is current inventory, not an immutable historical ledger.
+            if item["positions"] and trading_date != date.today():
+                item["error"] = "HISTORICAL_PORTFOLIO_UNAVAILABLE"
+                item["positions"] = []
+            result[owner] = item
+        except Exception:
+            result[owner] = {"error": "PORTFOLIO_CONTEXT_UNAVAILABLE"}
+    return result
+
+
+def _decision_context(daily: list[dict], trading_date: date, portfolios: dict) -> dict:
+    completed = {tf: [b for b in aggregate_bars(daily, tf) if b["is_complete"]] for tf in ("W", "M")}
+    weekly = analyze_bars(completed["W"]) if completed["W"] else {}
+    events = {}
+    for tf in ("W", "M"):
+        current = aggregate_bars(daily, tf)
+        previous = aggregate_bars(daily[:-1], tf)
+        # Confirm at first observed session of next period: conservative around holidays.
+        events[tf] = bool(current and previous and current[-1]["period_start"] != previous[-1]["period_start"])
+    return {"portfolios": portfolios, "evaluation_date": trading_date.isoformat(), "data_date": daily[-1]["date"], "daily_snapshot": calculate_indicators(daily).to_dict(), "weekly_snapshot": weekly.get("indicators", {}), "weekly_patterns": weekly.get("patterns", []), "monthly_snapshot": monthly_trend(completed["M"]), "period_events": events}
 
 
 def _pattern_evidence_cluster(reasons: list[str]) -> str | None:
@@ -434,18 +515,24 @@ def _pattern_evidence_cluster(reasons: list[str]) -> str | None:
                 token = reason[len(prefix):]
                 for suffix in ("_CONFIRMED", "_READY"):
                     if token.endswith(suffix):
-                        return token[:-len(suffix)]
+                        name = token[:-len(suffix)]
+                        return {"FLAT_BASE": "ACCUMULATION_BASE", "FLAG_PENNANT": "BULL_FLAG"}.get(name, name)
     return None
+
+def _stats_key(version_id: str, timeframe: str) -> str:
+    return version_id if timeframe == "D" else f"{version_id}:{timeframe}"
+
 
 def _initialize_engine_stats(active_rules: list[dict]) -> dict[str, dict[str, Any]]:
     return {
-        version["id"]: {
+        _stats_key(version["id"], timeframe): {
             "rule_id": version["rules"]["id"], "rule_version_id": version["id"],
             "engine_name": version["rules"].get("name") or version["dsl"].get("engine") or "Rule Studio",
-            "timeframe": version["dsl"].get("timeframe", "D"),
+            "timeframe": timeframe,
             "evaluated_count": 0, "emitted_count": 0, "contributed_count": 0,
         }
         for version in active_rules
+        for timeframe in version["dsl"].get("timeframes", [version["dsl"].get("timeframe", "D")])
     }
 
 

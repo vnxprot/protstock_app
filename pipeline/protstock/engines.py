@@ -6,6 +6,7 @@ from .analysis import resolve_signal
 from .classical_patterns import MODEL_LABELS, detect_classical_patterns
 from .fibonacci import enrich_pattern_fibonacci, matching_fibonacci
 from .rules import evaluate_rule, multi_timeframe_gate
+from .divergence import evaluate_rsi_macd_confirmation
 
 
 CORE_PACK_METADATA = {
@@ -56,7 +57,7 @@ def evaluate_named_engine(engine: str | None, overrides: dict[str, Any] | None, 
             **overrides,
         )
         reasons = [f"TREND_{context['snapshot'].get('trend_state', 'UNKNOWN')}", *reasons]
-        meaningful = action != "WATCH" or any(reason.startswith("NEAR_TRIGGER_") for reason in reasons)
+        meaningful = action != "WATCH" or len(reasons) > 1
         matches = [match for pattern in context.get("patterns", []) if "FIB_CONFLUENCE" in pattern.get("reasons", []) for match in (pattern.get("evidence") or {}).get("fibonacci", [])]
         if "FIB_CONFLUENCE" in reasons and matches:
             context["engine_evidence"] = {**(context.get("engine_evidence") or {}), "fibonacci": matches}
@@ -71,6 +72,8 @@ def evaluate_named_engine(engine: str | None, overrides: dict[str, Any] | None, 
         return evaluate_vcp_breakout_v1(context)
     if engine == "rsi_macd_divergence_v1":
         return evaluate_rsi_macd_divergence_v1(context)
+    if engine == "rsi_macd_confirmation_v1_1":
+        return evaluate_rsi_macd_confirmation(context)
     if engine == "relative_strength_leader_v1":
         return evaluate_relative_strength_leader_v1(context)
     raise ValueError(f"unknown signal engine: {engine}")

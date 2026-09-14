@@ -81,6 +81,8 @@ const visual = [
   { tone: "risk", title: "Quản trị rủi ro", text: "Stop Loss · 7% từ giá vốn" },
 ];
 
+import { compareEngines, engineGuides } from "../lib/engineCatalog";
+import { formatDate } from "../lib/date";
 const corePackContents: Record<string, string[]> = {
   "Prot Core Engine v0.0": [
     "Research-first: chỉ tạo evidence rõ ràng; mặc định không gửi Telegram",
@@ -177,7 +179,7 @@ export function RuleBuilderPage({ authenticated }: { authenticated: boolean }) {
       const { data, error } = await supabase!
         .from("rules")
         .select(
-          "id,name,input_text,status,kind,pack_version,notification_mode,created_at,rule_versions(id,dsl)",
+          "id,name,input_text,status,kind,pack_version,notification_mode,created_at,rule_versions(id,dsl,version)",
         )
         .order("created_at", { ascending: false });
       if (error) throw error;
@@ -249,7 +251,7 @@ export function RuleBuilderPage({ authenticated }: { authenticated: boolean }) {
     client.invalidateQueries({ queryKey: ["rules"] });
   }
   async function toggleClassicalModel(pack: any, model: string) {
-    const version = pack.rule_versions?.[0];
+    const version = [...(pack.rule_versions ?? [])].sort((a,b)=>b.version-a.version)[0];
     if (!supabase || !version) return setToast("Chưa tìm thấy cấu hình v0.0");
     const models = version.dsl?.overrides?.models ?? {};
     const dsl = { ...version.dsl, overrides: { ...(version.dsl?.overrides ?? {}), models: { ...models, [model]: models[model] === false } } };
@@ -261,19 +263,14 @@ export function RuleBuilderPage({ authenticated }: { authenticated: boolean }) {
     client.invalidateQueries({ queryKey: ["rules"] });
   }
   const corePacks = (rules.data ?? []).filter(
-    (rule) => rule.kind === "CORE_PACK",
+    (rule) => rule.kind === "CORE_PACK" && !(rule.status === "ARCHIVED" && !rule.rule_versions?.length),
   );
-  const sortedCorePacks = [...corePacks].sort((a, b) => {
-    const aEngine = coreEngineNames.has(a.name), bEngine = coreEngineNames.has(b.name);
-    if (aEngine !== bEngine) return aEngine ? -1 : 1;
-    const order = aEngine ? coreEngineOrder : corePackOrder;
-    return (order.indexOf(a.name) < 0 ? 999 : order.indexOf(a.name)) - (order.indexOf(b.name) < 0 ? 999 : order.indexOf(b.name));
-  });
+  const sortedCorePacks = [...corePacks].sort(compareEngines);
   const userRules = (rules.data ?? []).filter(
     (rule) => rule.kind !== "CORE_PACK",
   );
   const latestRunByRule = useMemo(
-    () => Object.fromEntries((engineRuns.data ?? []).map((run: any) => [run.rule_id, run])),
+    () => Object.fromEntries([...(engineRuns.data ?? [])].reverse().map((run: any) => [run.rule_id, run])),
     [engineRuns.data],
   );
   const highlighted = preview.dsl
@@ -332,12 +329,12 @@ export function RuleBuilderPage({ authenticated }: { authenticated: boolean }) {
           {sortedCorePacks.map((pack) => {
             const state = statusCopy(pack.status, pack.kind);
             const expanded = expandedPack === pack.id;
-            const details = corePackContents[pack.name] ?? [pack.input_text];
+            const guide = engineGuides.find(item => item.name === pack.name);
+            const details = guide ? [guide.detail] : corePackContents[pack.name] ?? [pack.input_text];
             const run = latestRunByRule[pack.id] as any;
-            const version = (pack as any).rule_versions?.[0];
+            const version = [...((pack as any).rule_versions ?? [])].sort((a,b)=>b.version-a.version)[0];
             const modelStates = version?.dsl?.overrides?.models ?? {};
             const isEngine = coreEngineNames.has(pack.name);
-            const supportingEngine = isEngine ? null : coreEngineLabels[version?.dsl?.engine] ?? "Prot Core Engine v2.0";
             return (
               <article className={`core-pack-card ${state.tone}`} key={pack.id}>
                 <div className="core-pack-main">
@@ -358,12 +355,12 @@ export function RuleBuilderPage({ authenticated }: { authenticated: boolean }) {
                     </div>
                     <small>{state.detail}</small>
                     <span className="core-role">
-                      {isEngine ? "Engine chính · lớp quyết định" : <>Hỗ trợ <b>{supportingEngine}</b></>}
+                      {isEngine ? "Nguồn đề xuất · qua bộ lọc chung" : "Pack độc lập · qua bộ lọc chung"}
                     </span>
                     {run ? (
                       <span className="engine-run-summary">
                         <b>{run.evaluated_count}</b> đánh giá · <b>{run.emitted_count}</b> setup ·{" "}
-                        <b>{run.contributed_count}</b> đóng góp <i>({run.trading_date})</i>
+                        <b>{run.contributed_count}</b> đóng góp <i>({formatDate(run.trading_date)})</i>
                       </span>
                     ) : (
                       <span className="engine-run-summary muted">

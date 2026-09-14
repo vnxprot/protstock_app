@@ -9,6 +9,7 @@ from .patterns import detect_patterns
 from .rules import multi_timeframe_gate
 from .risk import DEFAULT_MAX_SECTOR_WEIGHT_PCT, invalidation_width_warning, portfolio_exposure, position_size
 from .zones import detect_zones, zone_confluence_bonus
+from .signal_policy import average_turnover_vnd, MIN_AVERAGE_TURNOVER_VND
 
 
 ALGORITHM_VERSION = "core-rules-v2"
@@ -46,14 +47,14 @@ def analyze_bars(bars: Sequence[dict], position: dict | None = None, weekly_patt
 def resolve_signal(patterns: list[dict], snapshot: dict, position: dict | None = None, *, market_context: dict | None = None, multi_timeframe_context: dict | None = None, zones: Sequence[dict] | None = None, portfolio_positions: list[dict] | None = None, candidate_sector: str | None = None, capital: float | None = None, max_sector_weight_pct: float = DEFAULT_MAX_SECTOR_WEIGHT_PCT) -> tuple[str, list[str]]:
     if zones is not None:
         patterns = _apply_zone_confluence(patterns, zones)
-    if position and snapshot.get("close", 0) < position["invalidation_price"]:
+    if position and position.get("invalidation_price") and snapshot.get("close", 0) < position["invalidation_price"]:
         return "EXIT", ["INVALIDATION_BROKEN"]
     bear = [p for p in patterns if p["direction"] == "BEARISH" and p["state"] == "CONFIRMED" and p["quality_score"] >= 60]
     if bear and position:
         return "REDUCE", [f"PATTERN_{p['pattern_type']}_CONFIRMED" for p in bear]
     bull = [p for p in patterns if p["direction"] == "BULLISH" and p["state"] == "CONFIRMED"]
     top = max(bull, key=lambda p: p["quality_score"], default=None)
-    liquid = (snapshot.get("volume_avg20") or 0) * (snapshot.get("close") or 0) >= 300_000_000
+    liquid = average_turnover_vnd(snapshot) >= MIN_AVERAGE_TURNOVER_VND
     bonus = snapshot.get("ma_stack") or (snapshot.get("relative_strength_market") or 0) > 0
     threshold = 65 if bonus else 70
     if top and top["quality_score"] >= threshold and snapshot.get("trend_state") in ("UP", "SIDEWAYS") and (snapshot.get("volume_ratio20") or 0) >= 1.3 and (snapshot.get("rsi14") or 100) < 75 and liquid:
@@ -64,6 +65,15 @@ def resolve_signal(patterns: list[dict], snapshot: dict, position: dict | None =
         action = "PROBE_BUY" if not position else ("ADD" if str(top.get("start_date", "")) > str(position.get("entry_date", "")) else "WATCH")
         return _apply_long_gates(action, reasons, multi_timeframe_context, market_context, portfolio_positions, candidate_sector, capital, snapshot, top, max_sector_weight_pct)
     ready = [p for p in patterns if p["state"] == "READY"]
+    if top:
+        blocked = []
+        if top["quality_score"] < threshold: blocked.append("QUALITY_BELOW_THRESHOLD")
+        if snapshot.get("trend_state") not in ("UP", "SIDEWAYS"): blocked.append("TREND_NOT_ELIGIBLE")
+        if (snapshot.get("volume_ratio20") or 0) < 1.3: blocked.append("BREAKOUT_VOLUME_INSUFFICIENT")
+        if (snapshot.get("rsi14") or 100) >= 75: blocked.append("RSI_NOT_ELIGIBLE")
+        if not liquid: blocked.append("INSUFFICIENT_LIQUIDITY")
+        if blocked:
+            return "WATCH", [f"PATTERN_{top['pattern_type']}_CONFIRMED", "ENTRY_BLOCKED", *blocked]
     return "WATCH", [f"NEAR_TRIGGER_{p['pattern_type']}" for p in ready[:2]]
 
 

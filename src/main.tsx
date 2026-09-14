@@ -7,9 +7,12 @@ import './styles.css'
 import './overview-screener.css'
 import './light-theme.css'
 import './ui-polish.css'
+import './signal-controls.css'
 import { initializeTheme } from './lib/theme'
+import { initializeInputModality } from './lib/inputModality'
 
 initializeTheme()
+initializeInputModality()
 
 if ('serviceWorker' in navigator && import.meta.env.PROD) {
   window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js'))

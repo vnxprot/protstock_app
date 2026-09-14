@@ -115,7 +115,7 @@ class SupabaseRestClient:
         rules_response = self._client.get(
             "/rules",
             params={
-                "select": "id,name,kind,pack_version,notification_mode,blocks_new_entries,status",
+                "select": "id,user_id,name,kind,pack_version,notification_mode,blocks_new_entries,status",
                 "status": "eq.ACTIVE",
             },
         )
@@ -127,19 +127,22 @@ class SupabaseRestClient:
         rule_ids = ",".join(rules_by_id)
         versions_response = self._client.get(
             "/rule_versions",
-            params={"select": "id,rule_id,dsl", "rule_id": f"in.({rule_ids})"},
+            params={"select": "id,rule_id,dsl,version", "rule_id": f"in.({rule_ids})", "order": "version.desc"},
         )
         versions_response.raise_for_status()
+        latest = {}
+        for version in versions_response.json():
+            latest.setdefault(version["rule_id"], version)
         return [
             {"id": version["id"], "dsl": version["dsl"], "rules": rules_by_id[version["rule_id"]]}
-            for version in versions_response.json()
+            for version in latest.values()
             if version["rule_id"] in rules_by_id
         ]
 
     def market_breadth_snapshot(self, trading_date) -> dict[str, Any] | None:
         response = self._client.get(
             "/market_breadth_snapshots",
-            params={"select": "trading_date,pct_above_sma50,sample_size,vnindex_trend_state", "trading_date": f"eq.{trading_date.isoformat()}", "limit": "1"},
+            params={"select": "trading_date,pct_above_sma50,sample_size,vnindex_trend_state", "trading_date": f"lte.{trading_date.isoformat()}", "order": "trading_date.desc", "limit": "1"},
         )
         response.raise_for_status()
         rows = response.json()
@@ -159,16 +162,23 @@ class SupabaseRestClient:
         return response.json()
 
     def signals_missing_outcomes(self, cutoff_date) -> list[dict[str, Any]]:
-        response = self._client.get(
-            "/signals",
-            params={
+        rows = []
+        for offset in range(0, 1_000_000, 1000):
+            response = self._client.get("/signals", params={
                 "select": "id,symbol_id,as_of_date,action,evidence,signal_outcomes(horizon_days)",
-                "as_of_date": f"lte.{cutoff_date.isoformat()}",
-                "order": "as_of_date.asc",
-            },
-        )
+                "as_of_date": f"lte.{cutoff_date.isoformat()}", "order": "as_of_date.asc,id.asc",
+            }, headers={"Range": f"{offset}-{offset + 999}"})
+            response.raise_for_status()
+            page = response.json()
+            rows.extend(row for row in page if {5, 10, 20} - {item["horizon_days"] for item in (row.get("signal_outcomes") or [])})
+            if len(page) < 1000: break
+        return rows
+
+    def portfolio_context(self, user_id: str) -> dict:
+        response = self._client.get("/portfolios", params={"select": "id,capital,max_risk_per_trade_pct,positions(symbol_id,quantity,average_cost,stop_price,opened_at,symbols(sector))", "user_id": f"eq.{user_id}", "order": "created_at.asc"})
         response.raise_for_status()
-        return response.json()
+        portfolios = response.json()
+        return {"capital": sum(float(p["capital"]) for p in portfolios), "risk_pct": min((float(p["max_risk_per_trade_pct"]) for p in portfolios), default=1), "positions": [position for p in portfolios for position in p.get("positions", [])]}
 
     def archive_old_pattern_evidence(self, cutoff_date) -> int:
         response = self._client.post(

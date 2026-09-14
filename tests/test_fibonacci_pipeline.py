@@ -14,7 +14,7 @@ def test_fibonacci_decision_reaches_raw_and_consolidated_storage():
             return len(rows)
         def delete_consolidated_signal(self, *args): raise AssertionError('Expected meaningful signal')
     stored = {}
-    _write_analysis(Client(), 1, 'D', [{'date': '2026-09-14'}], [], [{'id': 'v2', 'dsl': {'engine': 'core_ladder_v2'}, 'rules': {'kind': 'CORE_PACK'}}], {'signals': 0}, result, {'weekly_patterns': [{'direction': 'BULLISH', 'state': 'READY'}], 'monthly_snapshot': {'trend_state': 'UP'}}, persist_evidence=False)
+    _write_analysis(Client(), 1, 'D', [{'date': '2026-09-14'}], [], [{'id': 'v2', 'dsl': {'engine': 'core_ladder_v2'}, 'rules': {'kind': 'CORE_PACK'}}], {'signals': 0}, result, {'weekly_patterns': [{'direction': 'BULLISH', 'state': 'READY'}], 'monthly_snapshot': {'trend_state': 'UP'}, 'market_context': {'breadth': {'pct_above_sma50': 60}, 'vnindex_snapshot': {'trend_state': 'UP'}}}, persist_evidence=False)
     raw = stored['signals'][0]
     consolidated = stored['consolidated_signals'][0]
     assert raw['action'] == consolidated['composite_action'] == 'PROBE_BUY'
