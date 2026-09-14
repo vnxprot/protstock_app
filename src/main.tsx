@@ -6,6 +6,7 @@ import { AuthGate } from './AuthGate'
 import './styles.css'
 import './overview-screener.css'
 import './light-theme.css'
+import './ui-polish.css'
 import { initializeTheme } from './lib/theme'
 
 initializeTheme()

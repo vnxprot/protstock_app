@@ -1,0 +1,54 @@
+/* Shared surface rhythm for both themes; loaded after legacy page paint. */
+:root {
+  --line: #1e3027;
+  --line-bright: #304a3b;
+  --radius-md: 12px;
+  --radius-lg: 20px;
+  --control-radius: 12px;
+}
+:root[data-theme="light"] { --line: #dfe8e2; --line-bright: #cbd9d0; }
+.app-shell :is(.panel,.analytic-card,.overview-kpi,.core-engine-section,.core-pack-card,.signal-visual-card,.guide-group,.metric-card),
+.auth-card { border-radius: var(--radius-lg); border-color: var(--line) !important; }
+.app-shell :is(.screener-field,.screener-filter-toolbar,.status-chip,.theme-toggle,.icon-button,.command-trigger,.secondary-button,.symbol-picker button,.chart-tools button,.timeframe-tabs button,.position-row button,.rule-mode-tabs button,.view-switcher button,.screener-toolbar-chips button),
+.auth-card :is(input,button), .rule-form :is(input,select,textarea) { border-radius: var(--control-radius); border-color: var(--line-bright) !important; }
+.app-shell .primary-button { border-radius: var(--control-radius); border: 1px solid transparent; }
+.app-shell :is(.health-metrics > span,.overview-signal-row,.overview-watch-row,.zone-card,.signal-preview,.classical-model-row) { border-radius: var(--radius-md); border-color: var(--line) !important; }
+.topbar-actions { gap: 10px; align-items: center; }
+.topbar-actions :is(.theme-toggle,.status-chip,.icon-button) { height: 40px; min-height: 40px; margin: 0; }
+.topbar-actions .status-chip { padding: 0 14px; font-size: 12px; line-height: 1.3; white-space: nowrap; }
+.topbar-actions .icon-button { width: 40px; padding: 0; display: grid; place-items: center; }
+.topbar-actions .live-dot { margin-right: 8px; flex-shrink: 0; }
+.overview-page .overview-signals-card,
+.overview-page .overview-watch-card { padding: 22px; }
+.overview-page .overview-card-heading { margin-bottom: 18px; }
+.overview-page .overview-signal-list { gap: 10px; }
+.overview-page .overview-signal-row { padding: 16px; gap: 12px; border: 1px solid var(--line); }
+.overview-page .overview-signal-top { gap: 14px; flex-wrap: wrap; }
+.overview-page .overview-signal-identity { gap: 12px; min-width: 0; flex-wrap: wrap; }
+.overview-page .overview-signal-values { margin-left: auto; gap: 14px; }
+.overview-page .overview-score-gauge { min-width: 36px; padding: 5px 8px; text-align: center; border-radius: 10px; font-size: 17px; line-height: 1.2; }
+.overview-page .overview-signal-bottom { gap: 12px; align-items: center; flex-wrap: wrap; }
+.overview-page .overview-signal-bottom > span:first-child { gap: 10px; }
+.overview-page .overview-chart-link { margin-left: auto; }
+.overview-page .overview-watch-list { gap: 8px; padding: 2px; }
+.overview-page .overview-watch-row,
+.overview-page .overview-watch-row:first-child,
+.overview-page .overview-watch-row:last-child { padding: 13px 14px; border: 1px solid var(--line); }
+.overview-page .overview-watch-row:hover { background: var(--surface-3); }
+.app-shell :is(.overview-signal-row,.overview-watch-row,.secondary-button,.icon-button,.theme-toggle) { transition: background-color 160ms ease, border-color 160ms ease, box-shadow 160ms ease; }
+.app-shell :is(button,input,select,textarea):focus-visible { outline: 2px solid var(--mint); outline-offset: 3px; }
+@media (max-width: 1050px) { .topbar-actions { gap: 8px; }.topbar-actions .status-chip { padding: 0 10px; } }
+@media (max-width: 760px) {
+  .overview-page .overview-signals-card,.overview-page .overview-watch-card { padding: 18px; }
+  .overview-page .overview-signal-row { padding: 14px; gap: 10px; }
+  .overview-page .overview-signal-identity { gap: 8px; }
+  .overview-page .overview-signal-values { gap: 10px; }
+  .overview-page .overview-signal-bottom { font-size: 12px; gap: 8px; }
+  .overview-page .overview-signal-values time { font-size: 12px; }
+  .mobile-header > div { gap: 8px; align-items: center; }
+}
+@media (prefers-reduced-motion: reduce) { .app-shell :is(.overview-signal-row,.overview-watch-row,.secondary-button,.icon-button,.theme-toggle) { transition: none; } }
+
+.core-engine-section .core-pack-card,.panel .metric-card,.panel .signal-visual-card { border-radius: var(--radius-md); }
+.status-chip.pending .live-dot { background: var(--amber); box-shadow: none; }
+.status-chip.error .live-dot { background: var(--red); box-shadow: none; }

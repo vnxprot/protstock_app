@@ -56,7 +56,7 @@ export function AuthGate({ children }: AuthGateProps) {
       <div className="auth-theme-toggle"><ThemeToggle/></div>
       <section className="auth-card" aria-labelledby="login-title">
         <span className="brand-mark">P</span>
-        <span className="eyebrow">PRIVATE ACCESS</span>
+        <span className="eyebrow">TRUY CẬP RIÊNG</span>
         <h1 id="login-title">Prot Stock</h1>
         <p>Khu vực riêng của Prot.</p>
         <form onSubmit={signIn}>

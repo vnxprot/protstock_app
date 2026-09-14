@@ -266,7 +266,7 @@ export function RuleBuilderPage({ authenticated }: { authenticated: boolean }) {
 
       <div className="page-title-row">
         <div>
-          <h1>Rule Studio</h1>
+          <h1>Thiết lập quy tắc</h1>
           <p className="muted">
             Chuyển kỷ luật giao dịch thành điều kiện có thể kiểm chứng.
           </p>
@@ -286,17 +286,17 @@ export function RuleBuilderPage({ authenticated }: { authenticated: boolean }) {
           className={mode === "visual" ? "active" : ""}
           onClick={() => setMode("visual")}
         >
-          <GripVertical size={15} /> Visual blocks
+          <GripVertical size={15} /> Khối điều kiện
         </button>
       </div>
-      <section className="core-engine-section" aria-label="Core Engines">
+      <section className="core-engine-section" aria-label="Bộ máy tín hiệu">
         <div className="core-engine-heading">
           <div>
 
-            <h2>Core Engines</h2>
+            <h2>Bộ máy tín hiệu</h2>
             <p>
-              Mỗi engine là một nguồn đánh giá độc lập. Toggle quyết định engine
-              nào được chạy; resolver chỉ phân xử kết quả của các engine đang bật.
+              Mỗi bộ máy là một nguồn đánh giá độc lập. Nút bật/tắt quyết định bộ máy
+              nào được chạy; bộ tổng hợp chỉ phân xử kết quả của các bộ máy đang bật.
             </p>
           </div>
           <span>
@@ -458,9 +458,9 @@ export function RuleBuilderPage({ authenticated }: { authenticated: boolean }) {
         <div className="panel-title">
           <div>
 
-            <h3>Rule Studio · Rules phụ</h3>
+            <h3>Quy tắc tuỳ chỉnh</h3>
           </div>
-          <span>{userRules.length} RULE</span>
+          <span>{userRules.length} QUY TẮC</span>
         </div>
         <p className="muted">
           Các rule này ghi nhận điều kiện riêng của Prot; chúng không thay thế
@@ -491,7 +491,7 @@ export function RuleBuilderPage({ authenticated }: { authenticated: boolean }) {
         })}
         {!rules.isLoading && !userRules.length && (
           <p className="muted">
-            Chưa có Rule Studio bổ sung. Core Engine vẫn hoạt động độc lập.
+            Chưa có quy tắc tuỳ chỉnh. Các bộ máy tín hiệu vẫn hoạt động độc lập.
           </p>
         )}
       </article>

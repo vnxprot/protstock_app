@@ -20,8 +20,8 @@ const SettingsPage = lazy(() => import('./components/SettingsPage').then(m => ({
 
 const modules = [
   { id: 'today', icon: LayoutDashboard, label: 'Tổng quan' }, { id: 'analysis', icon: BarChart3, label: 'Phân tích mã' },
-  { id: 'screener', icon: Search, label: 'Screener' }, { id: 'rules', icon: Workflow, label: 'Rule Studio' },
-  { id: 'backtest', icon: FlaskConical, label: 'Backtest' }, { id: 'portfolio', icon: BriefcaseBusiness, label: 'Danh mục' },
+  { id: 'screener', icon: Search, label: 'Bộ lọc tín hiệu' }, { id: 'rules', icon: Workflow, label: 'Thiết lập quy tắc' },
+  { id: 'backtest', icon: FlaskConical, label: 'Kiểm thử lịch sử' }, { id: 'portfolio', icon: BriefcaseBusiness, label: 'Danh mục' },
   { id: 'journal', icon: BookOpen, label: 'Nhật ký' }, { id: 'settings', icon: Settings, label: 'Cài đặt' },
 ]
 const primaryMobile = modules.filter(item => ['today', 'analysis', 'screener', 'portfolio'].includes(item.id))
@@ -34,13 +34,14 @@ function App({ authenticated = false }: { authenticated?: boolean }) {
   const navCounts = useQuery({ queryKey: ['nav-counts'], enabled: authenticated && Boolean(supabase), queryFn: async () => { const [latestSignal, rules] = await Promise.all([supabase!.from('consolidated_signals').select('as_of_date').order('as_of_date', { ascending: false }).order('created_at', { ascending: false }).limit(1).maybeSingle(), supabase!.from('rules').select('id', { count: 'exact', head: true }).eq('status', 'ACTIVE')]); if (latestSignal.error || rules.error) throw latestSignal.error || rules.error; const latestDate = latestSignal.data?.as_of_date; if (!latestDate) return { signals: 0, rules: rules.count ?? 0 }; const { count, error } = await supabase!.from('consolidated_signals').select('id', { count: 'exact', head: true }).eq('as_of_date', latestDate); if (error) throw error; return { signals: count ?? 0, rules: rules.count ?? 0 } } })
   const navigation = modules.map(item => ({ ...item, badge: item.id === 'screener' ? navCounts.data?.signals : item.id === 'rules' ? navCounts.data?.rules : undefined }))
   useEffect(() => { const update = () => { setPage(currentPage()); setMoreOpen(false); scrollTo({ top: 0, behavior: 'smooth' }) }; addEventListener('hashchange', update); return () => removeEventListener('hashchange', update) }, [])
-  const connectionLabel = !isSupabaseConfigured ? 'Chưa kết nối Supabase' : health.isLoading ? 'Đang đồng bộ' : health.isError ? 'Pipeline cần kiểm tra' : 'Pipeline EOD trực tuyến'
+  const connectionLabel = !isSupabaseConfigured ? 'Chưa kết nối Supabase' : health.isLoading ? 'Đang kết nối dữ liệu' : health.isError ? 'Kết nối cần kiểm tra' : 'Đã kết nối dữ liệu'
+  const connectionState = !isSupabaseConfigured || health.isError ? 'error' : health.isLoading ? 'pending' : 'ready'
   const pages: Record<string, React.ReactNode> = { analysis: <AnalysisPage authenticated={authenticated}/>, screener: <ScreenerPage authenticated={authenticated}/>, rules: <RuleBuilderPage authenticated={authenticated}/>, backtest: <BacktestPage authenticated={authenticated}/>, portfolio: <PortfolioPage authenticated={authenticated}/>, journal: <JournalPage authenticated={authenticated}/>, settings: <SettingsPage authenticated={authenticated}/> }
   return <div className={collapsed ? 'app-shell sidebar-collapsed' : 'app-shell'}>
-    <aside className="sidebar"><div className="sidebar-head"><a className="brand" href="#today"><span className="brand-mark">P</span><span className="brand-copy">Prot<span>Stock</span></span></a><button className="icon-button collapse-button" onClick={() => setCollapsed(v => !v)} aria-label="Thu gọn thanh bên"><ChevronLeft size={18}/></button></div><nav aria-label="Điều hướng chính">{navigation.map(item => <a className={page === item.id ? 'nav-item active' : 'nav-item'} data-tooltip={item.label} href={`#${item.id}`} key={item.id}><item.icon size={19}/><span className="nav-label">{item.label}</span>{item.badge != null && <small className="nav-badge">{item.badge}</small>}</a>)}</nav><div className="sidebar-note"><span className="live-dot"/><span className="sidebar-note-copy">Pipeline EOD ổn định</span></div><button className="signout" onClick={() => supabase?.auth.signOut()}><span className="nav-label">Đăng xuất</span></button></aside>
-    <main id="top"><div className="topbar"><button className="command-trigger" onClick={() => openCommandPalette()}><Search size={17}/><span>Tìm mã hoặc chức năng…</span><kbd><Command size={12}/> K</kbd></button><div className="topbar-actions"><ThemeToggle/><div className="status-chip"><span className="live-dot"/>{connectionLabel}</div><button className="icon-button notification" aria-label="Thông báo"><Bell size={18}/><i/></button></div></div><div className="mobile-header"><a className="brand" href="#today"><span className="brand-mark">P</span><span className="brand-copy">Prot<span>Stock</span></span></a><div><ThemeToggle/><button className="icon-button" onClick={() => openCommandPalette()}><Search size={19}/></button><span className="mobile-live"><span className="live-dot"/>EOD</span></div></div>
+    <aside className="sidebar"><div className="sidebar-head"><a className="brand" href="#today"><span className="brand-mark">P</span><span className="brand-copy">Prot<span>Stock</span></span></a><button className="icon-button collapse-button" onClick={() => setCollapsed(v => !v)} aria-label="Thu gọn thanh bên"><ChevronLeft size={18}/></button></div><nav aria-label="Điều hướng chính">{navigation.map(item => <a className={page === item.id ? 'nav-item active' : 'nav-item'} data-tooltip={item.label} href={`#${item.id}`} key={item.id}><item.icon size={19}/><span className="nav-label">{item.label}</span>{item.badge != null && <small className="nav-badge">{item.badge}</small>}</a>)}</nav><div className="sidebar-note"><span className="live-dot"/><span className="sidebar-note-copy">{connectionLabel}</span></div><button className="signout" onClick={() => supabase?.auth.signOut()}><span className="nav-label">Đăng xuất</span></button></aside>
+    <main id="top"><div className="topbar"><button className="command-trigger" onClick={() => openCommandPalette()}><Search size={17}/><span>Tìm mã hoặc chức năng…</span><kbd><Command size={12}/> K</kbd></button><div className="topbar-actions"><ThemeToggle/><div className={'status-chip '+connectionState} role="status" aria-live="polite"><span className="live-dot"/>{connectionLabel}</div><button className="icon-button notification" aria-label="Thông báo"><Bell size={18}/><i/></button></div></div><div className="mobile-header"><a className="brand" href="#today"><span className="brand-mark">P</span><span className="brand-copy">Prot<span>Stock</span></span></a><div><ThemeToggle/><button className="icon-button" onClick={() => openCommandPalette()}><Search size={19}/></button><span className="mobile-live"><span className="live-dot"/>EOD</span></div></div>
       {page === 'today' ? <Dashboard connectionLabel={connectionLabel} health={health.data}/> : <Suspense fallback={<LoadingPage/>}>{pages[page]}</Suspense>}<footer className="app-footer"><span>Prot Stock · Hệ thống nghiên cứu cá nhân · Không phải khuyến nghị đầu tư</span><span className="app-version" aria-label="Phiên bản ứng dụng">v{appVersion}</span></footer></main>
-    <nav className="bottom-nav">{primaryMobile.map(item => <a className={page === item.id ? 'active' : ''} href={`#${item.id}`} key={item.id}><item.icon size={21}/><span>{item.label === 'Phân tích mã' ? 'Phân tích' : item.label}</span></a>)}<button className={moreOpen || moreMobile.some(item => item.id === page) ? 'active' : ''} onClick={() => setMoreOpen(true)}><Menu size={21}/><span>Thêm</span></button></nav>
+    <nav className="bottom-nav">{primaryMobile.map(item => <a className={page === item.id ? 'active' : ''} href={`#${item.id}`} key={item.id}><item.icon size={21}/><span>{item.id === 'analysis' ? 'Phân tích' : item.id === 'screener' ? 'Tín hiệu' : item.label}</span></a>)}<button className={moreOpen || moreMobile.some(item => item.id === page) ? 'active' : ''} onClick={() => setMoreOpen(true)}><Menu size={21}/><span>Thêm</span></button></nav>
     {moreOpen && <div className="sheet-backdrop" onMouseDown={() => setMoreOpen(false)}><section className="bottom-sheet" onMouseDown={e => e.stopPropagation()}><div className="sheet-handle"/><div className="sheet-title"><div><h2>Mở thêm công cụ</h2></div><button className="icon-button" onClick={() => setMoreOpen(false)}><X size={20}/></button></div><div className="sheet-grid">{moreMobile.map(item => <a href={`#${item.id}`} key={item.id}><span><item.icon size={21}/></span><strong>{item.label}</strong><small>{item.id === 'rules' ? 'Thiết kế điều kiện' : item.id === 'backtest' ? 'Kiểm chứng lịch sử' : item.id === 'journal' ? 'Ghi và review' : 'Hệ thống'}</small></a>)}</div></section></div>}
     <CommandPalette symbols={symbols.data ?? []}/>
   </div>
@@ -101,8 +102,8 @@ function ExecutiveKpiStrip({ favorites, connectionLabel, health }: { favorites: 
   })
   return <section className="overview-kpis" aria-label="Tóm tắt phiên gần nhất">
     <article className="overview-kpi"><span className="overview-kpi-label">TÍN HIỆU EOD</span><strong>{summary.data?.total ?? '—'}</strong><small>{summary.data ? `${summary.data.high} đồng thuận cao · ${formatDate(summary.data.date)}` : summary.isError ? 'Chưa tải được tín hiệu' : 'Đang tải…'}</small></article>
-    <article className="overview-kpi"><span className="overview-kpi-label">PIPELINE</span><strong className={connectionLabel.includes('trực tuyến') ? 'positive' : ''}>{connectionLabel.includes('trực tuyến') ? 'ONLINE' : connectionLabel.includes('Đang') ? 'ĐANG TẢI' : 'CẦN KIỂM TRA'}</strong><small>{health ? `${health.active_symbols} mã · ${formatDate(health.latest_price_date)}` : connectionLabel}</small></article>
-    <article className="overview-kpi"><span className="overview-kpi-label">WATCHLIST</span><strong>{favorites.length}</strong><small>{summary.data ? `${summary.data.watched} mã có tín hiệu hành động` : 'Đang tải tín hiệu watchlist…'}</small></article>
+    <article className="overview-kpi"><span className="overview-kpi-label">PIPELINE</span><strong className={connectionLabel === 'Đã kết nối dữ liệu' ? 'positive' : ''}>{connectionLabel === 'Đã kết nối dữ liệu' ? 'ONLINE' : connectionLabel.includes('Đang') ? 'ĐANG TẢI' : 'CẦN KIỂM TRA'}</strong><small>{health ? `${health.active_symbols} mã · ${formatDate(health.latest_price_date)}` : connectionLabel}</small></article>
+    <article className="overview-kpi"><span className="overview-kpi-label">THEO DÕI</span><strong>{favorites.length}</strong><small>{summary.data ? `${summary.data.watched} mã có tín hiệu hành động` : 'Đang tải tín hiệu watchlist…'}</small></article>
   </section>
 }
 function Dashboard({ connectionLabel, health }: { connectionLabel: string; health?: DataHealth }) {
@@ -126,7 +127,6 @@ function Dashboard({ connectionLabel, health }: { connectionLabel: string; healt
     return () => removeEventListener('protstock:favorites', update)
   }, [])
   const feed = signals.data ?? []
-  const actionLabels: Record<string, string> = { PROBE_BUY: 'Mua thăm dò', ADD: 'Mua thêm', REDUCE: 'Giảm tỷ trọng', EXIT: 'Thoát lệnh', WATCH: 'Theo dõi' }
   const selectSymbol = (symbol: string) => {
     localStorage.setItem('protstock-symbol', symbol)
     dispatchEvent(new CustomEvent('protstock:symbol', { detail: symbol }))
@@ -134,7 +134,7 @@ function Dashboard({ connectionLabel, health }: { connectionLabel: string; healt
   return <section className="dashboard-page overview-page">
     <header className="dashboard-header overview-header">
       <div><h1>Tổng quan</h1><p>Thị trường, tín hiệu và danh sách đang theo dõi.</p></div>
-      <a href="#screener" className="primary-button"><TrendingUp size={16}/> Mở Screener</a>
+      <a href="#screener" className="primary-button"><TrendingUp size={16}/> Mở bộ lọc</a>
     </header>
     <ExecutiveKpiStrip favorites={favorites} connectionLabel={connectionLabel} health={health}/>
     <section className="overview-layout dashboard-grid"><div className="overview-main"><MarketContextCard/>
@@ -144,10 +144,10 @@ function Dashboard({ connectionLabel, health }: { connectionLabel: string; healt
           {signals.isLoading ? <p className="overview-empty">Đang tải tín hiệu…</p> : signals.isError ? <p className="overview-empty negative">Chưa tải được tín hiệu. Vui lòng thử lại.</p> : feed.length ? feed.map(item =>
             <a href="#analysis" className="overview-signal-row" key={item.id} onClick={() => selectSymbol(item.symbol)}>
               <div className="overview-signal-top">
-                <div className="overview-signal-identity"><strong>{item.symbol}</strong><span className={`action-pill ${item.action.toLowerCase()}`}>{actionLabels[item.action] ?? item.action}</span></div>
-                <div className="overview-signal-values"><b className="overview-score-gauge">{item.score}<small>/100</small></b><time>{formatDate(item.as_of_date)}</time></div>
+                <div className="overview-signal-identity"><strong>{item.symbol}</strong><span className={`action-pill ${item.action.toLowerCase()}`}>{item.action}</span></div>
+                <div className="overview-signal-values"><b className="overview-score-gauge" title="Điểm tín hiệu">{item.score}</b><time>{formatDate(item.as_of_date)}</time></div>
               </div>
-              <div className="overview-signal-bottom"><span>{item.sector ?? 'Chưa phân ngành'} · {item.timeframe} · {item.count} engine<span className={`overview-consensus confluence-badge ${item.count >= 3 ? 'strong_aligned' : item.count === 2 ? 'high_confluence' : 'standard'}`}>{item.count >= 3 ? 'Đồng thuận mạnh' : item.count === 2 ? 'Đồng thuận cao' : 'Tiêu chuẩn'}</span></span><span className="overview-chart-link">Xem chart</span></div>
+              <div className="overview-signal-bottom"><span>{item.sector ?? 'Chưa phân ngành'} · {item.timeframe}<span className={`overview-consensus confluence-badge ${item.count >= 3 ? 'strong_aligned' : item.count === 2 ? 'high_confluence' : 'standard'}`}>{item.count >= 3 ? 'Đồng thuận mạnh' : item.count === 2 ? 'Đồng thuận cao' : 'Tiêu chuẩn'}</span></span><span className="overview-chart-link">Xem biểu đồ</span></div>
             </a>
           ) : <p className="overview-empty">Chưa có tín hiệu sau phiên.</p>}
         </div>
@@ -156,7 +156,7 @@ function Dashboard({ connectionLabel, health }: { connectionLabel: string; healt
         <TodayHealth/>
         <article className="panel overview-watch-card">
           <div className="overview-card-heading"><div><h2>Đang theo dõi <small>{favorites.length} mã</small></h2></div><button type="button" className="text-button" onClick={() => openCommandPalette('symbols')}>+ Thêm mã</button></div>
-          <div className="overview-watch-list">{favorites.length ? favorites.map(symbol => <a href="#analysis" className="overview-watch-row" key={symbol} onClick={() => selectSymbol(symbol)}><strong>{symbol}</strong><span>Xem phân tích</span></a>) : <p className="overview-empty">Chưa có mã nào trong watchlist.</p>}</div>
+          <div className="overview-watch-list">{favorites.length ? favorites.map(symbol => <a href="#analysis" className="overview-watch-row" key={symbol} onClick={() => selectSymbol(symbol)}><strong>{symbol}</strong><span>Xem phân tích</span></a>) : <p className="overview-empty">Chưa có mã nào trong danh sách theo dõi.</p>}</div>
         </article>
       </aside>
     </section>
