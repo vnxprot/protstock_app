@@ -56,7 +56,7 @@ function App({ authenticated = false }: { authenticated?: boolean }) {
   return <div className={collapsed ? 'app-shell sidebar-collapsed' : 'app-shell'}>
     <aside className="sidebar"><div className="sidebar-head"><a className="brand" href="#today"><span className="brand-mark">P</span><span className="brand-copy">Prot<span>Stock</span></span></a><button className="icon-button collapse-button" onClick={() => setCollapsed(v => !v)} aria-label="Thu gọn thanh bên"><ChevronLeft size={18}/></button></div><nav aria-label="Điều hướng chính">{navigation.map(item => <a className={page === item.id ? 'nav-item active' : 'nav-item'} data-tooltip={item.label} href={`#${item.id}`} key={item.id}><item.icon size={19}/><span className="nav-label">{item.label}</span>{item.badge != null && <small className="nav-badge">{item.badge}</small>}</a>)}</nav><div className="sidebar-note"><span className="live-dot"/><span className="sidebar-note-copy">{connectionLabel}</span></div><button className="signout" onClick={() => supabase?.auth.signOut()}><span className="nav-label">Đăng xuất</span></button></aside>
     <main id="top"><div className="topbar"><button className="command-trigger" onClick={() => openCommandPalette()}><Search size={17}/><span>Tìm mã hoặc chức năng…</span><kbd><Command size={12}/> K</kbd></button><div className="topbar-actions"><ThemeToggle/><div className={'status-chip '+connectionState} role="status" aria-live="polite"><span className="live-dot"/>{connectionLabel}</div><button className="icon-button notification" aria-label="Thông báo"><Bell size={18}/><i/></button></div></div><div className="mobile-header"><a className="brand" href="#today"><span className="brand-mark">P</span><span className="brand-copy">Prot<span>Stock</span></span></a><div><ThemeToggle/><button className="icon-button" onClick={() => openCommandPalette()}><Search size={19}/></button><span className="mobile-live"><span className="live-dot"/>EOD</span></div></div>
-      {page === 'today' ? <Dashboard connectionLabel={connectionLabel} health={health.data}/> : <Suspense fallback={<LoadingPage/>}>{pages[page]}</Suspense>}<footer className="app-footer"><span>Prot Stock · Hệ thống nghiên cứu cá nhân · Không phải khuyến nghị đầu tư</span><span className="app-version" aria-label="Phiên bản ứng dụng">v{appVersion}</span></footer></main>
+      {page === 'today' ? <Dashboard/> : <Suspense fallback={<LoadingPage/>}>{pages[page]}</Suspense>}<footer className="app-footer"><span>Prot Stock · Không Khuyến nghị đầu tư</span><span className="app-version" aria-label="Phiên bản ứng dụng">v{appVersion}</span></footer></main>
     <nav className={`bottom-nav${mobileNavCompact ? ' is-compact' : ''}`} aria-label="Điều hướng di động">{primaryMobile.map(item => <a className={page === item.id ? 'active' : ''} href={`#${item.id}`} aria-label={item.label} key={item.id}><item.icon size={21}/><span>{item.id === 'analysis' ? 'Phân tích' : item.id === 'screener' ? 'Tín hiệu' : item.label}</span></a>)}<button className={moreOpen || moreMobile.some(item => item.id === page) ? 'active' : ''} onClick={() => setMoreOpen(true)} aria-label="Thêm công cụ"><Menu size={21}/><span>Thêm</span></button></nav>
     {moreOpen && <div className="sheet-backdrop" onMouseDown={() => setMoreOpen(false)}><section className="bottom-sheet" onMouseDown={e => e.stopPropagation()}><div className="sheet-handle"/><div className="sheet-title"><div><h2>Mở thêm công cụ</h2></div><button className="icon-button" onClick={() => setMoreOpen(false)}><X size={20}/></button></div><div className="sheet-grid">{moreMobile.map(item => <a href={`#${item.id}`} key={item.id}><span><item.icon size={21}/></span><strong>{item.label}</strong><small>{item.id === 'rules' ? 'Thiết kế điều kiện' : item.id === 'backtest' ? 'Kiểm chứng lịch sử' : item.id === 'journal' ? 'Ghi và review' : 'Hệ thống'}</small></a>)}</div></section></div>}
     <CommandPalette symbols={symbols.data ?? []}/>
@@ -99,7 +99,7 @@ function MarketContextCard() {
     </div>
   </details>
 }
-function ExecutiveKpiStrip({ favorites, connectionLabel, health }: { favorites: string[]; connectionLabel: string; health?: DataHealth }) {
+function ExecutiveKpiStrip({ favorites }: { favorites: string[] }) {
   const summary = useQuery({
     queryKey: ['overview-signal-summary', favorites.join(',')], enabled: Boolean(supabase), staleTime: 60_000,
     queryFn: async () => {
@@ -118,11 +118,10 @@ function ExecutiveKpiStrip({ favorites, connectionLabel, health }: { favorites: 
   })
   return <section className="overview-kpis" aria-label="Tóm tắt phiên gần nhất">
     <article className="overview-kpi"><span className="overview-kpi-label">TÍN HIỆU EOD</span><strong>{summary.data?.total ?? '—'}</strong><small>{summary.data ? `${summary.data.high} đồng thuận cao · ${formatDate(summary.data.date)}` : summary.isError ? 'Chưa tải được tín hiệu' : 'Đang tải…'}</small></article>
-    <article className="overview-kpi"><span className="overview-kpi-label">PIPELINE</span><strong className={connectionLabel === 'Đã kết nối dữ liệu' ? 'positive' : ''}>{connectionLabel === 'Đã kết nối dữ liệu' ? 'ONLINE' : connectionLabel.includes('Đang') ? 'ĐANG TẢI' : 'CẦN KIỂM TRA'}</strong><small>{health ? `${health.active_symbols} mã · ${formatDate(health.latest_price_date)}` : connectionLabel}</small></article>
     <article className="overview-kpi"><span className="overview-kpi-label">THEO DÕI</span><strong>{favorites.length}</strong><small>{summary.data ? `${summary.data.watched} mã có tín hiệu hành động` : 'Đang tải tín hiệu watchlist…'}</small></article>
   </section>
 }
-function Dashboard({ connectionLabel, health }: { connectionLabel: string; health?: DataHealth }) {
+function Dashboard() {
   const signals = useQuery({
     queryKey: ['today-consolidated-signals'], enabled: Boolean(supabase),
     queryFn: async () => {
@@ -152,8 +151,9 @@ function Dashboard({ connectionLabel, health }: { connectionLabel: string; healt
       <div><h1>Tổng quan</h1><p>Thị trường, tín hiệu và danh sách đang theo dõi.</p></div>
       <a href="#screener" className="primary-button"><TrendingUp size={16}/> Mở bộ lọc</a>
     </header>
-    <ExecutiveKpiStrip favorites={favorites} connectionLabel={connectionLabel} health={health}/>
-    <section className="overview-layout dashboard-grid"><div className="overview-main"><MarketContextCard/>
+    <MarketContextCard/>
+    <ExecutiveKpiStrip favorites={favorites}/>
+    <section className="overview-layout dashboard-grid"><div className="overview-main">
       <article className="panel overview-signals-card">
         <div className="overview-card-heading"><div><h2>Tín hiệu gần nhất</h2></div><a href="#screener">Xem tất cả</a></div>
         <div className="overview-signal-list">
@@ -169,11 +169,11 @@ function Dashboard({ connectionLabel, health }: { connectionLabel: string; healt
         </div>
       </article>
       </div><aside className="overview-side">
-        <TodayHealth/>
         <article className="panel overview-watch-card">
           <div className="overview-card-heading"><div><h2>Đang theo dõi <small>{favorites.length} mã</small></h2></div><button type="button" className="text-button" onClick={() => openCommandPalette('symbols')}>+ Thêm mã</button></div>
           <div className="overview-watch-list">{favorites.length ? favorites.map(symbol => <a href="#analysis" className="overview-watch-row" key={symbol} onClick={() => selectSymbol(symbol)}><strong>{symbol}</strong><span>Xem phân tích</span></a>) : <p className="overview-empty">Chưa có mã nào trong danh sách theo dõi.</p>}</div>
         </article>
+        <TodayHealth/>
       </aside>
     </section>
   </section>
