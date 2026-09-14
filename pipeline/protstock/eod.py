@@ -516,7 +516,7 @@ def _pattern_evidence_cluster(reasons: list[str]) -> str | None:
                 for suffix in ("_CONFIRMED", "_READY"):
                     if token.endswith(suffix):
                         name = token[:-len(suffix)]
-                        return {"FLAT_BASE": "ACCUMULATION_BASE", "FLAG_PENNANT": "BULL_FLAG"}.get(name, name)
+                        return {"FLAT_BASE": "ACCUMULATION_BASE", "FLAT_BASE_BREAKOUT": "ACCUMULATION_BASE", "FLAG_PENNANT": "BULL_FLAG"}.get(name, name)
     return None
 
 def _stats_key(version_id: str, timeframe: str) -> str:

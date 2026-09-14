@@ -35,5 +35,6 @@ def evaluate_period_signal(timeframe: str, context: dict) -> tuple[bool, str, li
     if close > resistance and volume_average > 0 and float(latest["volume"]) >= 1.3 * volume_average:
         return True, "PROBE_BUY", ["WEEKLY_BREAKOUT_13_CONFIRMED", "CLOSED_PERIOD_ONLY"]
     if float(latest["low"]) <= ema20 < close and close > float(latest["open"]):
+        context["engine_evidence"].update(pattern_type="WEEKLY_PULLBACK_EMA20", trigger_price=ema20, evidence_cluster="WEEKLY_PULLBACK_EMA20")
         return True, "WATCH", ["WEEKLY_PULLBACK_EMA20_SETUP", "CLOSED_PERIOD_ONLY"]
     return False, "WATCH", []

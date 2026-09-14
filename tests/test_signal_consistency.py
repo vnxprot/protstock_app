@@ -178,3 +178,16 @@ def test_weekly_event_reaches_consolidated_with_confirmation_date():
     row=client.tables['consolidated_signals'][0]
     assert row['timeframe']=='W' and row['as_of_date']=='2026-09-15'
     assert row['composite_action']=='PROBE_BUY'
+
+
+def test_weekly_pullback_evidence_is_not_mislabeled_as_breakout():
+    rows=[{**bar,'is_complete':True} for bar in bars(21)]
+    rows[-1].update(close=102,open=100,low=99)
+    ctx={'bars':rows,'period_event':True,'evaluation_date':'2026-09-14'}
+    assert evaluate_period_signal('W',ctx)[:2]==(True,'WATCH')
+    assert ctx['engine_evidence']['pattern_type']=='WEEKLY_PULLBACK_EMA20'
+
+
+def test_classical_flat_base_and_accumulation_share_evidence_family():
+    from protstock.eod import _pattern_evidence_cluster
+    assert _pattern_evidence_cluster(['V0_FLAT_BASE_BREAKOUT_CONFIRMED']) == _pattern_evidence_cluster(['PATTERN_ACCUMULATION_BASE_CONFIRMED'])
