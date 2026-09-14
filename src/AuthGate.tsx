@@ -2,6 +2,7 @@ import { FormEvent, ReactNode, useEffect, useState } from 'react'
 import type { Session } from '@supabase/supabase-js'
 
 import { isSupabaseConfigured, supabase } from './lib/supabase'
+import { ThemeToggle } from './components/ThemeToggle'
 
 interface AuthGateProps {
   children: (authenticated: boolean) => ReactNode
@@ -52,6 +53,7 @@ export function AuthGate({ children }: AuthGateProps) {
 
   return (
     <main className="auth-screen">
+      <div className="auth-theme-toggle"><ThemeToggle/></div>
       <section className="auth-card" aria-labelledby="login-title">
         <span className="brand-mark">P</span>
         <span className="eyebrow">PRIVATE ACCESS</span>

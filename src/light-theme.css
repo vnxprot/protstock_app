@@ -1,0 +1,121 @@
+/* Imported last: scoped color overrides for the legacy dark-only page styles.
+   Important declarations are limited to paint; layout/routing remain untouched. */
+.theme-toggle { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-width: 40px; min-height: 40px; padding: 0 11px; border: 1px solid var(--line-bright); border-radius: 10px; background: var(--surface-2); color: var(--text); cursor: pointer; font-size: 12px; font-weight: 600; }
+.theme-toggle:hover { border-color: var(--lime); }
+.theme-toggle:focus-visible { outline: 2px solid var(--lime); outline-offset: 3px; }
+.auth-theme-toggle { position: absolute; right: 20px; top: 20px; }
+.auth-screen { position: relative; }
+@media (max-width: 760px) { .mobile-header .theme-toggle { padding: 0; width: 40px; }.mobile-header .theme-toggle span { display: none; } }
+
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg: #f4f7f5;
+  --surface: #ffffff;
+  --surface-2: #edf3ef;
+  --surface-3: #e3ede6;
+  --line: #d0ddd4;
+  --line-bright: #afc5b7;
+  --text: #172d23;
+  --muted: #4d6658;
+  --lime: #466900;
+  --mint: #08754d;
+  --red: #b4233b;
+  --amber: #866000;
+  --elevation-1: 0 1px 3px #173e2110;
+  --elevation-2: 0 6px 20px #173e2112;
+  --elevation-3: 0 12px 32px #173e2118;
+  --elevation-4: 0 20px 48px #173e2122;
+  background: var(--bg);
+  color: var(--text);
+}
+html[data-theme="light"] body,
+html[data-theme="light"] .auth-screen { background: var(--bg); color: var(--text); }
+html[data-theme="light"] ::selection { background: #d7ff52; color: #172d23; }
+html[data-theme="light"] :is(h1,h2,h3,h4) { color: var(--text) !important; }
+html[data-theme="light"] :is(.panel,.analytic-card,.metric-card,.overview-kpi,.auth-card,.core-engine-section,.core-pack-card,.signal-visual-card,.market-context-card,.guide-group,.guide-card,.settings-card,.condition-card) { background: #fff !important; border-color: var(--line) !important; box-shadow: var(--elevation-1); color: var(--text); }
+html[data-theme="light"] :is(.sidebar,.mobile-header,.bottom-nav) { background: #fffffffa !important; border-color: var(--line); color: var(--text); box-shadow: var(--elevation-1); }
+html[data-theme="light"] :is(.brand,.brand-copy,.brand-copy span,.stock-heading p,.symbol-picker > span,.nav-label) { color: var(--text); }
+html[data-theme="light"] :is(.nav-item,.bottom-nav a,.bottom-nav button) { color: #4d6658; }
+html[data-theme="light"] :is(.nav-item.active,.nav-item:hover,.bottom-nav .active) { background: #e7f0e9; color: #315200; }
+html[data-theme="light"] :is(.brand-mark,.nav-badge) { background: #d7ff52; color: #172d23; }
+html[data-theme="light"] :is(.muted,.eyebrow,.overview-page .overview-header p,.overview-kpi-label,.overview-kpi > small,.overview-signal-bottom,.overview-signal-values time,.overview-watch-row span,.overview-empty,.health-details dt,.health-metrics small,.health-details dd,.overview-page .health-details dd,.overview-page .health-details dt,.market-context-detail p,.market-context-detail small,.market-context-heading small,.app-footer,.pattern-row small,.pattern-row p,.metric-card > span,.metric-card > small,.journal-timeline small,.journal-timeline p,.equity-axis,.rule-row small,.core-pack-copy p,.core-pack-copy small,.engine-run-summary,.condition-card small,.sparkline-empty,.signal-visual-head small,.signal-visual-card > small,.signal-visual-card p) { color: var(--muted) !important; }
+html[data-theme="light"] :is(.overview-kpi > strong,.metric-card strong,.overview-watch-row strong,.health-metrics b,.overview-page .health-metrics b,.market-context-price b,.market-context-detail strong,.signal-visual-head strong,.journal-timeline strong,.win-gauge strong,.risk-number strong,.rule-row strong,.condition-card strong,.core-pack-copy strong,.budget-label b) { color: var(--text); }
+html[data-theme="light"] :is(.command-trigger,.status-chip,.sidebar-note,.signout,.icon-button,.theme-toggle,.screener-filter-toolbar,.screener-field,.screener-toolbar-chips button,.view-switcher button,.chart-tools button,.timeframe-tabs button,.rule-mode-tabs button,.rule-mode-tabs,.prompt-chips button,.secondary-button,.symbol-picker button,.sector-donut-tooltip,.symbol-avatar,.ticker-line span,.screener-pagination button,.app-version,.visual-card-actions button,.guide-tabs button) { background: var(--surface-2) !important; border-color: var(--line-bright) !important; color: var(--text) !important; }
+html[data-theme="light"] :is(input,textarea,select,select option,.dsl-preview,pre,code) { background: var(--surface-2) !important; border-color: var(--line-bright) !important; color: var(--text) !important; caret-color: var(--text); }
+html[data-theme="light"] :is(input,textarea)::placeholder { color: #597064; opacity: 1; }
+html[data-theme="light"] :is(input,textarea,select):focus-visible { outline: 2px solid #466900; outline-offset: 2px; }
+html[data-theme="light"] :is(.primary-button,.auth-card form > button,.rule-form > button,.form-sticky-actions button,.screener-toolbar-chips button.active,.view-switcher button.active,.chart-tools button.active,.rule-mode-tabs button.active,.guide-tabs button.active,.timeframe-tabs button.active,.emotion-picker button.active,.core-toggle.is-on) { background: #d7ff52 !important; border-color: #94b238 !important; color: #172d23 !important; }
+html[data-theme="light"] :is(.overview-signal-row,.overview-watch-row,.health-metrics > span,.overview-page .health-metrics > span,.signal-preview,.core-pack-details,.classical-model-row,.ai-explain-card,.ai-sample-prompts button,.recent-chips button,.position-sheet,.bottom-sheet,.command-dialog,.command-input,.command-footer,.command-row,.emotion-picker button,.risk-track) { background: var(--surface-2) !important; border-color: var(--line) !important; color: var(--text); }
+html[data-theme="light"] :is(.overview-signal-row:hover,.overview-watch-row:hover,.signal-visual-card:hover,.command-row:hover,.command-main:hover,.legend button:hover) { background: #e5efe7 !important; }
+html[data-theme="light"] :is(.sheet-backdrop,.command-backdrop) { background: #173b2866; }
+html[data-theme="light"] :is(.sheet-handle,.core-toggle:not(.is-on)) { background: #aec2b5; }
+html[data-theme="light"] :is(.form-sticky-actions,.win-gauge:before) { background: var(--surface) !important; }
+html[data-theme="light"] :is(.overview-score-gauge,.score,.signal-visual-head > b,.overview-chart-link,.overview-card-heading a,.overview-card-heading button,.text-button,.signal-rule-detail b,.core-pack-details summary) { color: #466900 !important; }
+html[data-theme="light"] .overview-signal-values > .overview-score-gauge { background: #f2f8e2; border-color: #b3c48b; }
+html[data-theme="light"] .overview-score-gauge small { color: var(--muted); }
+html[data-theme="light"] .signal-rule-detail small { color: var(--muted) !important; }
+html[data-theme="light"] :is(.screener-table .signal-date,.signal-visual-date) { color: var(--text) !important; }
+html[data-theme="light"] .screener-table .table-head { background: #e7eee9; color: #3d5849; }
+html[data-theme="light"] .screener-table .table-head > span { color: #3d5849 !important; }
+html[data-theme="light"] .position-row { border-color: var(--line); color: var(--text); }
+html[data-theme="light"] .position-row small { color: var(--muted) !important; }
+html[data-theme="light"] .position-row:nth-child(odd) { background: #f0f5f1 !important; }
+html[data-theme="light"] .position-row:nth-child(even) { background: #fff !important; }
+html[data-theme="light"] .position-row:hover { background: #e5efe7 !important; border-left-color: #638200 !important; }
+html[data-theme="light"] :is(.positive,.form-ok,.health-ok) { color: var(--mint) !important; }
+html[data-theme="light"] :is(.negative,.form-error,.auth-message) { color: var(--red) !important; }
+html[data-theme="light"] :is(.action-pill.probe_buy,.action-pill.add,.trend-badge.up,.market-regime.up,.core-status.on) { color: #086042 !important; background: #dff2e7 !important; border-color: #7db79a !important; }
+html[data-theme="light"] :is(.action-pill.reduce,.action-pill.exit,.trend-badge.down,.market-regime.down) { color: #a91e35 !important; background: #fde7eb !important; border-color: #d898a4 !important; }
+html[data-theme="light"] :is(.action-pill.watch,.trend-badge.sideways,.market-regime.sideways,.market-regime.unknown,.core-status.off,.journal-timeline em) { color: #785300 !important; background: #fff2d6 !important; border-color: #cab075 !important; }
+html[data-theme="light"] :is(.confluence-badge.standard,.core-status.archived) { color: #4d6658 !important; background: #edf3ef !important; border-color: #afc5b7 !important; }
+html[data-theme="light"] .confluence-badge.high_confluence { color: #466900 !important; background: #eff6de !important; border-color: #adc487 !important; }
+html[data-theme="light"] .confluence-badge.strong_aligned { color: #253800 !important; background: #d7ed9c !important; border-color: #91b552 !important; }
+html[data-theme="light"] :is(.risk-warning,.health-errors,.empty-state.warning) { color: #844611 !important; background: #fff2e4 !important; border-color: #d5ae80 !important; }
+html[data-theme="light"] :is(.zone-card,.zone-band.support) { background: #e5f2e9 !important; border-color: #7bb38e !important; }
+html[data-theme="light"] :is(.zone-card.resistance,.zone-band.resistance) { background: #fbe9eb !important; border-color: #cd8b98 !important; }
+html[data-theme="light"] :is(.zone-card.support strong,.zone-band.support,.zone-kind) { color: #086042 !important; }
+html[data-theme="light"] :is(.zone-card.resistance strong,.zone-card.resistance .zone-kind,.zone-band.resistance) { color: #a91e35 !important; }
+html[data-theme="light"] .zone-meta { color: var(--muted); }
+html[data-theme="light"] .zone-touches b { color: #466900; }
+html[data-theme="light"] .zone-band { background: #08754d12 !important; }
+html[data-theme="light"] .zone-band.resistance { background: #b4233b12 !important; }
+html[data-theme="light"] .pattern-box { color: #466900; border-color: #63820099; background: #4669000d; }
+html[data-theme="light"] .stock-chart { background: #fff; border-color: var(--line); }
+html[data-theme="light"] .chart-touch-lock button { background: #ffffffee; color: var(--text); border-color: var(--line-bright); }
+html[data-theme="light"] .chart-touch-lock small { color: var(--muted); }
+html[data-theme="light"] .synced-crosshair { border-color: #46690099; }
+html[data-theme="light"] :is(.skeleton,.pulse-chart,.mini-chart) { background: #dde8e0; }
+html[data-theme="light"] .toast { background: #172d23; color: #fff; }
+html[data-theme="light"] :is(.heatmap i.loss,.timeline-dot.loss) { background: #b4233b; }
+html[data-theme="light"] :is(.heatmap i.win,.timeline-dot.win) { background: #08754d; }
+html[data-theme="light"] .sidebar-collapsed .nav-item::after { background: #172d23; color: #fff; }
+html[data-theme="light"] .live-dot { background: #08754d; box-shadow: 0 0 0 3px #08754d18; }
+
+/* Legacy widget internals: explicit surfaces and readable secondary text. */
+html[data-theme="light"] :is(.market-context-detail,.market-context-detail > div,.empty-state,.sheet-grid a,.screener-toolbar) { background: var(--surface-2) !important; border-color: var(--line) !important; color: var(--muted); }
+html[data-theme="light"] :is(.market-context-heading strong,.legend b,.review-grid > div > strong) { color: var(--text) !important; }
+html[data-theme="light"] :is(.reason-list,.panel-title > span,.rule-form label,.auth-card label,.auth-card p,.core-engine-heading p,.core-pack-details ul,.core-pack-details > span,.core-expand,.classical-model-row small,.classical-model-list > span,.zone-meta i,.win-gauge span,.risk-number span,.budget-label span,.emotion-picker legend,.emotion-review span,.screener-pagination,.sidebar-note small,.sheet-grid small,.mobile-live,.command-footer,.command-meta) { color: var(--muted) !important; }
+html[data-theme="light"] :is(.zone-touches b,.zone-touches small,.screener-pagination b,.rule-row > span,.core-engine-heading > span,.core-pack-details summary) { color: #466900 !important; }
+html[data-theme="light"] :is(.core-pack-copy em,.core-engine-heading > span,.zone-touches) { background: #edf3df !important; border-color: #b1c387 !important; color: #466900 !important; }
+html[data-theme="light"] :is(.legend,.legend button,.classical-model-row strong) { color: var(--text) !important; }
+html[data-theme="light"] .legend b { color: var(--mint) !important; }
+html[data-theme="light"] .position-row button { background: var(--surface-2); color: var(--text); }
+html[data-theme="light"] .table-head { color: var(--muted); }
+html[data-theme="light"] .emotion-review b { color: var(--red); }
+html[data-theme="light"] .dsl-key { color: #2463a7; }
+html[data-theme="light"] .dsl-number { color: #875515; }
+html[data-theme="light"] .dsl-string { color: #08754d; }
+html[data-theme="light"] .win-gauge { background: conic-gradient(var(--mint) var(--win), #dce7df 0); }
+html[data-theme="light"] .interactive-equity circle { stroke: #fff; }
+html[data-theme="light"] .interactive-equity circle:is(:hover,:focus) { fill: #172d23; }
+html[data-theme="light"] .core-toggle:not(.is-on) i { background: #fff; }
+html[data-theme="light"] .risk-warning svg { color: #844611; }
+html[data-theme="light"] :is(.zone-card strong i,.screener-results-tools > span,.command-label,.command-main small,.ai-explain-card > span,.ai-explain-card > em,.ai-explain-card small,.command-tabs button,.command-icon) { color: var(--muted) !important; }
+html[data-theme="light"] :is(.zone-meta > span:not(.zone-touches),.signal-timeframe) { background: var(--surface-2) !important; color: var(--text) !important; border-color: var(--line-bright); }
+html[data-theme="light"] :is(.stock-heading,.pattern-row,.rule-row,.event-row,.phase-row) { border-color: var(--line); }
+html[data-theme="light"] .command-tabs button.active { color: #466900 !important; border-color: #466900; }
+html[data-theme="light"] .ai-explain-card b { color: #fff; }
+html[data-theme="light"] .core-pack-card.on { border-color: #94b572 !important; }
+html[data-theme="light"] .donut::after { background: #fff; }
+html[data-theme="light"] .donut small { color: var(--muted); }
+html[data-theme="light"] .primary-button { border: 1px solid #94b238; }

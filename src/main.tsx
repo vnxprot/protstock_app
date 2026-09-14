@@ -5,6 +5,10 @@ import App from './App'
 import { AuthGate } from './AuthGate'
 import './styles.css'
 import './overview-screener.css'
+import './light-theme.css'
+import { initializeTheme } from './lib/theme'
+
+initializeTheme()
 
 if ('serviceWorker' in navigator && import.meta.env.PROD) {
   window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js'))
