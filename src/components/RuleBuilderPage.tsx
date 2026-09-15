@@ -114,6 +114,7 @@ const classicalModels = [
   { id: "double_bottom", label: "Hai đáy", detail: "Đảo chiều tăng khi vượt neckline" },
   { id: "double_top", label: "Hai đỉnh", detail: "Cảnh báo giảm tỷ trọng khi thủng neckline" },
   { id: "head_shoulders", label: "Vai đầu vai / Ngược", detail: "Neckline, cấu trúc ba pivot và volume xác nhận" },
+  { id: "cup_handle", label: "Cốc tay cầm / Đáy tròn", detail: "Miệng cốc cân đối, tay cầm nông hoặc nền tròn, breakout có volume" },
 ];
 const coreEngineOrder = [
   "Prot Core Engine v0.0",
