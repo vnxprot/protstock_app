@@ -9,8 +9,8 @@ export function SettingsPage({ authenticated, isAdmin = true }: { authenticated:
   const rules = useQuery({ queryKey: ['guide-rules'], enabled: authenticated && Boolean(supabase), queryFn: async () => { const { data, error } = await supabase!.from('rules').select('id,name,status,rule_versions(version)').order('name'); if (error) throw error; return data ?? [] } })
   return <section className="workspace-page settings-page">
     <div className="page-title-row"><div><h1>Cài đặt</h1><p className="muted">Hướng dẫn nghiên cứu và thông tin tài khoản riêng của Prot.</p></div></div>
-    <div className="timeframe-tabs" role="tablist" aria-label="Cài đặt">{!isAdmin&&<button className={tab === 'intro' ? 'active' : ''} onClick={() => setTab('intro')}>Giới thiệu</button>}<button className={tab === 'guide' ? 'active' : ''} onClick={() => setTab('guide')}>Hướng dẫn</button>{isAdmin&&<button className={tab === 'account' ? 'active' : ''} onClick={() => setTab('account')}>Tài khoản</button>}</div>
-    {tab === 'intro' ? <Intro/> : tab === 'account' ? (
+    <div className="timeframe-tabs" role="tablist" aria-label="Cài đặt">{!isAdmin&&<button className="active">Giới thiệu</button>}{isAdmin&&<><button className={tab === 'guide' ? 'active' : ''} onClick={() => setTab('guide')}>Hướng dẫn</button><button className={tab === 'account' ? 'active' : ''} onClick={() => setTab('account')}>Tài khoản</button></>}</div>
+    {!isAdmin || tab === 'intro' ? <Intro/> : tab === 'account' ? (
       <article className="panel account-panel">
         <div className="panel-title"><h3>Tài khoản</h3><span>Truy cập riêng tư</span></div>
         <div className="rule-row"><div><strong>Prot</strong></div><span>Đang bảo vệ</span></div>
