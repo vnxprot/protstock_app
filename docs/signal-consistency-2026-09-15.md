@@ -27,4 +27,6 @@ Shared engine ordering, styled keyboard-operable dropdowns, DD/MM/YYYY text + ca
 
 ## Verification
 
+Breadth integrity: calculate over unique active symbols from stored daily snapshots, not the current retry batch. A partial batch cannot overwrite universe breadth. On reading D-1, repair legacy batch summaries from stored rows and require complete eligible coverage for entry permission; incomplete coverage is explicitly BREADTH_COVERAGE_INCOMPLETE, not a claim that the market is weak. This does not fetch missing historical prices or invent missing snapshots.
+
 Run `python -m pytest tests/ -q`, `npm ci`, `npm run build`. Integration tests prove shared policy reaches raw and consolidated storage; verify migration RLS via owner JWT and execute the outcomes workflow after deployment. Browser QA covers light/dark, desktop/mobile, dropdown keyboard selection and date validation. No guarantee of improved performance is made until outcome samples mature.

@@ -14,6 +14,8 @@ def regime_ok(breadth: dict | None, vnindex_snapshot: dict | None, min_breadth_p
     """Return whether the prior completed market regime permits new long risk."""
     breadth, vnindex_snapshot = breadth or {}, vnindex_snapshot or {}
     pct_above = breadth.get("pct_above_sma50")
+    if breadth.get("coverage_complete") is False:
+        return False, ["BREADTH_COVERAGE_INCOMPLETE"] + (["VNINDEX_DOWNTREND"] if vnindex_snapshot.get("trend_state") == "DOWN" else [])
     breadth_ok = pct_above is not None and float(pct_above) >= min_breadth_pct
     index_ok = vnindex_snapshot.get("trend_state") != "DOWN"
     reasons = (["MARKET_BREADTH_WEAK"] if not breadth_ok else []) + (["VNINDEX_DOWNTREND"] if not index_ok else [])

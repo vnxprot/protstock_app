@@ -167,12 +167,16 @@ def run_eod(
                 })
             sleep(pause_seconds)
         if daily_snapshots and write_breadth_snapshot:
-            breadth = compute_breadth(daily_snapshots)
+            # A retry/batch must not replace universe breadth with its own subset.
+            breadth, expected_count = _stored_universe_breadth(client, trading_date)
             vnindex_snapshot = calculate_indicators(benchmark_daily).to_dict() if benchmark_daily else {"trend_state": "UNKNOWN"}
-            counts["breadth_snapshots"] += client.upsert("market_breadth_snapshots", [{
-                "trading_date": trading_date.isoformat(), **breadth,
-                "vnindex_trend_state": vnindex_snapshot["trend_state"],
-            }], "trading_date")
+            if expected_count and breadth["sample_size"] == expected_count:
+                counts["breadth_snapshots"] += client.upsert("market_breadth_snapshots", [{
+                    "trading_date": trading_date.isoformat(), **breadth,
+                    "vnindex_trend_state": vnindex_snapshot["trend_state"],
+                }], "trading_date")
+            else:
+                warnings.append(f"BREADTH_COVERAGE_INCOMPLETE: {breadth['sample_size']}/{expected_count}")
         status = "SUCCEEDED" if counts["failed"] == 0 else "PARTIAL"
         _persist_engine_stats(client, job["id"], trading_date, counts)
         client.finish_job(job["id"], {"status": status, "finished_at": _now(), "counts": counts, "warnings": warnings})
@@ -305,6 +309,13 @@ def _fetch_history_with_fallback(
             ) from fallback_error
 
 
+def _stored_universe_breadth(client: SupabaseRestClient, trading_date: date) -> tuple[dict, int]:
+    expected = {row["id"] for row in client.active_symbols()}
+    # Exclude retired symbols and count each active symbol only once.
+    rows = {row["symbol_id"]: row for row in client.daily_snapshots_for_date(trading_date) if row["symbol_id"] in expected}
+    return compute_breadth(list(rows.values())), len(expected)
+
+
 def _prior_market_context(client: SupabaseRestClient, trading_date: date) -> dict[str, dict] | None:
     getter = getattr(client, "market_breadth_snapshot", None)
     if getter is None:
@@ -314,8 +325,12 @@ def _prior_market_context(client: SupabaseRestClient, trading_date: date) -> dic
         return None
     if snapshot.get("trading_date") and (trading_date - date.fromisoformat(snapshot["trading_date"])).days > 7:
         return None
+    breadth, expected_count = _stored_universe_breadth(client, date.fromisoformat(snapshot["trading_date"]))
+    # Repair old batch-derived summaries from stored snapshots, never fetch prices.
+    if any(snapshot.get(key) != value for key, value in breadth.items()):
+        client.upsert("market_breadth_snapshots", [{"trading_date": snapshot["trading_date"], **breadth, "vnindex_trend_state": snapshot.get("vnindex_trend_state", "UNKNOWN")}], "trading_date")
     return {
-        "breadth": {"pct_above_sma50": snapshot.get("pct_above_sma50"), "sample_size": snapshot.get("sample_size")},
+        "breadth": {**breadth, "coverage_complete": bool(expected_count and breadth["sample_size"] == expected_count), "expected_count": expected_count},
         "vnindex_snapshot": {"trend_state": snapshot.get("vnindex_trend_state", "UNKNOWN")},
     }
 
