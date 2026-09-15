@@ -16,6 +16,7 @@ from .supabase_rest import SupabaseRestClient
 from .timeframes import aggregate_bars
 from .signal_policy import STOCK_PRICE_TO_VND, apply_signal_policy
 from .period_signals import monthly_trend, evaluate_period_signal
+from .wyckoff import classify_wyckoff
 
 # VNINDEX's first session was 28/07/2000. This keeps its benchmark history full
 # through the app's operational planning horizon without expanding symbol fetches.
@@ -141,6 +142,7 @@ def run_eod(
                         "monthly_snapshot": results.get("M", {}).get("indicators", {}),
                         "market_context": market_context,
                         "candidate_sector": symbol_row["sector"],
+                        "wyckoff_context": classify_wyckoff(analysis_rows),
                     }
                     for timeframe, scoped_rows in timeframe_rows.items():
                         if timeframe in results:
@@ -415,6 +417,7 @@ def _write_analysis(
             "fibonacci_context": result.get("fibonacci_context", {}),
             "position": position or context.get("position"),
             "market_context": context.get("market_context"),
+            "wyckoff_context": context.get("wyckoff_context"),
             "multi_timeframe_context": {
                 "weekly_patterns": context.get("weekly_patterns", []),
                 "weekly_snapshot": context.get("weekly_snapshot", {}),

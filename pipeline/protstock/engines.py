@@ -30,6 +30,16 @@ CORE_PACK_METADATA = {
         "target_engine": "core_ladder_v2",
         "description": "Bắt siêu cổ phiếu giữ nền giá mạnh hơn VNIndex",
     },
+    "wyckoff_context_v1": {
+        "name": "Wyckoff Context Pack",
+        "target_engine": "all",
+        "description": "Đọc Spring/SOS và UTAD/SOW làm bối cảnh cung–cầu; không tự phát lệnh mua",
+    },
+    "tplus_pullback_v1": {
+        "name": "T+ Pullback Pack",
+        "target_engine": "core_ladder_v2",
+        "description": "Hồi 3–7 phiên trong xu hướng tuần tăng, xác nhận nến và volume ngày",
+    },
 }
 
 
@@ -76,6 +86,10 @@ def evaluate_named_engine(engine: str | None, overrides: dict[str, Any] | None, 
         return evaluate_rsi_macd_confirmation(context)
     if engine == "relative_strength_leader_v1":
         return evaluate_relative_strength_leader_v1(context)
+    if engine == "wyckoff_context_v1":
+        return evaluate_wyckoff_context_v1(context)
+    if engine == "tplus_pullback_v1":
+        return evaluate_tplus_pullback_v1(context)
     raise ValueError(f"unknown signal engine: {engine}")
 
 
@@ -88,7 +102,7 @@ def evaluate_classical_patterns_v0(context: dict[str, Any], overrides: dict[str,
     overrides = overrides or {}
     enabled_models = {
         "flat_base": True, "flag_pennant": True, "double_bottom": True,
-        "double_top": True, "head_shoulders": True,
+        "double_top": True, "head_shoulders": True, "cup_handle": True,
         **(overrides.get("models") or {}),
     }
     candidates = context.get("classical_patterns") or detect_classical_patterns(
@@ -234,6 +248,34 @@ def evaluate_relative_strength_leader_v1(context: dict[str, Any]) -> tuple[bool,
     if snapshot.get("trend_state") != "UP" or rs is None or float(rs) <= 0.05 or market.get("trend_state") not in {"SIDEWAYS", "DOWN"}:
         return False, "WATCH", []
     return True, "PROBE_BUY", ["RELATIVE_STRENGTH_GT_5PCT", f"VNINDEX_{market['trend_state']}", "STOCK_UPTREND"]
+
+
+def evaluate_wyckoff_context_v1(context: dict[str, Any]) -> tuple[bool, str, list[str]]:
+    """Persist decisive supply/demand evidence as WATCH only, never a buy vote."""
+    wyckoff = context.get("wyckoff_context") or {}
+    if not wyckoff.get("event"):
+        return False, "WATCH", []
+    context["engine_evidence"] = {"wyckoff": wyckoff}
+    return True, "WATCH", list(wyckoff.get("reasons") or [])
+
+
+def evaluate_tplus_pullback_v1(context: dict[str, Any]) -> tuple[bool, str, list[str]]:
+    """A 3–7 session pullback; not a generic counter-trend oversold bounce."""
+    bars, snapshot = context.get("bars", []), context.get("snapshot", {})
+    weekly = (context.get("multi_timeframe_context") or {}).get("weekly_snapshot") or {}
+    if len(bars) < 12 or weekly.get("trend_state") != "UP":
+        return False, "WATCH", []
+    pullback = bars[-8:-1]
+    declines = sum(float(pullback[index]["close"]) < float(pullback[index - 1]["close"]) for index in range(1, len(pullback)))
+    last = bars[-1]
+    support = next((float(value) for value in (snapshot.get("ema20"), snapshot.get("sma20"), snapshot.get("sma50")) if value is not None and float(last["low"]) <= float(value) <= float(last["high"])), None)
+    reversal = float(last["close"]) > float(last["open"]) and float(last["close"]) > float(bars[-2]["close"])
+    volume_ok = float(snapshot.get("volume_ratio20") or 0) >= 1.05
+    if not (3 <= declines <= 7 and support is not None and reversal and volume_ok):
+        return False, "WATCH", []
+    stop = min(float(row["low"]) for row in pullback)
+    context["engine_evidence"] = {"pattern_type": "TPLUS_PULLBACK", "trigger_price": float(last["high"]), "invalidation_price": stop, "setup_expiry_sessions": 3, "time_stop_sessions": 8, "evidence_cluster": "TPLUS_PULLBACK"}
+    return True, "PROBE_BUY", ["TPLUS_PULLBACK_3_TO_7_SESSIONS", "WEEKLY_UP", "EMA_OR_SMA_SUPPORT", "BULLISH_DAILY_TRIGGER", "VOLUME_TRIGGER_CONFIRMED", "TPLUS_ENTRY_EXPIRES_3_SESSIONS", "TPLUS_TIME_STOP_8_SESSIONS"]
 
 
 def _high(bars: list[dict]) -> float:

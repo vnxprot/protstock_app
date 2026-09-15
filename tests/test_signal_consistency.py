@@ -69,7 +69,7 @@ class Recorder:
     def delete_consolidated_signal(self, *args): pass
 
 
-@pytest.mark.parametrize("engine", ["core_ladder_v1", "core_ladder_v2", "classical_patterns_v0", "pullback_continuation_v1", "vcp_breakout_v1", "rsi_macd_confirmation_v1_1", "relative_strength_leader_v1", "custom"])
+@pytest.mark.parametrize("engine", ["core_ladder_v1", "core_ladder_v2", "classical_patterns_v0", "pullback_continuation_v1", "vcp_breakout_v1", "rsi_macd_confirmation_v1_1", "relative_strength_leader_v1", "wyckoff_context_v1", "tplus_pullback_v1", "custom"])
 def test_every_proposal_passes_policy_before_storage(monkeypatch, engine):
     monkeypatch.setattr("protstock.eod.evaluate_named_engine", lambda *args: (True, "PROBE_BUY", ["TEST_SETUP"]))
     ctx = context(); ctx["market_context"]["vnindex_snapshot"]["trend_state"] = "DOWN"

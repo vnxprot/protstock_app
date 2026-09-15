@@ -41,4 +41,4 @@ def test_relative_strength_leader_pack_requires_strength_in_soft_market() -> Non
 
 
 def test_core_pack_metadata_describes_all_phase_two_packs() -> None:
-    assert set(CORE_PACK_METADATA) == {"pullback_continuation_v1", "vcp_breakout_v1", "rsi_macd_divergence_v1", "relative_strength_leader_v1"}
+    assert set(CORE_PACK_METADATA) == {"pullback_continuation_v1", "vcp_breakout_v1", "rsi_macd_divergence_v1", "relative_strength_leader_v1", "wyckoff_context_v1", "tplus_pullback_v1"}

@@ -9,6 +9,7 @@ MODEL_LABELS = {
     "double_bottom": "Hai đáy",
     "double_top": "Hai đỉnh",
     "head_shoulders": "Vai đầu vai và Vai đầu vai ngược",
+    "cup_handle": "Cốc tay cầm và đáy tròn",
 }
 
 
@@ -28,6 +29,7 @@ def detect_classical_patterns(bars: Sequence[dict], snapshot: dict | None = None
         _double(ordered, snapshot, "top"),
         _head_shoulders(ordered, snapshot, "inverse"),
         _head_shoulders(ordered, snapshot, "top"),
+        _cup_or_rounding_bottom(ordered, snapshot),
     ]
     return [candidate for candidate in candidates if candidate is not None]
 
@@ -196,4 +198,46 @@ def _head_shoulders(bars: Sequence[dict], snapshot: dict, kind: str) -> dict[str
         trigger=neckline, invalidation=invalidation,
         reasons=["PRIOR_TREND", "THREE_PIVOT_STRUCTURE", "HEAD_CLEARANCE", "SLOPING_NECKLINE", "BREAKOUT_VOLUME" if confirmed else "NEAR_NECKLINE" if ready else "HEAD_SHOULDERS_FORMING"],
         evidence={"left_shoulder": left, "head": head, "right_shoulder": right, "shoulder_similarity_pct": round((1 - shoulder_tolerance) * 100, 2), "head_clearance_pct": round(head_clearance * 100, 2), "neckline_left": round(first_neck, 4), "neckline_right": round(second_neck, 4), "prior_return_pct": round(prior_return * 100, 2), "volume_ratio20": round(volume_ratio, 3)},
+    )
+
+
+def _cup_or_rounding_bottom(bars: Sequence[dict], snapshot: dict) -> dict[str, Any] | None:
+    """Strict cup-with-handle detector; a clean cup without handle is a saucer.
+
+    The last bar is evaluated only as a breakout and never used to define the
+    rim, so a same-day spike cannot manufacture its own pattern.
+    """
+    if len(bars) < 66:
+        return None
+    cup = list(bars[-66:-11])
+    handle = list(bars[-11:-1])
+    lows = [float(row["low"]) for row in cup]
+    bottom_index = lows.index(min(lows))
+    if not 12 <= bottom_index <= len(cup) - 13:
+        return None
+    left_lip = max(float(row["high"]) for row in cup[:10])
+    right_lip = max(float(row["high"]) for row in cup[-10:])
+    rim = max(left_lip, right_lip)
+    lip_difference = abs(left_lip - right_lip) / rim if rim else 1.0
+    depth = (rim - lows[bottom_index]) / rim if rim else 1.0
+    if lip_difference > 0.08 or not 0.08 <= depth <= 0.40:
+        return None
+    handle_low = min(float(row["low"]) for row in handle)
+    handle_depth = (rim - handle_low) / rim if rim else 1.0
+    handle_volume = sum(float(row.get("volume") or 0) for row in handle) / len(handle)
+    right_cup_volume = sum(float(row.get("volume") or 0) for row in cup[-15:]) / 15
+    has_handle = 0 < handle_depth <= min(0.15, depth / 2) and float(handle[-1]["close"]) <= rim
+    pattern_type = "CUP_HANDLE" if has_handle else "ROUNDING_BOTTOM"
+    close, volume_ratio = float(bars[-1]["close"]), _volume_ratio(bars)
+    confirmed = close > rim and volume_ratio >= 1.3
+    ready = close >= rim * 0.97
+    state = "CONFIRMED" if confirmed else "READY" if ready else "FORMING"
+    prior = bars[-86:-66]
+    prior_return = float(prior[-1]["close"]) / float(prior[0]["close"]) - 1 if len(prior) > 1 else 0
+    quality = 42 + (14 if has_handle else 7) + max(0, 12 - lip_difference * 150) + (8 if handle_volume <= right_cup_volume else 0) + (20 if confirmed else 10 if ready else 0)
+    return _candidate(
+        model="cup_handle", pattern_type=pattern_type, direction="BULLISH", state=state, quality=quality,
+        trigger=rim, invalidation=handle_low if has_handle else lows[bottom_index],
+        reasons=["ROUNDED_BASE", "SYMMETRICAL_LIPS", "HANDLE_SHALLOW" if has_handle else "SAUCER_WITHOUT_HANDLE", "HANDLE_VOLUME_DRY_UP" if has_handle and handle_volume <= right_cup_volume else "HANDLE_VOLUME_MIXED", "BREAKOUT_VOLUME" if confirmed else "NEAR_RIM_BREAKOUT" if ready else "CUP_FORMING"],
+        evidence={"cup_bars": len(cup), "bottom_index": bottom_index, "depth_pct": round(depth * 100, 2), "lip_difference_pct": round(lip_difference * 100, 2), "handle_depth_pct": round(handle_depth * 100, 2), "handle_volume_ratio": round(handle_volume / right_cup_volume, 3) if right_cup_volume else None, "prior_return_pct": round(prior_return * 100, 2), "volume_ratio20": round(volume_ratio, 3)},
     )

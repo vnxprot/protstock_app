@@ -126,6 +126,8 @@ const corePackOrder = [
   "Prot Core Pack · VCP Breakout",
   "Prot Core Pack · RSI MACD Divergence",
   "Prot Core Pack · Relative Strength Leader",
+  "Prot Core Pack · Wyckoff Context",
+  "Prot Core Pack · T+ Pullback",
 ];
 const coreEngineLabels: Record<string, string> = {
   core_ladder_v1: "Prot Core Engine v1.0",
