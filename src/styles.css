@@ -530,6 +530,20 @@ input[type="number"] {
 .bottom-sheet,
 .journal-sheet { border-radius: var(--radius-xl) var(--radius-xl) 0 0; box-shadow: var(--elevation-4); }
 
+/* Transaction and journal controls. */
+.journal-entry-actions { display:flex; gap:5px; align-items:start; }
+.journal-entry-actions button,.transaction-actions button { display:grid; place-items:center; min-width:30px; min-height:30px; border:1px solid var(--line); border-radius:8px; color:var(--muted); background:var(--surface-2); cursor:pointer; }
+.journal-entry-actions button:hover,.transaction-actions button:hover { color:var(--text); background:var(--surface-3); }
+.transaction-history { display:grid; gap:10px; }
+.transaction-list { display:grid; }
+.transaction-row { display:flex; align-items:start; justify-content:space-between; gap:14px; padding:12px 0; border-top:1px solid var(--line); }
+.transaction-row>div:first-child { display:grid; gap:3px; min-width:0; }
+.transaction-row small,.transaction-row p { color:var(--muted); font-size:12px; }
+.transaction-row p { margin:0; }
+.transaction-actions { display:flex; gap:6px; flex:0 0 auto; }
+.transaction-actions button { display:flex; gap:5px; padding:0 9px; }
+.transaction-actions .danger { color:var(--red); }
+
 /* Desktop uses a Fluent-style right utility panel; mobile retains the bottom sheet. */
 @media (min-width:761px) {
   .sheet-backdrop { display:grid; place-items:stretch end; padding:0; }
