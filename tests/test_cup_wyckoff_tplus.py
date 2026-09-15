@@ -43,11 +43,12 @@ def test_distribution_context_blocks_buy_but_not_as_a_standalone_sell() -> None:
 
 
 def test_tplus_pullback_has_weekly_trend_and_short_horizon_evidence() -> None:
-    closes = [110, 109, 108, 107, 106, 105, 104, 103, 102, 101, 100, 101.5]
-    bars = [_bar(index, close, low=99.5 if index == len(closes) - 1 else close - 1) for index, close in enumerate(closes)]
+    bars = [_bar(index, 110, volume=150) for index in range(14)]
+    bars.extend(_bar(14 + index, close, volume=100) for index, close in enumerate([106, 105, 104, 103, 102, 101, 100]))
+    bars.append(_bar(21, 101.5, low=99.5, volume=165))
     passed, action, reasons = evaluate_named_engine("tplus_pullback_v1", {}, {
-        "bars": bars, "snapshot": {"ema20": 100, "sma20": 99, "sma50": 95, "volume_ratio20": 1.2},
+        "bars": bars, "snapshot": {"ema10": 100, "ema20": 99, "sma50": 95, "volume_ratio20": 1.2, "rsi14": 55, "atr14": 2},
         "multi_timeframe_context": {"weekly_snapshot": {"trend_state": "UP"}},
     })
     assert (passed, action) == (True, "PROBE_BUY")
-    assert "TPLUS_TIME_STOP_8_SESSIONS" in reasons
+    assert "TPLUS_TIME_STOP_5_TO_8_SESSIONS" in reasons

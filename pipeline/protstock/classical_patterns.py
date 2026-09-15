@@ -14,7 +14,7 @@ MODEL_LABELS = {
 
 
 def detect_classical_patterns(bars: Sequence[dict], snapshot: dict | None = None) -> list[dict[str, Any]]:
-    """Detect the five deliberately strict v0.0 classical-chart families.
+    """Detect the six deliberately strict v0.1 classical-chart families.
 
     The function is pure and returns evidence-rich candidates.  It does not make
     a trading decision; the Core Engine supplies market, multi-timeframe and

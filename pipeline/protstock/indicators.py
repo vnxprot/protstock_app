@@ -62,6 +62,7 @@ class IndicatorSnapshot:
     sma20: float | None
     sma50: float | None
     sma200: float | None
+    ema10: float | None
     ema20: float | None
     ema50: float | None
     rsi14: float | None
@@ -108,7 +109,7 @@ def calculate_indicators(bars: Sequence[dict]) -> IndicatorSnapshot:
     volume_avg = _sma(volumes, 20)
     return IndicatorSnapshot(
         close=closes[-1], sma20=sma20, sma50=sma50, sma200=sma200,
-        ema20=_ema_series(closes, 20)[-1], ema50=_ema_series(closes, 50)[-1],
+        ema10=_ema_series(closes, 10)[-1], ema20=_ema_series(closes, 20)[-1], ema50=_ema_series(closes, 50)[-1],
         rsi14=_rsi(closes), macd=macd, macd_signal=signal,
         macd_histogram=(macd - signal) if macd is not None and signal is not None else None,
         bollinger_upper=(middle + 2 * deviation) if middle is not None and deviation is not None else None,

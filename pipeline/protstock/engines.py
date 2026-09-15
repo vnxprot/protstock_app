@@ -94,7 +94,7 @@ def evaluate_named_engine(engine: str | None, overrides: dict[str, Any] | None, 
 
 
 def evaluate_classical_patterns_v0(context: dict[str, Any], overrides: dict[str, Any] | None = None) -> tuple[bool, str, list[str]]:
-    """Evaluate the strict, research-first five-family classical engine.
+    """Evaluate the strict, research-first six-family classical engine.
 
     One strongest valid candidate is selected so a single chart structure never
     becomes several independent votes in the consolidated signal resolver.
@@ -260,22 +260,32 @@ def evaluate_wyckoff_context_v1(context: dict[str, Any]) -> tuple[bool, str, lis
 
 
 def evaluate_tplus_pullback_v1(context: dict[str, Any]) -> tuple[bool, str, list[str]]:
-    """A 3–7 session pullback; not a generic counter-trend oversold bounce."""
+    """Strict T+ continuation setup; never a generic oversold-bounce call."""
     bars, snapshot = context.get("bars", []), context.get("snapshot", {})
     weekly = (context.get("multi_timeframe_context") or {}).get("weekly_snapshot") or {}
-    if len(bars) < 12 or weekly.get("trend_state") != "UP":
+    weekly_healthy = weekly.get("trend_state") == "UP" or (
+        weekly.get("trend_state") == "SIDEWAYS" and weekly.get("ema20") is not None
+        and float(weekly.get("close") or 0) >= float(weekly["ema20"])
+    )
+    if len(bars) < 22 or not weekly_healthy:
         return False, "WATCH", []
     pullback = bars[-8:-1]
     declines = sum(float(pullback[index]["close"]) < float(pullback[index - 1]["close"]) for index in range(1, len(pullback)))
     last = bars[-1]
-    support = next((float(value) for value in (snapshot.get("ema20"), snapshot.get("sma20"), snapshot.get("sma50")) if value is not None and float(last["low"]) <= float(value) <= float(last["high"])), None)
+    support = next((float(value) for value in (snapshot.get("ema10"), snapshot.get("ema20"), snapshot.get("sma50")) if value is not None and float(last["low"]) <= float(value) <= float(last["high"])), None)
     reversal = float(last["close"]) > float(last["open"]) and float(last["close"]) > float(bars[-2]["close"])
-    volume_ok = float(snapshot.get("volume_ratio20") or 0) >= 1.05
-    if not (3 <= declines <= 7 and support is not None and reversal and volume_ok):
+    pullback_volume = sum(float(row.get("volume") or 0) for row in pullback) / len(pullback)
+    prior_volume = sum(float(row.get("volume") or 0) for row in bars[-15:-8]) / 7
+    volume_contracted = prior_volume > 0 and pullback_volume <= prior_volume * .9
+    volume_ok = float(snapshot.get("volume_ratio20") or 0) >= 1.1
+    rsi = snapshot.get("rsi14")
+    rsi_healthy = rsi is not None and 45 <= float(rsi) <= 72
+    if not (3 <= declines <= 7 and support is not None and reversal and volume_contracted and volume_ok and rsi_healthy):
         return False, "WATCH", []
-    stop = min(float(row["low"]) for row in pullback)
-    context["engine_evidence"] = {"pattern_type": "TPLUS_PULLBACK", "trigger_price": float(last["high"]), "invalidation_price": stop, "setup_expiry_sessions": 3, "time_stop_sessions": 8, "evidence_cluster": "TPLUS_PULLBACK"}
-    return True, "PROBE_BUY", ["TPLUS_PULLBACK_3_TO_7_SESSIONS", "WEEKLY_UP", "EMA_OR_SMA_SUPPORT", "BULLISH_DAILY_TRIGGER", "VOLUME_TRIGGER_CONFIRMED", "TPLUS_ENTRY_EXPIRES_3_SESSIONS", "TPLUS_TIME_STOP_8_SESSIONS"]
+    atr = float(snapshot.get("atr14") or 0)
+    stop = max(0.01, min(float(row["low"]) for row in pullback) - atr * .1)
+    context["engine_evidence"] = {"pattern_type": "TPLUS_PULLBACK", "trigger_price": float(last["high"]), "invalidation_price": stop, "setup_expiry_sessions": 3, "time_stop_sessions": 8, "partial_take_profit_r": 1.0, "evidence_cluster": "TPLUS_PULLBACK"}
+    return True, "PROBE_BUY", ["TPLUS_PULLBACK_3_TO_7_SESSIONS", "WEEKLY_HEALTHY", "EMA10_EMA20_OR_SMA50_SUPPORT", "PULLBACK_VOLUME_CONTRACTION", "RSI_STRUCTURE_INTACT", "BULLISH_DAILY_TRIGGER", "VOLUME_TRIGGER_GE_1_1X", "MARKET_RISK_POLICY_REQUIRED", "TPLUS_ENTRY_EXPIRES_3_SESSIONS", "TPLUS_TIME_STOP_5_TO_8_SESSIONS", "PARTIAL_TAKE_PROFIT_1R_OR_RESISTANCE"]
 
 
 def _high(bars: list[dict]) -> float:
