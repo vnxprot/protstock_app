@@ -23,7 +23,7 @@ const queryClient = new QueryClient()
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
-      <AuthGate>{(authenticated) => <App authenticated={authenticated} />}</AuthGate>
+      <AuthGate>{(authenticated, profile) => <App authenticated={authenticated} profile={profile} />}</AuthGate>
     </QueryClientProvider>
   </StrictMode>,
 )
