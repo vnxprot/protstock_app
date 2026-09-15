@@ -21,6 +21,14 @@ def test_turnover_converts_thousand_vnd_exactly_once():
     assert apply_signal_policy("PROBE_BUY", [], context())[0] == "PROBE_BUY"
 
 
+def test_degraded_breadth_is_recorded_without_blocking_a_valid_entry():
+    ctx = context()
+    ctx["market_context"]["breadth"]["coverage_status"] = "DEGRADED"
+    action, reasons = apply_signal_policy("PROBE_BUY", [], ctx)
+    assert action == "PROBE_BUY"
+    assert "BREADTH_DATA_DEGRADED" in reasons
+
+
 @pytest.mark.parametrize("action", ["PROBE_BUY", "ADD"])
 def test_common_policy_blocks_bad_regime(action):
     ctx = context()

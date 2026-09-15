@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
+from datetime import date
 from time import sleep
 from typing import Any
 
@@ -142,11 +143,20 @@ class SupabaseRestClient:
     def market_breadth_snapshot(self, trading_date) -> dict[str, Any] | None:
         response = self._client.get(
             "/market_breadth_snapshots",
-            params={"select": "trading_date,pct_above_sma50,sample_size,vnindex_trend_state", "trading_date": f"lte.{trading_date.isoformat()}", "order": "trading_date.desc", "limit": "1"},
+            params={"select": "trading_date,pct_above_sma50,sample_size,universe_size,eligible_count,observed_count,coverage_ratio,coverage_status,vnindex_trend_state", "trading_date": f"lte.{trading_date.isoformat()}", "order": "trading_date.desc", "limit": "1"},
         )
         response.raise_for_status()
         rows = response.json()
         return rows[0] if rows else None
+
+    def latest_daily_snapshot_date_before(self, trading_date) -> date | None:
+        response = self._client.get(
+            "/technical_snapshots",
+            params={"select": "as_of_date", "timeframe": "eq.D", "as_of_date": f"lt.{trading_date.isoformat()}", "order": "as_of_date.desc", "limit": "1"},
+        )
+        response.raise_for_status()
+        rows = response.json()
+        return date.fromisoformat(rows[0]["as_of_date"]) if rows else None
 
     def daily_snapshots_for_date(self, trading_date) -> list[dict[str, Any]]:
         """One completed daily snapshot per symbol for Fast Lane completion checks."""

@@ -43,6 +43,10 @@ def apply_signal_policy(action: str, reasons: list[str], context: dict) -> tuple
         ok, codes = regime_ok(market.get("breadth"), market.get("vnindex_snapshot"))
         if not ok:
             blocked.extend(codes)
+        else:
+            # Degraded coverage remains transparent, but must not become a
+            # mechanical veto when the eligible sample is still representative.
+            reasons.extend(codes)
         if (market.get("vnindex_snapshot") or {}).get("trend_state") in {None, "UNKNOWN"}:
             blocked.append("VNINDEX_CONTEXT_UNAVAILABLE")
     mtf = context.get("multi_timeframe_context") or {}

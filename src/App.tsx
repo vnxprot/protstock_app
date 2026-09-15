@@ -70,7 +70,7 @@ function useMarketContext() {
     if (indexError) throw indexError
     const [{ data: prices, error: pricesError }, { data: breadth, error: breadthError }] = await Promise.all([
       supabase!.from('market_index_prices').select('trading_date,close,source,collected_at').eq('index_id', index.id).order('trading_date', { ascending: false }).limit(2),
-      supabase!.from('market_breadth_snapshots').select('trading_date,pct_above_sma50,sample_size,vnindex_trend_state,calculated_at').order('trading_date', { ascending: false }).limit(1),
+      supabase!.from('market_breadth_snapshots').select('trading_date,pct_above_sma50,sample_size,universe_size,eligible_count,observed_count,coverage_ratio,coverage_status,vnindex_trend_state,calculated_at').order('trading_date', { ascending: false }).limit(1),
     ])
     if (pricesError || breadthError) throw pricesError || breadthError
     const latest = prices?.[0]
@@ -86,6 +86,11 @@ function MarketContextCard() {
   const stateLabel = state === 'UP' ? 'UPTREND' : state === 'DOWN' ? 'DOWNTREND' : state === 'SIDEWAYS' ? 'NEUTRAL' : 'ĐANG ĐỒNG BỘ'
   const isRiskOff = state === 'DOWN' || (data?.breadth?.pct_above_sma50 != null && Number(data.breadth.pct_above_sma50) < 35)
   const breadthPct = data?.breadth?.pct_above_sma50 == null ? '—' : `${Number(data.breadth.pct_above_sma50).toFixed(1)}%`
+  const coverageStatus = data?.breadth?.coverage_status ?? 'LEGACY'
+  const coverageLabel = coverageStatus === 'COMPLETE' ? 'Đầy đủ' : coverageStatus === 'DEGRADED' ? 'Gần đầy đủ' : coverageStatus === 'INCOMPLETE' ? 'Thiếu dữ liệu' : coverageStatus === 'BOOTSTRAP' ? 'Đang tạo mẫu' : 'Dữ liệu lịch sử'
+  const observed = data?.breadth?.observed_count ?? data?.breadth?.sample_size ?? 0
+  const eligible = data?.breadth?.eligible_count ?? data?.breadth?.sample_size ?? 0
+  const coveragePct = data?.breadth?.coverage_ratio == null ? null : Number(data.breadth.coverage_ratio) * 100
   return <details className="market-context-card panel">
     <summary>
       <div className="market-context-heading"><strong>VN-Index · {market.isLoading ? 'Đang tải…' : formatDate(data?.latest?.trading_date ?? data?.breadth?.trading_date)}</strong><small>EOD · {data?.latest?.source?.replace('VNSTOCK_', '') ?? '—'}</small></div>
@@ -93,9 +98,10 @@ function MarketContextCard() {
       <span className={`market-regime ${state.toLowerCase()}`}>{stateLabel}</span><ChevronDown className="market-context-chevron" size={18}/>
     </summary>
     <div className="market-context-detail">
-      <div><span>Breadth trên SMA50</span><strong>{breadthPct}</strong><small>{data?.breadth?.sample_size ?? 0} mã có dữ liệu</small></div>
+      <div><span>Prot Universe Breadth · SMA50</span><strong>{breadthPct}</strong><small>{observed}/{eligible} mã đủ điều kiện</small></div>
+      <div><span>Độ bao phủ dữ liệu</span><strong className={coverageStatus === 'INCOMPLETE' ? 'negative' : 'positive'}>{coverageLabel}</strong><small>{coveragePct == null ? 'Chưa đủ lịch sử để đánh giá' : `${coveragePct.toFixed(1)}% mẫu đủ điều kiện đã quan sát`}</small></div>
       <div><span>Market Gate</span><strong className={isRiskOff ? 'negative' : 'positive'}>{isRiskOff ? 'Thận trọng' : 'Cho phép setup'}</strong><small>{isRiskOff ? 'Tín hiệu mua có thể bị hạ xuống WATCH.' : 'Không có chặn mua từ bối cảnh thị trường.'}</small></div>
-      <p>Card này chỉ hiển thị bối cảnh dùng trực tiếp bởi Prot Core Engine; biểu đồ VNINDEX chuyên sâu vẫn nên xem tại FireAnt, 24HMoney hoặc TradingView.</p>
+      <p>Độ rộng chỉ đo trên Prot Trading Universe, không đại diện toàn bộ thị trường Việt Nam. Card này là bối cảnh cho Prot Core Engine; biểu đồ VN-Index chuyên sâu vẫn nên xem tại FireAnt, 24HMoney hoặc TradingView.</p>
     </div>
   </details>
 }

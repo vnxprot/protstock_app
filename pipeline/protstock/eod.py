@@ -9,7 +9,7 @@ from .fibonacci import build_fibonacci_context
 from .config import Settings
 from .engines import evaluate_named_engine
 from .indicators import calculate_indicators
-from .market_regime import compute_breadth
+from .market_regime import build_breadth_membership
 from .provider_vnstock import VnstockProvider
 from .resolution import resolve_consolidated_signal
 from .supabase_rest import SupabaseRestClient
@@ -60,7 +60,6 @@ def run_eod(
         portfolios = _load_portfolios(client, active_rules, trading_date)
         counts["engine_stats"] = _initialize_engine_stats(active_rules)
         market_context = _prior_market_context(client, trading_date)
-        daily_snapshots: list[dict] = []
         benchmark_daily: list[dict] = []
         try:
             index = client.market_index("VNINDEX")
@@ -148,8 +147,6 @@ def run_eod(
                             if "period_events" not in context:
                                 context.update(_decision_context(analysis_rows, trading_date, portfolios))
                             _write_analysis(client, symbol_row["id"], timeframe, scoped_rows, benchmark_rows[timeframe], active_rules, counts, results[timeframe], context)
-                    if "D" in results:
-                        daily_snapshots.append(results["D"]["indicators"])
                 counts["symbols"] += 1
                 client.create_job_item({
                     "job_run_id": job["id"], "symbol_id": symbol_row["id"],
@@ -166,17 +163,13 @@ def run_eod(
                     "duration_ms": int((monotonic() - started) * 1000),
                 })
             sleep(pause_seconds)
-        if daily_snapshots and write_breadth_snapshot:
-            # A retry/batch must not replace universe breadth with its own subset.
-            breadth, expected_count = _stored_universe_breadth(client, trading_date)
+        if write_breadth_snapshot and symbols:
+            # A retry/batch reads the complete stored universe, never its own subset.
             vnindex_snapshot = calculate_indicators(benchmark_daily).to_dict() if benchmark_daily else {"trend_state": "UNKNOWN"}
-            if expected_count and breadth["sample_size"] == expected_count:
-                counts["breadth_snapshots"] += client.upsert("market_breadth_snapshots", [{
-                    "trading_date": trading_date.isoformat(), **breadth,
-                    "vnindex_trend_state": vnindex_snapshot["trend_state"],
-                }], "trading_date")
-            else:
-                warnings.append(f"BREADTH_COVERAGE_INCOMPLETE: {breadth['sample_size']}/{expected_count}")
+            breadth = _persist_universe_breadth(client, trading_date, vnindex_snapshot["trend_state"])
+            counts["breadth_snapshots"] += 1
+            if breadth["coverage_status"] != "COMPLETE":
+                warnings.append(f"BREADTH_DATA_{breadth['coverage_status']}: {breadth['observed_count']}/{breadth['eligible_count']} eligible")
         status = "SUCCEEDED" if counts["failed"] == 0 else "PARTIAL"
         _persist_engine_stats(client, job["id"], trading_date, counts)
         client.finish_job(job["id"], {"status": status, "finished_at": _now(), "counts": counts, "warnings": warnings})
@@ -201,11 +194,7 @@ def finalize_fast_lane(trading_date: date) -> dict[str, Any]:
         index = client.market_index("VNINDEX")
         benchmark = _rows_as_of(client.index_price_history(index["id"], MULTI_TIMEFRAME_HISTORY_LIMIT), trading_date)
         vnindex_snapshot = calculate_indicators(benchmark).to_dict() if benchmark else {"trend_state": "UNKNOWN"}
-        breadth = compute_breadth(snapshots)
-        client.upsert("market_breadth_snapshots", [{
-            "trading_date": trading_date.isoformat(), **breadth,
-            "vnindex_trend_state": vnindex_snapshot["trend_state"],
-        }], "trading_date")
+        breadth = _persist_universe_breadth(client, trading_date, vnindex_snapshot["trend_state"])
         return {"status": "SUCCEEDED", "covered": len(covered), "expected": len(expected), "breadth": breadth}
     finally:
         client.close()
@@ -309,11 +298,23 @@ def _fetch_history_with_fallback(
             ) from fallback_error
 
 
-def _stored_universe_breadth(client: SupabaseRestClient, trading_date: date) -> tuple[dict, int]:
-    expected = {row["id"] for row in client.active_symbols()}
-    # Exclude retired symbols and count each active symbol only once.
-    rows = {row["symbol_id"]: row for row in client.daily_snapshots_for_date(trading_date) if row["symbol_id"] in expected}
-    return compute_breadth(list(rows.values())), len(expected)
+def _stored_universe_breadth(client: SupabaseRestClient, trading_date: date) -> tuple[dict, list[dict]]:
+    symbols = client.active_symbols()
+    previous_date_getter = getattr(client, "latest_daily_snapshot_date_before", None)
+    previous_date = previous_date_getter(trading_date) if previous_date_getter else None
+    prior_rows = client.daily_snapshots_for_date(previous_date) if previous_date else []
+    current_rows = client.daily_snapshots_for_date(trading_date)
+    return build_breadth_membership(symbols, prior_rows, current_rows, trading_date.isoformat())
+
+
+def _persist_universe_breadth(client: SupabaseRestClient, trading_date: date, vnindex_trend_state: str) -> dict:
+    breadth, membership = _stored_universe_breadth(client, trading_date)
+    client.upsert("breadth_universe_memberships", membership, "trading_date,symbol_id")
+    client.upsert("market_breadth_snapshots", [{
+        "trading_date": trading_date.isoformat(), **breadth,
+        "vnindex_trend_state": vnindex_trend_state,
+    }], "trading_date")
+    return breadth
 
 
 def _prior_market_context(client: SupabaseRestClient, trading_date: date) -> dict[str, dict] | None:
@@ -325,12 +326,13 @@ def _prior_market_context(client: SupabaseRestClient, trading_date: date) -> dic
         return None
     if snapshot.get("trading_date") and (trading_date - date.fromisoformat(snapshot["trading_date"])).days > 7:
         return None
-    breadth, expected_count = _stored_universe_breadth(client, date.fromisoformat(snapshot["trading_date"]))
+    breadth, membership = _stored_universe_breadth(client, date.fromisoformat(snapshot["trading_date"]))
     # Repair old batch-derived summaries from stored snapshots, never fetch prices.
     if any(snapshot.get(key) != value for key, value in breadth.items()):
         client.upsert("market_breadth_snapshots", [{"trading_date": snapshot["trading_date"], **breadth, "vnindex_trend_state": snapshot.get("vnindex_trend_state", "UNKNOWN")}], "trading_date")
+    client.upsert("breadth_universe_memberships", membership, "trading_date,symbol_id")
     return {
-        "breadth": {**breadth, "coverage_complete": bool(expected_count and breadth["sample_size"] == expected_count), "expected_count": expected_count},
+        "breadth": breadth,
         "vnindex_snapshot": {"trend_state": snapshot.get("vnindex_trend_state", "UNKNOWN")},
     }
 
