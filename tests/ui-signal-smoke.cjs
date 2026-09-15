@@ -46,7 +46,7 @@ async function main() {
     assert.equal(await page.getByText('Hỗ trợ gần giá',{exact:true}).count(),1)
     assert((await page.locator('.zone-group.resistance .zone-card').count())<=3)
     assert((await page.locator('.zone-group.support .zone-card').count())<=3)
-    await page.screenshot({path:'exports/ui/zone-context.png'})
+    await page.locator('.zone-panel').screenshot({path:'exports/ui/zone-context.png'})
     await page.setViewportSize({width:390,height:900})
     assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'zone context mobile overflow')
     await page.setViewportSize({width:1366,height:900})
