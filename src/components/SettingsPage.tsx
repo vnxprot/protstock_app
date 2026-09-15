@@ -20,7 +20,7 @@ export function SettingsPage({ authenticated, isAdmin = true }: { authenticated:
   </section>
 }
 
-function Intro(){ return <article className="panel app-intro-card"><h2>Giới thiệu Prot Stock</h2><p>Prot Stock là workspace theo dõi thị trường, phân tích đa khung và tổng hợp tín hiệu cho cổ phiếu Việt Nam.</p><div><strong>Nên xem sau 17:00</strong><span>từ thứ Hai đến thứ Sáu, sau khi EOD hoàn tất: Tổng quan, Phân tích mã và Bộ lọc tín hiệu sẽ phản ánh dữ liệu phiên mới nhất.</span></div><small>Thông tin phục vụ nghiên cứu cá nhân, không phải khuyến nghị đầu tư.</small></article> }
+function Intro(){ return <article className="panel app-intro-card"><h2>Giới thiệu Prot Stock</h2><p>Prot Stock là công cụ theo dõi thị trường, phân tích đa khung và tổng hợp tín hiệu cho cổ phiếu Việt Nam.</p><div><strong>Dữ liệu cập nhật sau 17:00</strong><span>từ thứ Hai đến thứ Sáu.</span></div></article> }
 function Guide({ rules, loading, includeIntro }: { rules: any[]; loading: boolean; includeIntro: boolean }) {
   const active = rules.filter(rule => rule.status === 'ACTIVE'); const core = active.filter(rule => String(rule.name).startsWith('Prot Core')); const latestVersion = Math.max(0, ...core.flatMap(rule => rule.rule_versions ?? []).map((version: any) => Number(version.version)))
   return <div className="guide-list">{includeIntro&&<Intro/>}<EngineGuide/>

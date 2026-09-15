@@ -1,3 +1,4 @@
+import { Eye, EyeOff } from 'lucide-react'
 import { FormEvent, ReactNode, useEffect, useState } from 'react'
 import type { Session } from '@supabase/supabase-js'
 
@@ -15,6 +16,7 @@ export function AuthGate({ children }: AuthGateProps) {
   const [loading, setLoading] = useState(isSupabaseConfigured)
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
   const [message, setMessage] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
@@ -72,7 +74,7 @@ export function AuthGate({ children }: AuthGateProps) {
           <label htmlFor="username">Tên đăng nhập</label>
           <input id="username" autoComplete="username" required value={username} onChange={(event) => setUsername(event.target.value)} placeholder="prot" />
           <label htmlFor="password">Mật khẩu</label>
-          <input id="password" type="password" autoComplete="current-password" required value={password} onChange={(event) => setPassword(event.target.value)} />
+          <span className="password-input auth-password-input"><input id="password" type={showPassword ? 'text' : 'password'} autoComplete="current-password" required value={password} onChange={(event) => setPassword(event.target.value)} /><button type="button" onClick={() => setShowPassword(value => !value)} aria-label={showPassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}>{showPassword ? <EyeOff size={17}/> : <Eye size={17}/>}</button></span>
           <button type="submit" disabled={submitting}>{submitting ? 'Đang đăng nhập…' : 'Đăng nhập'}</button>
         </form>
         {message && <p className="auth-message" role="status">{message}</p>}
