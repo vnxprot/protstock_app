@@ -1,4 +1,9 @@
 .zone-card { flex-wrap: wrap; }
+.zone-context-copy { display:grid; gap:4px; margin:0 0 14px; padding:10px 12px; border-radius:10px; background:var(--surface-2); color:var(--muted); font-size:12px; line-height:1.5; }
+.zone-context-copy b { color:var(--text); font-size:13px; }.zone-context-copy p { margin:0; }
+.zone-context-down .zone-context-copy { background:#ff73730d; }.zone-context-up .zone-context-copy { background:#55e6b10d; }.zone-context-sideways .zone-context-copy { background:#efbf620d; }
+.zone-groups { display:grid; gap:15px; }.zone-group { min-width:0; }.zone-group-heading { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:8px; }.zone-group-heading>div { display:grid; gap:2px; }.zone-group-heading strong { color:var(--text); font-size:13px; }.zone-group-heading small,.zone-group-heading>span { color:var(--muted); font-size:11px; }.zone-group-heading>span { padding:3px 7px; border-radius:999px; background:var(--surface-2); }.zone-group.resistance .zone-group-heading strong { color:var(--red); }.zone-group.support .zone-group-heading strong { color:var(--mint); }
+.zone-card-main { min-width:0; }.zone-empty { margin:0; padding:10px 12px; border-radius:9px; color:var(--muted); background:var(--surface-2); font-size:12px; line-height:1.5; }
 .zone-evidence { flex: 1 1 100%; min-width: 0; display: flex; flex-wrap: wrap; gap: 8px 16px; padding-top: 10px; margin-top: 4px; border-top: 1px solid var(--line); color: var(--muted); font-size: 12px; line-height: 1.5; }
 .zone-evidence b { color: var(--text); font-weight: 500; }
 .zone-fib-details { width: 100%; }
