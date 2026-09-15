@@ -127,6 +127,10 @@ footer { margin-top: 54px; color: #50665c; font-size:12px; text-align: center; }
 .rule-form { display: grid; gap: 15px; }
 .rule-form label { display: grid; gap: 7px; color: #8fa39a; font-size: 12px; font-weight: 700; }
 .rule-form input, .rule-form textarea { width: 100%; padding: 12px 13px; border: 1px solid #2c4036; border-radius: 10px; color: #ecf3ef; background: #07110e; font: inherit; resize: vertical; }
+.currency-input { display:grid; gap:7px; color:#8fa39a; font-size:12px; font-weight:700; }
+.currency-input>span { position:relative; display:block; }
+.currency-input input { padding-right:42px!important; font-variant-numeric:tabular-nums; }
+.currency-input i { position:absolute; top:50%; right:14px; transform:translateY(-50%); color:var(--muted); font-style:normal; font-weight:700; pointer-events:none; }
 .rule-form select { width: 100%; padding: 12px 13px; border: 1px solid #2c4036; border-radius: 10px; color: #ecf3ef; background: #07110e; font: inherit; }
 .rule-form button { padding: 12px 14px; border: 0; border-radius: 10px; background: #d7ff52; color: #07110e; font: 700 13px inherit; cursor: pointer; }
 .rule-form button:disabled { opacity: .45; cursor: not-allowed; }
@@ -525,6 +529,17 @@ input[type="number"] {
 .filter-chip { border-radius: var(--radius-full); }
 .bottom-sheet,
 .journal-sheet { border-radius: var(--radius-xl) var(--radius-xl) 0 0; box-shadow: var(--elevation-4); }
+
+/* Desktop uses a Fluent-style right utility panel; mobile retains the bottom sheet. */
+@media (min-width:761px) {
+  .sheet-backdrop { display:grid; place-items:stretch end; padding:0; }
+  .bottom-sheet.position-sheet,
+  .bottom-sheet.journal-sheet { display:grid; align-self:stretch; width:min(480px,38vw); max-height:none; margin:0; padding:28px 26px; overflow-y:auto; border:0; border-left:1px solid var(--line); border-radius:var(--radius-xl) 0 0 var(--radius-xl); background:var(--surface-1); box-shadow:-20px 0 64px rgba(0,0,0,.28); }
+  .bottom-sheet.position-sheet .sheet-handle,
+  .bottom-sheet.journal-sheet .sheet-handle { display:none; }
+  .bottom-sheet.position-sheet .form-sticky-actions,
+  .bottom-sheet.journal-sheet .form-sticky-actions { position:sticky; bottom:-28px; margin:4px -26px -28px; padding:15px 26px 22px; border-top:1px solid var(--line); background:var(--surface-1); }
+}
 /* Design system · C. Icon and signal badge language */
 .sidebar-nav svg,
 .sidebar-toggle svg { stroke-width: 1.8px; }
