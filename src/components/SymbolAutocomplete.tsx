@@ -13,7 +13,7 @@ export function SymbolAutocomplete({ symbols, value, onChange, label = 'Mã cổ
   }, [query, symbols])
   const choose = (symbol: string) => { onChange(symbol); setQuery(symbol); setOpen(false) }
   return <label className="symbol-autocomplete">{label}
-    <input value={query} placeholder="Nhập mã, ví dụ FPT" autoCapitalize="characters" autoComplete="off" onFocus={() => setOpen(true)} onChange={event => { const next = event.target.value.toUpperCase(); setQuery(next); onChange(next) }} onBlur={() => setTimeout(() => setOpen(false), 120)} />
+    <input value={query} placeholder="Nhập mã cổ phiếu" autoCapitalize="characters" autoComplete="off" onFocus={() => setOpen(true)} onChange={event => { const next = event.target.value.toUpperCase(); setQuery(next); onChange(next) }} onKeyDown={event => { if (event.key === 'Enter' && open) { event.preventDefault(); const selected = matches.find(item => item.symbol === query.trim().toUpperCase()) ?? matches[0]; if (selected) choose(selected.symbol) } }} onBlur={() => setTimeout(() => setOpen(false), 120)} />
     {open && <div className="symbol-suggestions" role="listbox">{matches.map(item => <button type="button" key={item.id} onMouseDown={event => event.preventDefault()} onClick={() => choose(item.symbol)}><strong>{item.symbol}</strong><small>{item.sector ?? 'Chưa phân ngành'}</small></button>)}{!matches.length && <span>Không tìm thấy mã phù hợp</span>}</div>}
   </label>
 }
