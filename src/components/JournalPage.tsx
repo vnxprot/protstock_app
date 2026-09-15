@@ -40,6 +40,8 @@ export function JournalPage({ authenticated }: { authenticated: boolean }) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [toast, setToast] = useState("");
   const [selectedPoint, setSelectedPoint] = useState<number | null>(null);
+  const [swipedEntryId, setSwipedEntryId] = useState<string | null>(null);
+  const swipeStart = useRef<Record<string, number>>({});
   const entries = useQuery({
     queryKey: ["journal"],
     enabled: authenticated && Boolean(supabase),
@@ -351,7 +353,7 @@ export function JournalPage({ authenticated }: { authenticated: boolean }) {
           <h3>Dòng thời gian quyết định</h3>
         </div>
         {rows.map((item) => (
-          <div className="journal-timeline" key={item.id}>
+          <div className={`journal-timeline ${swipedEntryId === item.id ? "swiped" : ""}`} key={item.id} onPointerDown={event => { swipeStart.current[item.id] = event.clientX; }} onPointerUp={event => { const start = swipeStart.current[item.id]; if (start - event.clientX > 44) setSwipedEntryId(item.id); if (event.clientX - start > 30) setSwipedEntryId(null); }}>
             <span className={`timeline-dot ${item.outcome?.toLowerCase()}`} />
             <div>
               <strong>
@@ -370,7 +372,7 @@ export function JournalPage({ authenticated }: { authenticated: boolean }) {
               {Number(item.result_pct ?? 0) > 0 ? "+" : ""}
               {Number(item.result_pct ?? 0).toFixed(2)}%
             </b>
-            <span className="journal-entry-actions"><button type="button" onClick={() => openEdit(item)} aria-label="Sửa nhận xét"><Pencil size={14}/></button><button type="button" onClick={() => deleteEntry(item)} aria-label="Xoá nhận xét"><Trash2 size={14}/></button></span>
+            <span className="journal-entry-actions"><button type="button" onClick={() => openEdit(item)} aria-label="Sửa nhận xét"><Pencil size={14}/><span>Sửa</span></button><button type="button" onClick={() => deleteEntry(item)} aria-label="Xoá nhận xét"><Trash2 size={14}/><span>Xoá</span></button></span>
           </div>
         ))}
       </article>

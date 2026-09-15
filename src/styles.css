@@ -984,6 +984,29 @@ button, input, select, textarea, svg text { font-family: var(--font-family); }
 }
 .metric-grid-compact { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
 
+/* Dense portfolio overview, responsive action groups, and export menus. */
+.portfolio-actions > .secondary-button,.portfolio-actions > .primary-button,.portfolio-actions .report-menu > button { min-height:40px; display:inline-flex; align-items:center; justify-content:center; }
+.portfolio-overview { display:grid; grid-template-columns:minmax(280px,.85fr) minmax(0,2.15fr); gap:var(--space-3); margin:var(--space-4) 0; }
+.portfolio-nav { display:grid; align-content:center; gap:var(--space-1); min-height:132px; padding:var(--space-5); border-radius:var(--radius-lg); color:var(--text); background:linear-gradient(135deg,color-mix(in srgb,var(--lime) 16%,var(--surface-2)),var(--surface-2)); box-shadow:var(--elevation-1); }
+.portfolio-nav > span { color:var(--muted); font-size:var(--text-caption); text-transform:uppercase; letter-spacing:.08em; }
+.portfolio-nav strong { font-size:clamp(1.35rem,2.3vw,2.05rem); line-height:1.15; }
+.portfolio-nav small { color:var(--muted); font-size:var(--text-caption); }
+.portfolio-overview .portfolio-summary-grid { margin:0; grid-template-columns:repeat(5,minmax(0,1fr)); }
+.portfolio-overview .metric-card { min-height:132px; padding:var(--space-4); }
+.capital-ledger { margin-top:var(--space-4); }
+.capital-ledger-row { display:grid; grid-template-columns:104px 1fr auto; gap:var(--space-3); align-items:center; padding:var(--space-3) 0; border-top:1px solid var(--line); font-size:var(--text-label); }
+.capital-ledger-row time { color:var(--muted); font-variant-numeric:tabular-nums; }.capital-ledger-row b { white-space:nowrap; }
+
+/* Journal decisions reveal their actions with a short left swipe on touch. */
+.journal-entry-actions { display:flex; gap:6px; align-items:center; }.journal-entry-actions button { display:inline-flex; align-items:center; gap:4px; min-height:30px; padding:0 8px; border:1px solid var(--line); border-radius:var(--radius-sm); background:var(--surface-2); color:var(--muted); }.journal-entry-actions button:last-child { color:var(--red); }
+.win-gauge { background:conic-gradient(var(--lime) var(--win),#31443a 0)!important; box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--lime) 28%,transparent); }.win-gauge:before { background:var(--surface-1)!important; }.win-gauge strong { color:var(--text); text-shadow:0 1px 0 color-mix(in srgb,#fff 24%,transparent); }.win-gauge span { color:var(--text)!important; opacity:.76; font-weight:500; }
+
+/* EOD schedule is a recovery-oriented four-step guide, not a loose paragraph list. */
+.eod-stepper { display:grid; gap:0; margin-top:var(--space-4); }.eod-stepper section { position:relative; display:grid; grid-template-columns:32px 1fr; gap:var(--space-3); padding:0 0 var(--space-4); }.eod-stepper section:not(:last-child):before { content:''; position:absolute; left:15px; top:31px; bottom:0; width:1px; background:var(--line); }.eod-stepper i { z-index:1; width:30px; height:30px; display:grid; place-items:center; border-radius:50%; background:var(--lime); color:#102218; font-style:normal; font-weight:800; }.eod-stepper h3 { margin:2px 0 4px; font-size:var(--text-body); }.eod-stepper p { margin:0; color:var(--muted); font-size:var(--text-caption); line-height:1.6; }
+
+@media (max-width:1180px) { .portfolio-overview { grid-template-columns:1fr; }.portfolio-overview .portfolio-summary-grid { grid-template-columns:repeat(5,minmax(140px,1fr)); overflow-x:auto; padding-bottom:2px; }.portfolio-overview .metric-card { min-width:140px; } }
+@media (max-width:760px) { .portfolio-actions { display:grid; grid-template-columns:1fr 1fr; }.portfolio-actions .report-menu { grid-column:1/-1; }.portfolio-actions > .primary-button { grid-column:2; }.portfolio-actions > .secondary-button { grid-column:1; }.portfolio-nav { min-height:118px; padding:var(--space-4); }.portfolio-overview .portfolio-summary-grid { grid-template-columns:repeat(2,minmax(0,1fr)); overflow:visible; }.portfolio-overview .metric-card { min-width:0; min-height:102px; }.capital-ledger-row { grid-template-columns:76px 1fr; gap:var(--space-2); }.capital-ledger-row b { grid-column:2; }.journal-timeline { overflow:hidden; transition:background .18s ease; }.journal-entry-actions { position:absolute; inset:0 0 0 auto; transform:translateX(104%); transition:transform .2s ease; padding:0 10px; background:var(--surface-3); }.journal-entry-actions button { min-height:100%; border:0; border-radius:0; flex-direction:column; justify-content:center; font-size:11px; }.journal-timeline.swiped .journal-entry-actions { transform:translateX(0); }.journal-timeline.swiped > b { margin-right:104px; }.win-gauge { width:148px; height:148px; }.win-gauge strong { font-size:28px; } }
+
 @media (max-width: 1050px) {
   .portfolio-summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }

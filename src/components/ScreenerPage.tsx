@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { ArrowDownAZ, Download, Filter, LayoutGrid, List, Search } from 'lucide-react'
+import { ArrowDownAZ, ChevronDown, Download, FileSpreadsheet, FileText, Filter, LayoutGrid, List, Search } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { formatDate } from '../lib/date'
 
 import { SoftSelect } from './SoftSelect'
 import { DateField } from './DateField'
 import { canonicalEngineName, compareEngines } from '../lib/engineCatalog'
+import { downloadSignalCsv, downloadSignalExcel, downloadSignalPdf } from '../lib/signalReports'
 type SignalRow = { signal_id:string; symbol:string; sector:string|null; as_of_date:string; timeframe:string; action:string; score:number; confluence_count:number; confluence_badge:string; consensus_engines:string[]; reasons:string[] }
 type PricePoint = { symbol_id:string; trading_date:string; close:number; symbols?:{symbol:string}|null }
 
@@ -15,7 +16,6 @@ const engineLabels:Record<string,string>={core_ladder_v1:'Prot Core Engine v1.0'
 const reasonLabels:Record<string,string>={TREND_UP:'Xu hướng tăng',TREND_DOWN:'Xu hướng giảm',TREND_SIDEWAYS:'Xu hướng đi ngang',TREND_UNKNOWN:'Xu hướng chưa đủ dữ liệu'}
 function displayEngine(engine:string){const canonical=canonicalEngineName(engine);return engineLabels[canonical]??canonical.replaceAll('_',' ')}
 function displayReason(reason:string){return reasonLabels[reason]??reason.replace(/^CORE_V1_/,'Core v1 · ').replaceAll('_',' ')}
-function csvCell(value: unknown) { const text = value == null ? '' : String(value); return /[",\r\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text }
 function Sparkline({ points }: { points:number[] }) { const values=points.slice(-20); if(values.length<2)return <span className="sparkline-empty">Chưa đủ 20 phiên</span>; const min=Math.min(...values),max=Math.max(...values),span=max-min||1; const polyline=values.map((value,index)=>`${index/(values.length-1)*100},${92-(value-min)/span*84}`).join(' '); const rising=values.at(-1)!>=values[0]; return <svg className={`sparkline ${rising?'up':'down'}`} viewBox="0 0 100 100" preserveAspectRatio="none" aria-label="Xu hướng giá 20 phiên"><polyline points={polyline}/></svg> }
 
 async function fetchAllConsolidatedSignals():Promise<SignalRow[]> {
@@ -31,7 +31,7 @@ async function fetchAllConsolidatedSignals():Promise<SignalRow[]> {
 }
 
 export function ScreenerPage({ authenticated }: { authenticated: boolean }) {
-  const [query,setQuery]=useState(''); const [action,setAction]=useState('ALL'); const [minScore,setMinScore]=useState(0); const [descending,setDescending]=useState(true); const [page,setPage]=useState(1); const [pageSize,setPageSize]=useState(25); const [view,setView]=useState<'table'|'cards'>(()=>localStorage.getItem('protstock-screener-view')==='cards'?'cards':'table'); const [favorites,setFavorites]=useState<string[]>(()=>{try{return JSON.parse(localStorage.getItem('protstock-favorites')??'[]')}catch{return[]}}); const [exportNotice,setExportNotice]=useState('')
+  const [query,setQuery]=useState(''); const [action,setAction]=useState('ALL'); const [minScore,setMinScore]=useState(0); const [descending,setDescending]=useState(true); const [page,setPage]=useState(1); const [pageSize,setPageSize]=useState(25); const [view,setView]=useState<'table'|'cards'>(()=>localStorage.getItem('protstock-screener-view')==='cards'?'cards':'table'); const [favorites,setFavorites]=useState<string[]>(()=>{try{return JSON.parse(localStorage.getItem('protstock-favorites')??'[]')}catch{return[]}}); const [exportNotice,setExportNotice]=useState(''); const [exportOpen,setExportOpen]=useState(false)
   const signals=useQuery({queryKey:['consolidated-signals'],enabled:authenticated&&Boolean(supabase),queryFn:fetchAllConsolidatedSignals})
   const activeEngines=useQuery({queryKey:['active-core-engines'],enabled:authenticated&&Boolean(supabase),queryFn:async()=>{const {data,error}=await supabase!.from('rules').select('name').eq('status','ACTIVE').ilike('name','Prot Core %');if(error)throw error;return(data??[]).map(item=>canonicalEngineName(item.name))}})
   const prices=useQuery({queryKey:['screener-sparklines'],enabled:authenticated&&Boolean(supabase),staleTime:300_000,queryFn:async()=>{const{data,error}=await supabase!.from('daily_prices').select('symbol_id,trading_date,close,symbols!inner(symbol)').order('trading_date',{ascending:false}).limit(5000);if(error)throw error;return data??[]}})
@@ -48,9 +48,9 @@ export function ScreenerPage({ authenticated }: { authenticated: boolean }) {
   function openChart(symbol:string){localStorage.setItem('protstock-symbol',symbol);dispatchEvent(new CustomEvent('protstock:symbol',{detail:symbol}));location.hash='analysis'}
   function toggleFavorite(symbol:string){setFavorites(current=>{const next=current.includes(symbol)?current.filter(value=>value!==symbol):[...current,symbol];localStorage.setItem('protstock-favorites',JSON.stringify(next));dispatchEvent(new CustomEvent('protstock:favorites',{detail:next}));return next})}
   function openJournal(symbol:string){localStorage.setItem('protstock-symbol',symbol);location.hash='journal'}
-  function exportCsv(){if(!rows.length){setExportNotice('Không có tín hiệu khớp bộ lọc để xuất.');return}const csv=[['Mã','Ngành','Hành động','Khung','Điểm đồng thuận','Số bộ máy','Ngày','Bộ máy tín hiệu','Lý do'],...rows.map(x=>[x.symbol,x.sector??'',x.action,x.timeframe,x.score,x.confluence_count,formatDate(x.as_of_date),x.consensus_engines.map(displayEngine).join(' / '),x.reasons.map(displayReason).join(' / ')])].map(row=>row.map(csvCell).join(',')).join('\r\n');const url=URL.createObjectURL(new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8'}));const anchor=document.createElement('a');anchor.href=url;anchor.download=`prot-stock-tin-hieu-${new Date().toISOString().slice(0,10)}.csv`;document.body.append(anchor);anchor.click();anchor.remove();window.setTimeout(()=>URL.revokeObjectURL(url),1000);setExportNotice(`Đã xuất ${rows.length} tín hiệu theo bộ lọc hiện tại.`)}
+  async function exportSignals(format:'csv'|'excel'|'pdf'){if(!rows.length){setExportNotice('Không có tín hiệu khớp bộ lọc để xuất.');return}const output=rows.map(x=>({symbol:x.symbol,sector:x.sector,action:x.action,timeframe:x.timeframe,score:x.score,confluenceCount:x.confluence_count,date:x.as_of_date,engines:x.consensus_engines.map(displayEngine).join(' / '),reasons:x.reasons.map(displayReason).join(' / ')}));try{if(format==='csv')downloadSignalCsv(output);else if(format==='excel')await downloadSignalExcel(output);else await downloadSignalPdf(output);setExportNotice(`Đã xuất ${rows.length} tín hiệu theo bộ lọc hiện tại.`);setExportOpen(false)}catch{setExportNotice('Không thể tạo tệp xuất. Thử lại sau.')}}
   const ruleDetail=(signal:SignalRow)=><span className="signal-rule-detail"><b>{[...new Set(signal.consensus_engines.map(displayEngine))].join(' · ')}</b><small>{signal.reasons.map(displayReason).join(' · ')||'Tín hiệu EOD tổng hợp'}</small></span>
-  return <section className="workspace-page"><div className="page-title-row"><div><h1>Bộ lọc tín hiệu</h1><p className="muted">Một kết luận tổng hợp cho mỗi mã sau khi phân xử các Core Engine. Nhấp đúp mã để xem phân tích.</p></div><button className="secondary-button export-button" onClick={exportCsv}><Download size={15}/> Xuất CSV</button></div>{exportNotice&&<p className="export-notice" role="status">{exportNotice}</p>}
+  return <section className="workspace-page"><div className="page-title-row"><div><h1>Bộ lọc tín hiệu</h1><p className="muted">Một kết luận tổng hợp cho mỗi mã sau khi phân xử các Core Engine. Nhấp đúp mã để xem phân tích.</p></div><div className="report-menu"><button className="secondary-button export-button" onClick={()=>setExportOpen(value=>!value)}><Download size={15}/> Tải kết quả <ChevronDown size={14}/></button>{exportOpen&&<div className="report-menu-popover"><button onClick={()=>void exportSignals('csv')}><Download size={16}/> Tải CSV <small>.csv · dùng nhanh</small></button><button onClick={()=>void exportSignals('excel')}><FileSpreadsheet size={16}/> Tải Excel <small>.xlsx · đầy đủ bộ lọc</small></button><button onClick={()=>void exportSignals('pdf')}><FileText size={16}/> Tải PDF <small>.pdf · bản in tóm tắt</small></button></div>}</div></div>{exportNotice&&<p className="export-notice" role="status">{exportNotice}</p>}
     <div className="screener-filter-toolbar" aria-label="Bộ lọc tín hiệu">
       <div className="screener-filter-fields">
         <label className="screener-field screener-search"><Search size={15}/><input aria-label="Tìm mã cổ phiếu" value={query} onChange={e => setQuery(e.target.value)} placeholder="Tìm mã…"/></label>
