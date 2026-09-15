@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { ArrowDownAZ, ChevronDown, Download, FileSpreadsheet, FileText, LayoutGrid, List, Search, SlidersHorizontal } from 'lucide-react'
+import { ArrowDownAZ, ChevronDown, Download, FileSpreadsheet, FileText, Filter, LayoutGrid, List, Search, SlidersHorizontal } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { formatDate } from '../lib/date'
 
@@ -54,6 +54,7 @@ export function ScreenerPage({ authenticated }: { authenticated: boolean }) {
     <div className="screener-filter-toolbar" aria-label="Bộ lọc tín hiệu">
       <div className="screener-filter-fields">
         <label className="screener-field screener-search"><Search size={15}/><input aria-label="Tìm mã cổ phiếu" value={query} onChange={e => setQuery(e.target.value)} placeholder="Tìm mã…"/></label>
+        <label className="screener-field screener-action"><Filter size={15}/><SoftSelect aria-label="Hành động" value={action} onChange={e => chooseChip(e.target.value)}><option value="ALL">Mọi hành động</option><option value="CONFLUENCE">Đồng thuận cao</option><option value="BUY">Mua</option><option value="SELL">Bán</option><option value="WATCHLIST">Theo dõi</option></SoftSelect></label>
         <label className="screener-field screener-score">Điểm ≥<input aria-label="Điểm tối thiểu" type="number" min="0" max="100" value={minScore} onChange={e => { setMinScore(Math.max(0,Math.min(100,Number(e.target.value)||0))) }}/></label>
         <button type="button" className="screener-field screener-sort" onClick={() => setDescending(value => !value)}><ArrowDownAZ size={15}/>{descending ? 'Điểm cao → thấp' : 'Điểm thấp → cao'}</button>
       </div>
