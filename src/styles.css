@@ -130,6 +130,18 @@ footer { margin-top: 54px; color: #50665c; font-size:12px; text-align: center; }
 .rule-form select { width: 100%; padding: 12px 13px; border: 1px solid #2c4036; border-radius: 10px; color: #ecf3ef; background: #07110e; font: inherit; }
 .rule-form button { padding: 12px 14px; border: 0; border-radius: 10px; background: #d7ff52; color: #07110e; font: 700 13px inherit; cursor: pointer; }
 .rule-form button:disabled { opacity: .45; cursor: not-allowed; }
+.symbol-autocomplete { position: relative; z-index: 2; }
+.symbol-autocomplete input { text-transform: uppercase; }
+.symbol-suggestions { position: absolute; z-index: 12; top: calc(100% + 6px); right: 0; left: 0; display: grid; overflow: hidden; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface-2); box-shadow: var(--elevation-3); }
+.symbol-suggestions button { display: flex; align-items: baseline; justify-content: space-between; min-height: 42px; padding: 9px 12px; border: 0; border-radius: 0; color: var(--text); background: transparent; text-align: left; }
+.symbol-suggestions button:hover { background: var(--surface-3); }
+.symbol-suggestions small, .symbol-suggestions > span { color: var(--muted); font-size: var(--text-caption); }
+.symbol-suggestions > span { padding: 12px; }
+.portfolio-empty { display: grid; gap: var(--space-3); align-items: start; }
+.portfolio-empty h2, .portfolio-empty p { margin: 0; }
+.portfolio-empty .primary-button { justify-self: start; }
+.page-actions { display: flex; align-items: center; gap: var(--space-2); }
+@media (max-width: 760px) { .page-actions { width: 100%; } .page-actions > button { flex: 1; justify-content: center; } }
 .form-error { color: #ff8b8b; }
 .form-ok { color: #55e6b1; }
 .dsl-preview { min-height: 235px; padding: 14px; overflow: auto; border-radius: 10px; background: #07110e; color: #b8d1c5; font-size:12px; line-height: 1.55; }
