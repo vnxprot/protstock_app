@@ -326,7 +326,7 @@ kbd { display:inline-flex; align-items:center; gap:3px; padding:3px 7px; border:
 .nav-item { overflow:hidden; white-space:nowrap; }
 .nav-label { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .sidebar .nav-label { width:auto; flex:1 1 auto; color:inherit; }
-.sidebar-note { display:flex; align-items:center; overflow:hidden; white-space:nowrap; }
+.sidebar-note { display:flex; align-items:center; gap:10px; overflow:hidden; white-space:nowrap; }
 .sidebar-note-copy { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .sidebar-note small { display:none; }
 .donut { display:grid; place-items:center; background:#1b2c24; }
