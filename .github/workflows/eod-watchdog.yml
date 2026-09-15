@@ -70,14 +70,16 @@ jobs:
     if: inputs.stage == 'early' && needs.inspect.outputs.action == 'DISPATCH_FAST_LANE'
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
       - name: Dispatch the primary Fast Lane only when no EOD worker has started
         env:
           GH_TOKEN: ${{ github.token }}
           TRADING_DATE: ${{ inputs.trading_date }}
+          REPOSITORY: ${{ github.repository }}
         run: |
           args=(--ref main)
           if [ -n "$TRADING_DATE" ]; then args+=(-f "trading_date=$TRADING_DATE"); fi
-          gh workflow run eod-fast.yml "${args[@]}"
+          gh workflow run eod-fast.yml --repo "$REPOSITORY" "${args[@]}"
 
   final-recovery:
     needs: inspect
