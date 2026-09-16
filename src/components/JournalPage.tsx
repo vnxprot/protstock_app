@@ -41,7 +41,30 @@ export function JournalPage({ authenticated }: { authenticated: boolean }) {
   const [toast, setToast] = useState("");
   const [selectedPoint, setSelectedPoint] = useState<number | null>(null);
   const [swipedEntryId, setSwipedEntryId] = useState<string | null>(null);
-  const swipeStart = useRef<Record<string, number>>({});
+  const swipeStart = useRef<Record<string, { x: number; y: number; base: number }>>({});
+  const startSwipe = (id: string, event: PointerEvent<HTMLDivElement>) => {
+    if (event.pointerType === "mouse") return;
+    swipeStart.current[id] = { x: event.clientX, y: event.clientY, base: swipedEntryId === id ? -128 : 0 };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+  const moveSwipe = (id: string, event: PointerEvent<HTMLDivElement>) => {
+    const start = swipeStart.current[id];
+    if (!start || event.pointerType === "mouse") return;
+    const deltaX = event.clientX - start.x;
+    if (Math.abs(event.clientY - start.y) > Math.abs(deltaX)) return;
+    const offset = Math.min(0, Math.max(-128, start.base + deltaX));
+    event.currentTarget.classList.add("is-dragging");
+    event.currentTarget.style.setProperty("--swipe-offset", `${offset}px`);
+  };
+  const finishSwipe = (id: string, event: PointerEvent<HTMLDivElement>) => {
+    const start = swipeStart.current[id];
+    if (!start || event.pointerType === "mouse") return;
+    const offset = Math.min(0, Math.max(-128, start.base + event.clientX - start.x));
+    event.currentTarget.classList.remove("is-dragging");
+    event.currentTarget.style.removeProperty("--swipe-offset");
+    setSwipedEntryId(offset < -56 ? id : null);
+    delete swipeStart.current[id];
+  };
   const entries = useQuery({
     queryKey: ["journal"],
     enabled: authenticated && Boolean(supabase),
@@ -353,26 +376,28 @@ export function JournalPage({ authenticated }: { authenticated: boolean }) {
           <h3>Dòng thời gian quyết định</h3>
         </div>
         {rows.map((item) => (
-          <div className={`journal-timeline ${swipedEntryId === item.id ? "swiped" : ""}`} key={item.id} onPointerDown={event => { swipeStart.current[item.id] = event.clientX; }} onPointerUp={event => { const start = swipeStart.current[item.id]; if (start - event.clientX > 44) setSwipedEntryId(item.id); if (event.clientX - start > 30) setSwipedEntryId(null); }}>
-            <span className={`timeline-dot ${item.outcome?.toLowerCase()}`} />
-            <div>
-              <strong>
-                {item.symbols?.symbol} · {item.decision}
-              </strong>
-              <small>
-                {item.decision_date} · {item.setup_type ?? "Chưa setup"} ·{" "}
-                {item.market_state ?? "Chưa phân loại"}
-              </small>
-              <p>{item.rationale}</p>
-              <em>{emotionLabel(item.lesson)}</em>
+          <div className={`journal-timeline ${swipedEntryId === item.id ? "swiped" : ""}`} key={item.id} onPointerDown={(event) => startSwipe(item.id, event)} onPointerMove={(event) => moveSwipe(item.id, event)} onPointerUp={(event) => finishSwipe(item.id, event)} onPointerCancel={(event) => finishSwipe(item.id, event)}>
+            <div className="journal-entry-content">
+              <span className={`timeline-dot ${item.outcome?.toLowerCase()}`} />
+              <div>
+                <strong>
+                  {item.symbols?.symbol} · {item.decision}
+                </strong>
+                <small>
+                  {item.decision_date} · {item.setup_type ?? "Chưa setup"} ·{" "}
+                  {item.market_state ?? "Chưa phân loại"}
+                </small>
+                <p>{item.rationale}</p>
+                <em>{emotionLabel(item.lesson)}</em>
+              </div>
+              <b
+                className={Number(item.result_pct) < 0 ? "negative" : "positive"}
+              >
+                {Number(item.result_pct ?? 0) > 0 ? "+" : ""}
+                {Number(item.result_pct ?? 0).toFixed(2)}%
+              </b>
             </div>
-            <b
-              className={Number(item.result_pct) < 0 ? "negative" : "positive"}
-            >
-              {Number(item.result_pct ?? 0) > 0 ? "+" : ""}
-              {Number(item.result_pct ?? 0).toFixed(2)}%
-            </b>
-            <span className="journal-entry-actions"><button type="button" onClick={() => openEdit(item)} aria-label="Sửa nhận xét"><Pencil size={14}/><span>Sửa</span></button><button type="button" onClick={() => deleteEntry(item)} aria-label="Xoá nhận xét"><Trash2 size={14}/><span>Xoá</span></button></span>
+            <span className="journal-entry-actions" onPointerDown={(event) => event.stopPropagation()}><button type="button" onClick={() => openEdit(item)} aria-label="Sửa nhận xét"><Pencil size={14}/><span>Sửa</span></button><button type="button" onClick={() => deleteEntry(item)} aria-label="Xoá nhận xét"><Trash2 size={14}/><span>Xoá</span></button></span>
           </div>
         ))}
       </article>
