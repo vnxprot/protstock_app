@@ -170,6 +170,9 @@ html[data-theme="light"] .win-gauge span { color:#52685b!important; }
 html[data-theme="light"] .interactive-equity circle { stroke: #fff; }
 html[data-theme="light"] .interactive-equity circle:is(:hover,:focus) { fill: #172d23; }
 html[data-theme="light"] .core-toggle:not(.is-on) i { background: #fff; }
+html[data-theme="light"] .signal-explanation-panel { background:var(--surface) !important; border-color:var(--line-bright); color:var(--text); }
+html[data-theme="light"] .signal-explanation-groups section,html[data-theme="light"] .signal-explanation-panel header button { background:var(--surface-2) !important; border-color:var(--line); }
+html[data-theme="light"] .signal-explanation-panel header p,html[data-theme="light"] .signal-technical-codes summary,html[data-theme="light"] .signal-technical-codes code,html[data-theme="light"] .signal-explanation-panel footer { color:var(--muted) !important; }
 html[data-theme="light"] .risk-warning svg { color: #844611; }
 html[data-theme="light"] :is(.zone-card strong i,.screener-results-tools > span,.command-label,.command-main small,.ai-explain-card > span,.ai-explain-card > em,.ai-explain-card small,.command-tabs button,.command-icon) { color: var(--muted) !important; }
 html[data-theme="light"] :is(.zone-meta > span:not(.zone-touches),.signal-timeframe) { background: var(--surface-2) !important; color: var(--text) !important; border-color: var(--line-bright); }

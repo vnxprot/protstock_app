@@ -1163,6 +1163,29 @@ button, input, select, textarea, svg text { font-family: var(--font-family); }
 .health-timestamp b { color:var(--text); font-size:var(--text-label); }
 .overview-page .health-details .health-run-window dd { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
 .health-run-window dd>span { display:grid; gap:3px; padding:8px; border:1px solid var(--line); border-radius:var(--radius-sm); background:var(--surface-2); }
+
+/* Signal explanations keep the screener compact while making the rule path readable. */
+.signal-explain-trigger { justify-self:start; min-height:26px; padding:0; border:0; color:var(--lime); background:transparent; font:600 var(--text-caption); cursor:pointer; }
+.signal-explain-trigger:hover { text-decoration:underline; text-underline-offset:3px; }
+.signal-explanation-backdrop { position:fixed; z-index:120; inset:0; display:grid; place-items:center; padding:24px; background:rgba(2,8,6,.68); backdrop-filter:blur(8px); }
+.signal-explanation-panel { width:min(560px,100%); max-height:min(720px,calc(100dvh - 48px)); overflow:auto; padding:var(--space-5); border:1px solid var(--line-bright); border-radius:var(--radius-lg); color:var(--text); background:var(--surface); box-shadow:var(--elevation-4); }
+.signal-explanation-panel header { display:flex; align-items:flex-start; gap:var(--space-3); margin:0 0 var(--space-5); }
+.signal-explanation-panel header>div { min-width:0; flex:1; }
+.signal-explanation-panel header span { display:block; margin-bottom:var(--space-1); color:var(--lime); font:var(--text-caption); font-weight:600; }
+.signal-explanation-panel h2 { margin:0 0 var(--space-2); font:var(--text-heading); }
+.signal-explanation-panel header p { margin:0; color:var(--muted); font:var(--text-body); }
+.signal-explanation-panel header button { display:grid; flex:0 0 auto; width:34px; height:34px; place-items:center; border:1px solid var(--line); border-radius:var(--radius-sm); color:var(--muted); background:var(--surface-2); cursor:pointer; }
+.signal-explanation-panel header button:hover { color:var(--text); background:var(--surface-3); }
+.signal-explanation-groups { display:grid; gap:var(--space-3); }
+.signal-explanation-groups section { padding:var(--space-3) var(--space-4); border-radius:var(--radius-md); background:var(--surface-2); }
+.signal-explanation-groups h3 { margin:0 0 var(--space-2); color:var(--lime); font:var(--text-label); }
+.signal-explanation-groups p { margin:0; color:var(--text); font:var(--text-body); }
+.signal-explanation-groups p+p { margin-top:var(--space-2); }
+.signal-technical-codes { margin-top:var(--space-4); padding-top:var(--space-3); border-top:1px solid var(--line); }
+.signal-technical-codes summary { color:var(--muted); font:var(--text-caption); cursor:pointer; }
+.signal-technical-codes code { display:block; margin-top:var(--space-2); overflow-wrap:anywhere; color:var(--muted); font:var(--text-caption); }
+.signal-explanation-panel footer { margin:var(--space-4) 0 0; color:var(--muted); font:var(--text-caption); text-align:left; }
+@media (max-width:760px) { .signal-explanation-backdrop { align-items:end; padding:0; }.signal-explanation-panel { width:100%; max-height:82dvh; padding:var(--space-5) var(--space-4) calc(var(--space-5) + env(safe-area-inset-bottom)); border-radius:var(--radius-xl) var(--radius-xl) 0 0; }.signal-explanation-groups section { padding:var(--space-3); } }
 .health-run-window dd>span>small { color:var(--muted); font-size:var(--text-xs); }
 .health-run-window .health-timestamp { justify-content:space-between; }
 @media (max-width:420px) {
