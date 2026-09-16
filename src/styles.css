@@ -1118,6 +1118,19 @@ button, input, select, textarea, svg text { font-family: var(--font-family); }
   .screener-filter-fields { grid-template-columns:minmax(150px,170px) minmax(165px,185px) minmax(92px,104px) minmax(160px,175px)!important; }
 }
 
+/* Tables scroll before zoom can compress headers and data into each other. */
+@media (min-width:761px) and (max-width:1180px) {
+  .data-table { overflow-x:auto; overscroll-behavior-inline:contain; }
+  .data-table .table-head,
+  .data-table .position-row { width:max-content; min-width:840px; box-sizing:border-box; }
+  .admin-table .table-head,
+  .admin-table .position-row { min-width:1040px; }
+  .portfolio-positions-table .table-head,
+  .portfolio-positions-table .position-row { min-width:1080px; }
+  .screener-table .table-head,
+  .screener-table .position-row { min-width:953px; }
+}
+
 /* A timestamp is deliberately split into date and time, avoiding ambiguous number runs. */
 .overview-page .health-details dd { display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; }
 .health-timestamp { display:inline-flex; align-items:baseline; gap:6px; white-space:nowrap; font-variant-numeric:tabular-nums; }

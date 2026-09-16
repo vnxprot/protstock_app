@@ -1,18 +1,275 @@
-import { FormEvent, useState } from 'react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Eye, EyeOff, LockKeyhole, Plus, Power, Users } from 'lucide-react'
-import { supabase } from '../lib/supabase'
-import { DateField } from './DateField'
+import { FormEvent, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Eye, EyeOff, LockKeyhole, Plus, Power, Users } from "lucide-react";
+import { supabase } from "../lib/supabase";
+import { DateField } from "./DateField";
 
-type Profile = { user_id:string; username:string; full_name:string; role:string; status:string; created_at:string; last_login_at:string|null; last_seen_at:string|null }
-const date = (value:string|null) => value ? new Date(value).toLocaleString('vi-VN', { hour12:false }) : 'Chưa có'
+type Profile = {
+  user_id: string;
+  username: string;
+  full_name: string;
+  role: string;
+  status: string;
+  created_at: string;
+  last_login_at: string | null;
+  last_seen_at: string | null;
+};
+const date = (value: string | null) =>
+  value
+    ? new Date(value).toLocaleString("vi-VN", { hour12: false })
+    : "Chưa có";
+const accessState = (row: Profile) => {
+  if (row.status === "ACTIVE" && !row.last_login_at) return { label: "Chờ đăng nhập", className: "invited" };
+  if (row.status === "ACTIVE") return { label: "Đang cho phép", className: "active" };
+  if (row.status === "SUSPENDED") return { label: "Tạm khóa", className: "suspended" };
+  if (row.status === "INVITED") return { label: "Đã mời", className: "invited" };
+  return { label: "Đã vô hiệu hóa", className: "disabled" };
+};
 export function AdminPage() {
-  const client=useQueryClient(); const [open,setOpen]=useState(false); const [name,setName]=useState(''); const [username,setUsername]=useState(''); const [password,setPassword]=useState(''); const [showPassword,setShowPassword]=useState(false); const [toast,setToast]=useState('')
-  const accounts=useQuery({queryKey:['admin-accounts'],queryFn:async()=>{const {data,error}=await supabase!.from('user_profiles').select('user_id,username,full_name,role,status,created_at,last_login_at,last_seen_at').order('created_at',{ascending:false});if(error)throw error;return data as Profile[]}})
-  const events=useQuery({queryKey:['admin-login-events'],queryFn:async()=>{const {data,error}=await supabase!.from('user_login_events').select('user_id,event_type,occurred_at').order('occurred_at',{ascending:false}).limit(500);if(error)throw error;return data??[]}})
-  const sessions=useQuery({queryKey:['admin-sessions'],queryFn:async()=>{const {data,error}=await supabase!.from('user_active_sessions').select('user_id,session_id,last_seen_at').gte('last_seen_at',new Date(Date.now()-14*864e5).toISOString());if(error)throw error;return data??[]}})
-  const call=async(action:string,payload:Record<string,unknown>)=>{const {error}=await supabase!.functions.invoke('admin-users',{body:{action,...payload}});if(error){let detail=error.message;try{const body=await (error as any).context?.clone().json();detail=body?.error??detail}catch{}setToast(`Không thể thực hiện thao tác: ${detail}`);return false}client.invalidateQueries({queryKey:['admin-accounts']});client.invalidateQueries({queryKey:['admin-sessions']});setToast('Đã cập nhật');setTimeout(()=>setToast(''),2400);return true}
-  const create=async(event:FormEvent)=>{event.preventDefault();const created=await call('create',{full_name:name,username,password});if(!created)return;setOpen(false);setName('');setUsername('');setPassword('');setShowPassword(false)}
-  const logins=(id:string,days:number)=> (events.data??[]).filter((event:any)=>event.user_id===id&&event.event_type==='LOGIN'&&new Date(event.occurred_at).getTime()>=Date.now()-days*864e5).length
-  return <section className="workspace-page admin-page"><div className="page-title-row"><div><h1>Quản trị</h1><p className="muted">Tài khoản, phiên sử dụng và quyền truy cập hệ thống.</p></div><button className="primary-button" onClick={()=>setOpen(true)}><Plus size={16}/> Tạo tài khoản</button></div><div className="admin-summary"><article><Users size={18}/><strong>{accounts.data?.filter(x=>x.status==='ACTIVE').length??0}</strong><span>tài khoản hoạt động</span></article><article><Power size={18}/><strong>{sessions.data?.length??0}</strong><span>phiên trong 14 ngày</span></article><article><LockKeyhole size={18}/><strong>{accounts.data?.filter(x=>x.last_seen_at&&Date.now()-new Date(x.last_seen_at).getTime()<15*60e3).length??0}</strong><span>đang trực tuyến gần đây</span></article></div><article className="panel"><div className="panel-title"><h3>Danh sách tài khoản</h3><span>{accounts.data?.length??0} tài khoản</span></div><div className="data-table admin-table"><div className="table-head"><span>Người dùng</span><span>Vai trò</span><span>Trạng thái</span><span>Lần dùng gần nhất</span><span>7 / 30 ngày</span><span>Phiên</span><span>Thao tác</span></div>{(accounts.data??[]).map(row=><div className="position-row" key={row.user_id}><strong>{row.full_name}<small>@{row.username} · tạo {date(row.created_at)}</small></strong><span>{row.role==='ADMIN'?'Prot Admin':'Client'}</span><span className={`account-status ${row.status.toLowerCase()}`}>{row.status==='ACTIVE'?'Hoạt động':row.status==='SUSPENDED'?'Tạm khóa':row.status==='INVITED'?'Đã mời':'Đã vô hiệu hóa'}</span><span>{date(row.last_seen_at??row.last_login_at)}</span><span>{logins(row.user_id,7)} / {logins(row.user_id,30)}</span><span>{(sessions.data??[]).filter((x:any)=>x.user_id===row.user_id).length}</span><div className="admin-actions">{row.role!=='ADMIN'&&<><button onClick={()=>void call('status',{user_id:row.user_id,status:row.status==='ACTIVE'?'SUSPENDED':'ACTIVE'})}>{row.status==='ACTIVE'?'Khóa':'Mở khóa'}</button><button onClick={()=>void call('signout_all',{user_id:row.user_id})}>Đăng xuất hết</button></>}</div></div>)}</div></article>{open&&<div className="sheet-backdrop" onMouseDown={()=>setOpen(false)}><form className="bottom-sheet position-sheet rule-form" onSubmit={create} onMouseDown={event=>event.stopPropagation()}><div className="sheet-handle"/><div className="sheet-title"><h2>Tạo tài khoản Client</h2></div><label>Họ và tên<input value={name} onChange={e=>setName(e.target.value)} required/></label><label>Username<input value={username} onChange={e=>setUsername(e.target.value.toLowerCase())} pattern="[a-z0-9_]{3,32}" required/></label><label>Mật khẩu ban đầu<span className="password-input"><input type={showPassword?'text':'password'} value={password} onChange={e=>setPassword(e.target.value)} required/><button type="button" onClick={()=>setShowPassword(value=>!value)} aria-label={showPassword?'Ẩn mật khẩu':'Hiện mật khẩu'}>{showPassword?<EyeOff size={17}/>:<Eye size={17}/>}</button></span></label><p className="muted">Đăng nhập bằng username/mật khẩu; Client chỉ xem Tổng quan, Phân tích mã và Bộ lọc tín hiệu.</p><div className="form-sticky-actions"><button>Tạo tài khoản</button></div></form></div>}{toast&&<div className="toast">{toast}</div>}</section>
+  const client = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState("");
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [toast, setToast] = useState("");
+  const accounts = useQuery({
+    queryKey: ["admin-accounts"],
+    queryFn: async () => {
+      const { data, error } = await supabase!
+        .from("user_profiles")
+        .select(
+          "user_id,username,full_name,role,status,created_at,last_login_at,last_seen_at",
+        )
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return data as Profile[];
+    },
+  });
+  const events = useQuery({
+    queryKey: ["admin-login-events"],
+    queryFn: async () => {
+      const { data, error } = await supabase!
+        .from("user_login_events")
+        .select("user_id,event_type,occurred_at")
+        .order("occurred_at", { ascending: false })
+        .limit(500);
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+  const sessions = useQuery({
+    queryKey: ["admin-sessions"],
+    queryFn: async () => {
+      const { data, error } = await supabase!
+        .from("user_active_sessions")
+        .select("user_id,session_id,last_seen_at")
+        .gte("last_seen_at", new Date(Date.now() - 14 * 864e5).toISOString());
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+  const call = async (action: string, payload: Record<string, unknown>) => {
+    const { error } = await supabase!.functions.invoke("admin-users", {
+      body: { action, ...payload },
+    });
+    if (error) {
+      let detail = error.message;
+      try {
+        const body = await (error as any).context?.clone().json();
+        detail = body?.error ?? detail;
+      } catch {}
+      setToast(`Không thể thực hiện thao tác: ${detail}`);
+      return false;
+    }
+    client.invalidateQueries({ queryKey: ["admin-accounts"] });
+    client.invalidateQueries({ queryKey: ["admin-sessions"] });
+    setToast("Đã cập nhật");
+    setTimeout(() => setToast(""), 2400);
+    return true;
+  };
+  const create = async (event: FormEvent) => {
+    event.preventDefault();
+    const created = await call("create", {
+      full_name: name,
+      username,
+      password,
+    });
+    if (!created) return;
+    setOpen(false);
+    setName("");
+    setUsername("");
+    setPassword("");
+    setShowPassword(false);
+  };
+  const logins = (id: string, days: number) =>
+    (events.data ?? []).filter(
+      (event: any) =>
+        event.user_id === id &&
+        event.event_type === "LOGIN" &&
+        new Date(event.occurred_at).getTime() >= Date.now() - days * 864e5,
+    ).length;
+  return (
+    <section className="workspace-page admin-page">
+      <div className="page-title-row">
+        <div>
+          <h1>Quản trị</h1>
+          <p className="muted">
+            Tài khoản, phiên sử dụng và quyền truy cập hệ thống.
+          </p>
+        </div>
+        <button className="primary-button" onClick={() => setOpen(true)}>
+          <Plus size={16} /> Tạo tài khoản
+        </button>
+      </div>
+      <div className="admin-summary">
+        <article>
+          <Users size={18} />
+          <strong>
+            {accounts.data?.filter((x) => x.status === "ACTIVE").length ?? 0}
+          </strong>
+          <span>tài khoản được mở truy cập</span>
+        </article>
+        <article>
+          <Power size={18} />
+          <strong>{sessions.data?.length ?? 0}</strong>
+          <span>phiên trong 14 ngày</span>
+        </article>
+        <article>
+          <LockKeyhole size={18} />
+          <strong>
+            {accounts.data?.filter(
+              (x) =>
+                x.last_seen_at &&
+                Date.now() - new Date(x.last_seen_at).getTime() < 15 * 60e3,
+            ).length ?? 0}
+          </strong>
+          <span>đang trực tuyến gần đây</span>
+        </article>
+      </div>
+      <article className="panel">
+        <div className="panel-title">
+          <h3>Danh sách tài khoản</h3>
+          <span>{accounts.data?.length ?? 0} tài khoản</span>
+        </div>
+        <div className="data-table admin-table">
+          <div className="table-head">
+            <span>Người dùng</span>
+            <span>Vai trò</span>
+            <span>Trạng thái truy cập</span>
+            <span>Lần dùng gần nhất</span>
+            <span>7 / 30 ngày</span>
+            <span>Phiên</span>
+            <span>Thao tác</span>
+          </div>
+          {(accounts.data ?? []).map((row) => (
+            <div className="position-row" key={row.user_id}>
+              <strong>
+                {row.full_name}
+                <small>
+                  @{row.username} · tạo {date(row.created_at)}
+                </small>
+              </strong>
+              <span>{row.role === "ADMIN" ? "Prot Admin" : "Client"}</span>
+              <span className={`account-status ${accessState(row).className}`}>
+                {accessState(row).label}
+              </span>
+              <span>{date(row.last_seen_at ?? row.last_login_at)}</span>
+              <span>
+                {logins(row.user_id, 7)} / {logins(row.user_id, 30)}
+              </span>
+              <span>
+                {
+                  (sessions.data ?? []).filter(
+                    (x: any) => x.user_id === row.user_id,
+                  ).length
+                }
+              </span>
+              <div className="admin-actions">
+                {row.role !== "ADMIN" && (
+                  <>
+                    <button
+                      onClick={() =>
+                        void call("status", {
+                          user_id: row.user_id,
+                          status:
+                            row.status === "ACTIVE" ? "SUSPENDED" : "ACTIVE",
+                        })
+                      }
+                    >
+                      {row.status === "ACTIVE" ? "Khóa" : "Mở khóa"}
+                    </button>
+                    <button
+                      onClick={() =>
+                        void call("signout_all", { user_id: row.user_id })
+                      }
+                    >
+                      Đăng xuất hết
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      </article>
+      {open && (
+        <div className="sheet-backdrop" onMouseDown={() => setOpen(false)}>
+          <form
+            className="bottom-sheet position-sheet rule-form"
+            onSubmit={create}
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <div className="sheet-handle" />
+            <div className="sheet-title">
+              <h2>Tạo tài khoản Client</h2>
+            </div>
+            <label>
+              Họ và tên
+              <input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                required
+              />
+            </label>
+            <label>
+              Username
+              <input
+                value={username}
+                onChange={(e) => setUsername(e.target.value.toLowerCase())}
+                pattern="[a-z0-9_]{3,32}"
+                required
+              />
+            </label>
+            <label>
+              Mật khẩu ban đầu
+              <span className="password-input">
+                <input
+                  type={showPassword ? "text" : "password"}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((value) => !value)}
+                  aria-label={showPassword ? "Ẩn mật khẩu" : "Hiện mật khẩu"}
+                >
+                  {showPassword ? <EyeOff size={17} /> : <Eye size={17} />}
+                </button>
+              </span>
+            </label>
+            <p className="muted">
+              Đăng nhập bằng username/mật khẩu; Client chỉ xem Tổng quan, Phân
+              tích mã và Bộ lọc tín hiệu.
+            </p>
+            <div className="form-sticky-actions">
+              <button>Tạo tài khoản</button>
+            </div>
+          </form>
+        </div>
+      )}
+      {toast && <div className="toast">{toast}</div>}
+    </section>
+  );
 }
