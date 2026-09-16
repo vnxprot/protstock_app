@@ -1150,9 +1150,9 @@ button, input, select, textarea, svg text { font-family: var(--font-family); }
   .journal-timeline.is-dragging .journal-entry-content { transition:none; }
   .journal-timeline.swiped .journal-entry-content { transform:translate3d(calc(-1 * var(--journal-swipe-width)),0,0); }
   .journal-entry-actions { position:absolute; z-index:0; inset:0 0 0 auto; display:grid; grid-template-columns:1fr 1fr; width:var(--journal-swipe-width); padding:0!important; background:transparent!important; transform:none!important; }
-  .journal-entry-actions button { display:flex!important; flex-direction:column; align-items:center; justify-content:center; gap:4px; min-width:0; min-height:0!important; padding:0!important; border:0!important; border-radius:0!important; background:transparent!important; box-shadow:none!important; font-size:11px!important; font-weight:700; }
-  .journal-entry-actions button:first-child { color:#3698f5!important; }
-  .journal-entry-actions button:last-child { color:#ef4a4a!important; }
+  .journal-entry-actions button { display:flex!important; flex-direction:column; align-items:center; justify-content:center; gap:4px; min-width:0; min-height:0!important; padding:0!important; border:0!important; border-radius:0!important; color:#fff!important; box-shadow:none!important; font-size:11px!important; font-weight:700; }
+  .journal-entry-actions button:first-child { background:#2384d6!important; }
+  .journal-entry-actions button:last-child { background:#df4545!important; }
 }
 
 /* A timestamp is deliberately split into date and time, avoiding ambiguous number runs. */
