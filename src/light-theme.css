@@ -116,6 +116,57 @@ html[data-theme="light"] .dsl-key { color: #2463a7; }
 html[data-theme="light"] .dsl-number { color: #875515; }
 html[data-theme="light"] .dsl-string { color: #08754d; }
 html[data-theme="light"] .win-gauge { background: conic-gradient(var(--mint) var(--win), #dce7df 0); }
+
+/* Light surfaces: retain contrast for interactive rule blocks and guided steps. */
+html[data-theme="light"] .rule-mode-tabs,
+html[data-theme="light"] .rule-mode-tabs button,
+html[data-theme="light"] .rule-mode-tabs button.active {
+  background:transparent!important;
+  border-color:transparent!important;
+}
+html[data-theme="light"] .rule-mode-tabs button { color:var(--muted)!important; }
+html[data-theme="light"] .rule-mode-tabs button.active {
+  color:#3f6200!important;
+  box-shadow:inset 0 -2px 0 #6f9900;
+}
+html[data-theme="light"] .rule-form .visual-builder .condition-card {
+  background:#fff!important;
+  border-color:#d7e2da!important;
+  color:#172d23!important;
+}
+html[data-theme="light"] .rule-form .visual-builder .condition-card:hover {
+  background:#f7faef!important;
+  border-color:#a9c967!important;
+}
+html[data-theme="light"] .rule-form .visual-builder .condition-card.selected {
+  background:#f1f8df!important;
+  border-color:#98b95a!important;
+}
+html[data-theme="light"] .rule-form .visual-builder .condition-card > span {
+  background:#e9f0eb!important;
+  color:#476500!important;
+}
+html[data-theme="light"] .rule-form .visual-builder .condition-card.selected > span,
+html[data-theme="light"] .rule-form .visual-builder .condition-card.selected em {
+  background:#d7ff52!important;
+  color:#172d23!important;
+}
+html[data-theme="light"] .rule-form .visual-builder .condition-card em {
+  background:#edf3ef!important;
+  color:#52685b!important;
+}
+html[data-theme="light"] .eod-stepper i {
+  background:#d7ff52!important;
+  color:#172d23!important;
+  box-shadow:0 0 0 1px #badb6e;
+}
+html[data-theme="light"] .win-gauge {
+  background:conic-gradient(#d7ff52 var(--win), #dce7df 0)!important;
+  box-shadow:inset 0 0 0 1px #c5d5c9;
+}
+html[data-theme="light"] .win-gauge:before { background:#fff!important; }
+html[data-theme="light"] .win-gauge strong { color:#172d23!important; }
+html[data-theme="light"] .win-gauge span { color:#52685b!important; }
 html[data-theme="light"] .interactive-equity circle { stroke: #fff; }
 html[data-theme="light"] .interactive-equity circle:is(:hover,:focus) { fill: #172d23; }
 html[data-theme="light"] .core-toggle:not(.is-on) i { background: #fff; }

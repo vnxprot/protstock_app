@@ -16,28 +16,31 @@ export function TodayHealth() {
     staleTime: 60_000,
     queryFn: async () => {
       if (!supabase) throw new Error('Supabase is not configured')
-      const [{ count: priceRows, error: priceError }, { count: coveredSymbols, error: coverageError }, { data: signals, error: signalError }, { data: jobs, error: jobError }, { count: activeSymbols, error: universeError }] = await Promise.all([
+      const [{ count: priceRows, error: priceError }, { count: coveredSymbols, error: coverageError }, { data: latestSignal, error: signalError }, { data: jobs, error: jobError }, { count: activeSymbols, error: universeError }] = await Promise.all([
         supabase.from('daily_prices').select('symbol_id', { count: 'exact', head: true }),
         supabase.from('latest_daily_prices').select('symbol_id', { count: 'exact', head: true }),
-        supabase.from('consolidated_signals').select('composite_action,as_of_date,created_at').order('as_of_date', { ascending: false }).order('created_at', { ascending: false }).limit(1000),
+        supabase.from('consolidated_signals').select('as_of_date,created_at').order('as_of_date', { ascending: false }).order('created_at', { ascending: false }).limit(1).maybeSingle(),
         supabase.from('job_runs').select('id,status,trading_date,counts,warnings,started_at,finished_at').eq('job_type', 'EOD_INGEST').order('started_at', { ascending: false }).limit(8),
         supabase.from('symbols').select('id', { count: 'exact', head: true }).eq('active', true),
       ])
       if (priceError || coverageError || signalError || jobError || universeError) throw priceError || coverageError || signalError || jobError || universeError
+      const newestDate = latestSignal?.as_of_date
+      const [actionCount, watchCount] = newestDate ? await Promise.all([
+        supabase.from('consolidated_signals').select('id', { count: 'exact', head: true }).eq('as_of_date', newestDate).neq('composite_action', 'WATCH'),
+        supabase.from('consolidated_signals').select('id', { count: 'exact', head: true }).eq('as_of_date', newestDate).eq('composite_action', 'WATCH'),
+      ]) : [{ count: 0, error: null }, { count: 0, error: null }]
+      if (actionCount.error || watchCount.error) throw actionCount.error || watchCount.error
       const job = jobs?.[0]
       const attentionJob = (jobs ?? []).find(candidate => candidate.status === 'PARTIAL' || candidate.status === 'FAILED')
       const { data: failedItems, error: failedError } = attentionJob
         ? await supabase.from('job_run_items').select('item_key,error_code').eq('job_run_id', attentionJob.id).eq('status', 'FAILED').order('item_key')
         : { data: [], error: null }
       if (failedError) throw failedError
-      const newestDate = signals?.[0]?.as_of_date
-      const todaySignals = (signals ?? []).filter(signal => signal.as_of_date === newestDate)
-      const latestSignalAt = todaySignals[0]?.created_at
       return {
         priceRows: priceRows ?? 0, coveredSymbols: coveredSymbols ?? 0, activeSymbols: activeSymbols ?? 0, newestDate,
-        coreActions: todaySignals.filter(signal => signal.composite_action !== 'WATCH').length,
-        coreWatch: todaySignals.filter(signal => signal.composite_action === 'WATCH').length,
-        latestSignalAt, job, attentionJob, failedItems: failedItems ?? [],
+        coreActions: actionCount.count ?? 0,
+        coreWatch: watchCount.count ?? 0,
+        latestSignalAt: latestSignal?.created_at, job, attentionJob, failedItems: failedItems ?? [],
       }
     },
   })
@@ -45,7 +48,7 @@ export function TodayHealth() {
   return <article className="panel discipline-card today-health-card">
     <div className="panel-title"><div><h2>Dữ liệu và pipeline</h2></div><Activity size={23}/></div>
     {health.isLoading ? <p className="muted">Đang kiểm tra độ phủ dữ liệu…</p> : health.isError ? <p className="negative">Không tải được trạng thái dữ liệu.</p> : <>
-      <div className="health-metrics"><span><b>{data?.coveredSymbols ?? 0}/{data?.activeSymbols ?? 0}</b><small>Mã có giá</small></span><span><b>{(data?.priceRows ?? 0).toLocaleString('vi-VN')}</b><small>Bản ghi giá</small></span><span><b>{data?.coreActions ?? 0}</b><small>Action tổng hợp</small></span><span><b>{data?.coreWatch ?? 0}</b><small>WATCH tổng hợp</small></span></div>
+      <div className="health-metrics"><span><b>{data?.coveredSymbols ?? 0}/{data?.activeSymbols ?? 0}</b><small>Mã có giá mới nhất</small></span><span><b>{(data?.priceRows ?? 0).toLocaleString('vi-VN')}</b><small>Tổng bản ghi giá</small></span><span><b>{data?.coreActions ?? 0}</b><small>Action · phiên mới nhất</small></span><span><b>{data?.coreWatch ?? 0}</b><small>WATCH · phiên mới nhất</small></span></div>
       <dl className="health-details">
         <div><dt>Signal mới nhất</dt><dd><span>Phiên {formatDate(data?.newestDate)}</span><Timestamp value={data?.latestSignalAt}/></dd></div>
         <div><dt>EOD gần nhất · {data?.job?.status ?? '—'}</dt><dd><span>Phiên {formatDate(data?.job?.trading_date)}</span><Timestamp value={data?.job?.finished_at ?? data?.job?.started_at}/></dd></div>
