@@ -19,7 +19,7 @@ const date = (value: string | null) =>
     ? new Date(value).toLocaleString("vi-VN", { hour12: false })
     : "Chưa có";
 const accessState = (row: Profile) => {
-  if (row.status === "ACTIVE" && !row.last_login_at) return { label: "Chờ đăng nhập", className: "invited" };
+  if (row.status === "ACTIVE" && !row.last_login_at && !row.last_seen_at) return { label: "Chờ đăng nhập", className: "invited" };
   if (row.status === "ACTIVE") return { label: "Đang cho phép", className: "active" };
   if (row.status === "SUSPENDED") return { label: "Tạm khóa", className: "suspended" };
   if (row.status === "INVITED") return { label: "Đã mời", className: "invited" };
