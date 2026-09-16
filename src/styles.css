@@ -1186,6 +1186,32 @@ button, input, select, textarea, svg text { font-family: var(--font-family); }
 .signal-technical-codes code { display:block; margin-top:var(--space-2); overflow-wrap:anywhere; color:var(--muted); font:var(--text-caption); }
 .signal-explanation-panel footer { margin:var(--space-4) 0 0; color:var(--muted); font:var(--text-caption); text-align:left; }
 @media (max-width:760px) { .signal-explanation-backdrop { align-items:end; padding:0; }.signal-explanation-panel { width:100%; max-height:82dvh; padding:var(--space-5) var(--space-4) calc(var(--space-5) + env(safe-area-inset-bottom)); border-radius:var(--radius-xl) var(--radius-xl) 0 0; }.signal-explanation-groups section { padding:var(--space-3); } }
+
+/* Keep source, auditable codes, and plain-language interpretation distinct. */
+.signal-engine-detail,.signal-technical-detail,.signal-explanation-detail { display:grid; min-width:0; gap:var(--space-1); line-height:1.45; }
+.signal-engine-detail { color:var(--lime); font-size:var(--text-caption); font-weight:600; overflow-wrap:anywhere; }
+.signal-technical-detail { color:var(--muted); font-size:11px; overflow-wrap:anywhere; }
+.signal-explanation-detail small { color:var(--text); font-size:var(--text-caption); line-height:1.45; }
+.signal-card-details { display:grid; gap:var(--space-3); padding-top:var(--space-2); }
+@media (min-width:761px) {
+  .screener-table .table-head,.screener-table .position-row { grid-template-columns:100px 115px 65px 150px minmax(175px,.8fr) minmax(250px,1.2fr) minmax(275px,1.4fr) 110px; width:max(100%,1325px); min-width:0; }
+  .screener-table .table-head > :nth-child(n+5):nth-child(-n+7),.screener-table .signal-engine-detail,.screener-table .signal-technical-detail,.screener-table .signal-explanation-detail { text-align:left; text-align-last:auto; }
+  .screener-table .signal-engine-detail { grid-column:5; }
+  .screener-table .signal-technical-detail { grid-column:6; }
+  .screener-table .signal-explanation-detail { grid-column:7; }
+  .screener-table .signal-date,.screener-table .table-head > :nth-child(8) { grid-column:8; color:var(--text); }
+}
+@media (max-width:760px) {
+  .screener-table .position-row { grid-template-columns:minmax(0,1fr) auto; grid-template-areas:'symbol date' 'meta meta' 'engine engine' 'technical technical' 'explanation explanation'; }
+  .screener-table .signal-engine-detail { grid-area:engine; }
+  .screener-table .signal-technical-detail { grid-area:technical; }
+  .screener-table .signal-explanation-detail { grid-area:explanation; }
+  .signal-engine-detail,.signal-technical-detail,.signal-explanation-detail { padding-top:var(--space-2); border-top:1px solid var(--line); text-align:left; }
+  .signal-engine-detail::before,.signal-technical-detail::before,.signal-explanation-detail::before { color:var(--muted); font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.04em; }
+  .signal-engine-detail::before { content:'Bộ máy'; }
+  .signal-technical-detail::before { content:'Tín hiệu & lý do'; }
+  .signal-explanation-detail::before { content:'Diễn giải'; }
+}
 .health-run-window dd>span>small { color:var(--muted); font-size:var(--text-xs); }
 .health-run-window .health-timestamp { justify-content:space-between; }
 @media (max-width:420px) {
