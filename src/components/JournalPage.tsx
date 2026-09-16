@@ -23,6 +23,7 @@ const decisionMatches = (decision: string, action: string) =>
     SKIP: action === "WATCH",
     HOLD: action === "WATCH",
   })[decision] ?? false;
+const swipeActionWidth = 144;
 
 export function JournalPage({ authenticated }: { authenticated: boolean }) {
   const client = useQueryClient();
@@ -42,9 +43,11 @@ export function JournalPage({ authenticated }: { authenticated: boolean }) {
   const [selectedPoint, setSelectedPoint] = useState<number | null>(null);
   const [swipedEntryId, setSwipedEntryId] = useState<string | null>(null);
   const swipeStart = useRef<Record<string, { x: number; y: number; base: number }>>({});
+  const swipeDidMove = useRef(false);
   const startSwipe = (id: string, event: PointerEvent<HTMLDivElement>) => {
     if (event.pointerType === "mouse") return;
-    swipeStart.current[id] = { x: event.clientX, y: event.clientY, base: swipedEntryId === id ? -128 : 0 };
+    swipeDidMove.current = false;
+    swipeStart.current[id] = { x: event.clientX, y: event.clientY, base: swipedEntryId === id ? -swipeActionWidth : 0 };
     event.currentTarget.setPointerCapture(event.pointerId);
   };
   const moveSwipe = (id: string, event: PointerEvent<HTMLDivElement>) => {
@@ -52,18 +55,20 @@ export function JournalPage({ authenticated }: { authenticated: boolean }) {
     if (!start || event.pointerType === "mouse") return;
     const deltaX = event.clientX - start.x;
     if (Math.abs(event.clientY - start.y) > Math.abs(deltaX)) return;
-    const offset = Math.min(0, Math.max(-128, start.base + deltaX));
+    if (Math.abs(deltaX) > 8) swipeDidMove.current = true;
+    const offset = Math.min(0, Math.max(-swipeActionWidth, start.base + deltaX));
     event.currentTarget.classList.add("is-dragging");
     event.currentTarget.style.setProperty("--swipe-offset", `${offset}px`);
   };
   const finishSwipe = (id: string, event: PointerEvent<HTMLDivElement>) => {
     const start = swipeStart.current[id];
     if (!start || event.pointerType === "mouse") return;
-    const offset = Math.min(0, Math.max(-128, start.base + event.clientX - start.x));
+    const offset = Math.min(0, Math.max(-swipeActionWidth, start.base + event.clientX - start.x));
     event.currentTarget.classList.remove("is-dragging");
     event.currentTarget.style.removeProperty("--swipe-offset");
-    setSwipedEntryId(offset < -56 ? id : null);
+    setSwipedEntryId(offset < -(swipeActionWidth * .44) ? id : null);
     delete swipeStart.current[id];
+    window.setTimeout(() => { swipeDidMove.current = false; }, 0);
   };
   const entries = useQuery({
     queryKey: ["journal"],
@@ -397,7 +402,7 @@ export function JournalPage({ authenticated }: { authenticated: boolean }) {
                 {Number(item.result_pct ?? 0).toFixed(2)}%
               </b>
             </div>
-            <span className="journal-entry-actions" onPointerDown={(event) => event.stopPropagation()} onPointerUp={(event) => event.stopPropagation()}><button type="button" onClick={(event) => { event.stopPropagation(); setSwipedEntryId(null); openEdit(item); }} aria-label="Sửa nhận xét"><Pencil size={14}/><span>Sửa</span></button><button type="button" onClick={(event) => { event.stopPropagation(); setSwipedEntryId(null); void deleteEntry(item); }} aria-label="Xoá nhận xét"><Trash2 size={14}/><span>Xoá</span></button></span>
+            <span className="journal-entry-actions"><button type="button" onClick={(event) => { event.stopPropagation(); if (swipeDidMove.current) return; setSwipedEntryId(null); openEdit(item); }} aria-label="Sửa nhận xét"><Pencil size={14}/><span>Sửa</span></button><button type="button" onClick={(event) => { event.stopPropagation(); if (swipeDidMove.current) return; setSwipedEntryId(null); void deleteEntry(item); }} aria-label="Xoá nhận xét"><Trash2 size={14}/><span>Xoá</span></button></span>
           </div>
         ))}
       </article>
