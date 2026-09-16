@@ -4,6 +4,11 @@ import { useQuery } from '@tanstack/react-query'
 import { formatDate, formatDateTime } from '../lib/date'
 import { supabase } from '../lib/supabase'
 
+function Timestamp({ value }: { value: string | null | undefined }) {
+  const [calendarDate, clock] = formatDateTime(value).split(' ')
+  return <span className="health-timestamp"><time>{calendarDate ?? '—'}</time><b>{clock ?? '—'}</b></span>
+}
+
 export function TodayHealth() {
   const health = useQuery({
     queryKey: ['today-health-detail'],
@@ -42,9 +47,9 @@ export function TodayHealth() {
     {health.isLoading ? <p className="muted">Đang kiểm tra độ phủ dữ liệu…</p> : health.isError ? <p className="negative">Không tải được trạng thái dữ liệu.</p> : <>
       <div className="health-metrics"><span><b>{data?.coveredSymbols ?? 0}/{data?.activeSymbols ?? 0}</b><small>Mã có giá</small></span><span><b>{(data?.priceRows ?? 0).toLocaleString('vi-VN')}</b><small>Bản ghi giá</small></span><span><b>{data?.coreActions ?? 0}</b><small>Action tổng hợp</small></span><span><b>{data?.coreWatch ?? 0}</b><small>WATCH tổng hợp</small></span></div>
       <dl className="health-details">
-        <div><dt>Signal mới nhất</dt><dd>{formatDate(data?.newestDate)} · {formatDateTime(data?.latestSignalAt)}</dd></div>
-        <div><dt>EOD gần nhất · {data?.job?.status ?? '—'}</dt><dd>{formatDate(data?.job?.trading_date)}</dd></div>
-        <div><dt>Bắt đầu / Hoàn tất</dt><dd>{formatDateTime(data?.job?.started_at)} / {formatDateTime(data?.job?.finished_at)}</dd></div>
+        <div><dt>Signal mới nhất</dt><dd><span>Phiên {formatDate(data?.newestDate)}</span><Timestamp value={data?.latestSignalAt}/></dd></div>
+        <div><dt>EOD gần nhất · {data?.job?.status ?? '—'}</dt><dd><span>Phiên {formatDate(data?.job?.trading_date)}</span><Timestamp value={data?.job?.finished_at ?? data?.job?.started_at}/></dd></div>
+        <div className="health-run-window"><dt>Thời gian xử lý EOD</dt><dd><span><small>Bắt đầu</small><Timestamp value={data?.job?.started_at}/></span><span><small>Hoàn tất</small><Timestamp value={data?.job?.finished_at}/></span></dd></div>
       </dl>
       {data?.failedItems.length ? <div className="health-errors"><ShieldAlert size={15}/><span>{data.failedItems.length} mã cần retry ({formatDate(data.attentionJob?.trading_date)}): {data.failedItems.map(item => item.item_key).join(', ')}</span></div> : <div className="health-ok">Không có mã lỗi trong các EOD gần đây.</div>}
     </>}

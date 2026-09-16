@@ -64,22 +64,35 @@ const chips = [
 ];
 const visual = [
   {
+    id: "price",
     tone: "price",
     title: "Điều kiện giá",
     text: "Giá đóng cửa · Vượt đỉnh · 20 phiên",
   },
   {
+    id: "volume",
     tone: "volume",
     title: "Khối lượng xác nhận",
     text: "Volume · > · 1.5 × Trung bình 20 phiên",
   },
   {
+    id: "indicator",
     tone: "indicator",
     title: "Chỉ báo động lượng",
     text: "RSI 14 · Trong khoảng · 45–70",
   },
-  { tone: "risk", title: "Quản trị rủi ro", text: "Stop Loss · 7% từ giá vốn" },
+  { id: "risk", tone: "risk", title: "Quản trị rủi ro", text: "Stop Loss · 7% từ giá vốn" },
 ];
+
+function visualInput(conditionIds: string[]) {
+  const clauses = [
+    conditionIds.includes("price") && "giá đóng cửa vượt đỉnh 20 phiên",
+    conditionIds.includes("volume") && "volume lớn hơn 1.5 lần",
+    conditionIds.includes("indicator") && "RSI từ 45 đến 70",
+    conditionIds.includes("risk") && "cắt lỗ 7%",
+  ].filter(Boolean);
+  return clauses.length ? `Mua khi ${clauses.join(", ")}` : "";
+}
 
 import { compareEngines, engineGuides } from "../lib/engineCatalog";
 import { formatDate } from "../lib/date";
@@ -165,6 +178,7 @@ export function RuleBuilderPage({ authenticated }: { authenticated: boolean }) {
     "Mua khi giá đóng cửa vượt đỉnh 20 phiên, volume lớn hơn 1.5 lần, MA20 > MA50 > MA200 và RSI từ 45 đến 70",
   );
   const [mode, setMode] = useState<"language" | "visual">("language");
+  const [visualConditions, setVisualConditions] = useState<string[]>(() => visual.map((item) => item.id));
   const [message, setMessage] = useState("");
   const [toast, setToast] = useState("");
   const [expandedPack, setExpandedPack] = useState<string | null>(null);
@@ -236,6 +250,17 @@ export function RuleBuilderPage({ authenticated }: { authenticated: boolean }) {
       (value) =>
         `${value.trim().replace(/[,.]$/, "")}, ${chip.charAt(0).toLowerCase() + chip.slice(1)}`,
     );
+  }
+  function setVisualCondition(id: string) {
+    const next = visualConditions.includes(id)
+      ? visualConditions.filter((item) => item !== id)
+      : [...visualConditions, id];
+    setVisualConditions(next);
+    setInput(visualInput(next));
+  }
+  function addSuggestedCondition() {
+    const next = visual.find((item) => !visualConditions.includes(item.id));
+    if (next) setVisualCondition(next.id);
   }
   async function toggleRule(rule: {
     id: string;
@@ -313,6 +338,11 @@ export function RuleBuilderPage({ authenticated }: { authenticated: boolean }) {
           <GripVertical size={15} /> Khối điều kiện
         </button>
       </div>
+      <p className="rule-mode-help">
+        {mode === "language"
+          ? "Viết điều kiện bằng lời; hệ thống chỉ lưu DSL khi nhận diện được các điều kiện hợp lệ."
+          : "Chọn các khối điều kiện có sẵn. DSL xem trước và nút lưu sẽ cập nhật ngay theo các khối đang dùng."}
+      </p>
       <section className="core-engine-section" aria-label="Bộ máy tín hiệu">
         <div className="core-engine-heading">
           <div>
@@ -446,9 +476,11 @@ export function RuleBuilderPage({ authenticated }: { authenticated: boolean }) {
           ) : (
             <div className="visual-builder">
               {visual.map((item, index) => (
-                <div
-                  className={`condition-card ${item.tone}`}
-                  draggable
+                <button
+                  type="button"
+                  className={`condition-card ${item.tone} ${visualConditions.includes(item.id) ? "selected" : ""}`}
+                  aria-pressed={visualConditions.includes(item.id)}
+                  onClick={() => setVisualCondition(item.id)}
                   key={item.title}
                 >
                   <span>
@@ -460,11 +492,12 @@ export function RuleBuilderPage({ authenticated }: { authenticated: boolean }) {
                     </strong>
                     <small>{item.text}</small>
                   </div>
-                </div>
+                  <em>{visualConditions.includes(item.id) ? "Đang dùng" : "Thêm"}</em>
+                </button>
               ))}
-              <button type="button" className="secondary-button">
-                <Plus size={14} /> Thêm điều kiện
-              </button>
+              {visualConditions.length < visual.length && <button type="button" className="secondary-button" onClick={addSuggestedCondition}>
+                <Plus size={14} /> Thêm điều kiện gợi ý
+              </button>}
             </div>
           )}
           <button disabled={!preview.dsl}>
