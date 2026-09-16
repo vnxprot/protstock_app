@@ -397,7 +397,7 @@ export function JournalPage({ authenticated }: { authenticated: boolean }) {
                 {Number(item.result_pct ?? 0).toFixed(2)}%
               </b>
             </div>
-            <span className="journal-entry-actions" onPointerDown={(event) => event.stopPropagation()}><button type="button" onClick={() => openEdit(item)} aria-label="Sửa nhận xét"><Pencil size={14}/><span>Sửa</span></button><button type="button" onClick={() => deleteEntry(item)} aria-label="Xoá nhận xét"><Trash2 size={14}/><span>Xoá</span></button></span>
+            <span className="journal-entry-actions" onPointerDown={(event) => event.stopPropagation()} onPointerUp={(event) => event.stopPropagation()}><button type="button" onClick={(event) => { event.stopPropagation(); setSwipedEntryId(null); openEdit(item); }} aria-label="Sửa nhận xét"><Pencil size={14}/><span>Sửa</span></button><button type="button" onClick={(event) => { event.stopPropagation(); setSwipedEntryId(null); void deleteEntry(item); }} aria-label="Xoá nhận xét"><Trash2 size={14}/><span>Xoá</span></button></span>
           </div>
         ))}
       </article>
