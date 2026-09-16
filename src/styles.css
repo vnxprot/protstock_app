@@ -1212,6 +1212,14 @@ button, input, select, textarea, svg text { font-family: var(--font-family); }
   .signal-technical-detail::before { content:'Tín hiệu & lý do'; }
   .signal-explanation-detail::before { content:'Diễn giải'; }
 }
+
+/* Give the consolidated results enough horizontal room for all three detail columns and date. */
+@media (min-width:1100px) {
+  main:has(.screener-page) { width:min(1480px,100%); max-width:1480px; padding-inline:24px; }
+  .screener-page .panel { min-width:0; }
+  .screener-table .table-head,.screener-table .position-row { width:max(100%,1370px); min-width:1370px; }
+  .screener-table .signal-date,.screener-table .table-head > :nth-child(8) { min-width:0; justify-self:stretch; text-align:center; white-space:nowrap; }
+}
 .health-run-window dd>span>small { color:var(--muted); font-size:var(--text-xs); }
 .health-run-window .health-timestamp { justify-content:space-between; }
 @media (max-width:420px) {
