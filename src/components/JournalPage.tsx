@@ -42,20 +42,25 @@ export function JournalPage({ authenticated }: { authenticated: boolean }) {
   const [toast, setToast] = useState("");
   const [selectedPoint, setSelectedPoint] = useState<number | null>(null);
   const [swipedEntryId, setSwipedEntryId] = useState<string | null>(null);
-  const swipeStart = useRef<Record<string, { x: number; y: number; base: number }>>({});
+  const swipeStart = useRef<Record<string, { x: number; y: number; base: number; horizontal: boolean }>>({});
   const swipeDidMove = useRef(false);
   const startSwipe = (id: string, event: PointerEvent<HTMLDivElement>) => {
     if (event.pointerType === "mouse") return;
     swipeDidMove.current = false;
-    swipeStart.current[id] = { x: event.clientX, y: event.clientY, base: swipedEntryId === id ? -swipeActionWidth : 0 };
-    event.currentTarget.setPointerCapture(event.pointerId);
+    swipeStart.current[id] = { x: event.clientX, y: event.clientY, base: swipedEntryId === id ? -swipeActionWidth : 0, horizontal: false };
   };
   const moveSwipe = (id: string, event: PointerEvent<HTMLDivElement>) => {
     const start = swipeStart.current[id];
     if (!start || event.pointerType === "mouse") return;
     const deltaX = event.clientX - start.x;
-    if (Math.abs(event.clientY - start.y) > Math.abs(deltaX)) return;
-    if (Math.abs(deltaX) > 8) swipeDidMove.current = true;
+    const deltaY = event.clientY - start.y;
+    if (!start.horizontal) {
+      if (Math.abs(deltaY) > Math.abs(deltaX)) { delete swipeStart.current[id]; return; }
+      if (Math.abs(deltaX) < 14) return;
+      start.horizontal = true;
+      event.currentTarget.setPointerCapture(event.pointerId);
+    }
+    if (Math.abs(deltaX) > 14) swipeDidMove.current = true;
     const offset = Math.min(0, Math.max(-swipeActionWidth, start.base + deltaX));
     event.currentTarget.classList.add("is-dragging");
     event.currentTarget.style.setProperty("--swipe-offset", `${offset}px`);
@@ -63,6 +68,7 @@ export function JournalPage({ authenticated }: { authenticated: boolean }) {
   const finishSwipe = (id: string, event: PointerEvent<HTMLDivElement>) => {
     const start = swipeStart.current[id];
     if (!start || event.pointerType === "mouse") return;
+    if (!start.horizontal) { delete swipeStart.current[id]; return; }
     const offset = Math.min(0, Math.max(-swipeActionWidth, start.base + event.clientX - start.x));
     event.currentTarget.classList.remove("is-dragging");
     event.currentTarget.style.removeProperty("--swipe-offset");
