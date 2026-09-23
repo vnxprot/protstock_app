@@ -562,6 +562,8 @@ input[type="number"] {
 .transaction-filter-clear { min-height:38px; padding:0 12px; border:1px solid var(--line-bright); border-radius:var(--radius-sm); color:var(--lime); background:transparent; cursor:pointer; white-space:nowrap; }
 @media (max-width:900px) { .transaction-filters { grid-template-columns:repeat(2,minmax(0,1fr)); } .transaction-filter-clear { justify-self:start; } }
 @media (max-width:520px) { .transaction-filters { grid-template-columns:1fr; } }
+.journal-entry-meta { display:flex!important; align-items:center; flex-wrap:wrap; gap:6px; color:#6f857a; font-size:12px; }
+.journal-entry-meta span { padding:3px 7px; border:1px solid var(--line); border-radius:999px; background:var(--surface-2); }
 .transaction-list { display:grid; }
 .transaction-row { display:flex; align-items:start; justify-content:space-between; gap:14px; padding:12px 0; border-top:1px solid var(--line); }
 .transaction-row>div:first-child { display:grid; gap:3px; min-width:0; }

@@ -85,6 +85,20 @@ export function JournalPage({ authenticated }: { authenticated: boolean }) {
       return data ?? [];
     },
   });
+  const portfolioTransactions = useQuery({
+    queryKey: ["journal-portfolio-transactions"],
+    enabled: authenticated && Boolean(supabase),
+    queryFn: async () => {
+      const { data, error } = await supabase!
+        .from("portfolio_transactions")
+        .select("id,symbol_id,trading_date,action,quantity,price,symbols(symbol,sector)")
+        .order("trading_date", { ascending: true })
+        .order("created_at", { ascending: true })
+        .limit(1000);
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
   const activeSignals = useQuery({
     queryKey: ["journal-active-signals"],
     enabled: authenticated && Boolean(supabase),
@@ -102,6 +116,37 @@ export function JournalPage({ authenticated }: { authenticated: boolean }) {
     },
   });
   const rows = (entries.data ?? []) as any[];
+  const realizedTrades = useMemo(() => {
+    const lots: Record<string, { quantity: number; cost: number }[]> = {};
+    const realized: any[] = [];
+    for (const raw of portfolioTransactions.data ?? []) {
+      const item: any = raw;
+      const key = String(item.symbol_id);
+      const quantity = Number(item.quantity ?? 0);
+      const price = Number(item.price ?? 0);
+      if (!lots[key]) lots[key] = [];
+      if (["BUY_NEW", "BUY_ADD"].includes(item.action) && quantity > 0 && price > 0) {
+        lots[key].push({ quantity, cost: price });
+        continue;
+      }
+      if (!["SELL_REDUCE", "SELL_CLOSE"].includes(item.action) || quantity <= 0 || price <= 0) continue;
+      let remaining = quantity;
+      let costBasis = 0;
+      while (remaining > 0 && lots[key].length) {
+        const lot = lots[key][0];
+        const used = Math.min(remaining, lot.quantity);
+        costBasis += used * lot.cost;
+        lot.quantity -= used;
+        remaining -= used;
+        if (lot.quantity <= 0) lots[key].shift();
+      }
+      const matched = quantity - remaining;
+      if (matched <= 0 || costBasis <= 0) continue;
+      const pnl = matched * price - costBasis;
+      realized.push({ id: `trade-${item.id}`, decision_date: item.trading_date, decision: "SELL", setup_type: "Giao dịch danh mục", market_state: null, rationale: "Kết quả tự tính từ sổ giao dịch.", result_pct: pnl / costBasis * 100, outcome: pnl > 0 ? "WIN" : pnl < 0 ? "LOSS" : "BREAKEVEN", lesson: "", symbols: item.symbols });
+    }
+    return realized;
+  }, [portfolioTransactions.data]);
   const signalBySymbol = useMemo(
     () =>
       Object.fromEntries(
@@ -122,7 +167,7 @@ export function JournalPage({ authenticated }: { authenticated: boolean }) {
         alignedRows.length) *
       100
     : 0;
-  const closed = rows.filter((x) => x.outcome !== "OPEN");
+  const closed = [...rows.filter((x) => x.outcome !== "OPEN"), ...realizedTrades];
   const wins = closed.filter((x) => x.outcome === "WIN");
   const winRate = closed.length ? (wins.length / closed.length) * 100 : 0;
   const review = useMemo(
@@ -388,10 +433,7 @@ export function JournalPage({ authenticated }: { authenticated: boolean }) {
                 <strong>
                   {item.symbols?.symbol} · {item.decision}
                 </strong>
-                <small>
-                  {item.decision_date} · {item.setup_type ?? "Chưa setup"} ·{" "}
-                  {item.market_state ?? "Chưa phân loại"}
-                </small>
+                <div className="journal-entry-meta"><span>{item.decision_date}</span><span>{item.setup_type ?? "Chưa setup"}</span><span>{item.market_state ?? "Chưa phân loại"}</span></div>
                 <p>{item.rationale}</p>
                 <em>{emotionLabel(item.lesson)}</em>
               </div>
