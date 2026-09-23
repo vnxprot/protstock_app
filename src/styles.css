@@ -562,6 +562,8 @@ input[type="number"] {
 .transaction-filter-clear { min-height:38px; padding:0 12px; border:1px solid var(--line-bright); border-radius:var(--radius-sm); color:var(--lime); background:transparent; cursor:pointer; white-space:nowrap; }
 .transaction-realized { display:flex; align-items:baseline; flex-wrap:wrap; gap:6px; margin-top:6px; font-size:var(--text-caption); }
 .transaction-realized b { font-size:var(--text-label); }.transaction-realized small { color:var(--muted); }
+.trade-availability { display:grid; grid-template-columns:1fr auto; gap:3px 10px; padding:10px 12px; border:1px solid color-mix(in srgb,var(--lime) 30%,var(--line)); border-radius:var(--radius-md); background:color-mix(in srgb,var(--lime) 7%,var(--surface-2)); }
+.trade-availability span,.trade-availability small { color:var(--muted); font-size:var(--text-caption); }.trade-availability b { color:var(--lime); font-size:var(--text-label); }.trade-availability small { grid-column:1/-1; }.trade-availability small strong { color:var(--text); }
 @media (max-width:900px) { .transaction-filters { grid-template-columns:repeat(2,minmax(0,1fr)); } .transaction-filter-clear { justify-self:start; } }
 @media (max-width:520px) { .transaction-filters { grid-template-columns:1fr; } }
 .journal-entry-meta { display:flex!important; align-items:center; flex-wrap:wrap; gap:6px; color:#6f857a; font-size:12px; }
