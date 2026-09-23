@@ -554,6 +554,14 @@ input[type="number"] {
 .journal-entry-actions button,.transaction-actions button { display:grid; place-items:center; min-width:30px; min-height:30px; border:1px solid var(--line); border-radius:8px; color:var(--muted); background:var(--surface-2); cursor:pointer; }
 .journal-entry-actions button:hover,.transaction-actions button:hover { color:var(--text); background:var(--surface-3); }
 .transaction-history { display:grid; gap:10px; }
+.transaction-filters { display:grid; grid-template-columns:minmax(150px,1.1fr) repeat(2,minmax(145px,.8fr)) minmax(180px,1fr) auto; gap:8px; align-items:end; padding:10px; border:1px solid var(--line); border-radius:var(--radius-md); background:var(--surface-2); }
+.transaction-filters label { display:grid; gap:5px; min-width:0; }
+.transaction-filters label span { color:var(--muted); font-size:var(--text-caption); font-weight:600; }
+.transaction-filters input,.transaction-filters select { width:100%; min-width:0; min-height:38px; box-sizing:border-box; padding:0 10px; border:1px solid var(--line-bright); border-radius:var(--radius-sm); color:var(--text); background:var(--surface); font:var(--text-body); }
+.transaction-filters input:focus,.transaction-filters select:focus { outline:2px solid color-mix(in srgb,var(--lime) 45%,transparent); outline-offset:1px; }
+.transaction-filter-clear { min-height:38px; padding:0 12px; border:1px solid var(--line-bright); border-radius:var(--radius-sm); color:var(--lime); background:transparent; cursor:pointer; white-space:nowrap; }
+@media (max-width:900px) { .transaction-filters { grid-template-columns:repeat(2,minmax(0,1fr)); } .transaction-filter-clear { justify-self:start; } }
+@media (max-width:520px) { .transaction-filters { grid-template-columns:1fr; } }
 .transaction-list { display:grid; }
 .transaction-row { display:flex; align-items:start; justify-content:space-between; gap:14px; padding:12px 0; border-top:1px solid var(--line); }
 .transaction-row>div:first-child { display:grid; gap:3px; min-width:0; }
