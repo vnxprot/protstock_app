@@ -17,6 +17,7 @@ def repair_missing_history(
     source: str = "KBS",
     symbol_offset: int = 0,
     symbol_limit: int | None = None,
+    symbols: set[str] | None = None,
     pause_seconds: float = 3.0,
 ) -> dict[str, Any]:
     """Fill only missing daily sessions using VNINDEX as the trading calendar."""
@@ -34,7 +35,10 @@ def repair_missing_history(
         calendar = source_calendar or existing_index_dates
         if not calendar:
             raise RuntimeError("VNINDEX calendar is empty for the requested date range")
-        symbols = client.active_symbols()[symbol_offset:]
+        active_symbols = client.active_symbols()
+        if symbols is not None:
+            active_symbols = [row for row in active_symbols if row["symbol"] in symbols]
+        symbols = active_symbols[symbol_offset:]
         if symbol_limit is not None:
             symbols = symbols[:symbol_limit]
         for symbol in symbols:
