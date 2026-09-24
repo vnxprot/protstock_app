@@ -58,7 +58,7 @@ export function useSymbols(enabled: boolean) {
     queryKey: ['symbols'], enabled: enabled && Boolean(supabase), staleTime: 300_000,
     queryFn: async () => {
       if (!supabase) throw new Error('Supabase is not configured')
-      const { data, error } = await supabase.from('symbols').select('id,symbol,sector,exchange').eq('active', true).order('symbol')
+      const { data, error } = await supabase.from('symbols').select('id,symbol,company_name,sector,exchange').eq('active', true).order('symbol')
       if (error) throw error
       return data ?? []
     },
