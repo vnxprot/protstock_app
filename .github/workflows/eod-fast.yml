@@ -29,11 +29,11 @@ jobs:
           - label: A–K
             source: KBS
             offset: 0
-            limit: 101
+            limit: 104
           - label: L–Z
             source: VCI
-            offset: 101
-            limit: 101
+            offset: 104
+            limit: 104
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
