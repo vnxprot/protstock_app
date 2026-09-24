@@ -55,6 +55,7 @@ def main() -> None:
     repair.add_argument("--symbol-offset", type=int, default=0)
     repair.add_argument("--symbol-limit", type=int)
     repair.add_argument("--pause-seconds", type=float, default=3.0)
+    repair.add_argument("--symbols", help="Comma-separated symbols; overrides the offset range")
     coverage = subparsers.add_parser("history-coverage")
     coverage.add_argument("--start-date", type=date.fromisoformat, default=date(2021, 1, 1))
     coverage.add_argument("--end-date", type=date.fromisoformat, default=date.today())
@@ -104,7 +105,7 @@ def main() -> None:
         print(json.dumps(seed_vnindex_history(args.start_date, args.end_date, args.source), ensure_ascii=False))
         raise SystemExit(0)
     if args.command == "repair-history":
-        result = repair_missing_history(args.start_date, args.end_date, source=args.source, symbol_offset=args.symbol_offset, symbol_limit=args.symbol_limit, pause_seconds=args.pause_seconds)
+        result = repair_missing_history(args.start_date, args.end_date, source=args.source, symbol_offset=args.symbol_offset, symbol_limit=args.symbol_limit, symbols={item.strip().upper() for item in args.symbols.split(",") if item.strip()} if args.symbols else None, pause_seconds=args.pause_seconds)
         print(json.dumps(result, ensure_ascii=False))
         raise SystemExit(0 if result["status"] in {"SUCCEEDED", "PARTIAL"} else 1)
     if args.command == "history-coverage":

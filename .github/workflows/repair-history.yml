@@ -11,7 +11,12 @@ on:
       end_date:
         description: Last session to verify
         required: true
-        default: "2026-09-11"
+        default: "2026-09-24"
+        type: string
+      symbols:
+        description: Comma-separated symbols; leave blank to repair the full universe
+        required: false
+        default: ""
         type: string
 
 permissions:
@@ -25,16 +30,6 @@ jobs:
   repair:
     runs-on: ubuntu-latest
     timeout-minutes: 120
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - label: A-K
-            offset: 0
-            limit: 101
-          - label: L-Z
-            offset: 101
-            limit: 101
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -50,5 +45,4 @@ jobs:
           protstock repair-history
           --start-date "${{ inputs.start_date }}"
           --end-date "${{ inputs.end_date }}"
-          --symbol-offset "${{ matrix.offset }}"
-          --symbol-limit "${{ matrix.limit }}"
+          --symbols "${{ inputs.symbols }}"
