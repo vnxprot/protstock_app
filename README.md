@@ -31,3 +31,7 @@ See:
 3. Screener and rules — implemented in code
 4. Backtesting — engine and result workspace implemented
 5. Portfolio and journal — implemented in code
+
+## Data source
+
+- EOD OHLCV uses KBS's public endpoint with no API key or paid market-data subscription. This is for personal use and remains subject to the source's availability and terms.
