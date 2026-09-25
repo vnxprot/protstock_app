@@ -89,3 +89,21 @@ def test_prior_breadth_repairs_legacy_summary_and_persists_membership():
     assert context["breadth"]["coverage_status"] == "COMPLETE"
     assert {table for table, _, _ in client.written} == {"market_breadth_snapshots", "breadth_universe_memberships"}
     assert regime_ok(context["breadth"], context["vnindex_snapshot"]) == (True, [])
+
+
+
+def test_breadth_depth_uses_prior_close_and_stored_eod_fields_only():
+    symbols = [{"id": 1, "sector": "Ngân hàng"}, {"id": 2, "sector": "Ngân hàng"}]
+    prior = snapshots((1, 10, 9), (2, 10, 9))
+    current = [
+        {"symbol_id": 1, "close": 11, "sma50": 9, "last_volume": 200, "close_high20": 11, "close_low20": 8},
+        {"symbol_id": 2, "close": 9, "sma50": 10, "last_volume": 100, "close_high20": 12, "close_low20": 9},
+    ]
+    breadth, _ = build_breadth_membership(symbols, prior, current, "2026-09-11")
+    assert breadth["advance_count"] == 1
+    assert breadth["decline_count"] == 1
+    assert breadth["advance_decline_ratio"] == 1
+    assert breadth["new_high20_count"] == 1
+    assert breadth["new_low20_count"] == 1
+    assert breadth["up_down_volume_ratio"] == 2
+    assert breadth["sector_breadth"][0]["sector"] == "Ngân hàng"

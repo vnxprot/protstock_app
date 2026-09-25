@@ -24,6 +24,12 @@ def analyze_bars(bars: Sequence[dict], position: dict | None = None, weekly_patt
     patterns = detect_patterns(ordered, snapshot.to_dict())
     zones = detect_zones(ordered, fibonacci_context=fibonacci_context)
     snapshot_dict = snapshot.to_dict()
+    recent_closes = [float(item["close"]) for item in ordered[-20:]]
+    snapshot_dict.update({
+        "last_volume": float(ordered[-1].get("volume") or 0),
+        "close_high20": max(recent_closes) if len(recent_closes) == 20 else None,
+        "close_low20": min(recent_closes) if len(recent_closes) == 20 else None,
+    })
     snapshot_dict.update(calculate_flow(ordered))
     if benchmark_rows is not None:
         benchmark_by_date = {item["date"]: float(item["close"]) for item in benchmark_rows}

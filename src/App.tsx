@@ -76,7 +76,7 @@ function useMarketContext() {
     if (indexError) throw indexError
     const [{ data: prices, error: pricesError }, { data: breadth, error: breadthError }] = await Promise.all([
       supabase!.from('market_index_prices').select('trading_date,close,source,collected_at').eq('index_id', index.id).order('trading_date', { ascending: false }).limit(2),
-      supabase!.from('market_breadth_snapshots').select('trading_date,pct_above_sma50,sample_size,universe_size,eligible_count,observed_count,coverage_ratio,coverage_status,vnindex_trend_state,calculated_at').order('trading_date', { ascending: false }).limit(1),
+      supabase!.from('market_breadth_snapshots').select('trading_date,pct_above_sma50,pct_above_sma20,pct_above_sma200,pct_ma_stack,market_health_score,market_health_state,sample_size,universe_size,eligible_count,observed_count,coverage_ratio,coverage_status,vnindex_trend_state,advance_count,decline_count,unchanged_count,advance_decline_ratio,new_high20_count,new_low20_count,up_down_volume_ratio,sector_breadth,calculated_at').order('trading_date', { ascending: false }).limit(1),
     ])
     if (pricesError || breadthError) throw pricesError || breadthError
     const latest = prices?.[0]
@@ -89,6 +89,10 @@ function MarketContextCard() {
   const market = useMarketContext()
   const data = market.data
   const state = data?.breadth?.vnindex_trend_state ?? 'UNKNOWN'
+  const healthState = data?.breadth?.market_health_state ?? 'UNKNOWN'
+  const healthScore = data?.breadth?.market_health_score == null ? '—' : Number(data.breadth.market_health_score).toFixed(1)
+  const healthLabel = healthState === 'RISK_ON' ? 'Tích cực' : healthState === 'RISK_OFF' ? 'Phòng thủ' : healthState === 'NEUTRAL' ? 'Trung tính' : 'Đang đồng bộ'
+  const breadthMetric = (value:any) => value == null ? '—' : `${Number(value).toFixed(1)}%`
   const stateLabel = state === 'UP' ? 'UPTREND' : state === 'DOWN' ? 'DOWNTREND' : state === 'SIDEWAYS' ? 'NEUTRAL' : 'ĐANG ĐỒNG BỘ'
   const isRiskOff = state === 'DOWN' || (data?.breadth?.pct_above_sma50 != null && Number(data.breadth.pct_above_sma50) < 35)
   const breadthPct = data?.breadth?.pct_above_sma50 == null ? '—' : `${Number(data.breadth.pct_above_sma50).toFixed(1)}%`
@@ -106,8 +110,8 @@ function MarketContextCard() {
     <div className="market-context-detail">
       <div><span>Prot Universe Breadth · SMA50</span><strong>{breadthPct}</strong><small>{observed}/{eligible} mã đủ điều kiện</small></div>
       <div><span>Độ bao phủ dữ liệu</span><strong className={coverageStatus === 'INCOMPLETE' ? 'negative' : 'positive'}>{coverageLabel}</strong><small>{coveragePct == null ? 'Chưa đủ lịch sử để đánh giá' : `${coveragePct.toFixed(1)}% mẫu đủ điều kiện đã quan sát`}</small></div>
-      <div><span>Market Gate</span><strong className={isRiskOff ? 'negative' : 'positive'}>{isRiskOff ? 'Thận trọng' : 'Cho phép setup'}</strong><small>{isRiskOff ? 'Tín hiệu mua có thể bị hạ xuống WATCH.' : 'Không có chặn mua từ bối cảnh thị trường.'}</small></div>
-      <p>Độ rộng chỉ đo trên Prot Trading Universe, không đại diện toàn bộ thị trường Việt Nam. Card này là bối cảnh cho Prot Core Engine; biểu đồ VN-Index chuyên sâu vẫn nên xem tại FireAnt, 24HMoney hoặc TradingView.</p>
+      <div><span>Market Health</span><strong className={healthState === 'RISK_OFF' ? 'negative' : 'positive'}>{healthScore} · {healthLabel}</strong><small>SMA20 {breadthMetric(data?.breadth?.pct_above_sma20)} · SMA50 {breadthPct} · SMA200 {breadthMetric(data?.breadth?.pct_above_sma200)}</small></div><div><span>Độ sâu thị trường</span><strong>{data?.breadth?.advance_count ?? '—'} tăng / {data?.breadth?.decline_count ?? '—'} giảm</strong><small>Đỉnh/đáy 20 phiên: {data?.breadth?.new_high20_count ?? '—'} / {data?.breadth?.new_low20_count ?? '—'} · KL tăng/giảm: {data?.breadth?.up_down_volume_ratio == null ? '—' : `${Number(data.breadth.up_down_volume_ratio).toFixed(2)}x`}</small></div><div><span>Market Gate</span><strong className={isRiskOff ? 'negative' : 'positive'}>{isRiskOff ? 'Thận trọng' : 'Cho phép setup'}</strong><small>{isRiskOff ? 'Tín hiệu mua có thể bị hạ xuống WATCH.' : 'Không có chặn mua từ bối cảnh thị trường.'}</small></div>
+      <p>Độ rộng, A/D, đỉnh/đáy và khối lượng chỉ đo trên Prot Trading Universe; không đại diện toàn bộ thị trường Việt Nam. Card này là bối cảnh cho Prot Core Engine; biểu đồ VN-Index chuyên sâu vẫn nên xem tại FireAnt, 24HMoney hoặc TradingView.</p>
     </div>
   </details>
 }
