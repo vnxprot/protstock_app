@@ -10,6 +10,7 @@ def test_resolution_prioritizes_exit_over_conflicting_buy() -> None:
         "composite_action": "EXIT", "confluence_score": 70, "confluence_count": 1,
         "confluence_badge": "STANDARD", "consensus_engines": ["Risk Pack"],
         "reasons": ["INVALIDATION_BROKEN"],
+        "signal_state": "ACTIONABLE",
     }
 
 

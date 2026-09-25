@@ -58,10 +58,18 @@ def build_breadth_membership(
 
 
 def compute_breadth(snapshots: Sequence[dict]) -> dict:
-    """Calculate breadth from one completed daily snapshot per symbol."""
+    """Calculate free, point-in-time market health from daily snapshots."""
     eligible = [snapshot for snapshot in snapshots if snapshot.get("sma50") is not None and snapshot.get("close") is not None]
     above = sum(1 for snapshot in eligible if float(snapshot["close"]) > float(snapshot["sma50"]))
-    return {"pct_above_sma50": above / len(eligible) * 100 if eligible else None, "sample_size": len(eligible)}
+    def pct(predicate):
+        return sum(1 for snapshot in eligible if predicate(snapshot)) / len(eligible) * 100 if eligible else None
+    pct_sma20 = pct(lambda snapshot: snapshot.get("sma20") is not None and float(snapshot["close"]) > float(snapshot["sma20"]))
+    pct_sma200 = pct(lambda snapshot: snapshot.get("sma200") is not None and float(snapshot["close"]) > float(snapshot["sma200"]))
+    pct_stack = pct(lambda snapshot: bool(snapshot.get("ma_stack")))
+    components = [value for value in (pct_sma20, above / len(eligible) * 100 if eligible else None, pct_sma200, pct_stack) if value is not None]
+    health_score = round(sum(components) / len(components), 1) if components else None
+    health_state = "RISK_ON" if health_score is not None and health_score >= 65 else "RISK_OFF" if health_score is not None and health_score < 35 else "NEUTRAL"
+    return {"pct_above_sma50": above / len(eligible) * 100 if eligible else None, "pct_above_sma20": pct_sma20, "pct_above_sma200": pct_sma200, "pct_ma_stack": pct_stack, "market_health_score": health_score, "market_health_state": health_state, "sample_size": len(eligible)}
 
 
 def regime_ok(breadth: dict | None, vnindex_snapshot: dict | None, min_breadth_pct: float = 40.0) -> tuple[bool, list[str]]:

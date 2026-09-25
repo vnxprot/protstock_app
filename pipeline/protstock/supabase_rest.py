@@ -143,7 +143,7 @@ class SupabaseRestClient:
     def market_breadth_snapshot(self, trading_date) -> dict[str, Any] | None:
         response = self._client.get(
             "/market_breadth_snapshots",
-            params={"select": "trading_date,pct_above_sma50,sample_size,universe_size,eligible_count,observed_count,coverage_ratio,coverage_status,vnindex_trend_state", "trading_date": f"lte.{trading_date.isoformat()}", "order": "trading_date.desc", "limit": "1"},
+            params={"select": "trading_date,pct_above_sma50,pct_above_sma20,pct_above_sma200,pct_ma_stack,market_health_score,market_health_state,sample_size,universe_size,eligible_count,observed_count,coverage_ratio,coverage_status,vnindex_trend_state", "trading_date": f"lte.{trading_date.isoformat()}", "order": "trading_date.desc", "limit": "1"},
         )
         response.raise_for_status()
         rows = response.json()
@@ -163,7 +163,7 @@ class SupabaseRestClient:
         response = self._client.get(
             "/technical_snapshots",
             params={
-                "select": "symbol_id,close,sma50",
+                "select": "symbol_id,close,sma20,sma50,sma200,ma_stack",
                 "timeframe": "eq.D",
                 "as_of_date": f"eq.{trading_date.isoformat()}",
             },

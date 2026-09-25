@@ -6,6 +6,19 @@ from typing import Any
 ACTION_PRIORITY = {"EXIT": 5, "REDUCE": 4, "ADD": 3, "PROBE_BUY": 2, "WATCH": 1}
 CONFLUENCE = {1: (70, "STANDARD"), 2: (90, "HIGH_CONFLUENCE")}
 
+def classify_signal_state(action: str, reasons: list[str]) -> str:
+    """Make WATCH actionable: setup, extended leader, or explicit context."""
+    if action != "WATCH":
+        return "ACTIONABLE"
+    codes = set(reasons)
+    if "RSI_NOT_ELIGIBLE" in codes or ("ENTRY_BLOCKED" in codes and "PATTERN_" in " ".join(codes)):
+        return "EXTENDED"
+    if any(code.startswith("NEAR_TRIGGER_") or code.startswith("V0_NEAR_") for code in codes):
+        return "WATCH_SETUP"
+    if "RELATIVE_STRENGTH_GT_5PCT" in codes or "STOCK_UPTREND" in codes:
+        return "MOMENTUM_CONTINUATION"
+    return "WATCH_CONTEXT"
+
 
 def resolve_consolidated_signal(raw_signals: list[dict[str, Any]]) -> dict[str, Any]:
     """Choose one action while retaining the engines that agree with it.
@@ -31,4 +44,5 @@ def resolve_consolidated_signal(raw_signals: list[dict[str, Any]]) -> dict[str, 
         "confluence_badge": badge,
         "consensus_engines": engines,
         "reasons": reasons,
+        "signal_state": classify_signal_state(action, reasons),
     }

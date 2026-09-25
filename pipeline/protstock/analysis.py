@@ -4,6 +4,7 @@ from typing import Sequence
 
 from .indicators import calculate_indicators, relative_strength
 from .fibonacci import enrich_pattern_fibonacci
+from .flow import calculate_flow
 from .market_regime import regime_ok
 from .patterns import detect_patterns
 from .rules import multi_timeframe_gate
@@ -23,6 +24,7 @@ def analyze_bars(bars: Sequence[dict], position: dict | None = None, weekly_patt
     patterns = detect_patterns(ordered, snapshot.to_dict())
     zones = detect_zones(ordered, fibonacci_context=fibonacci_context)
     snapshot_dict = snapshot.to_dict()
+    snapshot_dict.update(calculate_flow(ordered))
     if benchmark_rows is not None:
         benchmark_by_date = {item["date"]: float(item["close"]) for item in benchmark_rows}
         aligned = [(float(item["close"]), benchmark_by_date[item["date"]]) for item in ordered if item["date"] in benchmark_by_date]
