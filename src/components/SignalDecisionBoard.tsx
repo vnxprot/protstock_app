@@ -20,7 +20,7 @@ export function SignalDecisionBoard({onSelect}:{onSelect:(symbol:string)=>void})
   const query=useQuery({queryKey:['signal-decision-board'],enabled:Boolean(supabase),staleTime:60_000,queryFn:loadBoard})
   const rows=query.data??[]
   const actionable=rows.filter(row=>row.state==='ACTIONABLE'&&row.action!=='WATCH').sort((a,b)=>(actionRank[b.action]-actionRank[a.action])||(b.count-a.count)||(b.score-a.score)).slice(0,8)
-  const watch=rows.filter(row=>row.action==='WATCH'&&row.state==='WATCH_SETUP').sort((a,b)=>(a.expiry??'9999').localeCompare(b.expiry??'9999')||b.score-a.score).slice(0,8)
+  const watch=rows.filter(row=>row.action==='WATCH'&&row.state==='WATCH_SETUP'&&row.trigger!=null&&row.stop!=null&&row.expiry!=null).sort((a,b)=>(a.expiry??'9999').localeCompare(b.expiry??'9999')||b.score-a.score).slice(0,8)
   const context=rows.filter(row=>row.action==='WATCH'&&row.state!=='WATCH_SETUP').sort((a,b)=>b.score-a.score).slice(0,8)
   const Row=({row,kind}:{row:Row;kind:'action'|'watch'|'context'})=><a href="#analysis" className={`decision-row ${kind}`} onClick={()=>onSelect(row.symbol)}><div><strong>{row.symbol}</strong><small>{row.sector??'Chưa phân ngành'} · {row.timeframe}</small></div>{kind==='action'?<span className={`action-pill ${row.action.toLowerCase()}`}>{row.action}</span>:kind==='watch'?<span className="decision-plan">Trigger {formatMarketPrice(row.trigger)}<small>Hết hạn {row.expiry?formatDate(row.expiry):'—'}</small></span>:<span className="decision-context">{stateLabel[row.state]??'Bối cảnh'}<small>{row.reasons[0]??'Theo dõi'}</small></span>}</a>
   const Empty=({children}:{children:string})=><p className="decision-empty">{children}</p>

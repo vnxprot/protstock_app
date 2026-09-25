@@ -503,7 +503,7 @@ def _write_analysis(
         counts.setdefault("consolidated_signals", 0)
         counts["consolidated_signals"] += client.upsert("consolidated_signals", [{
             "symbol_id": symbol_id, "timeframe": timeframe, "as_of_date": context.get("evaluation_date", result["as_of_date"]),
-            **{key: consolidated[key] for key in ("composite_action", "confluence_score", "confluence_count", "consensus_engines", "reasons", "signal_state", "trigger_price", "invalidation_price", "expiry_date")},
+            **{key: consolidated.get(key) for key in ("composite_action", "confluence_score", "confluence_count", "consensus_engines", "reasons", "signal_state", "trigger_price", "invalidation_price", "expiry_date")},
         }], "symbol_id,timeframe,as_of_date")
     else:
         client.delete_consolidated_signal(symbol_id, timeframe, context.get("evaluation_date", result["as_of_date"]))

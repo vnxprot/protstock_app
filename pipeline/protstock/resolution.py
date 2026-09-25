@@ -18,8 +18,7 @@ def classify_signal_state(action: str, reasons: list[str], evidence: dict[str, A
         return "WATCH_CONTEXT"
     if "RSI_NOT_ELIGIBLE" in codes:
         return "EXTENDED"
-    has_prices = evidence.get("trigger_price") is not None and evidence.get("invalidation_price") is not None
-    if has_prices and any(code.startswith(("NEAR_TRIGGER_", "V0_NEAR_")) or "SETUP" in code or "READY" in code or "WAIT_" in code for code in codes):
+    if any(code.startswith(("NEAR_TRIGGER_", "V0_NEAR_")) or "SETUP" in code or "READY" in code or "WAIT_" in code for code in codes):
         return "WATCH_SETUP"
     if "RELATIVE_STRENGTH_GT_5PCT" in codes or "STOCK_UPTREND" in codes:
         return "MOMENTUM_CONTINUATION"
@@ -66,7 +65,5 @@ def resolve_consolidated_signal(raw_signals: list[dict[str, Any]]) -> dict[str, 
         "consensus_engines": engines,
         "reasons": reasons,
         "signal_state": classify_signal_state(action, reasons, evidence),
-        "trigger_price": evidence.get("trigger_price"),
-        "invalidation_price": evidence.get("invalidation_price"),
-        "expiry_date": _setup_expiry(as_of_date, evidence) if as_of_date else None,
+        **({"trigger_price": evidence.get("trigger_price"), "invalidation_price": evidence.get("invalidation_price"), "expiry_date": _setup_expiry(as_of_date, evidence) if as_of_date else None} if evidence.get("trigger_price") is not None or evidence.get("invalidation_price") is not None else {}),
     }

@@ -63,7 +63,7 @@ def send_eod_telegram_alerts(trading_date: date, action_dedupe_days: int = 5) ->
                 continue
             # A repeated daily snapshot is not a new decision. Alert again only
             # after an action change or a short cooling-off period.
-            if _action_recently_notified(client, signal["symbol_id"], signal["action"], trading_date, action_dedupe_days):
+            if signal["action"] != "EXIT" and _action_recently_notified(client, signal["symbol_id"], signal["action"], trading_date, action_dedupe_days):
                 deduped += 1
                 continue
             text = build_telegram_message(signal, trading_date)
