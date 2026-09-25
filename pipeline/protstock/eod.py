@@ -241,6 +241,8 @@ def rebuild_signals(trading_date: date, *, symbol_offset: int = 0, symbol_limit:
                     if timeframe in results:
                         if "period_events" not in context:
                             context.update(_decision_context(analysis_rows, trading_date, portfolios))
+                        indicator_snapshot = {"symbol_id": symbol_row["id"], "timeframe": timeframe, "as_of_date": results[timeframe]["as_of_date"], "input_last_date": results[timeframe]["as_of_date"], "algorithm_version": ALGORITHM_VERSION, **results[timeframe]["indicators"]}
+                        counts["snapshots"] += client.upsert("technical_snapshots", [indicator_snapshot], "symbol_id,timeframe,as_of_date")
                         _write_analysis(client, symbol_row["id"], timeframe, rows, benchmark_rows[timeframe], active_rules, counts, results[timeframe], context, persist_evidence=False)
                 counts["symbols"] += 1
                 client.create_job_item({"job_run_id": job["id"], "symbol_id": symbol_row["id"], "item_key": symbol_row["symbol"], "status": "SUCCEEDED", "rows_written": 0, "duration_ms": int((monotonic() - started) * 1000)})
