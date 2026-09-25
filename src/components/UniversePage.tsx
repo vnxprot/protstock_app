@@ -1,0 +1,10 @@
+import { useMemo } from 'react'
+import { Download } from 'lucide-react'
+import { useSymbols } from '../hooks/useStockAnalysis'
+import { downloadUniverseExcel, type StockUniverseExportRow } from '../lib/stock-universe-export'
+
+export function UniversePage({ authenticated }: { authenticated: boolean }) {
+  const symbols = useSymbols(authenticated)
+  const universe = useMemo<StockUniverseExportRow[]>(() => (symbols.data ?? []).map((item: any) => ({ index: 0, symbol: String(item.symbol ?? ''), companyName: item.company_name || 'Chưa cập nhật', sector: item.sector || 'Chưa phân ngành', exchange: item.exchange === 'HOSE' ? 'HSX' : item.exchange || 'Chưa cập nhật' })).sort((a, b) => a.symbol.localeCompare(b.symbol, 'en')).map((item, index) => ({ ...item, index: index + 1 })), [symbols.data])
+  return <section className="workspace-page universe-page"><header className="universe-page-heading"><div><a href="#settings">← Hướng dẫn</a><h1>Danh sách cổ phiếu</h1><p>Danh sách mã đang hoạt động trên hệ thống, sắp xếp từ A đến Z.</p></div><button type="button" className="primary-button universe-download-button" onClick={() => downloadUniverseExcel(universe)} disabled={!universe.length}><Download size={16}/> Tải danh sách</button></header><article className="panel universe-list-panel"><div className="panel-title"><h3>{symbols.isLoading ? 'Đang tải danh sách…' : `${universe.length} mã cổ phiếu`}</h3><span>DANH SÁCH</span></div>{symbols.isError ? <p className="form-error">Không thể tải danh sách cổ phiếu. Thử lại sau.</p> : <div className="data-table universe-table"><div className="table-head"><span>STT</span><span>Mã</span><span>Tên công ty</span><span>Nhóm ngành</span><span>Sàn</span></div>{universe.map(stock => <div className="position-row" key={stock.symbol}><span>{stock.index}</span><strong>{stock.symbol}</strong><span>{stock.companyName}</span><span>{stock.sector}</span><span>{stock.exchange}</span></div>)}{!symbols.isLoading && !universe.length && <p className="muted">Chưa có mã cổ phiếu đang hoạt động.</p>}</div>}</article></section>
+}

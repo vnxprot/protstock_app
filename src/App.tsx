@@ -19,6 +19,7 @@ const PortfolioPage = lazy(() => import('./components/PortfolioPage').then(m => 
 const JournalPage = lazy(() => import('./components/JournalPage').then(m => ({ default: m.JournalPage })))
 const SettingsPage = lazy(() => import('./components/SettingsPage').then(m => ({ default: m.SettingsPage })))
 const AdminPage = lazy(() => import('./components/AdminPage').then(m => ({ default: m.AdminPage })))
+const UniversePage = lazy(() => import('./components/UniversePage').then(m => ({ default: m.UniversePage })))
 
 const modules = [
   { id: 'today', icon: LayoutDashboard, label: 'Tổng quan' }, { id: 'analysis', icon: BarChart3, label: 'Phân tích mã' },
@@ -29,7 +30,7 @@ const modules = [
 const clientModules = modules.filter(item => ['today', 'analysis', 'screener', 'settings'].includes(item.id))
 const primaryMobile = modules.filter(item => ['today', 'analysis', 'screener', 'portfolio'].includes(item.id))
 const moreMobile = modules.filter(item => ['rules', 'backtest', 'journal', 'settings'].includes(item.id))
-function currentPage() { const value = location.hash.replace('#', ''); return [...modules, { id: 'admin' }].some(item => item.id === value) ? value : 'today' }
+function currentPage() { const value = location.hash.replace('#', ''); return [...modules, { id: 'admin' }, { id: 'universe' }].some(item => item.id === value) ? value : 'today' }
 
 function App({ authenticated = false, profile = null }: { authenticated?: boolean; profile?: UserProfile | null }) {
   const [page, setPage] = useState(currentPage); const [collapsed, setCollapsed] = useState(false); const [moreOpen, setMoreOpen] = useState(false); const [mobileNavCompact, setMobileNavCompact] = useState(false)
@@ -57,8 +58,8 @@ function App({ authenticated = false, profile = null }: { authenticated?: boolea
   }, [])
   const connectionLabel = !isSupabaseConfigured ? 'Chưa kết nối Supabase' : health.isLoading ? 'Đang kết nối dữ liệu' : health.isError ? 'Kết nối cần kiểm tra' : 'Đã kết nối dữ liệu'
   const connectionState = !isSupabaseConfigured || health.isError ? 'error' : health.isLoading ? 'pending' : 'ready'
-  const activePage = permittedModules.some(item => item.id === page) ? page : 'today'
-  const pages: Record<string, React.ReactNode> = { analysis: <AnalysisPage authenticated={authenticated}/>, screener: <ScreenerPage authenticated={authenticated}/>, rules: <RuleBuilderPage authenticated={authenticated}/>, backtest: <BacktestPage authenticated={authenticated}/>, portfolio: <PortfolioPage authenticated={authenticated}/>, journal: <JournalPage authenticated={authenticated}/>, settings: <SettingsPage authenticated={authenticated} isAdmin={isAdmin}/>, admin: <AdminPage/> }
+  const activePage = permittedModules.some(item => item.id === page) || page === 'universe' ? page : 'today'
+  const pages: Record<string, React.ReactNode> = { analysis: <AnalysisPage authenticated={authenticated}/>, screener: <ScreenerPage authenticated={authenticated}/>, rules: <RuleBuilderPage authenticated={authenticated}/>, backtest: <BacktestPage authenticated={authenticated}/>, portfolio: <PortfolioPage authenticated={authenticated}/>, journal: <JournalPage authenticated={authenticated}/>, settings: <SettingsPage authenticated={authenticated} isAdmin={isAdmin}/>, universe: <UniversePage authenticated={authenticated}/>, admin: <AdminPage/> }
   return <div className={collapsed ? 'app-shell sidebar-collapsed' : 'app-shell'}>
     <aside className="sidebar"><div className="sidebar-head"><a className="brand" href="#today"><span className="brand-mark">P</span><span className="brand-copy">Prot<span>Stock</span></span></a><button className="icon-button collapse-button" onClick={() => setCollapsed(v => !v)} aria-label="Thu gọn thanh bên"><ChevronLeft size={18}/></button></div><nav aria-label="Điều hướng chính">{navigation.map(item => <a className={activePage === item.id ? 'nav-item active' : 'nav-item'} data-tooltip={item.label} href={`#${item.id}`} key={item.id}><item.icon size={19}/><span className="nav-label">{item.label}</span>{item.badge != null && <small className="nav-badge">{item.badge}</small>}</a>)}</nav><div className="sidebar-note"><UserRound size={14}/><span className="sidebar-note-copy">{profile?.username} · {isAdmin?'Admin':'Client'}</span></div><button className="signout" onClick={() => supabase?.auth.signOut()}><span className="nav-label">Đăng xuất</span></button></aside>
     <main id="top"><div className="topbar"><button className="command-trigger" onClick={() => openCommandPalette()}><Search size={17}/><span>Tìm mã hoặc chức năng…</span><kbd><Command size={12}/> K</kbd></button><div className="topbar-actions"><span className="account-chip"><UserRound size={15}/>{profile?.username} · {isAdmin?'Admin':'Client'}</span><ThemeToggle/><div className={'status-chip '+connectionState} role="status" aria-live="polite"><span className="live-dot"/>{connectionLabel}</div><button className="icon-button notification" aria-label="Thông báo"><Bell size={18}/><i/></button></div></div><div className="mobile-header"><a className="brand" href="#today"><span className="brand-mark">P</span><span className="brand-copy">Prot<span>Stock</span></span></a><div><ThemeToggle/><button className="icon-button" onClick={() => openCommandPalette()}><Search size={19}/></button><span className="mobile-live">{profile?.username}</span></div></div>
