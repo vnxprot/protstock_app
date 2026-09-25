@@ -25,6 +25,10 @@ export interface TechnicalSnapshot {
   bollinger_lower: number | null
   atr14: number | null
   volume_ratio20: number | null
+  flow_score: number | null
+  flow_state: "PURPLE" | "GREEN" | "RED" | "BLUE" | "NEUTRAL" | "UNKNOWN"
+  cmf20: number | null
+  obv_slope20: number | null
   trend_state: string
 }
 
