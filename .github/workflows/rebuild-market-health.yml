@@ -1,0 +1,39 @@
+name: Rebuild Market Health history
+
+on:
+  workflow_dispatch:
+    inputs:
+      start_date:
+        description: First date to rebuild (YYYY-MM-DD)
+        required: true
+        default: '2021-01-01'
+        type: string
+      end_date:
+        description: Final date to rebuild (YYYY-MM-DD)
+        required: true
+        default: '2026-09-25'
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: protstock-market-health-history
+  cancel-in-progress: false
+
+jobs:
+  rebuild:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - run: python -m pip install -e '.[data]'
+      - name: Build historical Market Health from stored OHLCV
+        env:
+          SUPABASE_URL: https://upmqxwktvvguegqeqibn.supabase.co
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: protstock rebuild-market-health --start-date '${{ inputs.start_date }}' --end-date '${{ inputs.end_date }}'

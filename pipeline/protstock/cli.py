@@ -7,7 +7,7 @@ from pathlib import Path
 
 from .analysis import analyze_bars
 from .backtest_worker import process_backtests
-from .eod import finalize_fast_lane, rebuild_signals, run_eod
+from .eod import finalize_fast_lane, rebuild_market_health, rebuild_signals, run_eod
 from .disclosures import run_hnx_disclosures
 from .fundamentals import run_fundamentals
 from .alerts import send_eod_telegram_alerts
@@ -74,6 +74,9 @@ def main() -> None:
     eod.add_argument("--skip-breadth-snapshot", action="store_true")
     finalize_fast = subparsers.add_parser("finalize-fast-eod")
     finalize_fast.add_argument("--date", dest="trading_date", type=date.fromisoformat, default=date.today())
+    health = subparsers.add_parser("rebuild-market-health")
+    health.add_argument("--start-date", type=date.fromisoformat, default=date(2021, 1, 1))
+    health.add_argument("--end-date", type=date.fromisoformat, default=date.today())
     rebuild = subparsers.add_parser("rebuild-signals")
     rebuild.add_argument("--date", dest="trading_date", type=date.fromisoformat, default=date.today())
     rebuild.add_argument("--symbol-offset", type=int, default=0)
@@ -133,6 +136,9 @@ def main() -> None:
         raise SystemExit(0 if result["status"] in {"SUCCEEDED", "PARTIAL"} else 1)
     if args.command == "finalize-fast-eod":
         print(json.dumps(finalize_fast_lane(args.trading_date), ensure_ascii=False))
+        raise SystemExit(0)
+    if args.command == "rebuild-market-health":
+        print(json.dumps(rebuild_market_health(args.start_date, args.end_date), ensure_ascii=False))
         raise SystemExit(0)
     if args.command == "rebuild-signals":
         result = rebuild_signals(args.trading_date, symbol_offset=args.symbol_offset, symbol_limit=args.symbol_limit)

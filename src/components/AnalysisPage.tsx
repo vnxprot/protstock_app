@@ -24,10 +24,10 @@ function zoneDistance(zone:PriceZone, close:number|null|undefined) {
   const distance=Math.abs(close-boundary)/close*100
   return `${number(distance,1)}% phía ${zone.zone_type==='SUPPORT'?'dưới':'trên'}`
 }
-function FlowCard({snapshot}:{snapshot:{flow_score?:number|null;flow_state?:string;cmf20?:number|null;obv_slope20?:number|null}|undefined}) {
+function FlowCard({snapshot}:{snapshot:{flow_score?:number|null;flow_state?:string;cmf20?:number|null;obv_slope20?:number|null;flow_volume_ratio20?:number|null;flow_clv?:number|null}|undefined}) {
   const state=snapshot?.flow_state??"UNKNOWN"
   const title=state==="PURPLE"?"Dòng tiền vào rất mạnh":state==="GREEN"?"Dòng tiền vào":state==="BLUE"?"Dòng tiền thoát ra rất mạnh":state==="RED"?"Dòng tiền thoát ra":state==="NEUTRAL"?"Dòng tiền trung tính":"Chưa đủ dữ liệu"
-  return <article className="panel flow-card"><div className="panel-title"><div><h3>Prot Flow</h3><small>Proxy dòng tiền từ giá và khối lượng EOD</small></div><b className={"flow-state "+state.toLowerCase()}>{state}</b></div><div className="flow-score"><strong>{snapshot?.flow_score==null?"—":number(snapshot.flow_score,1)}</strong><span>{title}</span></div><p>CMF20 {number(snapshot?.cmf20,3)} · OBV slope 20 {number(snapshot?.obv_slope20,3)}</p><small>Chỉ là bối cảnh OHLCV, không nhận diện nhà đầu tư và không tự tạo lệnh.</small></article>
+  return <article className="panel flow-card"><div className="panel-title"><div><h3>Prot Flow</h3><small>Proxy dòng tiền từ giá và khối lượng EOD</small></div><b className={"flow-state "+state.toLowerCase()}>{state}</b></div><div className="flow-score"><strong>{snapshot?.flow_score==null?"—":number(snapshot.flow_score,1)}</strong><span>{title}</span></div><p>Phiên: KL/TB20 {number(snapshot?.flow_volume_ratio20,2)}× · CLV {number(snapshot?.flow_clv,2)} · Xu hướng 20 phiên: CMF {number(snapshot?.cmf20,3)} · OBV {number(snapshot?.obv_slope20,3)}</p><small>Màu đo áp lực giá–khối lượng của phiên, không khẳng định danh tính “dòng tiền thông minh” và không tự tạo lệnh.</small></article>
 }
 
 function ZoneMap({zones,close,trend,timeframe}:{zones:PriceZone[];close:number|null|undefined;trend:string|undefined;timeframe:string}) {

@@ -10,6 +10,7 @@ from .config import Settings
 from .engines import evaluate_named_engine
 from .indicators import calculate_indicators
 from .market_regime import build_breadth_membership
+from .market_health_history import build_market_health_history
 from .provider_vnstock import VnstockProvider
 from .resolution import resolve_consolidated_signal
 from .supabase_rest import SupabaseRestClient
@@ -256,6 +257,20 @@ def rebuild_signals(trading_date: date, *, symbol_offset: int = 0, symbol_limit:
     except Exception as exc:
         client.finish_job(job["id"], {"status": "FAILED", "finished_at": _now(), "counts": counts, "error_summary": str(exc)[:500]})
         raise
+    finally:
+        client.close()
+
+
+def rebuild_market_health(start_date: date, end_date: date) -> dict[str, Any]:
+    """Rebuild 2021+ point-in-time Market Health from stored price history only."""
+    client = SupabaseRestClient(Settings.from_env())
+    try:
+        symbols = client.active_symbols()
+        rows = client.all_daily_prices(start_date - timedelta(days=365), end_date)
+        snapshots = build_market_health_history(symbols, rows, start_date, end_date)
+        for offset in range(0, len(snapshots), 500):
+            client.upsert("market_breadth_snapshots", snapshots[offset:offset + 500], "trading_date")
+        return {"status": "SUCCEEDED", "start_date": start_date.isoformat(), "end_date": end_date.isoformat(), "snapshots": len(snapshots)}
     finally:
         client.close()
 

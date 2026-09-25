@@ -29,6 +29,8 @@ export interface TechnicalSnapshot {
   flow_state: "PURPLE" | "GREEN" | "RED" | "BLUE" | "NEUTRAL" | "UNKNOWN"
   cmf20: number | null
   obv_slope20: number | null
+  flow_volume_ratio20: number | null
+  flow_clv: number | null
   trend_state: string
 }
 

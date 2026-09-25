@@ -111,6 +111,22 @@ class SupabaseRestClient:
                 break
         return list(reversed(rows))
 
+    def all_daily_prices(self, start_date: date, end_date: date) -> list[dict[str, Any]]:
+        """Read stored OHLCV in pages for point-in-time Market Health rebuilds."""
+        rows: list[dict[str, Any]] = []
+        for offset in range(0, 1_000_000, 1000):
+            response = self._client.get(
+                "/daily_prices",
+                params={"select": "symbol_id,trading_date,close,volume", "trading_date": f"gte.{start_date.isoformat()}", "order": "trading_date.asc,symbol_id.asc"},
+                headers={"Range": f"{offset}-{offset + 999}"},
+            )
+            response.raise_for_status()
+            page = response.json()
+            rows.extend(page)
+            if len(page) < 1000:
+                break
+        return rows
+
     def active_rule_versions(self) -> list[dict[str, Any]]:
         """Load enabled engines in two explicit queries; avoid fragile embedded filters."""
         rules_response = self._client.get(
@@ -143,7 +159,7 @@ class SupabaseRestClient:
     def market_breadth_snapshot(self, trading_date) -> dict[str, Any] | None:
         response = self._client.get(
             "/market_breadth_snapshots",
-            params={"select": "trading_date,pct_above_sma50,pct_above_sma20,pct_above_sma200,pct_ma_stack,market_health_score,market_health_state,sample_size,universe_size,eligible_count,observed_count,coverage_ratio,coverage_status,vnindex_trend_state,advance_count,decline_count,unchanged_count,advance_decline_ratio,new_high20_count,new_low20_count,up_volume,down_volume,up_down_volume_ratio,sector_breadth", "trading_date": f"lte.{trading_date.isoformat()}", "order": "trading_date.desc", "limit": "1"},
+            params={"select": "trading_date,pct_above_sma50,pct_above_sma20,pct_above_sma200,pct_ma_stack,market_health_score,market_health_state,sample_size,universe_size,eligible_count,observed_count,coverage_ratio,coverage_status,vnindex_trend_state,advance_count,decline_count,unchanged_count,advance_decline_ratio,new_high20_count,new_low20_count,up_volume,down_volume,up_down_volume_ratio,sector_breadth", "trading_date": f"lte.{trading_date.isoformat()}", "coverage_status": "in.(COMPLETE,DEGRADED)", "order": "trading_date.desc", "limit": "1"},
         )
         response.raise_for_status()
         rows = response.json()
