@@ -206,7 +206,7 @@ def rebuild_signals(trading_date: date, *, symbol_offset: int = 0, symbol_limit:
     """Re-evaluate stored EOD data only; this never calls an upstream price source."""
     client = SupabaseRestClient(Settings.from_env())
     job = client.create_job({"job_type": "DERIVE_BARS", "trading_date": trading_date.isoformat(), "status": "RUNNING", "trigger_type": "MANUAL", "source_revision": ALGORITHM_VERSION})
-    counts = {"symbols": 0, "snapshots": 0, "patterns": 0, "zones": 0, "signals": 0, "consolidated_signals": 0, "failed": 0}
+    counts = {"symbols": 0, "snapshots": 0, "patterns": 0, "zones": 0, "signals": 0, "consolidated_signals": 0, "breadth_snapshots": 0, "failed": 0}
     warnings: list[str] = []
     try:
         symbols = client.active_symbols()[symbol_offset:]
@@ -246,6 +246,9 @@ def rebuild_signals(trading_date: date, *, symbol_offset: int = 0, symbol_limit:
             except Exception as exc:
                 counts["failed"] += 1; warnings.append(f"{symbol_row['symbol']}: {type(exc).__name__}")
                 client.create_job_item({"job_run_id": job["id"], "symbol_id": symbol_row["id"], "item_key": symbol_row["symbol"], "status": "FAILED", "error_code": type(exc).__name__, "error_message": str(exc)[:500], "duration_ms": int((monotonic() - started) * 1000)})
+        vnindex_snapshot = calculate_indicators(benchmark_daily).to_dict() if benchmark_daily else {"trend_state": "UNKNOWN"}
+        _persist_universe_breadth(client, trading_date, vnindex_snapshot["trend_state"])
+        counts["breadth_snapshots"] += 1
         status = "SUCCEEDED" if not counts["failed"] else "PARTIAL"
         _persist_engine_stats(client, job["id"], trading_date, counts)
         client.finish_job(job["id"], {"status": status, "finished_at": _now(), "counts": counts, "warnings": warnings})
