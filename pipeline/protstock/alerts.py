@@ -29,7 +29,7 @@ def build_telegram_message(signal: dict, trading_date: date) -> str:
     return f"Prot Stock EOD · {trading_date:%d/%m/%Y}\n{signal['action']} {symbol} · {rule}\n{reasons}"
 
 
-def _reduce_recently_notified(client: SupabaseRestClient, symbol_id: int, trading_date: date, dedupe_days: int) -> bool:
+def _action_recently_notified(client: SupabaseRestClient, symbol_id: int, action: str, trading_date: date, dedupe_days: int) -> bool:
     response = client._client.get(
         "/notification_deliveries",
         params={
@@ -37,7 +37,7 @@ def _reduce_recently_notified(client: SupabaseRestClient, symbol_id: int, tradin
             "channel": "eq.TELEGRAM",
             "delivered_at": f"gte.{(trading_date - timedelta(days=dedupe_days)).isoformat()}",
             "consolidated_signals.symbol_id": f"eq.{symbol_id}",
-            "consolidated_signals.composite_action": "eq.REDUCE",
+            "consolidated_signals.composite_action": f"eq.{action}",
             "limit": "1",
         },
     )
@@ -45,7 +45,7 @@ def _reduce_recently_notified(client: SupabaseRestClient, symbol_id: int, tradin
     return bool(response.json())
 
 
-def send_eod_telegram_alerts(trading_date: date, reduce_dedupe_days: int = 5) -> dict:
+def send_eod_telegram_alerts(trading_date: date, action_dedupe_days: int = 5) -> dict:
     token, chat_id = os.getenv("TELEGRAM_BOT_TOKEN"), os.getenv("TELEGRAM_CHAT_ID")
     if not token or not chat_id:
         return {"status": "DISABLED", "reason": "Telegram secrets are not configured"}
@@ -61,7 +61,9 @@ def send_eod_telegram_alerts(trading_date: date, reduce_dedupe_days: int = 5) ->
             exists.raise_for_status()
             if exists.json():
                 continue
-            if signal["action"] == "REDUCE" and _reduce_recently_notified(client, signal["symbol_id"], trading_date, reduce_dedupe_days):
+            # A repeated daily snapshot is not a new decision. Alert again only
+            # after an action change or a short cooling-off period.
+            if _action_recently_notified(client, signal["symbol_id"], signal["action"], trading_date, action_dedupe_days):
                 deduped += 1
                 continue
             text = build_telegram_message(signal, trading_date)

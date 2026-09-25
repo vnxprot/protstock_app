@@ -10,6 +10,7 @@ import { TodayHealth } from './components/TodayHealth'
 import { formatDate } from './lib/date'
 import { version as appVersion } from '../package.json'
 import { ThemeToggle } from './components/ThemeToggle'
+import { SignalDecisionBoard } from './components/SignalDecisionBoard'
 
 const AnalysisPage = lazy(() => import('./components/AnalysisPage').then(m => ({ default: m.AnalysisPage })))
 const RuleBuilderPage = lazy(() => import('./components/RuleBuilderPage').then(m => ({ default: m.RuleBuilderPage })))
@@ -172,28 +173,13 @@ function Dashboard() {
     </header>
     <MarketContextCard/>
     <ExecutiveKpiStrip favorites={favorites}/>
-    <section className="overview-layout dashboard-grid"><div className="overview-main">
-      <article className="panel overview-signals-card">
-        <div className="overview-card-heading"><div><h2>Tín hiệu gần nhất</h2></div><a href="#screener">Xem tất cả</a></div>
-        <div className="overview-signal-list">
-          {signals.isLoading ? <p className="overview-empty">Đang tải tín hiệu…</p> : signals.isError ? <p className="overview-empty negative">Chưa tải được tín hiệu. Vui lòng thử lại.</p> : feed.length ? feed.map(item =>
-            <a href="#analysis" className="overview-signal-row" key={item.id} onClick={() => selectSymbol(item.symbol)}>
-              <div className="overview-signal-top">
-                <div className="overview-signal-identity"><strong>{item.symbol}</strong><span className={`action-pill ${item.action.toLowerCase()}`}>{item.action}</span></div>
-                <div className="overview-signal-values"><b className="overview-score-gauge" title="Điểm tín hiệu">{item.score}</b><time>{formatDate(item.as_of_date)}</time></div>
-              </div>
-              <div className="overview-signal-bottom"><span>{item.sector ?? 'Chưa phân ngành'} · {item.timeframe}<span className={`overview-consensus confluence-badge ${item.count >= 3 ? 'strong_aligned' : item.count === 2 ? 'high_confluence' : 'standard'}`}>{item.count >= 3 ? 'Đồng thuận mạnh' : item.count === 2 ? 'Đồng thuận cao' : 'Tiêu chuẩn'}</span></span><span className="overview-chart-link">Xem biểu đồ</span></div>
-            </a>
-          ) : <p className="overview-empty">Chưa có tín hiệu sau phiên.</p>}
-        </div>
-      </article>
-      </div><aside className="overview-side">
+    <SignalDecisionBoard onSelect={selectSymbol}/>
+    <section className="overview-support-grid">
         <article className="panel overview-watch-card">
           <div className="overview-card-heading"><div><h2>Đang theo dõi <small>{favorites.length} mã</small></h2></div><button type="button" className="text-button" onClick={() => openCommandPalette('symbols')}>+ Thêm mã</button></div>
           <div className="overview-watch-list">{favorites.length ? favorites.map(symbol => <a href="#analysis" className="overview-watch-row" key={symbol} onClick={() => selectSymbol(symbol)}><strong>{symbol}</strong><span>Xem phân tích</span></a>) : <p className="overview-empty">Chưa có mã nào trong danh sách theo dõi.</p>}</div>
         </article>
         <TodayHealth/>
-      </aside>
     </section>
   </section>
 }

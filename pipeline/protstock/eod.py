@@ -463,7 +463,7 @@ def _write_analysis(
             engine_context["engine_evidence"] = proposal_context.get("engine_evidence", {})
         proposed_action = action
         evidence = engine_context.setdefault("engine_evidence", {})
-        matched = [p for p in result["patterns"] if p.get("state") == "CONFIRMED" and any(p.get("pattern_type", "?") in reason for reason in reasons)]
+        matched = [p for p in result["patterns"] if p.get("state") in {"CONFIRMED", "READY"} and any(p.get("pattern_type", "?") in reason for reason in reasons)]
         if matched and not evidence.get("invalidation_price"):
             top = max(matched, key=lambda p: p.get("quality_score", 0))
             evidence.update({key: top.get(key) for key in ("pattern_type", "quality_score", "invalidation_price", "trigger_price")})
@@ -503,7 +503,7 @@ def _write_analysis(
         counts.setdefault("consolidated_signals", 0)
         counts["consolidated_signals"] += client.upsert("consolidated_signals", [{
             "symbol_id": symbol_id, "timeframe": timeframe, "as_of_date": context.get("evaluation_date", result["as_of_date"]),
-            **{key: consolidated[key] for key in ("composite_action", "confluence_score", "confluence_count", "consensus_engines", "reasons", "signal_state")},
+            **{key: consolidated[key] for key in ("composite_action", "confluence_score", "confluence_count", "consensus_engines", "reasons", "signal_state", "trigger_price", "invalidation_price", "expiry_date")},
         }], "symbol_id,timeframe,as_of_date")
     else:
         client.delete_consolidated_signal(symbol_id, timeframe, context.get("evaluation_date", result["as_of_date"]))
