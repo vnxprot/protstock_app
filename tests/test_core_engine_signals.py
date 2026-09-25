@@ -65,13 +65,13 @@ def test_core_v2_flows_through_active_rule_versions() -> None:
         "rule_version_id": "v2", "symbol_id": 42, "timeframe": "D", "as_of_date": "2026-09-11",
         "action": "WATCH", "source": "CORE_PACK", "score": 100,
         "reasons": ["TREND_UP", "NEAR_TRIGGER_ACCUMULATION_BASE"],
-        "evidence": {"close": 100.0, "rsi14": 55.0, "trend_state": "UP", "volume_avg20": 5000000, "volume_ratio20": 1.0, "pattern_type": "ACCUMULATION_BASE", "quality_score": 50, "invalidation_price": 95, "trigger_price": 101},
+        "evidence": {"close": 100.0, "rsi14": 55.0, "trend_state": "UP", "volume_avg20": 5000000, "volume_ratio20": 1.0},
     }]
     assert client.consolidated_rows == [{
         "symbol_id": 42, "timeframe": "D", "as_of_date": "2026-09-11", "composite_action": "WATCH",
         "confluence_score": 70, "confluence_count": 1, "consensus_engines": ["core_ladder_v2"],
         "reasons": ["TREND_UP", "NEAR_TRIGGER_ACCUMULATION_BASE"],
-        "signal_state": "WATCH_SETUP", "trigger_price": 101, "invalidation_price": 95, "expiry_date": None,
+        "signal_state": "WATCH_SETUP",
     }]
 
 
