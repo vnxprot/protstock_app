@@ -71,6 +71,7 @@ def test_core_v2_flows_through_active_rule_versions() -> None:
         "symbol_id": 42, "timeframe": "D", "as_of_date": "2026-09-11", "composite_action": "WATCH",
         "confluence_score": 70, "confluence_count": 1, "consensus_engines": ["core_ladder_v2"],
         "reasons": ["TREND_UP", "NEAR_TRIGGER_ACCUMULATION_BASE"],
+        "signal_state": "WATCH_SETUP",
     }]
 
 
