@@ -36,15 +36,14 @@ def test_eligible_universe_excludes_retired_and_duplicate_rows():
         date(2026, 9, 11): snapshots((1, 20, 10), (1, 20, 10), (2, 8, 10), (999, 100, 10)),
     })
     breadth, membership = _stored_universe_breadth(client, date(2026, 9, 11))
-    assert breadth == {
-        "pct_above_sma50": 50,
-        "sample_size": 2,
-        "universe_size": 2,
-        "eligible_count": 2,
-        "observed_count": 2,
-        "coverage_ratio": 1,
-        "coverage_status": "COMPLETE",
-    }
+    assert breadth["pct_above_sma50"] == 50
+    assert breadth["market_health_state"] == "RISK_OFF"
+    assert breadth["sample_size"] == 2
+    assert breadth["universe_size"] == 2
+    assert breadth["eligible_count"] == 2
+    assert breadth["observed_count"] == 2
+    assert breadth["coverage_ratio"] == 1
+    assert breadth["coverage_status"] == "COMPLETE"
     assert {row["symbol_id"] for row in membership} == {1, 2}
 
 
