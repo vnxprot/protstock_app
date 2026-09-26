@@ -31,14 +31,18 @@ export function StockChart({bars,zones=[],patterns=[],indicators,syncGroup='anal
       return Number.isFinite(lower) && Number.isFinite(upper) && lower > 0 && upper >= lower
         && lower / lastClose > 0.4 && upper / lastClose < 2.5
     })
+    const linePrice = (zone: PriceZone, kind: PriceZone['zone_type']) => kind === 'SUPPORT'
+      ? Number(zone.upper_price <= lastClose ? zone.upper_price : zone.lower_price)
+      : Number(zone.lower_price >= lastClose ? zone.lower_price : zone.upper_price)
     const closest = (kind: PriceZone['zone_type']) => validZones
-      .filter(zone => zone.zone_type === kind)
-      .sort((a, b) => Math.abs((kind === 'SUPPORT' ? a.upper_price : a.lower_price) - lastClose)
-        - Math.abs((kind === 'SUPPORT' ? b.upper_price : b.lower_price) - lastClose))[0]
+      .filter(zone => zone.zone_type === kind && (kind === 'SUPPORT'
+        ? Number(zone.lower_price) <= lastClose : Number(zone.upper_price) >= lastClose))
+      .sort((a, b) => Math.abs(linePrice(a, kind) - lastClose)
+        - Math.abs(linePrice(b, kind) - lastClose))[0]
     const zoneLines = (['SUPPORT', 'RESISTANCE'] as const).flatMap(kind => {
       const zone = closest(kind)
       if (!zone) return []
-      const price = kind === 'SUPPORT' ? Number(zone.upper_price) : Number(zone.lower_price)
+      const price = linePrice(zone, kind)
       const line = candles.createPriceLine({ price, color: kind === 'SUPPORT' ? palette.up : palette.down,
         lineWidth: 1, lineStyle: LineStyle.Dashed, axisLabelVisible: true,
         title: kind === 'SUPPORT' ? 'Hỗ trợ' : 'Kháng cự' })
