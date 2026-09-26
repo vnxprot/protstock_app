@@ -1,0 +1,61 @@
+name: Audit stock price units
+
+on:
+  workflow_dispatch:
+    inputs:
+      symbol:
+        description: Stock symbol to inspect
+        required: true
+        default: HDB
+        type: string
+      trading_date:
+        description: EOD date (YYYY-MM-DD)
+        required: true
+        default: '2026-09-25'
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Inspect stored prices and EOD job item
+        env:
+          SUPABASE_URL: https://upmqxwktvvguegqeqibn.supabase.co
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SYMBOL: ${{ inputs.symbol }}
+          TRADING_DATE: ${{ inputs.trading_date }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import re
+          from urllib.parse import urlencode
+          from urllib.request import Request, urlopen
+
+          symbol = os.environ['SYMBOL'].upper()
+          trading_date = os.environ['TRADING_DATE']
+          if not re.fullmatch(r'[A-Z0-9]{3,10}', symbol) or not re.fullmatch(r'\d{4}-\d{2}-\d{2}', trading_date):
+              raise ValueError('Invalid audit input')
+
+          def get(table, **params):
+              url = f"{os.environ['SUPABASE_URL']}/rest/v1/{table}?{urlencode(params)}"
+              request = Request(url, headers={
+                  'apikey': os.environ['SUPABASE_SERVICE_ROLE_KEY'],
+                  'Authorization': f"Bearer {os.environ['SUPABASE_SERVICE_ROLE_KEY']}",
+              })
+              with urlopen(request, timeout=30) as response:
+                  return json.load(response)
+
+          matches = get('symbols', select='id,symbol', symbol=f'eq.{symbol}', limit='1')
+          if not matches:
+              raise ValueError('Symbol not found')
+          symbol_id = matches[0]['id']
+          prices = get('daily_prices', select='trading_date,close,source', symbol_id=f'eq.{symbol_id}', trading_date=f'lte.{trading_date}', order='trading_date.desc', limit='20')
+          snapshot = get('technical_snapshots', select='as_of_date,close,sma20', symbol_id=f'eq.{symbol_id}', timeframe='eq.D', as_of_date=f'eq.{trading_date}', limit='1')
+          jobs = get('job_runs', select='id,status,started_at', job_type='eq.EOD_INGEST', trading_date=f'eq.{trading_date}', order='started_at.desc', limit='2')
+          items = [get('job_run_items', select='status,error_code,rows_written', job_run_id=f"eq.{job['id']}", symbol_id=f'eq.{symbol_id}', limit='1') for job in jobs]
+          print(json.dumps({'symbol': symbol, 'prices': prices, 'snapshot': snapshot, 'jobs': [{**job, 'item': item} for job, item in zip(jobs, items)]}, ensure_ascii=False))
+          PY
