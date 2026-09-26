@@ -10,6 +10,7 @@ import { canonicalEngineName, compareEngines } from '../lib/engineCatalog'
 import { downloadSignalCsv, downloadSignalExcel, downloadSignalPdf } from '../lib/signalReports'
 import { explainSignal, signalReasonSummary } from '../lib/signalExplanation'
 type SignalRow = { signal_id:string; symbol:string; sector:string|null; as_of_date:string; timeframe:string; action:string; score:number; confluence_count:number; confluence_badge:string; consensus_engines:string[]; reasons:string[] }
+type SignalResult = { rows: SignalRow[]; latestDate: string | null }
 type PricePoint = { symbol_id:string; trading_date:string; close:number; symbols?:{symbol:string}|null }
 
 const chipDefinitions=[['ALL','Tất cả'],['CONFLUENCE','Đồng thuận cao'],['BUY','Mua'],['SELL','Bán'],['WATCH','Theo dõi']] as const
@@ -17,21 +18,22 @@ const engineLabels:Record<string,string>={core_ladder_v1:'Prot Core Engine v1.0'
 function displayEngine(engine:string){const canonical=canonicalEngineName(engine);return engineLabels[canonical]??canonical.replaceAll('_',' ')}
 function Sparkline({ points }: { points:number[] }) { const values=points.slice(-20); if(values.length<2)return <span className="sparkline-empty">Chưa đủ 20 phiên</span>; const min=Math.min(...values),max=Math.max(...values),span=max-min||1; const polyline=values.map((value,index)=>`${index/(values.length-1)*100},${92-(value-min)/span*84}`).join(' '); const rising=values.at(-1)!>=values[0]; return <svg className={`sparkline ${rising?'up':'down'}`} viewBox="0 0 100 100" preserveAspectRatio="none" aria-label="Xu hướng giá 20 phiên"><polyline points={polyline}/></svg> }
 
-async function fetchConsolidatedSignals(showHistory:boolean):Promise<SignalRow[]> {
+async function fetchConsolidatedSignals(showHistory:boolean):Promise<SignalResult> {
   const rows:any[]=[]
   const pageSize=1000
-  const latest=showHistory?null:await supabase!.from('consolidated_signals').select('as_of_date').order('as_of_date',{ascending:false}).limit(1).maybeSingle()
-  if(latest?.error)throw latest.error
-  if(!showHistory&&!latest?.data)return[]
+  const {data:latestPrice,error:dateError}=await supabase!.from('daily_prices').select('trading_date').order('trading_date',{ascending:false}).limit(1).maybeSingle()
+  if(dateError)throw dateError
+  const latestDate=latestPrice?.trading_date??null
+  if(!showHistory&&!latestDate)return{rows:[],latestDate}
   for(let from=0;;from+=pageSize){
     let query=supabase!.from('consolidated_signals').select('id,as_of_date,timeframe,composite_action,confluence_score,confluence_count,consensus_engines,reasons,symbols!inner(symbol,sector)').order('as_of_date',{ascending:false}).order('confluence_score',{ascending:false})
-    if(latest?.data)query=query.eq('as_of_date',latest.data.as_of_date)
+    if(!showHistory&&latestDate)query=query.eq('as_of_date',latestDate)
     const {data,error}=await query.range(from,from+pageSize-1)
     if(error)throw error
     rows.push(...(data??[]))
     if((data??[]).length<pageSize)break
   }
-  return rows.map((item:any)=>{const symbol=Array.isArray(item.symbols)?item.symbols[0]:item.symbols;const count=Number(item.confluence_count);return{signal_id:item.id,symbol:symbol?.symbol??'—',sector:symbol?.sector??null,as_of_date:item.as_of_date,timeframe:item.timeframe,action:item.composite_action,score:Number(item.confluence_score),confluence_count:count,confluence_badge:count>=3?'STRONG_ALIGNED':count===2?'HIGH_CONFLUENCE':'STANDARD',consensus_engines:item.consensus_engines??[],reasons:item.reasons??[]}})
+  return {latestDate,rows:rows.map((item:any)=>{const symbol=Array.isArray(item.symbols)?item.symbols[0]:item.symbols;const count=Number(item.confluence_count);return{signal_id:item.id,symbol:symbol?.symbol??'—',sector:symbol?.sector??null,as_of_date:item.as_of_date,timeframe:item.timeframe,action:item.composite_action,score:Number(item.confluence_score),confluence_count:count,confluence_badge:count>=3?'STRONG_ALIGNED':count===2?'HIGH_CONFLUENCE':'STANDARD',consensus_engines:item.consensus_engines??[],reasons:item.reasons??[]}})}
 }
 
 export function ScreenerPage({ authenticated }: { authenticated: boolean }) {
@@ -42,8 +44,8 @@ export function ScreenerPage({ authenticated }: { authenticated: boolean }) {
   const prices=useQuery({queryKey:['screener-sparklines'],enabled:authenticated&&Boolean(supabase),staleTime:300_000,queryFn:async()=>{const{data,error}=await supabase!.from('daily_prices').select('symbol_id,trading_date,close,symbols!inner(symbol)').order('trading_date',{ascending:false}).limit(5000);if(error)throw error;return data??[]}})
   useEffect(()=>{const sync=(event:Event)=>setFavorites((event as CustomEvent<string[]>).detail);addEventListener('protstock:favorites',sync);return()=>removeEventListener('protstock:favorites',sync)},[])
   const [timeframe,setTimeframe]=useState('ALL'); const [engine,setEngine]=useState('ALL'); const [dateFrom,setDateFrom]=useState(''); const [dateTo,setDateTo]=useState(''); const [exactDate,setExactDate]=useState('')
-  const source=(signals.data??[]) as SignalRow[]
-  const latestDate=source[0]?.as_of_date
+  const source=signals.data?.rows??[]
+  const latestDate=signals.data?.latestDate??null
   const minScore=Math.max(0,Math.min(100,Number(minScoreText)||0))
   const engineOptions=useMemo(()=>[...new Set([...(activeEngines.data??[]),...source.flatMap(item=>item.consensus_engines.map(canonicalEngineName))])].map(name=>({name})).sort(compareEngines),[activeEngines.data,source])
   const sparklineBySymbol=useMemo(()=>{const grouped:Record<string,PricePoint[]>={};((prices.data??[]) as unknown as PricePoint[]).forEach(point=>{const symbol=Array.isArray(point.symbols)?point.symbols[0]?.symbol:point.symbols?.symbol;if(symbol)(grouped[symbol]??=[]).push(point)});return Object.fromEntries(Object.entries(grouped).map(([symbol,items])=>[symbol,items.sort((a,b)=>a.trading_date.localeCompare(b.trading_date)).slice(-20).map(item=>Number(item.close))]))},[prices.data])
