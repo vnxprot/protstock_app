@@ -7,7 +7,7 @@ from typing import Any
 from .analysis import ALGORITHM_VERSION, analyze_bars
 from .fibonacci import build_fibonacci_context
 from .config import Settings
-from .engines import evaluate_named_engine
+from .engines import evaluate_named_engine, relative_strength_context_reasons
 from .indicators import calculate_indicators
 from .market_regime import build_breadth_membership
 from .market_health_history import build_market_health_history
@@ -483,6 +483,12 @@ def _write_analysis(
         if passed or (timeframe == "D" and engine_context.get("position")):
             action, reasons = apply_signal_policy(action, reasons, engine_context)
             passed = passed or action == "EXIT"
+            if engine_context["data_date"] != engine_context["evaluation_date"]:
+                # Keep the failed evaluation for audit, never publish a WATCH
+                # based on an older close as if it were today's signal.
+                passed = False
+            elif passed and timeframe == "D" and action in {"PROBE_BUY", "ADD"}:
+                reasons = list(dict.fromkeys([*reasons, *relative_strength_context_reasons(engine_context)]))
         evaluation_date = context.get("evaluation_date", result["as_of_date"])
         if passed or reasons: evaluations.append({"rule_version_id": version["id"], "symbol_id": symbol_id, "timeframe": timeframe, "as_of_date": evaluation_date, "proposed_action": proposed_action, "action": action, "emitted": passed, "reasons": reasons or ["NO_MATCHING_SETUP"], "evidence": engine_context.get("engine_evidence") or {}})
         if passed:

@@ -20,7 +20,10 @@ def apply_signal_policy(action: str, reasons: list[str], context: dict) -> tuple
     close = float(snapshot.get("close") or 0)
     stop = (position or {}).get("invalidation_price")
     if context.get("data_date") != context.get("evaluation_date"):
-        return "WATCH", [*reasons, "ENTRY_BLOCKED", "STALE_PRICE_DATA"]
+        # Stale data is an audit failure, not an entry setup.  The caller
+        # suppresses emission while retaining this reason in evaluations.
+        blocked = ["ENTRY_BLOCKED"] if action in {"PROBE_BUY", "ADD"} else []
+        return "WATCH", list(dict.fromkeys([*reasons, *blocked, "STALE_PRICE_DATA"]))
     if position and stop and close > 0 and close < float(stop):
         return "EXIT", ["INVALIDATION_BROKEN", *reasons]
     if action in {"REDUCE", "EXIT"}:
@@ -28,8 +31,6 @@ def apply_signal_policy(action: str, reasons: list[str], context: dict) -> tuple
     if action not in {"PROBE_BUY", "ADD"}:
         return action, reasons
     blocked = []
-    if context.get("data_date") != context.get("evaluation_date"):
-        blocked.append("STALE_PRICE_DATA")
     if not isfinite(close) or close <= 0:
         blocked.append("INVALID_PRICE")
     # Liquidity is ALWAYS daily turnover, even for weekly/monthly setups.

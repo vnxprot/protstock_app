@@ -47,7 +47,7 @@ def evaluate_rsi_macd_confirmation(context: dict) -> tuple[bool, str, list[str]]
         trigger = max(float(row["high"]) for row in bars[first + 1:second])
         context["engine_evidence"] = {"pattern_type": "RSI_DIVERGENCE", "evidence_cluster": "RSI_DIVERGENCE", "invalidation_price": stop, "trigger_price": trigger, "first_pivot_date": bars[first]["date"], "second_pivot_date": bars[second]["date"], "setup_confirmed_on": bars[confirmed]["date"], "engine_version": "v1.1"}
         if any(float(row["close"]) < stop for row in bars[confirmed:]):
-            return True, "WATCH", ["RSI_SETUP_INVALIDATED"]
+            return False, "WATCH", ["RSI_SETUP_INVALIDATED"]
         reasons = ["BULLISH_RSI_DIVERGENCE", "SUPPORT_ZONE_STRONG"]
         crossed = False
         for i in range(confirmed, len(bars)):
@@ -65,5 +65,13 @@ def evaluate_rsi_macd_confirmation(context: dict) -> tuple[bool, str, list[str]]
         hist, prev_hist = indicators[-1]["macd_histogram"], indicators[-2]["macd_histogram"]
         if hist is not None and prev_hist is not None and hist > prev_hist:
             reasons.append("MACD_HISTOGRAM_IMPROVING")
-        return True, "WATCH", [*reasons, "WAIT_PRICE_TRIGGER" if crossed else "WAIT_MACD_CONFIRMATION"]
+        wait_reasons = [*reasons, "WAIT_PRICE_TRIGGER" if crossed else "WAIT_MACD_CONFIRMATION"]
+        current_close, previous_close = float(bars[-1]["close"]), float(bars[-2]["close"])
+        near_now = trigger * .97 <= current_close <= trigger
+        near_before = trigger * .97 <= previous_close <= trigger
+        just_crossed = crossed and prev_hist is not None and hist is not None and prev_hist <= 0 < hist
+        # WATCH only near the fixed trigger, and only for a new setup, MACD
+        # transition, or first approach. Do not re-emit the same wait daily.
+        noteworthy = near_now and (len(bars) - 1 == confirmed or just_crossed or not near_before)
+        return noteworthy, "WATCH", wait_reasons
     return False, "WATCH", []

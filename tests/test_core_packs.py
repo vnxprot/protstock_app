@@ -37,7 +37,9 @@ def test_rsi_macd_divergence_pack_detects_higher_rsi_at_new_price_low_in_support
 
 def test_relative_strength_leader_pack_requires_strength_in_soft_market() -> None:
     context = {"snapshot": {"relative_strength_market": .08, "trend_state": "UP"}, "market_context": {"vnindex_snapshot": {"trend_state": "SIDEWAYS"}}}
-    assert evaluate_relative_strength_leader_v1(context)[0:2] == (True, "PROBE_BUY")
+    emitted, action, reasons = evaluate_relative_strength_leader_v1(context)
+    assert (emitted, action) == (False, "WATCH")
+    assert reasons == ["RELATIVE_STRENGTH_GT_5PCT", "VNINDEX_SIDEWAYS", "STOCK_UPTREND"]
 
 
 def test_core_pack_metadata_describes_all_phase_two_packs() -> None:

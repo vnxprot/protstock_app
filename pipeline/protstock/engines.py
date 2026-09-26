@@ -28,7 +28,7 @@ CORE_PACK_METADATA = {
     "relative_strength_leader_v1": {
         "name": "Relative Strength Leader Pack",
         "target_engine": "core_ladder_v2",
-        "description": "Bắt siêu cổ phiếu giữ nền giá mạnh hơn VNIndex",
+        "description": "Bối cảnh sức mạnh tương đối; không tự phát lệnh mua",
     },
     "wyckoff_context_v1": {
         "name": "Wyckoff Context Pack",
@@ -241,13 +241,19 @@ def evaluate_rsi_macd_divergence_v1(context: dict[str, Any]) -> tuple[bool, str,
     return True, "PROBE_BUY", ["BULLISH_RSI_DIVERGENCE", "SUPPORT_ZONE_STRONG"]
 
 
-def evaluate_relative_strength_leader_v1(context: dict[str, Any]) -> tuple[bool, str, list[str]]:
+def relative_strength_context_reasons(context: dict[str, Any]) -> list[str]:
     snapshot = context.get("snapshot", {})
     market = (context.get("market_context") or {}).get("vnindex_snapshot") or {}
     rs = snapshot.get("relative_strength_market")
     if snapshot.get("trend_state") != "UP" or rs is None or float(rs) <= 0.05 or market.get("trend_state") not in {"SIDEWAYS", "DOWN"}:
-        return False, "WATCH", []
-    return True, "PROBE_BUY", ["RELATIVE_STRENGTH_GT_5PCT", f"VNINDEX_{market['trend_state']}", "STOCK_UPTREND"]
+        return []
+    return ["RELATIVE_STRENGTH_GT_5PCT", f"VNINDEX_{market['trend_state']}", "STOCK_UPTREND"]
+
+
+def evaluate_relative_strength_leader_v1(context: dict[str, Any]) -> tuple[bool, str, list[str]]:
+    # Preserve the evidence for audit; attach it only to an independently
+    # actionable buy in _write_analysis, without a separate signal or vote.
+    return False, "WATCH", relative_strength_context_reasons(context)
 
 
 def evaluate_wyckoff_context_v1(context: dict[str, Any]) -> tuple[bool, str, list[str]]:

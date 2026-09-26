@@ -63,10 +63,41 @@ def test_missing_or_stale_context_fails_closed(key,value,code):
     assert action == "WATCH" and code in reasons
 
 
+def test_stale_watch_is_a_data_warning_not_an_entry_block():
+    ctx = context(); ctx["data_date"] = "2026-09-14"
+    assert apply_signal_policy("WATCH", ["WAIT_MACD_CONFIRMATION"], ctx) == (
+        "WATCH", ["WAIT_MACD_CONFIRMATION", "STALE_PRICE_DATA"]
+    )
+
+
 class Recorder:
-    def __init__(self): self.tables = {}
+    def __init__(self): self.tables = {}; self.deleted = []
     def upsert(self, table, rows, conflict): self.tables[table] = list(rows); return len(rows)
-    def delete_consolidated_signal(self, *args): pass
+    def delete_consolidated_signal(self, *args): self.deleted.append(args)
+
+
+def test_stale_proposal_is_audited_but_not_published(monkeypatch):
+    monkeypatch.setattr("protstock.eod.evaluate_named_engine", lambda *args: (True, "PROBE_BUY", ["TEST_SETUP"]))
+    ctx = context(); ctx["data_date"] = "2026-09-14"
+    result = {"as_of_date": "2026-09-14", "patterns": [], "zones": [], "indicators": ctx["snapshot"]}
+    client = Recorder()
+    _write_analysis(client, 1, "D", [{"date": "2026-09-14"}], [], [{"id": "v", "dsl": {"engine": "custom"}, "rules": {"kind": "CORE_PACK"}}], {"signals": 0}, result, ctx, persist_evidence=False)
+    assert client.tables["signals"] == []
+    assert "consolidated_signals" not in client.tables
+    assert client.deleted == [(1, "D", "2026-09-15")]
+    assert client.tables["signal_evaluations"][0]["emitted"] is False
+
+
+def test_relative_strength_is_supporting_evidence_only(monkeypatch):
+    monkeypatch.setattr("protstock.eod.evaluate_named_engine", lambda *args: (True, "PROBE_BUY", ["TEST_SETUP"]))
+    ctx = context()
+    ctx["snapshot"].update(relative_strength_market=.08, trend_state="UP")
+    ctx["market_context"]["vnindex_snapshot"]["trend_state"] = "SIDEWAYS"
+    result = {"as_of_date": "2026-09-15", "patterns": [], "zones": [], "indicators": ctx["snapshot"]}
+    client = Recorder()
+    _write_analysis(client, 1, "D", [{"date": "2026-09-15"}], [], [{"id": "v", "dsl": {"engine": "custom"}, "rules": {"kind": "CORE_PACK"}}], {"signals": 0}, result, ctx, persist_evidence=False)
+    assert client.tables["signals"][0]["action"] == "PROBE_BUY"
+    assert "RELATIVE_STRENGTH_GT_5PCT" in client.tables["consolidated_signals"][0]["reasons"]
 
 
 @pytest.mark.parametrize("engine", ["core_ladder_v1", "core_ladder_v2", "classical_patterns_v0", "pullback_continuation_v1", "vcp_breakout_v1", "rsi_macd_confirmation_v1_1", "relative_strength_leader_v1", "wyckoff_context_v1", "tplus_pullback_v1", "custom"])
@@ -122,12 +153,25 @@ def test_rsi_macd_requires_both_macd_and_fixed_price_trigger(monkeypatch):
     assert 'WAIT_MACD_CONFIRMATION' in evaluate_rsi_macd_confirmation(ctx)[2]
 
 
+def test_rsi_wait_emits_only_on_setup_or_new_near_trigger_event(monkeypatch):
+    ctx=divergence_context(monkeypatch,cross=False)
+    assert evaluate_rsi_macd_confirmation(ctx)[0] is False
+    ctx['bars'][-1]['close']=104
+    assert evaluate_rsi_macd_confirmation(ctx)[:2] == (True, 'WATCH')
+    ctx['bars'][-2]['close']=104
+    assert evaluate_rsi_macd_confirmation(ctx)[0] is False
+    ctx=divergence_context(monkeypatch,cross=False)
+    ctx['bars']=ctx['bars'][:38]
+    ctx['bars'][-1]['close']=104
+    assert evaluate_rsi_macd_confirmation(ctx)[:2] == (True, 'WATCH')
+
+
 def test_divergence_no_lookahead_invalidation_expiry_and_no_repeat(monkeypatch):
     ctx=divergence_context(monkeypatch)
     ctx['bars']=ctx['bars'][:37]
     assert evaluate_rsi_macd_confirmation(ctx)[0] is False
     ctx=divergence_context(monkeypatch); ctx['bars'][40]['close']=89
-    assert evaluate_rsi_macd_confirmation(ctx)[2]==['RSI_SETUP_INVALIDATED']
+    assert evaluate_rsi_macd_confirmation(ctx)==(False,'WATCH',['RSI_SETUP_INVALIDATED'])
     ctx=divergence_context(monkeypatch); ctx['bars'][-2]['close']=106
     assert evaluate_rsi_macd_confirmation(ctx)[0] is False
     ctx=divergence_context(monkeypatch); ctx['bars'] += bars(10)
