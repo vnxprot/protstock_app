@@ -108,7 +108,7 @@ def evaluate_classical_patterns_v0(context: dict[str, Any], overrides: dict[str,
     candidates = context.get("classical_patterns") or detect_classical_patterns(
         context.get("bars", []), context.get("snapshot", {}),
     )
-    candidates = [candidate for candidate in candidates if enabled_models.get(candidate["model"], True)]
+    candidates = [candidate for candidate in candidates if enabled_models.get(candidate["model"], True) and candidate.get("pattern_type") != "ROUNDING_BOTTOM"]
     candidates = [enrich_pattern_fibonacci(candidate, context.get("fibonacci_context") or {}, context.get("zones", [])) for candidate in candidates]
     snapshot = context.get("snapshot", {})
     position = context.get("position")
@@ -133,7 +133,7 @@ def evaluate_classical_patterns_v0(context: dict[str, Any], overrides: dict[str,
         )
         return True, action, [f"V0_{top['pattern_type']}_CONFIRMED", *top["reasons"], *gate_reasons]
 
-    ready = [candidate for candidate in candidates if candidate["state"] == "READY"]
+    ready = [candidate for candidate in candidates if candidate["state"] == "READY" and candidate.get("pattern_type") == "CUP_HANDLE" and candidate.get("quality_score", 0) >= 70]
     if ready:
         top = max(ready, key=lambda candidate: candidate["quality_score"])
         _attach_v0_evidence(context, top)

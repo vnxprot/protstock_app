@@ -80,6 +80,21 @@ def test_ma_stack_relaxes_bullish_threshold():
     assert resolve_signal([_bull(score=67)], {**_snapshot(), "ma_stack": False})[0] == "WATCH"
 
 
+def test_rounding_bottom_is_context_not_a_signal():
+    rounding_bottom = {**_bull(), "pattern_type": "ROUNDING_BOTTOM"}
+    assert resolve_signal([rounding_bottom], _snapshot()) == ("WATCH", [])
+
+
+def test_watch_requires_a_quality_cup_handle_near_pivot():
+    cup_handle = {
+        "pattern_type": "CUP_HANDLE", "direction": "BULLISH", "state": "READY",
+        "quality_score": 70, "trigger_price": 102,
+    }
+    assert resolve_signal([cup_handle], _snapshot()) == (
+        "WATCH", ["CUP_HANDLE_QUALITY_SETUP", "NEAR_TRIGGER_CUP_HANDLE"],
+    )
+
+
 def test_relative_strength_uses_date_matched_benchmark_rows():
     bars = [_bar(10, 10, 10, 10), _bar(20, 20, 20, 20), _bar(30, 30, 30, 30)]
     bars[0]["date"], bars[1]["date"], bars[2]["date"] = "2025-01-01", "2025-01-02", "2025-01-03"

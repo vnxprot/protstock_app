@@ -60,7 +60,13 @@ def resolve_signal(patterns: list[dict], snapshot: dict, position: dict | None =
     bear = [p for p in patterns if p["direction"] == "BEARISH" and p["state"] == "CONFIRMED" and p["quality_score"] >= 60]
     if bear and position:
         return "REDUCE", [f"PATTERN_{p['pattern_type']}_CONFIRMED" for p in bear]
-    bull = [p for p in patterns if p["direction"] == "BULLISH" and p["state"] == "CONFIRMED"]
+    # Rounding bottoms are market structure context, never alert candidates.
+    bull = [
+        p for p in patterns
+        if p["direction"] == "BULLISH"
+        and p["state"] == "CONFIRMED"
+        and p.get("pattern_type") != "ROUNDING_BOTTOM"
+    ]
     top = max(bull, key=lambda p: p["quality_score"], default=None)
     liquid = average_turnover_vnd(snapshot) >= MIN_AVERAGE_TURNOVER_VND
     bonus = snapshot.get("ma_stack") or (snapshot.get("relative_strength_market") or 0) > 0
@@ -72,8 +78,16 @@ def resolve_signal(patterns: list[dict], snapshot: dict, position: dict | None =
         if warning: reasons.append(warning)
         action = "PROBE_BUY" if not position else ("ADD" if str(top.get("start_date", "")) > str(position.get("entry_date", "")) else "WATCH")
         return _apply_long_gates(action, reasons, multi_timeframe_context, market_context, portfolio_positions, candidate_sector, capital, snapshot, top, max_sector_weight_pct)
-    ready = [p for p in patterns if p["state"] == "READY"]
-    if top:
+    # WATCH is deliberately narrow: a high-quality cup-with-handle close to pivot.
+    ready = [
+        p for p in patterns
+        if p["state"] == "READY"
+        and p.get("pattern_type") == "CUP_HANDLE"
+        and p.get("quality_score", 0) >= 70
+        and p.get("trigger_price")
+        and float(snapshot.get("close") or 0) >= float(p["trigger_price"]) * 0.97
+    ]
+    if top and top.get("pattern_type") == "CUP_HANDLE":
         blocked = []
         if top["quality_score"] < threshold: blocked.append("QUALITY_BELOW_THRESHOLD")
         if snapshot.get("trend_state") not in ("UP", "SIDEWAYS"): blocked.append("TREND_NOT_ELIGIBLE")
@@ -82,7 +96,7 @@ def resolve_signal(patterns: list[dict], snapshot: dict, position: dict | None =
         if not liquid: blocked.append("INSUFFICIENT_LIQUIDITY")
         if blocked:
             return "WATCH", [f"PATTERN_{top['pattern_type']}_CONFIRMED", "ENTRY_BLOCKED", *blocked]
-    return "WATCH", [f"NEAR_TRIGGER_{p['pattern_type']}" for p in ready[:2]]
+    return "WATCH", ["CUP_HANDLE_QUALITY_SETUP", "NEAR_TRIGGER_CUP_HANDLE"] if ready else []
 
 
 def _apply_long_gates(action: str, reasons: list[str], multi_timeframe_context: dict | None, market_context: dict | None, portfolio_positions: list[dict] | None, candidate_sector: str | None, capital: float | None, snapshot: dict, pattern: dict, max_sector_weight_pct: float) -> tuple[str, list[str]]:
