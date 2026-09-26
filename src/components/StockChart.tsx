@@ -56,12 +56,20 @@ export function StockChart({ bars, zones: _zones = [], patterns: _patterns = [],
     const palette = chartPalette()
     const height = innerWidth <= 760 ? 310 : 430
     const chart = createChart(host, {
+      autoSize: true,
       width: Math.max(1, Math.round(host.getBoundingClientRect().width)),
       height,
       layout: { fontFamily: 'Inter, sans-serif', fontSize: 12, background: { type: ColorType.Solid, color: palette.background }, textColor: palette.text },
       grid: { vertLines: { color: palette.grid }, horzLines: { color: palette.grid } },
       rightPriceScale: { borderColor: palette.border },
-      timeScale: { borderColor: palette.border, timeVisible: false },
+      timeScale: {
+        borderColor: palette.border,
+        timeVisible: false,
+        fixLeftEdge: true,
+        fixRightEdge: true,
+        lockVisibleTimeRangeOnResize: true,
+        rightBarStaysOnScroll: true,
+      },
     })
     const candles = chart.addSeries(CandlestickSeries, {
       upColor: palette.up, downColor: palette.down, borderVisible: false, wickUpColor: palette.up, wickDownColor: palette.down,
@@ -92,27 +100,8 @@ export function StockChart({ bars, zones: _zones = [], patterns: _patterns = [],
       volume.setData(data.map(bar => ({ time: bar.trading_date as any, value: +bar.volume, color: +bar.close >= +bar.open ? next.volumeUp : next.volumeDown })))
       chartLines.forEach((line, index) => line.applyOptions({ color: [next.ma20, next.ma50, next.ma200, next.band, next.band][index] }))
     }
-    let lastWidth = 0
-    const resize = () => {
-      const width = Math.round(host.getBoundingClientRect().width)
-      if (width > 1 && width !== lastWidth) {
-        lastWidth = width
-        chart.resize(width, height)
-      }
-    }
-    let frame = 0
-    const observer = new ResizeObserver(() => {
-      cancelAnimationFrame(frame)
-      frame = requestAnimationFrame(resize)
-    })
-    observer.observe(host)
-    window.addEventListener('resize', resize)
     window.addEventListener('protstock:theme-change', recolor)
-    resize()
     return () => {
-      cancelAnimationFrame(frame)
-      observer.disconnect()
-      window.removeEventListener('resize', resize)
       window.removeEventListener('protstock:theme-change', recolor)
       chart.remove()
     }
