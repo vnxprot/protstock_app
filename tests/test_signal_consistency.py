@@ -93,6 +93,7 @@ def test_relative_strength_is_supporting_evidence_only(monkeypatch):
     ctx = context()
     ctx["snapshot"].update(relative_strength_market=.08, trend_state="UP")
     ctx["market_context"]["vnindex_snapshot"]["trend_state"] = "SIDEWAYS"
+    ctx["monthly_snapshot"] = {"trend_state": "UP"}
     result = {"as_of_date": "2026-09-15", "patterns": [], "zones": [], "indicators": ctx["snapshot"]}
     client = Recorder()
     _write_analysis(client, 1, "D", [{"date": "2026-09-15"}], [], [{"id": "v", "dsl": {"engine": "custom"}, "rules": {"kind": "CORE_PACK"}}], {"signals": 0}, result, ctx, persist_evidence=False)
