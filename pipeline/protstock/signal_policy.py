@@ -1,4 +1,4 @@
-"""Common post-proposal policy. Prices are stored in VND; capital is VND."""
+"""Common post-proposal policy. Stock prices are thousand VND; capital is VND."""
 from math import isfinite
 
 from .market_regime import regime_ok

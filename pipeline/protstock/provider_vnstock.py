@@ -18,6 +18,9 @@ class VnstockProvider:
 
     def history(self, symbol: str, start: date, end: date) -> list[DailyBar]:
         endpoint = "index" if symbol.upper().endswith("INDEX") else "stocks"
+        # KBS stock OHLC is VND/share, while Prot stores stock OHLC in
+        # thousand VND/share. Index values are points and must not be scaled.
+        stock_price_scale = 1_000 if endpoint == "stocks" else 1
         response = httpx.get(
             f"{self.API_BASE}/{endpoint}/{symbol.upper()}/data_day",
             params={"sdate": start.strftime("%d-%m-%Y"), "edate": end.strftime("%d-%m-%Y")},
@@ -34,10 +37,10 @@ class VnstockProvider:
             bar = DailyBar.create(
                 symbol=symbol,
                 trading_date=trading_day,
-                open=_number(record, "o"),
-                high=_number(record, "h"),
-                low=_number(record, "l"),
-                close=_number(record, "c"),
+                open=_number(record, "o") / stock_price_scale,
+                high=_number(record, "h") / stock_price_scale,
+                low=_number(record, "l") / stock_price_scale,
+                close=_number(record, "c") / stock_price_scale,
                 volume=int(_number(record, "v", default=0)),
                 source="KBS_PUBLIC",
                 collected_at=collected_at,

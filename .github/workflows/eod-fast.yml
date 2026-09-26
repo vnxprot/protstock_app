@@ -10,6 +10,11 @@ on:
         description: Optional completed trading date (YYYY-MM-DD)
         required: false
         type: string
+      skip_alerts:
+        description: Repair data without resending Telegram alerts
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -83,7 +88,7 @@ jobs:
         if: steps.finalize.outcome == 'failure'
         run: echo "::warning::Fast Lane coverage was incomplete; Telegram alerts will still send any eligible stored signals."
       - name: Send final concise Telegram EOD alerts
-        if: always()
+        if: always() && inputs.skip_alerts != true
         env:
           SUPABASE_URL: https://upmqxwktvvguegqeqibn.supabase.co
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
