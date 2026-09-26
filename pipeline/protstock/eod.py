@@ -207,7 +207,7 @@ def rebuild_signals(trading_date: date, *, symbol_offset: int = 0, symbol_limit:
     """Re-evaluate stored EOD data only; this never calls an upstream price source."""
     client = SupabaseRestClient(Settings.from_env())
     job = client.create_job({"job_type": "DERIVE_BARS", "trading_date": trading_date.isoformat(), "status": "RUNNING", "trigger_type": "MANUAL", "source_revision": ALGORITHM_VERSION})
-    counts = {"symbols": 0, "snapshots": 0, "patterns": 0, "zones": 0, "signals": 0, "consolidated_signals": 0, "breadth_snapshots": 0, "failed": 0}
+    counts = {"symbols": 0, "derived_bars": 0, "snapshots": 0, "patterns": 0, "zones": 0, "signals": 0, "consolidated_signals": 0, "breadth_snapshots": 0, "failed": 0}
     warnings: list[str] = []
     try:
         symbols = client.active_symbols()[symbol_offset:]
@@ -232,6 +232,19 @@ def rebuild_signals(trading_date: date, *, symbol_offset: int = 0, symbol_limit:
                 if not analysis_rows:
                     raise ValueError("no stored price history")
                 timeframe_rows = {"D": analysis_rows, "W": aggregate_bars(analysis_rows, "W"), "M": aggregate_bars(analysis_rows, "M")}
+                # A stored-price repair must also refresh the bars used by the
+                # W/M charts, not just snapshots and signals computed in memory.
+                for timeframe in ("W", "M"):
+                    derived_rows = [{
+                        "symbol_id": symbol_row["id"], "timeframe": timeframe,
+                        "period_start": bar["period_start"], "period_end": bar["period_end"],
+                        "open": bar["open"], "high": bar["high"], "low": bar["low"],
+                        "close": bar["close"], "volume": bar["volume"],
+                        "is_complete": bar["is_complete"], "source_last_date": bar["source_last_date"],
+                    } for bar in timeframe_rows[timeframe]]
+                    counts["derived_bars"] += client.upsert(
+                        "derived_bars", derived_rows, "symbol_id,timeframe,period_start"
+                    )
                 fibonacci_context = build_fibonacci_context(analysis_rows)
                 benchmark_rows = {"D": benchmark_daily, "W": aggregate_bars(benchmark_daily, "W"), "M": aggregate_bars(benchmark_daily, "M")}
                 preliminary = {timeframe: analyze_bars(rows, fibonacci_context=fibonacci_context) for timeframe, rows in timeframe_rows.items() if rows}
