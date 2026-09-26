@@ -92,10 +92,13 @@ export function StockChart({ bars, zones: _zones = [], patterns: _patterns = [],
       volume.setData(data.map(bar => ({ time: bar.trading_date as any, value: +bar.volume, color: +bar.close >= +bar.open ? next.volumeUp : next.volumeDown })))
       chartLines.forEach((line, index) => line.applyOptions({ color: [next.ma20, next.ma50, next.ma200, next.band, next.band][index] }))
     }
+    let lastWidth = 0
     const resize = () => {
       const width = Math.round(host.getBoundingClientRect().width)
-      const nextHeight = Math.round(host.getBoundingClientRect().height)
-      if (width > 1 && nextHeight > 1) chart.resize(width, nextHeight)
+      if (width > 1 && width !== lastWidth) {
+        lastWidth = width
+        chart.resize(width, height)
+      }
     }
     let frame = 0
     const observer = new ResizeObserver(() => {
@@ -115,5 +118,5 @@ export function StockChart({ bars, zones: _zones = [], patterns: _patterns = [],
     }
   }, [bars, indicators])
 
-  return <div className="stock-chart" ref={ref} aria-label={`${paneLabel ?? 'Biểu đồ'} nến, khối lượng và đường trung bình`} />
+  return <div className="stock-chart" ref={ref} style={{ height: innerWidth <= 760 ? 310 : 430 }} aria-label={`${paneLabel ?? 'Biểu đồ'} nến, khối lượng và đường trung bình`} />
 }
