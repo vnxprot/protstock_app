@@ -15,9 +15,9 @@ def normalize_rows(rows: list[dict]) -> list[dict]:
     result = []
     for row in rows:
         values = [float(row[key]) for key in ("open", "high", "low", "close")]
-        if row["source"] != "KBS_PUBLIC" or min(values) < 1000:
+        if row["source"] != "KBS_PUBLIC" or min(values) < 100:
             continue
-        result.append({**row, **{key: float(row[key]) / 1000 for key in ("open", "high", "low", "close")}})
+        result.append({**row, "source": "KBS_PUBLIC_REPAIRED", **{key: float(row[key]) / 1000 for key in ("open", "high", "low", "close")}})
     return result
 
 
@@ -28,6 +28,8 @@ def repair(trading_date: date, *, apply: bool = False) -> dict:
     try:
         rows = client.stock_prices_by_source_and_date("KBS_PUBLIC", trading_date)
         candidates = normalize_rows(rows)
+        if len(candidates) != len(rows):
+            raise ValueError("Some KBS rows do not match the raw-VND repair guard")
         candidate_ids = {row["symbol_id"] for row in candidates}
         skipped = [{"symbol_id": row["symbol_id"], "close": row["close"]} for row in rows if row["symbol_id"] not in candidate_ids]
         if apply:
