@@ -65,7 +65,7 @@ footer { margin-top: 54px; color: #50665c; font-size:12px; text-align: center; }
 .trend-badge { padding: 7px 11px; border: 1px solid #33463e; border-radius: 999px; color: #a8bbb2; font-size:12px; font-weight: 700; }
 .trend-badge.up { color: #55e6b1; border-color: #2f6651; }
 .trend-badge.down { color: #ff8b8b; border-color: #6e3b3b; }
-.stock-chart { width: 100%; height: 430px; overflow: hidden; border: 1px solid #223129; border-radius: 16px; background: #0b1713; touch-action: none; }
+.stock-chart { width: 100%; overflow: hidden; border: 1px solid #223129; border-radius: 16px; background: #0b1713; }
 .metric-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 12px; }
 .metric-card { padding: 14px 16px; border: 1px solid #223129; border-radius: 12px; background: #0b1813; }
 .metric-card span { display: block; margin-bottom: 8px; color: #70877c; font-size:12px; text-transform: uppercase; letter-spacing: .08em; }
@@ -1279,3 +1279,10 @@ button, input, select, textarea, svg text { font-family: var(--font-family); }
 
 /* v2.2.5: the decision board speaks in three plain-language lanes. */
 .signal-focus-tabs{padding-top:2px}.signal-focus-tabs button{min-width:112px;font-weight:700}.decision-zone h2{letter-spacing:-.02em}.decision-row.action .action-pill{max-width:132px;text-align:center;line-height:1.2}.decision-context small{max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* Let page scrolling through the chart work while mobile chart gestures are locked. */
+@media(max-width:760px){
+  .stock-chart:has(.chart-touch-lock.locked){touch-action:pan-y}
+  .stock-chart:has(.chart-touch-lock:not(.locked)){touch-action:none}
+  .chart-touch-lock button{pointer-events:auto}
+}
