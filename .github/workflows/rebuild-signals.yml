@@ -12,12 +12,17 @@ on:
         required: true
         default: false
         type: boolean
+      symbol:
+        description: Optional single symbol to rebuild first
+        required: false
+        default: ''
+        type: string
 
 permissions:
   contents: read
 
 concurrency:
-  group: protstock-signal-rebuild
+  group: protstock-signal-rebuild-${{ inputs.symbol || 'all' }}
   cancel-in-progress: false
 
 jobs:
@@ -32,7 +37,29 @@ jobs:
         env:
           SUPABASE_URL: https://upmqxwktvvguegqeqibn.supabase.co
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-        run: python -m protstock.cli rebuild-signals --date "${{ inputs.trading_date }}"
+          TARGET_SYMBOL: ${{ inputs.symbol }}
+          TRADING_DATE: ${{ inputs.trading_date }}
+        run: |
+          args=()
+          if [ -n "$TARGET_SYMBOL" ]; then
+            offset=$(python - <<'PY'
+          import os
+          import re
+          from protstock.config import Settings
+          from protstock.supabase_rest import SupabaseRestClient
+          symbol = os.environ['TARGET_SYMBOL'].upper()
+          if not re.fullmatch(r'[A-Z0-9]{3,10}', symbol):
+              raise ValueError('Invalid symbol')
+          client = SupabaseRestClient(Settings.from_env())
+          try:
+              print(next(index for index, row in enumerate(client.active_symbols()) if row['symbol'] == symbol))
+          finally:
+              client.close()
+          PY
+            )
+            args+=(--symbol-offset "$offset" --symbol-limit 1)
+          fi
+          python -m protstock.cli rebuild-signals --date "$TRADING_DATE" "${args[@]}"
       - name: Send Telegram only when explicitly requested
         if: inputs.send_telegram
         env:
