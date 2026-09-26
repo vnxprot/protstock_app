@@ -1,0 +1,35 @@
+name: Repair KBS stock price units
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Preview candidates or apply the narrow 25/09 repair
+        required: true
+        default: dry-run
+        type: choice
+        options: [dry-run, apply]
+
+permissions:
+  contents: read
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - run: python -m pip install -e '.[dev]'
+      - run: pytest -q tests/test_provider_price_units.py tests/test_repair_kbs_price_units.py
+      - name: Inspect or repair 25/09 stock rows
+        env:
+          SUPABASE_URL: https://upmqxwktvvguegqeqibn.supabase.co
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          MODE: ${{ inputs.mode }}
+        run: |
+          args=()
+          if [ "$MODE" = apply ]; then args+=(--apply); fi
+          python -m protstock.repair_kbs_price_units --date 2026-09-25 "${args[@]}"

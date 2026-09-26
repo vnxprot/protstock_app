@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
 import httpx
@@ -23,7 +23,10 @@ class VnstockProvider:
         stock_price_scale = 1_000 if endpoint == "stocks" else 1
         response = httpx.get(
             f"{self.API_BASE}/{endpoint}/{symbol.upper()}/data_day",
-            params={"sdate": start.strftime("%d-%m-%Y"), "edate": end.strftime("%d-%m-%Y")},
+            # KBS omitted the 25/09/2026 Friday bar when edate was the 25th
+            # or 26th, but returned it with the 27th. Request a small buffer
+            # and then enforce our inclusive end date locally.
+            params={"sdate": start.strftime("%d-%m-%Y"), "edate": (end + timedelta(days=2)).strftime("%d-%m-%Y")},
             headers={"Accept": "application/json", "User-Agent": "ProtStock/1.0"},
             timeout=30,
         )
@@ -34,6 +37,8 @@ class VnstockProvider:
         rows_by_date: dict[date, DailyBar] = {}
         for record in records:
             trading_day = _to_date(record.get("t") or record.get("time") or record.get("date"))
+            if trading_day < start or trading_day > end:
+                continue
             bar = DailyBar.create(
                 symbol=symbol,
                 trading_date=trading_day,
