@@ -54,8 +54,10 @@ jobs:
               raise ValueError('Symbol not found')
           symbol_id = matches[0]['id']
           prices = get('daily_prices', select='trading_date,close,source', symbol_id=f'eq.{symbol_id}', trading_date=f'lte.{trading_date}', order='trading_date.desc', limit='20')
+          first_bar = get('daily_prices', select='trading_date,close', symbol_id=f'eq.{symbol_id}', order='trading_date.asc', limit='1')
           snapshot = get('technical_snapshots', select='as_of_date,close,sma20', symbol_id=f'eq.{symbol_id}', timeframe='eq.D', as_of_date=f'eq.{trading_date}', limit='1')
+          derived = {frame: get('derived_bars', select='timeframe,source_last_date,close', symbol_id=f'eq.{symbol_id}', timeframe=f'eq.{frame}', source_last_date=f'lte.{trading_date}', order='period_start.desc', limit='1') for frame in ('W', 'M')}
           jobs = get('job_runs', select='id,status,started_at', job_type='eq.EOD_INGEST', trading_date=f'eq.{trading_date}', order='started_at.desc', limit='2')
           items = [get('job_run_items', select='status,error_code,rows_written', job_run_id=f"eq.{job['id']}", symbol_id=f'eq.{symbol_id}', limit='1') for job in jobs]
-          print(json.dumps({'symbol': symbol, 'prices': prices, 'snapshot': snapshot, 'jobs': [{**job, 'item': item} for job, item in zip(jobs, items)]}, ensure_ascii=False))
+          print(json.dumps({'symbol': symbol, 'first_bar': first_bar, 'prices': prices, 'snapshot': snapshot, 'derived': derived, 'jobs': [{**job, 'item': item} for job, item in zip(jobs, items)]}, ensure_ascii=False))
           PY

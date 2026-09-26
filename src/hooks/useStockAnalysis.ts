@@ -88,7 +88,7 @@ export function useStockAnalysis(symbol: string | null, timeframe: 'D' | 'W' | '
       }
       const priceQuery = timeframe === 'D'
         ? dailyPriceQuery()
-        : supabase.from('derived_bars').select('trading_date:source_last_date,open,high,low,close,volume').eq('symbol_id', symbolRow.id).eq('timeframe', timeframe).order('period_start', { ascending: false }).limit(260)
+        : supabase.from('derived_bars').select('trading_date:source_last_date,open,high,low,close,volume').eq('symbol_id', symbolRow.id).eq('timeframe', timeframe).order('period_start', { ascending: false }).limit(timeframe === 'W' ? 520 : 120)
       const [prices, technical, patterns, zones, disclosures, fundamentals] = await Promise.all([
         priceQuery,
         supabase.from('technical_snapshots').select('*').eq('symbol_id', symbolRow.id).eq('timeframe', timeframe).order('as_of_date', { ascending: false }).limit(1),
