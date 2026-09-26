@@ -59,7 +59,7 @@ jobs:
           if [ -n "$TRADING_DATE" ]; then date_args+=(--date "$TRADING_DATE"); fi
           for offset in $(seq "$START_OFFSET" 10 "$END_OFFSET"); do
             echo "::group::EOD alphabetic batch offset=$offset"
-            protstock eod "${date_args[@]}" --source KBS --lookback-days "$LOOKBACK_DAYS" --symbol-offset "$offset" --symbol-limit 10
+            protstock eod "${date_args[@]}" --historical --skip-breadth-snapshot --source KBS --lookback-days "$LOOKBACK_DAYS" --symbol-offset "$offset" --symbol-limit 10
             status=$?
             echo "::endgroup::"
             if [ "$status" -ne 0 ]; then failures=$((failures + 1)); fi
@@ -67,6 +67,16 @@ jobs:
           done
           echo "Completed historical backfill with $failures failed batches."
           exit "$failures"
+      - name: Evaluate signals with the completed same-day market context
+        id: rebuild
+        env:
+          SUPABASE_URL: https://upmqxwktvvguegqeqibn.supabase.co
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          TRADING_DATE: ${{ inputs.trading_date }}
+        run: |
+          args=()
+          if [ -n "$TRADING_DATE" ]; then args+=(--date "$TRADING_DATE"); fi
+          protstock rebuild-signals --historical "${args[@]}"
       - name: Process queued backtests
         if: always()
         env:
@@ -74,7 +84,7 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: protstock backtest-worker --limit 10
       - name: Send one concise catch-up alert
-        if: always()
+        if: always() && steps.rebuild.outcome == 'success'
         env:
           SUPABASE_URL: https://upmqxwktvvguegqeqibn.supabase.co
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}

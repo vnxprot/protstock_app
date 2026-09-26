@@ -133,13 +133,14 @@ jobs:
           finalized_status=$?
           set -e
           printf '%s\n' "$finalized"
-          protstock send-eod-alerts "${args[@]}"
-          if [ "$finalized_status" -ne 0 ]; then
+          if [ "$finalized_status" -eq 0 ]; then
+            protstock send-eod-alerts "${args[@]}"
+          else
             coverage=$(printf '%s' "$finalized" | grep -oE '[0-9]+/[0-9]+ daily snapshots' | head -1 | sed 's/ daily snapshots//')
             if [ -n "$coverage" ]; then
               day=${TRADING_DATE:-$(TZ=Asia/Ho_Chi_Minh date +%d/%m/%Y)}
               curl --fail --silent --show-error -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
                 -d "chat_id=${TELEGRAM_CHAT_ID}" \
-                --data-urlencode "text=Prot Stock EOD · ${day}\nDữ liệu tạm thời: ${coverage}. Các tín hiệu hợp lệ vẫn đã được gửi; hệ thống sẽ tự retry mã thiếu ở phiên kế tiếp."
+                --data-urlencode "text=Prot Stock EOD · ${day}\nDữ liệu tạm thời: ${coverage}. Chưa phát tín hiệu; hệ thống sẽ tự retry mã thiếu ở phiên kế tiếp."
             fi
           fi

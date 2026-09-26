@@ -7,9 +7,26 @@ from typing import Sequence
 from .market_regime import compute_breadth
 
 
-def build_market_health_history(active_symbols: Sequence[dict], price_rows: Sequence[dict], start_date: date, end_date: date) -> list[dict]:
+def _index_trends(index_rows: Sequence[dict]) -> dict[str, str]:
+    """Calculate the same SMA20/SMA50 regime as daily indicators, as of each day."""
+    closes: deque[float] = deque(maxlen=50)
+    result = {}
+    for row in sorted(index_rows, key=lambda item: item["trading_date"]):
+        close = float(row["close"])
+        closes.append(close)
+        trend = "UNKNOWN"
+        if len(closes) == 50:
+            values = list(closes)
+            sma20, sma50 = sum(values[-20:]) / 20, sum(values) / 50
+            trend = "UP" if close > sma20 > sma50 else "DOWN" if close < sma20 < sma50 else "SIDEWAYS"
+        result[row["trading_date"]] = trend
+    return result
+
+
+def build_market_health_history(active_symbols: Sequence[dict], price_rows: Sequence[dict], start_date: date, end_date: date, *, index_rows: Sequence[dict] = ()) -> list[dict]:
     """Build point-in-time breadth from stored daily OHLCV; no external data calls."""
     sector_by_symbol = {row["id"]: row.get("sector") for row in active_symbols}
+    index_trends = _index_trends(index_rows)
     by_symbol: dict[int, list[dict]] = defaultdict(list)
     for row in price_rows:
         if row.get("symbol_id") in sector_by_symbol:
@@ -41,5 +58,5 @@ def build_market_health_history(active_symbols: Sequence[dict], price_rows: Sequ
         prior = {item["symbol_id"]: {"close": item["prior_close"]} for item in snapshots if item["prior_close"] is not None}
         breadth = compute_breadth(snapshots, prior, sector_by_symbol)
         observed = breadth["sample_size"]
-        output.append({"trading_date": trading_date, **breadth, "universe_size": len(active_symbols), "eligible_count": observed, "observed_count": observed, "coverage_ratio": 1.0 if observed else None, "coverage_status": "COMPLETE" if observed else "BOOTSTRAP", "vnindex_trend_state": "UNKNOWN"})
+        output.append({"trading_date": trading_date, **breadth, "universe_size": len(active_symbols), "eligible_count": observed, "observed_count": observed, "coverage_ratio": 1.0 if observed else None, "coverage_status": "COMPLETE" if observed else "BOOTSTRAP", "vnindex_trend_state": index_trends.get(trading_date, "UNKNOWN")})
     return output

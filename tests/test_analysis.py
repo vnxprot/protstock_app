@@ -36,7 +36,7 @@ def test_indicator_snapshot_has_full_long_term_context() -> None:
 
 def test_analysis_is_explainable() -> None:
     result = analyze_bars(make_bars())
-    assert result["algorithm_version"] == "core-rules-v2"
+    assert result["algorithm_version"] == "core-rules-v2.1"
     assert result["reasons"][0] == "TREND_UP"
     assert result["signal_preview"] in {"WATCH", "PROBE_BUY", "ADD", "REDUCE", "EXIT"}
 
@@ -127,7 +127,7 @@ def _triangle_bars(volume=100):
 
 def _flag_bars(volume=100):
     pole = [_bar(100 + i * 1.5, 102 + i * 1.5, 99 + i * 1.5, 101.5 + i * 1.5, volume) for i in range(10)]
-    flag = [_bar(115 - i * .7, 116 - i * .7, 113 - i * .7, 114 - i * .7, volume) for i in range(10)]
+    flag = [_bar(115 - i * .4, 116 - i * .4, 113 - i * .4, 114 - i * .4, volume * .7) for i in range(10)]
     return pole + flag + [_bar(104, 118, 103, 117, volume)]
 
 
@@ -157,6 +157,14 @@ def test_flag_price_break_with_volume_confirms():
     candidate = detect_flag(bars)
     assert candidate is not None and candidate.state == "CONFIRMED"
     assert candidate.evidence["breakout_volume_ok"] is True
+
+
+def test_widening_consolidation_is_not_called_a_flag():
+    bars = _flag_bars()
+    for index, bar in enumerate(bars[10:-1]):
+        bar["high"] = 116
+        bar["low"] = 113 - index * .9
+    assert detect_flag(bars) is None
 
 
 def test_weekly_and_monthly_aggregation_preserves_ohlcv() -> None:

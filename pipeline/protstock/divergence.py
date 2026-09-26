@@ -3,6 +3,7 @@ from .indicators import _ema_series
 
 PIVOT_RADIUS = 2
 SETUP_LIFETIME_BARS = 20
+MIN_RSI_DIVERGENCE_POINTS = 2.0
 
 
 def momentum_series(bars: list[dict]) -> list[dict]:
@@ -31,21 +32,30 @@ def evaluate_rsi_macd_confirmation(context: dict) -> tuple[bool, str, list[str]]
     indicators = momentum_series(bars)
     pivots = [i for i in range(max(14, len(bars) - 82), len(bars) - PIVOT_RADIUS)
               if all(float(bars[i]["low"]) < float(bars[j]["low"]) for j in range(i - PIVOT_RADIUS, i + PIVOT_RADIUS + 1) if i != j)]
-    for second in reversed(pivots):
+    # The latest confirmed price bottom supersedes older setups. Comparing its
+    # RSI with an older, more convenient bottom can resurrect a false signal.
+    for second in pivots[-1:]:
         confirmed = second + PIVOT_RADIUS
         if len(bars) - 1 - confirmed > SETUP_LIFETIME_BARS:
-            break
+            return False, "WATCH", []
         first = next((i for i in reversed(pivots) if 5 <= second - i <= 40), None)
         if first is None:
-            continue
-        left, right = indicators[first]["rsi14"], indicators[second]["rsi14"]
+            return False, "WATCH", []
+        def rsi_trough(pivot: int) -> tuple[int, float] | None:
+            neighborhood = [(i, indicators[i]["rsi14"]) for i in range(pivot - PIVOT_RADIUS, pivot + PIVOT_RADIUS + 1)
+                            if indicators[i]["rsi14"] is not None]
+            return min(neighborhood, key=lambda item: item[1]) if neighborhood else None
+
+        first_rsi, second_rsi = rsi_trough(first), rsi_trough(second)
         stop = float(bars[second]["low"])
-        if left is None or right is None or not (stop < float(bars[first]["low"]) and right > left):
-            continue
+        if first_rsi is None or second_rsi is None or not (
+            stop < float(bars[first]["low"]) and second_rsi[1] - first_rsi[1] >= MIN_RSI_DIVERGENCE_POINTS
+        ):
+            return False, "WATCH", []
         if not any(z["zone_type"] == "SUPPORT" and float(z.get("strength") or 0) >= 60 and float(z["lower_price"]) <= stop <= float(z["upper_price"]) for z in context.get("zones", [])):
             continue
         trigger = max(float(row["high"]) for row in bars[first + 1:second])
-        context["engine_evidence"] = {"pattern_type": "RSI_DIVERGENCE", "evidence_cluster": "RSI_DIVERGENCE", "invalidation_price": stop, "trigger_price": trigger, "first_pivot_date": bars[first]["date"], "second_pivot_date": bars[second]["date"], "setup_confirmed_on": bars[confirmed]["date"], "engine_version": "v1.1"}
+        context["engine_evidence"] = {"pattern_type": "RSI_DIVERGENCE", "evidence_cluster": "RSI_DIVERGENCE", "invalidation_price": stop, "trigger_price": trigger, "first_pivot_date": bars[first]["date"], "second_pivot_date": bars[second]["date"], "first_rsi_pivot_date": bars[first_rsi[0]]["date"], "second_rsi_pivot_date": bars[second_rsi[0]]["date"], "first_rsi14": round(first_rsi[1], 2), "second_rsi14": round(second_rsi[1], 2), "setup_confirmed_on": bars[confirmed]["date"], "engine_version": "v1.2"}
         if any(float(row["close"]) < stop for row in bars[confirmed:]):
             return False, "WATCH", ["RSI_SETUP_INVALIDATED"]
         reasons = ["BULLISH_RSI_DIVERGENCE", "SUPPORT_ZONE_STRONG"]

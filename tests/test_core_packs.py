@@ -28,11 +28,11 @@ def test_vcp_breakout_pack_detects_contraction_dry_up_and_breakout() -> None:
     assert evaluate_vcp_breakout_v1({"bars": bars, "snapshot": {"volume_ratio20": 2.0}})[0:2] == (True, "PROBE_BUY")
 
 
-def test_rsi_macd_divergence_pack_detects_higher_rsi_at_new_price_low_in_support() -> None:
+def test_rsi_macd_divergence_pack_does_not_use_current_rsi_for_unconfirmed_pivot() -> None:
     closes = [120 - index * 2 for index in range(15)] + [92, 95, 98, 100, 98, 96, 94, 92, 89]
     bars = [_bar(index, close, 100, high=close + 1, low=close - 1) for index, close in enumerate(closes)]
     context = {"bars": bars, "snapshot": {"rsi14": 35}, "zones": [{"zone_type": "SUPPORT", "strength": 70, "lower_price": 85, "upper_price": 90}]}
-    assert evaluate_rsi_macd_divergence_v1(context)[0:2] == (True, "PROBE_BUY")
+    assert evaluate_rsi_macd_divergence_v1(context)[0:2] == (False, "WATCH")
 
 
 def test_relative_strength_leader_pack_requires_strength_in_soft_market() -> None:

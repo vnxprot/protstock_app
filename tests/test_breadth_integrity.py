@@ -2,6 +2,7 @@ from datetime import date
 
 from protstock.eod import _prior_market_context, _stored_universe_breadth
 from protstock.market_regime import build_breadth_membership, regime_ok
+from protstock.market_health_history import _index_trends, build_market_health_history
 
 
 class Client:
@@ -65,6 +66,24 @@ def test_degraded_coverage_stays_informative_without_becoming_a_veto():
     breadth, _ = build_breadth_membership(symbols, prior, current, "2026-09-11")
     assert breadth["coverage_status"] == "DEGRADED"
     assert regime_ok(breadth, {"trend_state": "UP"}) == (True, ["BREADTH_DATA_DEGRADED"])
+
+
+def test_degraded_coverage_does_not_override_a_down_market():
+    breadth = {"coverage_status": "DEGRADED", "pct_above_sma50": 55}
+    assert regime_ok(breadth, {"trend_state": "DOWN"}) == (False, ["BREADTH_DATA_DEGRADED", "VNINDEX_DOWNTREND"])
+
+
+def test_historical_market_health_uses_same_day_index_trend_without_future_bars():
+    from datetime import timedelta
+
+    index_rows = [{"trading_date": (date(2026, 1, 1) + timedelta(days=i)).isoformat(), "close": 100 + i} for i in range(55)]
+    trends = _index_trends(index_rows)
+    assert trends[index_rows[48]["trading_date"]] == "UNKNOWN"
+    assert trends[index_rows[49]["trading_date"]] == "UP"
+    trading_day = index_rows[49]["trading_date"]
+    prices = [{"symbol_id": 1, "trading_date": trading_day, "close": 10, "volume": 100}]
+    history = build_market_health_history([{"id": 1}], prices, date.fromisoformat(trading_day), date.fromisoformat(trading_day), index_rows=index_rows)
+    assert history[0]["vnindex_trend_state"] == "UP"
 
 
 def test_long_unavailable_symbol_is_not_a_permanent_breadth_veto():

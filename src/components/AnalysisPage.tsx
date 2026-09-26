@@ -6,7 +6,7 @@ import { StockChart } from './StockChart'
 import { ZoneEvidence } from './ZoneEvidence'
 import { formatMarketPrice } from '../lib/marketUnits'
 
-const patternNames:Record<string,string>={ACCUMULATION_BASE:'Nền tích lũy',DOUBLE_BOTTOM:'Hai đáy',DOUBLE_TOP:'Hai đỉnh',ASCENDING_TRIANGLE:'Tam giác tăng',DESCENDING_TRIANGLE:'Tam giác giảm',SYMMETRICAL_TRIANGLE:'Tam giác cân',BULL_FLAG:'Cờ tăng',BEAR_FLAG:'Cờ giảm'}
+const patternNames:Record<string,string>={ACCUMULATION_BASE:'Nền tích lũy',DOUBLE_BOTTOM:'Hai đáy',DOUBLE_TOP:'Hai đỉnh',ASCENDING_TRIANGLE:'Tam giác tăng',DESCENDING_TRIANGLE:'Tam giác giảm',SYMMETRICAL_TRIANGLE:'Tam giác cân',BULL_FLAG:'Cờ tăng',BULL_PENNANT:'Cờ đuôi nheo tăng',BEAR_FLAG:'Cờ giảm'}
 const number=(value:number|null|undefined,digits=2)=>value==null?'—':Number(value).toLocaleString('vi-VN',{maximumFractionDigits:digits})
 const rangeSize:Record<string,number>={ '1M':22,'3M':66,'6M':132,'1Y':260,'3Y':780,ALL:9999 }
 const exchangeLabel=(exchange:string|null|undefined)=>({HOSE:'HSX',HSX:'HSX',HNX:'HNX',UPCOM:'UPCOM'}[exchange??'']??'Đang đồng bộ sàn')

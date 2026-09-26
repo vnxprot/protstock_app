@@ -5,6 +5,7 @@ from typing import Sequence
 
 from .candles import is_bullish_engulfing, is_pin_bar
 from .indicators import calculate_indicators
+from .flag_geometry import detect_flag_structure
 
 
 @dataclass(frozen=True)
@@ -176,30 +177,19 @@ def detect_triangle(bars: Sequence[dict]) -> PatternCandidate | None:
 
 
 def detect_flag(bars: Sequence[dict]) -> PatternCandidate | None:
-    if len(bars) < 21:
+    structure = detect_flag_structure(bars) or detect_flag_structure(bars, bullish=False)
+    if structure is None:
         return None
-    pole = bars[-21:-11]
-    # The final bar is evaluated separately as breakout, never as retracement.
-    flag = bars[-11:-1]
-    pole_return = float(pole[-1]["close"]) / float(pole[0]["open"]) - 1
-    flag_return = float(flag[-1]["close"]) / float(flag[0]["open"]) - 1
-    if abs(pole_return) < 0.12 or pole_return * flag_return > 0 or abs(flag_return) > abs(pole_return) * 0.5:
-        return None
-    bullish = pole_return > 0
-    # Exclude the current breakout bar when deriving the flag channel boundary.
-    trigger = max(float(x["high"]) for x in flag[:-1]) if bullish else min(float(x["low"]) for x in flag[:-1])
-    invalidation = min(float(x["low"]) for x in flag) if bullish else max(float(x["high"]) for x in flag)
-    close = float(bars[-1]["close"])
-    price_break = close > trigger if bullish else close < trigger
-    volume_ok = _breakout_volume_ok(bars, 1.1)
-    confirmed = price_break and volume_ok
-    direction = "BULLISH" if bullish else "BEARISH"
+    confirmed = structure["state"] == "CONFIRMED"
+    direction = "BULLISH" if structure["pattern_type"].startswith("BULL") else "BEARISH"
     candle_ok = confirmed and _candle_confirmation(bars, direction)
-    score, quality = _quality(bars, len(bars) - 21, invalidation, trigger, confirmed, not confirmed, candle_ok)
-    return PatternCandidate("BULL_FLAG" if bullish else "BEAR_FLAG", "CONFIRMED" if confirmed else "READY",
-                            direction, len(bars) - 21, len(bars) - 1,
-                            trigger, invalidation, score, tuple(filter(None, ("IMPULSE_POLE", "CONTROLLED_RETRACEMENT", "BREAKOUT_VOLUME" if volume_ok else "", "CANDLESTICK_CONFIRMATION" if candle_ok else "", "NEEDS_VOLUME_CONFIRMATION" if price_break and not volume_ok else ""))),
-                            {"pole_return_pct": round(pole_return * 100, 2), "retracement_pct": round(flag_return * 100, 2), "breakout_volume_ok": volume_ok, **quality})
+    score, quality = _quality(bars, structure["start_index"], structure["invalidation_price"], structure["trigger_price"], confirmed, not confirmed, candle_ok)
+    price_break = float(bars[-1]["close"]) > structure["trigger_price"] * 1.003 if direction == "BULLISH" else float(bars[-1]["close"]) < structure["trigger_price"] * .997
+    return PatternCandidate(structure["pattern_type"], structure["state"], direction,
+                            structure["start_index"], len(bars) - 1,
+                            structure["trigger_price"], structure["invalidation_price"], score,
+                            tuple(filter(None, ("IMPULSE_POLE", "CONTROLLED_RETRACEMENT", "VOLUME_CONTRACTION", "BREAKOUT_VOLUME" if confirmed else "", "CANDLESTICK_CONFIRMATION" if candle_ok else "", "NEEDS_VOLUME_CONFIRMATION" if price_break and not confirmed else ""))),
+                            {**structure, **quality})
 
 
 def detect_pullback_continuation(bars: Sequence[dict], snapshot: dict | None = None) -> PatternCandidate | None:

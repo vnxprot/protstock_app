@@ -63,6 +63,21 @@ def test_missing_or_stale_context_fails_closed(key,value,code):
     assert action == "WATCH" and code in reasons
 
 
+def test_market_context_date_must_match_signal_day():
+    ctx = context()
+    ctx["market_context"]["trading_date"] = "2026-09-14"
+    action, reasons = apply_signal_policy("PROBE_BUY", [], ctx)
+    assert action == "WATCH" and "MARKET_CONTEXT_DATE_MISMATCH" in reasons
+
+
+def test_historical_portfolio_reason_is_not_hidden_by_generic_error():
+    ctx = context()
+    ctx["portfolio_error"] = "HISTORICAL_PORTFOLIO_UNAVAILABLE"
+    action, reasons = apply_signal_policy("PROBE_BUY", [], ctx)
+    assert action == "WATCH" and "HISTORICAL_PORTFOLIO_UNAVAILABLE" in reasons
+    assert "PORTFOLIO_CONTEXT_UNAVAILABLE" not in reasons
+
+
 def test_stale_watch_is_a_data_warning_not_an_entry_block():
     ctx = context(); ctx["data_date"] = "2026-09-14"
     assert apply_signal_policy("WATCH", ["WAIT_MACD_CONFIRMATION"], ctx) == (
@@ -177,6 +192,28 @@ def test_divergence_no_lookahead_invalidation_expiry_and_no_repeat(monkeypatch):
     assert evaluate_rsi_macd_confirmation(ctx)[0] is False
     ctx=divergence_context(monkeypatch); ctx['bars'] += bars(10)
     assert evaluate_rsi_macd_confirmation(ctx)[0] is False
+
+
+def test_latest_lower_rsi_bottom_cancels_bullish_divergence(monkeypatch):
+    ctx = divergence_context(monkeypatch)
+    monkeypatch.setattr('protstock.divergence.momentum_series', lambda rows: [
+        {'rsi14': 30 if i == 20 else 24 if i == 35 else 45, 'macd_histogram': 1}
+        for i in range(len(rows))
+    ])
+    assert evaluate_rsi_macd_confirmation(ctx) == (False, 'WATCH', [])
+    from protstock.engines import evaluate_rsi_macd_divergence_v1
+    assert evaluate_rsi_macd_divergence_v1(ctx) == (False, 'WATCH', [])
+
+
+def test_rsi_trough_before_price_pivot_prevents_false_ctr_divergence(monkeypatch):
+    ctx = divergence_context(monkeypatch)
+    # Price makes its second low at bar 35; RSI actually bottomed a bar earlier.
+    monkeypatch.setattr('protstock.divergence.momentum_series', lambda rows: [
+        {'rsi14': 38 if i == 20 else 36 if i == 34 else 42 if i == 35 else 50,
+         'macd_histogram': 1}
+        for i in range(len(rows))
+    ])
+    assert evaluate_rsi_macd_confirmation(ctx) == (False, 'WATCH', [])
 
 
 def test_monthly_uses_twenty_closed_months_not_daily_ma50():

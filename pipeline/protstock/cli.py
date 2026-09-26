@@ -72,6 +72,7 @@ def main() -> None:
     eod.add_argument("--pause-seconds", type=float, default=6.5)
     eod.add_argument("--fast-lane", action="store_true")
     eod.add_argument("--skip-breadth-snapshot", action="store_true")
+    eod.add_argument("--historical", action="store_true", help="Do not use today's portfolio for a historical EOD date")
     finalize_fast = subparsers.add_parser("finalize-fast-eod")
     finalize_fast.add_argument("--date", dest="trading_date", type=date.fromisoformat, default=date.today())
     health = subparsers.add_parser("rebuild-market-health")
@@ -81,6 +82,7 @@ def main() -> None:
     rebuild.add_argument("--date", dest="trading_date", type=date.fromisoformat, default=date.today())
     rebuild.add_argument("--symbol-offset", type=int, default=0)
     rebuild.add_argument("--symbol-limit", type=int)
+    rebuild.add_argument("--historical", action="store_true", help="Do not use today's portfolio for a historical rebuild")
     worker = subparsers.add_parser("backtest-worker")
     worker.add_argument("--limit", type=int, default=3)
     subparsers.add_parser("collect-hnx-disclosures")
@@ -131,6 +133,7 @@ def main() -> None:
             pause_seconds=args.pause_seconds,
             fast_lane=args.fast_lane,
             write_breadth_snapshot=not args.skip_breadth_snapshot,
+            historical=args.historical,
         )
         print(json.dumps(result, indent=2))
         raise SystemExit(0 if result["status"] in {"SUCCEEDED", "PARTIAL"} else 1)
@@ -141,7 +144,7 @@ def main() -> None:
         print(json.dumps(rebuild_market_health(args.start_date, args.end_date), ensure_ascii=False))
         raise SystemExit(0)
     if args.command == "rebuild-signals":
-        result = rebuild_signals(args.trading_date, symbol_offset=args.symbol_offset, symbol_limit=args.symbol_limit)
+        result = rebuild_signals(args.trading_date, symbol_offset=args.symbol_offset, symbol_limit=args.symbol_limit, historical=args.historical)
         print(json.dumps(result, ensure_ascii=False))
         raise SystemExit(0 if result["status"] in {"SUCCEEDED", "PARTIAL"} else 1)
     if args.command == "backtest-worker":

@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any, Sequence
 
+from .flag_geometry import detect_flag_structure
+
 
 MODEL_LABELS = {
     "flat_base": "Breakout nền phẳng",
@@ -87,35 +89,17 @@ def _flat_base(bars: Sequence[dict], snapshot: dict) -> dict[str, Any] | None:
 
 
 def _flag_or_pennant(bars: Sequence[dict], snapshot: dict) -> dict[str, Any] | None:
-    if len(bars) < 22:
+    structure = detect_flag_structure(bars)
+    if structure is None:
         return None
-    pole, consolidation = bars[-22:-12], bars[-12:-1]
-    pole_return = float(pole[-1]["close"]) / float(pole[0]["open"]) - 1
-    retracement = float(consolidation[-1]["close"]) / float(pole[-1]["close"]) - 1
-    if pole_return < 0.12 or retracement > 0 or abs(retracement) > pole_return * 0.5:
-        return None
-    highs = [float(item["high"]) for item in consolidation]
-    lows = [float(item["low"]) for item in consolidation]
-    upper_slope = highs[-1] - highs[0]
-    lower_slope = lows[-1] - lows[0]
-    converging = (max(highs[:5]) - min(lows[:5])) > (max(highs[-5:]) - min(lows[-5:]))
-    pattern_type = "BULL_PENNANT" if converging else "BULL_FLAG"
-    trigger = max(highs)
-    invalidation = min(lows)
-    close = float(bars[-1]["close"])
-    volume_ratio = _volume_ratio(bars)
-    consolidation_volume = sum(float(item.get("volume") or 0) for item in consolidation) / len(consolidation)
-    pole_volume = sum(float(item.get("volume") or 0) for item in pole) / len(pole)
-    contraction = consolidation_volume / pole_volume if pole_volume else 1.0
-    confirmed = close > trigger and volume_ratio >= 1.3
-    ready = close >= trigger * 0.97
-    state = "CONFIRMED" if confirmed else "READY" if ready else "FORMING"
-    quality = 35 + min(20, pole_return * 100) + (10 if contraction <= 0.85 else 0) + (20 if confirmed else 10 if ready else 0)
+    confirmed = structure["state"] == "CONFIRMED"
+    pennant = structure["pattern_type"] == "BULL_PENNANT"
+    quality = 35 + min(20, structure["pole_return_pct"]) + 10 + (20 if confirmed else 10)
     return _candidate(
-        model="flag_pennant", pattern_type=pattern_type, direction="BULLISH", state=state,
-        quality=quality, trigger=trigger, invalidation=invalidation,
-        reasons=["IMPULSE_POLE", "PENNANT_CONVERGENCE" if converging else "FLAG_CONTROLLED_RETRACE", "VOLUME_CONTRACTION" if contraction <= 0.85 else "FLAG_VOLUME_MIXED", "BREAKOUT_VOLUME" if confirmed else "NEAR_FLAG_BREAKOUT" if ready else "FLAG_FORMING"],
-        evidence={"pole_return_pct": round(pole_return * 100, 2), "retracement_pct": round(retracement * 100, 2), "volume_contraction_ratio": round(contraction, 3), "volume_ratio20": round(volume_ratio, 3), "upper_slope": round(upper_slope, 4), "lower_slope": round(lower_slope, 4)},
+        model="flag_pennant", pattern_type=structure["pattern_type"], direction="BULLISH", state=structure["state"],
+        quality=quality, trigger=structure["trigger_price"], invalidation=structure["invalidation_price"],
+        reasons=["IMPULSE_POLE", "PENNANT_CONVERGENCE" if pennant else "FLAG_CONTROLLED_RETRACE", "VOLUME_CONTRACTION", "BREAKOUT_VOLUME" if confirmed else "NEAR_FLAG_BREAKOUT"],
+        evidence={key: structure[key] for key in ("pole_bars", "flag_bars", "pole_return_pct", "retracement_pct", "volume_contraction_ratio", "volume_ratio20", "upper_slope", "lower_slope")},
     )
 
 

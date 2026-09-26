@@ -224,21 +224,9 @@ def evaluate_vcp_breakout_v1(context: dict[str, Any]) -> tuple[bool, str, list[s
 
 
 def evaluate_rsi_macd_divergence_v1(context: dict[str, Any]) -> tuple[bool, str, list[str]]:
-    bars, snapshot, zones = context.get("bars", []), context.get("snapshot", {}), context.get("zones", [])
-    if len(bars) < 21 or snapshot.get("rsi14") is None:
-        return False, "WATCH", []
-    current = bars[-1]
-    prior_slice = bars[-16:-4]
-    prior_low_index = min(range(len(prior_slice)), key=lambda index: float(prior_slice[index]["low"]))
-    prior_bars = bars[:len(bars) - 16 + prior_low_index + 1]
-    from .indicators import calculate_indicators
-    prior_rsi = calculate_indicators(prior_bars).rsi14
-    new_price_low = float(current["low"]) < min(float(item["low"]) for item in prior_slice)
-    bullish_rsi = prior_rsi is not None and float(snapshot["rsi14"]) > float(prior_rsi)
-    in_support = any(zone.get("zone_type") == "SUPPORT" and float(zone.get("strength") or 0) >= 60 and float(zone.get("lower_price") or 0) <= float(current["low"]) <= float(zone.get("upper_price") or 0) for zone in zones)
-    if not (new_price_low and bullish_rsi and in_support):
-        return False, "WATCH", []
-    return True, "PROBE_BUY", ["BULLISH_RSI_DIVERGENCE", "SUPPORT_ZONE_STRONG"]
+    # Both Core Pack versions must compare RSI on the same confirmed price
+    # pivots; current-bar RSI is not evidence for a prior pivot divergence.
+    return evaluate_rsi_macd_confirmation(context)
 
 
 def relative_strength_context_reasons(context: dict[str, Any]) -> list[str]:

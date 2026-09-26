@@ -118,15 +118,13 @@ def build_breadth_membership(active_symbols: Sequence[dict], prior_snapshots: Se
 
 
 def regime_ok(breadth: dict | None, vnindex_snapshot: dict | None, min_breadth_pct: float = 40.0) -> tuple[bool, list[str]]:
-    """Return whether the prior completed market regime permits new long risk."""
+    """Return whether the completed market regime permits new long risk."""
     breadth, vnindex_snapshot = breadth or {}, vnindex_snapshot or {}
     pct_above = breadth.get("pct_above_sma50")
     coverage_status = breadth.get("coverage_status")
     if coverage_status == "INCOMPLETE" or breadth.get("coverage_complete") is False:
         return False, ["BREADTH_COVERAGE_INCOMPLETE"] + (["VNINDEX_DOWNTREND"] if vnindex_snapshot.get("trend_state") == "DOWN" else [])
-    if coverage_status == "DEGRADED":
-        return True, ["BREADTH_DATA_DEGRADED"]
     breadth_ok = pct_above is not None and float(pct_above) >= min_breadth_pct
     index_ok = vnindex_snapshot.get("trend_state") != "DOWN"
-    reasons = (["MARKET_BREADTH_WEAK"] if not breadth_ok else []) + (["VNINDEX_DOWNTREND"] if not index_ok else [])
+    reasons = (["BREADTH_DATA_DEGRADED"] if coverage_status == "DEGRADED" else []) + (["MARKET_BREADTH_WEAK"] if not breadth_ok else []) + (["VNINDEX_DOWNTREND"] if not index_ok else [])
     return breadth_ok and index_ok, reasons

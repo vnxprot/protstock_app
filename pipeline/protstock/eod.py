@@ -44,6 +44,7 @@ def run_eod(
     pause_seconds: float = 6.5,
     fast_lane: bool = False,
     write_breadth_snapshot: bool = True,
+    historical: bool = False,
 ) -> dict[str, Any]:
     client = SupabaseRestClient(Settings.from_env())
     provider = VnstockProvider(source)
@@ -51,7 +52,7 @@ def run_eod(
     fallback_provider = VnstockProvider(fallback_source)
     job = client.create_job({
         "job_type": "EOD_INGEST", "trading_date": trading_date.isoformat(),
-        "status": "RUNNING", "trigger_type": "SCHEDULED",
+        "status": "RUNNING", "trigger_type": "MANUAL" if historical else "SCHEDULED",
         "source_revision": ALGORITHM_VERSION,
     })
     counts = {"symbols": 0, "prices": 0, "derived_bars": 0, "snapshots": 0, "patterns": 0, "zones": 0, "signals": 0, "consolidated_signals": 0, "breadth_snapshots": 0, "failed": 0}
@@ -59,10 +60,10 @@ def run_eod(
     try:
         symbols = client.active_symbols()
         active_rules = client.active_rule_versions()
-        portfolios = _load_portfolios(client, active_rules, trading_date)
         counts["engine_stats"] = _initialize_engine_stats(active_rules)
-        market_context = _prior_market_context(client, trading_date)
+        pending_signals = []
         benchmark_daily: list[dict] = []
+        benchmark_history: list[dict] = []
         try:
             index = client.market_index("VNINDEX")
             benchmark_fetch_days = FAST_LANE_BENCHMARK_FETCH_DAYS if fast_lane else benchmark_lookback_days
@@ -74,9 +75,10 @@ def run_eod(
                 "collected_at": bar.collected_at.isoformat(),
             } for bar in index_bars]
             client.upsert("market_index_prices", index_rows, "index_id,trading_date")
+            benchmark_history = client.index_price_history(index["id"], MULTI_TIMEFRAME_HISTORY_LIMIT)
             benchmark_daily = [
                 {**row, "date": row["trading_date"]}
-                for row in _rows_as_of(client.index_price_history(index["id"], MULTI_TIMEFRAME_HISTORY_LIMIT), trading_date)
+                for row in _rows_as_of(benchmark_history, trading_date)
             ]
             # A fresh database has no cached benchmark window. Self-heal once; all
             # later Fast Lane runs stay incremental.
@@ -89,7 +91,8 @@ def run_eod(
                     "collected_at": bar.collected_at.isoformat(),
                 } for bar in index_bars]
                 client.upsert("market_index_prices", index_rows, "index_id,trading_date")
-                benchmark_daily = [{**row, "date": row["trading_date"]} for row in _rows_as_of(client.index_price_history(index["id"], MULTI_TIMEFRAME_HISTORY_LIMIT), trading_date)]
+                benchmark_history = client.index_price_history(index["id"], MULTI_TIMEFRAME_HISTORY_LIMIT)
+                benchmark_daily = [{**row, "date": row["trading_date"]} for row in _rows_as_of(benchmark_history, trading_date)]
         except Exception as exc:
             warnings.append(f"VNINDEX: {type(exc).__name__}")
         symbols = symbols[symbol_offset:]
@@ -136,20 +139,20 @@ def run_eod(
                             "derived_bars", derived_rows, "symbol_id,timeframe,period_start"
                         )
                     preliminary = {timeframe: analyze_bars(scoped_rows, fibonacci_context=fibonacci_context) for timeframe, scoped_rows in timeframe_rows.items() if scoped_rows}
-                    results = {timeframe: analyze_bars(scoped_rows, weekly_patterns=preliminary.get("W", {}).get("patterns", []), monthly_snapshot=preliminary.get("M", {}).get("indicators", {}), benchmark_rows=benchmark_rows[timeframe], market_context=market_context if timeframe == "D" else None, fibonacci_context=fibonacci_context) for timeframe, scoped_rows in timeframe_rows.items() if scoped_rows}
+                    results = {timeframe: analyze_bars(scoped_rows, weekly_patterns=preliminary.get("W", {}).get("patterns", []), monthly_snapshot=preliminary.get("M", {}).get("indicators", {}), benchmark_rows=benchmark_rows[timeframe], fibonacci_context=fibonacci_context) for timeframe, scoped_rows in timeframe_rows.items() if scoped_rows}
                     context = {
                         "weekly_patterns": results.get("W", {}).get("patterns", []),
                         "weekly_snapshot": results.get("W", {}).get("indicators", {}),
                         "monthly_snapshot": results.get("M", {}).get("indicators", {}),
-                        "market_context": market_context,
                         "candidate_sector": symbol_row["sector"],
                         "wyckoff_context": classify_wyckoff(analysis_rows),
                     }
                     for timeframe, scoped_rows in timeframe_rows.items():
                         if timeframe in results:
                             if "period_events" not in context:
-                                context.update(_decision_context(analysis_rows, trading_date, portfolios))
-                            _write_analysis(client, symbol_row["id"], timeframe, scoped_rows, benchmark_rows[timeframe], active_rules, counts, results[timeframe], context)
+                                context.update(_decision_context(analysis_rows, trading_date, {}))
+                            _write_analysis(client, symbol_row["id"], timeframe, scoped_rows, benchmark_rows[timeframe], active_rules, counts, results[timeframe], context, evaluate_signals=False)
+                            pending_signals.append((symbol_row["id"], timeframe, scoped_rows, benchmark_rows[timeframe], results[timeframe], context))
                 counts["symbols"] += 1
                 client.create_job_item({
                     "job_run_id": job["id"], "symbol_id": symbol_row["id"],
@@ -168,11 +171,18 @@ def run_eod(
             sleep(pause_seconds)
         if write_breadth_snapshot and symbols:
             # A retry/batch reads the complete stored universe, never its own subset.
-            vnindex_snapshot = calculate_indicators(benchmark_daily).to_dict() if benchmark_daily else {"trend_state": "UNKNOWN"}
+            vnindex_snapshot = _benchmark_snapshot(benchmark_daily, trading_date)
             breadth = _persist_universe_breadth(client, trading_date, vnindex_snapshot["trend_state"])
             counts["breadth_snapshots"] += 1
             if breadth["coverage_status"] != "COMPLETE":
                 warnings.append(f"BREADTH_DATA_{breadth['coverage_status']}: {breadth['observed_count']}/{breadth['eligible_count']} eligible")
+            market_context = _same_day_market_context(trading_date, breadth, vnindex_snapshot)
+            past_session = any(row["trading_date"] > trading_date.isoformat() for row in benchmark_history)
+            portfolios = _load_portfolios(client, active_rules, trading_date, historical=historical or past_session)
+            for symbol_id, timeframe, scoped_rows, index_rows, result, context in pending_signals:
+                context["market_context"] = market_context
+                context["portfolios"] = portfolios
+                _write_analysis(client, symbol_id, timeframe, scoped_rows, index_rows, active_rules, counts, result, context, persist_evidence=False)
         status = "SUCCEEDED" if counts["failed"] == 0 else "PARTIAL"
         _persist_engine_stats(client, job["id"], trading_date, counts)
         client.finish_job(job["id"], {"status": status, "finished_at": _now(), "counts": counts, "warnings": warnings})
@@ -185,7 +195,7 @@ def run_eod(
 
 
 def finalize_fast_lane(trading_date: date) -> dict[str, Any]:
-    """Gate final alerts on complete two-worker coverage, then publish D breadth."""
+    """Publish the completed market snapshot before evaluating Fast Lane signals."""
     client = SupabaseRestClient(Settings.from_env())
     try:
         expected = {row["id"] for row in client.active_symbols()}
@@ -196,14 +206,17 @@ def finalize_fast_lane(trading_date: date) -> dict[str, Any]:
             raise RuntimeError(f"Fast Lane incomplete: {len(covered)}/{len(expected)} daily snapshots")
         index = client.market_index("VNINDEX")
         benchmark = _rows_as_of(client.index_price_history(index["id"], MULTI_TIMEFRAME_HISTORY_LIMIT), trading_date)
-        vnindex_snapshot = calculate_indicators(benchmark).to_dict() if benchmark else {"trend_state": "UNKNOWN"}
+        vnindex_snapshot = _benchmark_snapshot(benchmark, trading_date)
         breadth = _persist_universe_breadth(client, trading_date, vnindex_snapshot["trend_state"])
-        return {"status": "SUCCEEDED", "covered": len(covered), "expected": len(expected), "breadth": breadth}
     finally:
         client.close()
+    rebuilt = rebuild_signals(trading_date, prepared_market_context=_same_day_market_context(trading_date, breadth, vnindex_snapshot))
+    if rebuilt["status"] != "SUCCEEDED":
+        raise RuntimeError(f"Fast Lane signal evaluation was {rebuilt['status']}")
+    return {"status": "SUCCEEDED", "covered": len(covered), "expected": len(expected), "breadth": breadth, "signals": rebuilt["signals"]}
 
 
-def rebuild_signals(trading_date: date, *, symbol_offset: int = 0, symbol_limit: int | None = None) -> dict[str, Any]:
+def rebuild_signals(trading_date: date, *, symbol_offset: int = 0, symbol_limit: int | None = None, historical: bool = False, prepared_market_context: dict | None = None) -> dict[str, Any]:
     """Re-evaluate stored EOD data only; this never calls an upstream price source."""
     client = SupabaseRestClient(Settings.from_env())
     job = client.create_job({"job_type": "DERIVE_BARS", "trading_date": trading_date.isoformat(), "status": "RUNNING", "trigger_type": "MANUAL", "source_revision": ALGORITHM_VERSION})
@@ -214,7 +227,6 @@ def rebuild_signals(trading_date: date, *, symbol_offset: int = 0, symbol_limit:
         if symbol_limit:
             symbols = symbols[:symbol_limit]
         active_rules = client.active_rule_versions()
-        portfolios = _load_portfolios(client, active_rules, trading_date)
         if not active_rules:
             # A signal-only run has nothing meaningful to do without an enabled
             # engine. Fail loudly rather than report a misleading success.
@@ -222,9 +234,15 @@ def rebuild_signals(trading_date: date, *, symbol_offset: int = 0, symbol_limit:
                 "No ACTIVE signal engines found. Enable a Core Engine or Rule Studio rule before rebuilding signals."
             )
         counts["engine_stats"] = _initialize_engine_stats(active_rules)
-        market_context = _prior_market_context(client, trading_date)
+        pending_signals = []
         index = client.market_index("VNINDEX")
-        benchmark_daily = [{**row, "date": row["trading_date"]} for row in _rows_as_of(client.index_price_history(index["id"], MULTI_TIMEFRAME_HISTORY_LIMIT), trading_date)]
+        benchmark_history = client.index_price_history(index["id"], MULTI_TIMEFRAME_HISTORY_LIMIT)
+        benchmark_daily = [{**row, "date": row["trading_date"]} for row in _rows_as_of(benchmark_history, trading_date)]
+        if prepared_market_context and prepared_market_context.get("trading_date") != trading_date.isoformat():
+            raise ValueError("prepared market context date differs from signal date")
+        if prepared_market_context:
+            past_session = any(row["trading_date"] > trading_date.isoformat() for row in benchmark_history)
+            portfolios = _load_portfolios(client, active_rules, trading_date, historical=historical or past_session)
         for symbol_row in symbols:
             started = monotonic()
             try:
@@ -234,7 +252,7 @@ def rebuild_signals(trading_date: date, *, symbol_offset: int = 0, symbol_limit:
                 timeframe_rows = {"D": analysis_rows, "W": aggregate_bars(analysis_rows, "W"), "M": aggregate_bars(analysis_rows, "M")}
                 # A stored-price repair must also refresh the bars used by the
                 # W/M charts, not just snapshots and signals computed in memory.
-                for timeframe in ("W", "M"):
+                for timeframe in (("W", "M") if prepared_market_context is None else ()):
                     derived_rows = [{
                         "symbol_id": symbol_row["id"], "timeframe": timeframe,
                         "period_start": bar["period_start"], "period_end": bar["period_end"],
@@ -248,23 +266,35 @@ def rebuild_signals(trading_date: date, *, symbol_offset: int = 0, symbol_limit:
                 fibonacci_context = build_fibonacci_context(analysis_rows)
                 benchmark_rows = {"D": benchmark_daily, "W": aggregate_bars(benchmark_daily, "W"), "M": aggregate_bars(benchmark_daily, "M")}
                 preliminary = {timeframe: analyze_bars(rows, fibonacci_context=fibonacci_context) for timeframe, rows in timeframe_rows.items() if rows}
-                results = {timeframe: analyze_bars(rows, weekly_patterns=preliminary.get("W", {}).get("patterns", []), monthly_snapshot=preliminary.get("M", {}).get("indicators", {}), benchmark_rows=benchmark_rows[timeframe], market_context=market_context if timeframe == "D" else None, fibonacci_context=fibonacci_context) for timeframe, rows in timeframe_rows.items() if rows}
-                context = {"weekly_patterns": results.get("W", {}).get("patterns", []), "weekly_snapshot": results.get("W", {}).get("indicators", {}), "monthly_snapshot": results.get("M", {}).get("indicators", {}), "market_context": market_context, "candidate_sector": symbol_row["sector"]}
+                results = {timeframe: analyze_bars(rows, weekly_patterns=preliminary.get("W", {}).get("patterns", []), monthly_snapshot=preliminary.get("M", {}).get("indicators", {}), benchmark_rows=benchmark_rows[timeframe], fibonacci_context=fibonacci_context) for timeframe, rows in timeframe_rows.items() if rows}
+                context = {"weekly_patterns": results.get("W", {}).get("patterns", []), "weekly_snapshot": results.get("W", {}).get("indicators", {}), "monthly_snapshot": results.get("M", {}).get("indicators", {}), "candidate_sector": symbol_row["sector"], "wyckoff_context": classify_wyckoff(analysis_rows)}
                 for timeframe, rows in timeframe_rows.items():
                     if timeframe in results:
                         if "period_events" not in context:
-                            context.update(_decision_context(analysis_rows, trading_date, portfolios))
-                        indicator_snapshot = {"symbol_id": symbol_row["id"], "timeframe": timeframe, "as_of_date": results[timeframe]["as_of_date"], "input_last_date": results[timeframe]["as_of_date"], "algorithm_version": ALGORITHM_VERSION, **results[timeframe]["indicators"]}
-                        counts["snapshots"] += client.upsert("technical_snapshots", [indicator_snapshot], "symbol_id,timeframe,as_of_date")
-                        _write_analysis(client, symbol_row["id"], timeframe, rows, benchmark_rows[timeframe], active_rules, counts, results[timeframe], context, persist_evidence=False)
+                            context.update(_decision_context(analysis_rows, trading_date, {}))
+                        if prepared_market_context is None:
+                            _write_analysis(client, symbol_row["id"], timeframe, rows, benchmark_rows[timeframe], active_rules, counts, results[timeframe], context, evaluate_signals=False)
+                            pending_signals.append((symbol_row["id"], timeframe, rows, benchmark_rows[timeframe], results[timeframe], context))
+                        else:
+                            context["market_context"] = prepared_market_context
+                            context["portfolios"] = portfolios
+                            _write_analysis(client, symbol_row["id"], timeframe, rows, benchmark_rows[timeframe], active_rules, counts, results[timeframe], context, persist_evidence=False)
                 counts["symbols"] += 1
                 client.create_job_item({"job_run_id": job["id"], "symbol_id": symbol_row["id"], "item_key": symbol_row["symbol"], "status": "SUCCEEDED", "rows_written": 0, "duration_ms": int((monotonic() - started) * 1000)})
             except Exception as exc:
                 counts["failed"] += 1; warnings.append(f"{symbol_row['symbol']}: {type(exc).__name__}")
                 client.create_job_item({"job_run_id": job["id"], "symbol_id": symbol_row["id"], "item_key": symbol_row["symbol"], "status": "FAILED", "error_code": type(exc).__name__, "error_message": str(exc)[:500], "duration_ms": int((monotonic() - started) * 1000)})
-        vnindex_snapshot = calculate_indicators(benchmark_daily).to_dict() if benchmark_daily else {"trend_state": "UNKNOWN"}
-        _persist_universe_breadth(client, trading_date, vnindex_snapshot["trend_state"])
-        counts["breadth_snapshots"] += 1
+        if prepared_market_context is None:
+            vnindex_snapshot = _benchmark_snapshot(benchmark_daily, trading_date)
+            breadth = _persist_universe_breadth(client, trading_date, vnindex_snapshot["trend_state"])
+            counts["breadth_snapshots"] += 1
+            market_context = _same_day_market_context(trading_date, breadth, vnindex_snapshot)
+            past_session = any(row["trading_date"] > trading_date.isoformat() for row in benchmark_history)
+            portfolios = _load_portfolios(client, active_rules, trading_date, historical=historical or past_session)
+            for symbol_id, timeframe, rows, index_rows, result, context in pending_signals:
+                context["market_context"] = market_context
+                context["portfolios"] = portfolios
+                _write_analysis(client, symbol_id, timeframe, rows, index_rows, active_rules, counts, result, context, persist_evidence=False)
         status = "SUCCEEDED" if not counts["failed"] else "PARTIAL"
         _persist_engine_stats(client, job["id"], trading_date, counts)
         client.finish_job(job["id"], {"status": status, "finished_at": _now(), "counts": counts, "warnings": warnings})
@@ -282,7 +312,9 @@ def rebuild_market_health(start_date: date, end_date: date) -> dict[str, Any]:
     try:
         symbols = client.active_symbols()
         rows = client.all_daily_prices(start_date - timedelta(days=365), end_date)
-        snapshots = build_market_health_history(symbols, rows, start_date, end_date)
+        index = client.market_index("VNINDEX")
+        index_rows = _rows_as_of(client.index_price_history(index["id"], MULTI_TIMEFRAME_HISTORY_LIMIT), end_date)
+        snapshots = build_market_health_history(symbols, rows, start_date, end_date, index_rows=index_rows)
         for offset in range(0, len(snapshots), 500):
             client.upsert("market_breadth_snapshots", snapshots[offset:offset + 500], "trading_date")
         return {"status": "SUCCEEDED", "start_date": start_date.isoformat(), "end_date": end_date.isoformat(), "snapshots": len(snapshots)}
@@ -299,6 +331,16 @@ def _rows_as_of(rows: list[dict[str, Any]], trading_date: date) -> list[dict[str
     """Keep only bars known at the requested EOD cutoff (ISO dates sort chronologically)."""
     cutoff = trading_date.isoformat()
     return [row for row in rows if row["trading_date"] <= cutoff]
+
+
+def _benchmark_snapshot(rows: list[dict], trading_date: date) -> dict:
+    if not rows or (rows[-1].get("trading_date") or rows[-1].get("date")) != trading_date.isoformat():
+        return {"trend_state": "UNKNOWN"}
+    return calculate_indicators(rows).to_dict()
+
+
+def _same_day_market_context(trading_date: date, breadth: dict, vnindex_snapshot: dict) -> dict:
+    return {"trading_date": trading_date.isoformat(), "breadth": breadth, "vnindex_snapshot": vnindex_snapshot}
 
 
 def _fetch_history_with_retry(provider: VnstockProvider, symbol: str, start: date, end: date) -> list:
@@ -379,7 +421,7 @@ def _write_analysis(
     rows: list[dict],
     benchmark_rows: list[dict],
     active_rules: list[dict],
-    counts: dict[str, int], result: dict, context: dict[str, Any], *, persist_evidence: bool = True,
+    counts: dict[str, int], result: dict, context: dict[str, Any], *, persist_evidence: bool = True, evaluate_signals: bool = True,
 ) -> None:
     if not rows:
         return
@@ -403,10 +445,14 @@ def _write_analysis(
             "evidence": pattern["evidence"], "reasons": pattern["reasons"],
             "algorithm_version": ALGORITHM_VERSION,
         } for pattern in result["patterns"]]
-        counts["patterns"] += client.upsert(
-            "pattern_instances", patterns,
-            "symbol_id,timeframe,pattern_type,start_date,as_of_date,algorithm_version",
-        )
+        replacer = getattr(client, "replace_pattern_snapshot", None)
+        if replacer is not None:
+            counts["patterns"] += replacer(symbol_id, timeframe, result["as_of_date"], patterns)
+        else:
+            counts["patterns"] += client.upsert(
+                "pattern_instances", patterns,
+                "symbol_id,timeframe,pattern_type,start_date,as_of_date,algorithm_version",
+            )
         zones = [{
             "symbol_id": symbol_id, "timeframe": timeframe,
             "zone_type": zone["zone_type"], "start_date": rows[zone["start_index"]]["date"],
@@ -423,6 +469,8 @@ def _write_analysis(
                 "support_resistance_zones", zones,
                 "symbol_id,timeframe,as_of_date,zone_type,lower_price,upper_price",
             )
+    if not evaluate_signals:
+        return
     signal_rows = []
     raw_evaluations = []
     evaluations = []
@@ -528,7 +576,7 @@ def _write_analysis(
         client.delete_consolidated_signal(symbol_id, timeframe, context.get("evaluation_date", result["as_of_date"]))
 
 
-def _load_portfolios(client, active_rules: list[dict], trading_date: date) -> dict:
+def _load_portfolios(client, active_rules: list[dict], trading_date: date, *, historical: bool = False) -> dict:
     getter = getattr(client, "portfolio_context", None)
     if getter is None:
         return {}
@@ -537,6 +585,13 @@ def _load_portfolios(client, active_rules: list[dict], trading_date: date) -> di
     for owner in owners:
         try:
             item = getter(owner)
+            if historical or any(str(position.get("opened_at") or "")[:10] > trading_date.isoformat() for position in item["positions"]):
+                if float(item.get("capital") or 0) > 0 or item["positions"]:
+                    item["error"] = "HISTORICAL_PORTFOLIO_UNAVAILABLE"
+                item["positions"] = []
+                item["valued_positions"] = []
+                result[owner] = item
+                continue
             item["valued_positions"] = []
             for position in item["positions"]:
                 rows = _rows_as_of(client.price_history(position["symbol_id"], MULTI_TIMEFRAME_HISTORY_LIMIT), trading_date)
@@ -544,10 +599,6 @@ def _load_portfolios(client, active_rules: list[dict], trading_date: date) -> di
                     item["error"] = "POSITION_PRICE_UNAVAILABLE"
                 price = float(rows[-1]["close"]) * STOCK_PRICE_TO_VND if rows else float(position["average_cost"])
                 item["valued_positions"].append({"market_price": price, "quantity": position["quantity"], "sector": (position.get("symbols") or {}).get("sector", "UNKNOWN")})
-            # positions is current inventory, not an immutable historical ledger.
-            if item["positions"] and trading_date != date.today():
-                item["error"] = "HISTORICAL_PORTFOLIO_UNAVAILABLE"
-                item["positions"] = []
             result[owner] = item
         except Exception:
             result[owner] = {"error": "PORTFOLIO_CONTEXT_UNAVAILABLE"}

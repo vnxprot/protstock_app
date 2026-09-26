@@ -37,6 +37,11 @@ def resolve_consolidated_signal(raw_signals: list[dict[str, Any]]) -> dict[str, 
     count = len(clusters)
     score, badge = CONFLUENCE.get(count, (98, "STRONG_ALIGNED"))
     reasons = list(dict.fromkeys(reason for signal in agreeing for reason in (signal.get("reasons") or [])))
+    reason_set = set(reasons)
+    reasons = [reason for reason in reasons if not (
+        reason.startswith("V0_") and reason.endswith("_CONFIRMED")
+        and f"PATTERN_{reason[3:]}" in reason_set
+    )]
     return {
         "composite_action": action,
         "confluence_score": score,

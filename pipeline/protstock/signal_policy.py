@@ -41,6 +41,8 @@ def apply_signal_policy(action: str, reasons: list[str], context: dict) -> tuple
     if not market:
         blocked.append("MARKET_CONTEXT_MISSING")
     else:
+        if market.get("trading_date") and market["trading_date"] != context.get("evaluation_date"):
+            blocked.append("MARKET_CONTEXT_DATE_MISMATCH")
         ok, codes = regime_ok(market.get("breadth"), market.get("vnindex_snapshot"))
         if not ok:
             blocked.extend(codes)
@@ -72,7 +74,8 @@ def apply_signal_policy(action: str, reasons: list[str], context: dict) -> tuple
     if not entry_stop or not 0 < float(entry_stop) < close:
         blocked.append("INVALID_ENTRY_STOP")
     if context.get("portfolio_error"):
-        blocked.append("PORTFOLIO_CONTEXT_UNAVAILABLE")
+        error = context["portfolio_error"]
+        blocked.append(error if error in {"HISTORICAL_PORTFOLIO_UNAVAILABLE", "POSITION_PRICE_UNAVAILABLE"} else "PORTFOLIO_CONTEXT_UNAVAILABLE")
     if capital > 0 and positions is not None and entry_stop and 0 < float(entry_stop) < close:
         sizing = position_size(capital, float(context.get("risk_pct") or 1), close * STOCK_PRICE_TO_VND, float(entry_stop) * STOCK_PRICE_TO_VND)
         exposure = portfolio_exposure(positions, capital)

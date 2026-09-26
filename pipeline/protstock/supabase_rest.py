@@ -39,6 +39,19 @@ class SupabaseRestClient:
             response.raise_for_status()
         return count
 
+    def replace_pattern_snapshot(self, symbol_id: int, timeframe: str, as_of_date: str, rows: list[dict]) -> int:
+        """Refresh one day's pattern evidence and remove superseded geometry."""
+        filters = {"symbol_id": f"eq.{symbol_id}", "timeframe": f"eq.{timeframe}", "as_of_date": f"eq.{as_of_date}"}
+        count = self.upsert("pattern_instances", rows, "symbol_id,timeframe,pattern_type,start_date,as_of_date,algorithm_version")
+        response = self._client.get("/pattern_instances", params={**filters, "select": "id,pattern_type,start_date,algorithm_version"})
+        response.raise_for_status()
+        current = {(row["pattern_type"], row["start_date"], row["algorithm_version"]) for row in rows}
+        obsolete = [str(row["id"]) for row in response.json() if (row["pattern_type"], row["start_date"], row["algorithm_version"]) not in current]
+        if obsolete:
+            response = self._client.delete("/pattern_instances", params={**filters, "id": f"in.({','.join(obsolete)})"})
+            response.raise_for_status()
+        return count
+
     def close(self) -> None:
         self._client.close()
 

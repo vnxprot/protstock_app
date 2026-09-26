@@ -13,7 +13,7 @@ from .zones import detect_zones, zone_confluence_bonus
 from .signal_policy import average_turnover_vnd, MIN_AVERAGE_TURNOVER_VND
 
 
-ALGORITHM_VERSION = "core-rules-v2"
+ALGORITHM_VERSION = "core-rules-v2.1"
 
 
 def analyze_bars(bars: Sequence[dict], position: dict | None = None, weekly_patterns: list[dict] | None = None, monthly_snapshot: dict | None = None, benchmark_rows: Sequence[dict] | None = None, market_context: dict | None = None, portfolio_positions: list[dict] | None = None, candidate_sector: str | None = None, capital: float | None = None, fibonacci_context: dict | None = None) -> dict:
