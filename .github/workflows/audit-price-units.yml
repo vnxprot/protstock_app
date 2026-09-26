@@ -57,7 +57,9 @@ jobs:
           first_bar = get('daily_prices', select='trading_date,close', symbol_id=f'eq.{symbol_id}', order='trading_date.asc', limit='1')
           snapshot = get('technical_snapshots', select='as_of_date,close,sma20', symbol_id=f'eq.{symbol_id}', timeframe='eq.D', as_of_date=f'eq.{trading_date}', limit='1')
           derived = {frame: get('derived_bars', select='timeframe,source_last_date,close', symbol_id=f'eq.{symbol_id}', timeframe=f'eq.{frame}', source_last_date=f'lte.{trading_date}', order='period_start.desc', limit='1') for frame in ('W', 'M')}
+          zones = {frame: get('support_resistance_zones', select='as_of_date,zone_type,lower_price,upper_price,active', symbol_id=f'eq.{symbol_id}', timeframe=f'eq.{frame}', active='eq.true', order='as_of_date.desc', limit='6') for frame in ('D', 'W', 'M')}
+          rebuilds = get('job_runs', select='status,trading_date,finished_at,counts', job_type='eq.DERIVE_BARS', trading_date=f'eq.{trading_date}', order='started_at.desc', limit='1')
           jobs = get('job_runs', select='id,status,started_at', job_type='eq.EOD_INGEST', trading_date=f'eq.{trading_date}', order='started_at.desc', limit='2')
           items = [get('job_run_items', select='status,error_code,rows_written', job_run_id=f"eq.{job['id']}", symbol_id=f'eq.{symbol_id}', limit='1') for job in jobs]
-          print(json.dumps({'symbol': symbol, 'first_bar': first_bar, 'prices': prices, 'snapshot': snapshot, 'derived': derived, 'jobs': [{**job, 'item': item} for job, item in zip(jobs, items)]}, ensure_ascii=False))
+          print(json.dumps({'symbol': symbol, 'first_bar': first_bar, 'prices': prices, 'snapshot': snapshot, 'derived': derived, 'zones': zones, 'rebuilds': rebuilds, 'jobs': [{**job, 'item': item} for job, item in zip(jobs, items)]}, ensure_ascii=False))
           PY
