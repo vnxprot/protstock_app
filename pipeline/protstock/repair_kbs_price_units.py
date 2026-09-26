@@ -28,10 +28,12 @@ def repair(trading_date: date, *, apply: bool = False) -> dict:
     try:
         rows = client.stock_prices_by_source_and_date("KBS_PUBLIC", trading_date)
         candidates = normalize_rows(rows)
+        candidate_ids = {row["symbol_id"] for row in candidates}
+        skipped = [{"symbol_id": row["symbol_id"], "close": row["close"]} for row in rows if row["symbol_id"] not in candidate_ids]
         if apply:
             for offset in range(0, len(candidates), 100):
                 client.upsert("daily_prices", candidates[offset:offset + 100], "symbol_id,trading_date")
-        return {"date": trading_date.isoformat(), "mode": "apply" if apply else "dry-run", "source_rows": len(rows), "corrected_rows": len(candidates) if apply else 0, "candidate_rows": len(candidates)}
+        return {"date": trading_date.isoformat(), "mode": "apply" if apply else "dry-run", "source_rows": len(rows), "corrected_rows": len(candidates) if apply else 0, "candidate_rows": len(candidates), "skipped": skipped}
     finally:
         client.close()
 
