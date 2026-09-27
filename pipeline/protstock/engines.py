@@ -139,7 +139,10 @@ def evaluate_classical_patterns_v0(context: dict[str, Any], overrides: dict[str,
         )
         return True, action, [f"V0_{top['pattern_type']}_CONFIRMED", *top["reasons"], *gate_reasons]
 
-    ready = [candidate for candidate in candidates if candidate["state"] == "READY" and candidate.get("pattern_type") == "CUP_HANDLE" and candidate.get("quality_score", 0) >= 70]
+    ready_types = {"CUP_HANDLE"}
+    if context.get("timeframe") == "W":
+        ready_types.add("FLAT_BASE_BREAKOUT")
+    ready = [candidate for candidate in candidates if candidate["state"] == "READY" and candidate.get("pattern_type") in ready_types and candidate.get("quality_score", 0) >= 70]
     if ready:
         top = max(ready, key=lambda candidate: candidate["quality_score"])
         _attach_v0_evidence(context, top)

@@ -117,6 +117,7 @@ export function JournalPage({ authenticated }: { authenticated: boolean }) {
         .from("consolidated_signals")
         .select("composite_action,as_of_date,symbols!inner(symbol)")
         .eq("as_of_date", publication.date)
+        .eq("source_revision", publication.sourceRevision)
         .limit(1000);
       if (error) throw error;
       return (data ?? []).map((item: any) => ({

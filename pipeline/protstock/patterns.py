@@ -165,14 +165,19 @@ def detect_triangle(bars: Sequence[dict]) -> PatternCandidate | None:
     # The final bar is the possible breakout; it must not define its own boundary.
     upper, lower = max(highs[-11:-1]), min(lows[-11:-1])
     close = float(window[-1]["close"])
-    state = "READY" if min(abs(upper - close), abs(close - lower)) / close < 0.03 else "FORMING"
+    # READY means near the directional trigger, not merely near either edge.
+    near_trigger = (upper * 0.97 <= close <= upper * 1.03 if direction == "BULLISH"
+                    else lower * 0.97 <= close <= lower * 1.03 if direction == "BEARISH"
+                    else min(abs(upper - close), abs(close - lower)) / close < 0.03)
+    state = "READY" if near_trigger else "FORMING"
     price_break = close > upper if direction == "BULLISH" else close < lower if direction == "BEARISH" else False
     volume_ok = _breakout_volume_ok(window, 1.4)
     confirmed = price_break and volume_ok
     candle_ok = confirmed and _candle_confirmation(window, direction)
     score, quality = _quality(window, 0, lower, upper, confirmed, state == "READY", candle_ok)
-    return PatternCandidate(ptype, "CONFIRMED" if confirmed else state, direction, len(bars) - len(window), len(bars) - 1, upper, lower, score,
-                            tuple(filter(None, ("CONVERGING_BOUNDARIES", "RANGE_CONTRACTION", "BREAKOUT_VOLUME" if volume_ok else "", "CANDLESTICK_CONFIRMATION" if candle_ok else "", "NEEDS_VOLUME_CONFIRMATION" if price_break and not volume_ok else ""))),
+    trigger, invalidation = (lower, upper) if direction == "BEARISH" else (upper, lower)
+    return PatternCandidate(ptype, "CONFIRMED" if confirmed else state, direction, len(bars) - len(window), len(bars) - 1, trigger, invalidation, score,
+                            tuple(filter(None, ("CONVERGING_BOUNDARIES", "RANGE_CONTRACTION" if quality["volatility_ratio"] < 1 else "", "BREAKOUT_VOLUME" if volume_ok else "", "CANDLESTICK_CONFIRMATION" if candle_ok else "", "NEEDS_VOLUME_CONFIRMATION" if price_break and not volume_ok else ""))),
                             {"upper_slope": high_slope, "lower_slope": low_slope, "breakout_volume_ok": volume_ok, **quality})
 
 

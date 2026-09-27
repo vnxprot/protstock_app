@@ -128,8 +128,8 @@ function ExecutiveKpiStrip({ favorites }: { favorites: string[] }) {
       const publication = await latestSignalPublication()
       if (!publication) return { total: 0, high: 0, watched: 0, date: null }
       const [high, watched] = await Promise.all([
-        supabase!.from('consolidated_signals').select('id', { count: 'exact', head: true }).eq('as_of_date', publication.date).gte('confluence_count', 2),
-        favorites.length ? supabase!.from('consolidated_signals').select('symbols!inner(symbol)').eq('as_of_date', publication.date).neq('composite_action', 'WATCH').in('symbols.symbol', favorites).range(0, 999) : Promise.resolve({ data: [], error: null }),
+        supabase!.from('consolidated_signals').select('id', { count: 'exact', head: true }).eq('as_of_date', publication.date).eq('source_revision', publication.sourceRevision).gte('confluence_count', 2),
+        favorites.length ? supabase!.from('consolidated_signals').select('symbols!inner(symbol)').eq('as_of_date', publication.date).eq('source_revision', publication.sourceRevision).neq('composite_action', 'WATCH').in('symbols.symbol', favorites).range(0, 999) : Promise.resolve({ data: [], error: null }),
       ])
       if (high.error || watched.error) throw high.error || watched.error
       const tracked = new Set((watched.data ?? []).map((item: any) => (Array.isArray(item.symbols) ? item.symbols[0] : item.symbols)?.symbol).filter(Boolean))

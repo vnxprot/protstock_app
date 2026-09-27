@@ -53,7 +53,14 @@ def send_eod_telegram_alerts(trading_date: date, action_dedupe_days: int = 5) ->
     try:
         from .eod import resolve_eod_session
         trading_date = resolve_eod_session(client, trading_date)
-        response = client._client.get("/consolidated_signals", params={"select": "id,symbol_id,composite_action,confluence_score,confluence_count,consensus_engines,reasons,symbols!inner(symbol)", "as_of_date": f"eq.{trading_date.isoformat()}", "composite_action": "in.(PROBE_BUY,ADD,REDUCE,EXIT)"})
+        revision_getter = getattr(client, "published_signal_revision", None)
+        revision = revision_getter(trading_date) if revision_getter else None
+        if revision_getter and revision is None:
+            return {"status": "NOT_PUBLISHED", "sent": 0, "deduped": 0, "eligible": 0}
+        filters = {"select": "id,symbol_id,composite_action,confluence_score,confluence_count,consensus_engines,reasons,symbols!inner(symbol)", "as_of_date": f"eq.{trading_date.isoformat()}", "composite_action": "in.(PROBE_BUY,ADD,REDUCE,EXIT)"}
+        if revision:
+            filters["source_revision"] = f"eq.{revision}"
+        response = client._client.get("/consolidated_signals", params=filters)
         response.raise_for_status()
         signals = [{**signal, "signal_id": signal.get("id") or signal.get("signal_id"), "action": signal.get("composite_action") or signal.get("action"), "symbol": signal.get("symbol") or (signal.get("symbols") or {}).get("symbol", "?"), "rule_name": "Prot Consensus", "kind": "CORE_PACK"} for signal in response.json() if signal.get("notification_mode", "TELEGRAM") == "TELEGRAM"]
         sent = deduped = 0

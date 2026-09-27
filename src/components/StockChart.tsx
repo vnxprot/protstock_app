@@ -4,8 +4,8 @@ import type { PatternInstance, PriceBar, PriceZone } from '../hooks/useStockAnal
 
 type Indicators = { ma20: boolean; ma50: boolean; ma200: boolean; bollinger: boolean }
 type PatternOverlay = PatternInstance & { left: number; width: number; top: number; height: number }
-function average(values: PriceBar[], length: number) { return values.flatMap((bar,i)=>i+1<length?[]:[{time:bar.trading_date,value:values.slice(i+1-length,i+1).reduce((sum,item)=>sum+Number(item.close),0)/length}]) }
-function bollinger(values: PriceBar[], upper:boolean) { return values.flatMap((bar,i)=>{if(i<19)return[];const slice=values.slice(i-19,i+1).map(x=>Number(x.close));const mean=slice.reduce((a,b)=>a+b,0)/20;const sd=Math.sqrt(slice.reduce((a,b)=>a+(b-mean)**2,0)/20);return[{time:bar.trading_date,value:mean+(upper?2:-2)*sd}]}) }
+function average(values: PriceBar[], length: number) { const closed=values.filter(bar=>bar.is_complete!==false);return closed.flatMap((bar,i)=>i+1<length?[]:[{time:bar.trading_date,value:closed.slice(i+1-length,i+1).reduce((sum,item)=>sum+Number(item.close),0)/length}]) }
+function bollinger(values: PriceBar[], upper:boolean) { const closed=values.filter(bar=>bar.is_complete!==false);return closed.flatMap((bar,i)=>{if(i<19)return[];const slice=closed.slice(i-19,i+1).map(x=>Number(x.close));const mean=slice.reduce((a,b)=>a+b,0)/20;const sd=Math.sqrt(slice.reduce((a,b)=>a+(b-mean)**2,0)/20);return[{time:bar.trading_date,value:mean+(upper?2:-2)*sd}]}) }
 const patternNames:Record<string,string>={ACCUMULATION_BASE:'Nền tích lũy',DOUBLE_BOTTOM:'Hai đáy',DOUBLE_TOP:'Hai đỉnh',ASCENDING_TRIANGLE:'Tam giác tăng',DESCENDING_TRIANGLE:'Tam giác giảm',SYMMETRICAL_TRIANGLE:'Tam giác cân',BULL_FLAG:'Cờ tăng',BEAR_FLAG:'Cờ giảm'}
 
 function chartPalette() {

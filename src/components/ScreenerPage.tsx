@@ -10,7 +10,8 @@ import { DateField } from './DateField'
 import { canonicalEngineName, compareEngines } from '../lib/engineCatalog'
 import { downloadSignalCsv, downloadSignalExcel, downloadSignalPdf } from '../lib/signalReports'
 import { explainSignal, signalReasonSummary } from '../lib/signalExplanation'
-type SignalRow = { signal_id:string; symbol_id:number; symbol:string; sector:string|null; as_of_date:string; timeframe:string; action:string; score:number; confluence_count:number; confluence_badge:string; consensus_engines:string[]; reasons:string[] }
+import { version as appVersion } from '../../package.json'
+type SignalRow = { signal_id:string; symbol_id:number; symbol:string; sector:string|null; as_of_date:string; timeframe:string; action:string; score:number; confluence_count:number; confluence_badge:string; consensus_engines:string[]; reasons:string[]; source_revision:string }
 type WyckoffEvidence = { event_date:string; confirmed_on:string; timeframe:string; support:number; resistance:number; volume_ratio20:number; range_width_pct:number; clv:number }
 type SignalResult = { rows: SignalRow[]; latestDate: string | null }
 type PricePoint = { symbol_id:string; trading_date:string; close:number; symbols?:{symbol:string}|null }
@@ -18,22 +19,24 @@ type PricePoint = { symbol_id:string; trading_date:string; close:number; symbols
 const chipDefinitions=[['ALL','Tất cả'],['CONFLUENCE','Đồng thuận cao'],['BUY','Mua'],['SELL','Bán'],['WATCH','Theo dõi']] as const
 const engineLabels:Record<string,string>={core_ladder_v1:'Prot Core Engine v1.0',core_ladder_v2:'Prot Core Engine v2.0',pullback_continuation_v1:'Pullback Continuation',vcp_breakout_v1:'VCP Breakout',rsi_macd_divergence_v1:'RSI MACD Divergence',relative_strength_leader_v1:'Relative Strength Leader'}
 function displayEngine(engine:string){const canonical=canonicalEngineName(engine);return engineLabels[canonical]??canonical.replaceAll('_',' ')}
+function revisionLabel(signal:SignalRow){return signal.source_revision===`core-rules-v${appVersion}`?'v3.0.0':'Logic cũ'}
 function Sparkline({ points }: { points:number[] }) { const values=points.slice(-20); if(values.length<2)return <span className="sparkline-empty">Chưa đủ 20 phiên</span>; const min=Math.min(...values),max=Math.max(...values),span=max-min||1; const polyline=values.map((value,index)=>`${index/(values.length-1)*100},${92-(value-min)/span*84}`).join(' '); const rising=values.at(-1)!>=values[0]; return <svg className={`sparkline ${rising?'up':'down'}`} viewBox="0 0 100 100" preserveAspectRatio="none" aria-label="Xu hướng giá 20 phiên"><polyline points={polyline}/></svg> }
 
 async function fetchConsolidatedSignals(showHistory:boolean):Promise<SignalResult> {
   const rows:any[]=[]
   const pageSize=1000
-  const latestDate=(await latestSignalPublication())?.date??null
+  const publication=await latestSignalPublication()
+  const latestDate=publication?.date??null
   if(!showHistory&&!latestDate)return{rows:[],latestDate}
   for(let from=0;;from+=pageSize){
-    let query=supabase!.from('consolidated_signals').select('id,symbol_id,as_of_date,timeframe,composite_action,confluence_score,confluence_count,consensus_engines,reasons,symbols!inner(symbol,sector)').order('as_of_date',{ascending:false}).order('confluence_score',{ascending:false})
-    if(!showHistory&&latestDate)query=query.eq('as_of_date',latestDate)
+    let query=supabase!.from('consolidated_signals').select('id,symbol_id,as_of_date,timeframe,composite_action,confluence_score,confluence_count,consensus_engines,reasons,source_revision,symbols!inner(symbol,sector)').order('as_of_date',{ascending:false}).order('confluence_score',{ascending:false})
+    if(!showHistory&&publication)query=query.eq('as_of_date',publication.date).eq('source_revision',publication.sourceRevision)
     const {data,error}=await query.range(from,from+pageSize-1)
     if(error)throw error
     rows.push(...(data??[]))
     if((data??[]).length<pageSize)break
   }
-  return {latestDate,rows:rows.map((item:any)=>{const symbol=Array.isArray(item.symbols)?item.symbols[0]:item.symbols;const count=Number(item.confluence_count);return{signal_id:item.id,symbol_id:Number(item.symbol_id),symbol:symbol?.symbol??'—',sector:symbol?.sector??null,as_of_date:item.as_of_date,timeframe:item.timeframe,action:item.composite_action,score:Number(item.confluence_score),confluence_count:count,confluence_badge:count>=3?'STRONG_ALIGNED':count===2?'HIGH_CONFLUENCE':'STANDARD',consensus_engines:item.consensus_engines??[],reasons:item.reasons??[]}})}
+  return {latestDate,rows:rows.map((item:any)=>{const symbol=Array.isArray(item.symbols)?item.symbols[0]:item.symbols;const count=Number(item.confluence_count);return{signal_id:item.id,symbol_id:Number(item.symbol_id),symbol:symbol?.symbol??'—',sector:symbol?.sector??null,as_of_date:item.as_of_date,timeframe:item.timeframe,action:item.composite_action,score:Number(item.confluence_score),confluence_count:count,confluence_badge:count>=3?'STRONG_ALIGNED':count===2?'HIGH_CONFLUENCE':'STANDARD',consensus_engines:item.consensus_engines??[],reasons:item.reasons??[],source_revision:item.source_revision??'legacy'}})}
 }
 
 export function ScreenerPage({ authenticated }: { authenticated: boolean }) {
@@ -61,7 +64,7 @@ export function ScreenerPage({ authenticated }: { authenticated: boolean }) {
   function toggleFavorite(symbol:string){setFavorites(current=>{const next=current.includes(symbol)?current.filter(value=>value!==symbol):[...current,symbol];localStorage.setItem('protstock-favorites',JSON.stringify(next));dispatchEvent(new CustomEvent('protstock:favorites',{detail:next}));return next})}
   function openJournal(symbol:string){localStorage.setItem('protstock-symbol',symbol);location.hash='journal'}
   async function exportSignals(format:'csv'|'excel'|'pdf'){if(!rows.length){setExportNotice('Không có tín hiệu khớp bộ lọc để xuất.');return}const output=rows.map(x=>({symbol:x.symbol,sector:x.sector,action:x.action,timeframe:x.timeframe,score:x.score,confluenceCount:x.confluence_count,date:x.as_of_date,engines:x.consensus_engines.map(displayEngine).join(' / '),reasons:signalReasonSummary(x.reasons)}));try{if(format==='csv')downloadSignalCsv(output);else if(format==='excel')await downloadSignalExcel(output);else await downloadSignalPdf(output);setExportNotice(`Đã xuất ${rows.length} tín hiệu theo bộ lọc hiện tại.`);setExportOpen(false)}catch{setExportNotice('Không thể tạo tệp xuất. Thử lại sau.')}}
-  const engineDetail=(signal:SignalRow)=><span className="signal-engine-detail">{[...new Set(signal.consensus_engines.map(displayEngine))].join(' · ')||'—'}</span>
+  const engineDetail=(signal:SignalRow)=><span className="signal-engine-detail">{[...new Set(signal.consensus_engines.map(displayEngine))].join(' · ')||'—'}<small className="signal-revision">{revisionLabel(signal)}</small></span>
   const technicalDetail=(signal:SignalRow)=><span className="signal-technical-detail">{signal.reasons.join(' · ')||'—'}</span>
   const explanationDetail=(signal:SignalRow)=><span className="signal-explanation-detail"><small>{signalReasonSummary(signal.reasons)}</small><button type="button" className="signal-explain-trigger" onClick={()=>setExplainingSignal(signal)}>Vì sao?</button></span>
   const explanation=explainingSignal?explainSignal(explainingSignal.action,explainingSignal.reasons):null

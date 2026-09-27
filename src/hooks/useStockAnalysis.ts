@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase'
 
 export interface PriceBar {
   trading_date: string
+  is_complete?: boolean
   open: number
   high: number
   low: number
@@ -13,6 +14,8 @@ export interface PriceBar {
 export interface TechnicalSnapshot {
   timeframe: 'D' | 'W' | 'M'
   as_of_date: string
+  algorithm_version: string
+  classical_candidates: ClassicalCandidate[]
   close: number
   sma20: number | null
   sma50: number | null
@@ -49,6 +52,24 @@ export interface PatternInstance {
   direction: string
   reasons: string[]
   evidence: Record<string, number | string | boolean>
+}
+
+export interface ClassicalCandidate {
+  model: string
+  pattern_type: string
+  direction: string
+  state: string
+  quality_score: number
+  trigger_price: number | null
+  reasons: string[]
+}
+
+export interface StockDecision {
+  as_of_date: string
+  timeframe: 'D' | 'W' | 'M'
+  composite_action: 'EXIT' | 'REDUCE' | 'ADD' | 'PROBE_BUY' | 'WATCH'
+  reasons: string[]
+  source_revision: string
 }
 
 export interface PriceZone { id: string; zone_type: 'SUPPORT' | 'RESISTANCE'; lower_price: number; upper_price: number; touches: number; strength: number; as_of_date: string; evidence?: { volume_ratio_at_touches?: number | null; reaction_pct?: number | null; last_touch_date?: string; fibonacci?: { timeframe: string; ratio: number; price: number; sources: string[] }[] } }
@@ -90,7 +111,7 @@ export function useStockAnalysis(symbol: string | null, timeframe: 'D' | 'W' | '
       }
       const priceQuery = timeframe === 'D'
         ? dailyPriceQuery()
-        : supabase.from('derived_bars').select('trading_date:source_last_date,open,high,low,close,volume').eq('symbol_id', symbolRow.id).eq('timeframe', timeframe).order('period_start', { ascending: false }).limit(timeframe === 'W' ? 520 : 120)
+        : supabase.from('derived_bars').select('trading_date:source_last_date,open,high,low,close,volume,is_complete').eq('symbol_id', symbolRow.id).eq('timeframe', timeframe).order('period_start', { ascending: false }).limit(timeframe === 'W' ? 520 : 120)
       const [prices, technical, patterns, zones, disclosures, fundamentals] = await Promise.all([
         priceQuery,
         supabase.from('technical_snapshots').select('*').eq('symbol_id', symbolRow.id).eq('timeframe', timeframe).order('as_of_date', { ascending: false }).limit(1),
@@ -101,12 +122,20 @@ export function useStockAnalysis(symbol: string | null, timeframe: 'D' | 'W' | '
       ])
       const failure = prices.error || technical.error || patterns.error || zones.error || disclosures.error || fundamentals.error
       if (failure) throw failure
+      const asOfDate = technical.data?.[0]?.as_of_date
+      const decisionQuery = asOfDate
+        ? await supabase.from('consolidated_signals').select('as_of_date,timeframe,composite_action,reasons,source_revision').eq('symbol_id', symbolRow.id).eq('timeframe', timeframe).eq('as_of_date', asOfDate).limit(1)
+        : null
+      if (decisionQuery?.error) throw decisionQuery.error
       return {
         symbol: symbolRow,
         prices: ((prices.data ?? []) as PriceBar[]).reverse(),
         technical: (technical.data ?? []) as TechnicalSnapshot[],
+        decision: ((decisionQuery?.data?.[0]?.source_revision === technical.data?.[0]?.algorithm_version
+          || !technical.data?.[0]?.algorithm_version?.startsWith('core-rules-v3'))
+          ? decisionQuery?.data?.[0] ?? null : null) as StockDecision | null,
         patterns: ((patterns.data ?? []) as PatternInstance[]).filter(row => row.as_of_date === technical.data?.[0]?.as_of_date),
-        zones: latestUniqueZones((zones.data ?? []) as PriceZone[]),
+        zones: latestUniqueZones((zones.data ?? []) as PriceZone[], technical.data?.[0]?.as_of_date),
         disclosures: disclosures.data ?? [],
         fundamentals: (fundamentals.data ?? []) as FundamentalPeriod[],
       }
@@ -114,8 +143,7 @@ export function useStockAnalysis(symbol: string | null, timeframe: 'D' | 'W' | '
   })
 }
 
-function latestUniqueZones(rows: PriceZone[]): PriceZone[] {
-  const latestDate = rows[0]?.as_of_date
+function latestUniqueZones(rows: PriceZone[], latestDate?: string): PriceZone[] {
   const seen = new Set<string>()
   return rows.filter(zone => {
     if (zone.as_of_date !== latestDate) return false

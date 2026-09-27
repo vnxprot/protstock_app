@@ -77,13 +77,13 @@ def _flat_base(bars: Sequence[dict], snapshot: dict) -> dict[str, Any] | None:
     if not prior_up or depth > 0.15 or resistance_tests < 2 or support_tests < 2:
         return None
     confirmed = close > resistance and volume_ratio >= 1.3
-    ready = close >= resistance * 0.97
+    ready = resistance * 0.97 <= close <= resistance * 1.03
     state = "CONFIRMED" if confirmed else "READY" if ready else "FORMING"
     quality = 35 + min(15, resistance_tests + support_tests) + (10 if contraction <= 0.9 else 0) + (20 if confirmed else 10 if ready else 0)
     return _candidate(
         model="flat_base", pattern_type="FLAT_BASE_BREAKOUT", direction="BULLISH", state=state,
         quality=quality, trigger=resistance, invalidation=support,
-        reasons=["PRIOR_UPTREND", "TIGHT_FLAT_BASE", "VOLUME_CONTRACTION" if contraction <= 0.9 else "BASE_VOLUME_MIXED", "BREAKOUT_VOLUME" if confirmed else "NEAR_BASE_BREAKOUT" if ready else "BASE_FORMING"],
+        reasons=["PRIOR_UPTREND" if prior_return >= 0.08 else "CURRENT_UPTREND", "TIGHT_FLAT_BASE", "VOLUME_CONTRACTION" if contraction <= 0.9 else "BASE_VOLUME_MIXED", "BREAKOUT_VOLUME" if confirmed else "NEAR_BASE_BREAKOUT" if ready else "BASE_FORMING"],
         evidence={"base_bars": len(base), "depth_pct": round(depth * 100, 2), "prior_return_pct": round(prior_return * 100, 2), "resistance_tests": resistance_tests, "support_tests": support_tests, "volume_contraction_ratio": round(contraction, 3), "volume_ratio20": round(volume_ratio, 3)},
     )
 

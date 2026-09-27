@@ -145,10 +145,13 @@ class SupabaseRestClient:
         response.raise_for_status()
         return {date.fromisoformat(row["trading_date"]) for row in response.json() if row["is_open"] is False}
 
-    def consolidated_signal_count(self, trading_date: date) -> int:
+    def consolidated_signal_count(self, trading_date: date, source_revision: str | None = None) -> int:
+        filters = {"select": "id", "as_of_date": f"eq.{trading_date.isoformat()}", "limit": "1"}
+        if source_revision:
+            filters["source_revision"] = f"eq.{source_revision}"
         response = self._client.get(
             "/consolidated_signals",
-            params={"select": "id", "as_of_date": f"eq.{trading_date.isoformat()}", "limit": "1"},
+            params=filters,
             headers={"Prefer": "count=exact"},
         )
         response.raise_for_status()
@@ -156,8 +159,16 @@ class SupabaseRestClient:
         if "/" not in content_range or content_range.endswith("/*"):
             raise RuntimeError("Exact published signal count unavailable")
         return int(content_range.rsplit("/", 1)[1])
+
+    def published_signal_revision(self, trading_date: date) -> str | None:
+        response = self._client.get(
+            "/job_runs",
+            params={"select": "source_revision,counts", "trading_date": f"eq.{trading_date.isoformat()}",
+                    "status": "eq.SUCCEEDED", "order": "finished_at.desc", "limit": "20"},
+        )
         response.raise_for_status()
-        return response.json()
+        return next((row.get("source_revision") or "legacy" for row in response.json()
+                     if (row.get("counts") or {}).get("published_signals") is not None), None)
 
     def all_daily_prices(self, start_date: date, end_date: date) -> list[dict[str, Any]]:
         """Read stored OHLCV in pages for point-in-time Market Health rebuilds."""

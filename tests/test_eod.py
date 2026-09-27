@@ -129,7 +129,7 @@ def test_eod_evaluates_signals_only_after_same_day_market_snapshot(monkeypatch) 
         def market_index(self, _code): return {"id": 1}
         def index_price_history(self, *_args): return [row]
         def price_history(self, *_args): return [row]
-        def consolidated_signal_count(self, _date): return 0
+        def consolidated_signal_count(self, *_args): return 0
         def upsert(self, *_args): return 1
         def create_job_item(self, _payload): pass
         def finish_job(self, *_args): pass
@@ -156,7 +156,7 @@ def test_eod_evaluates_signals_only_after_same_day_market_snapshot(monkeypatch) 
     monkeypatch.setattr("protstock.eod.Settings.from_env", lambda: object())
     monkeypatch.setattr("protstock.eod.aggregate_bars", lambda *_args: [])
     monkeypatch.setattr("protstock.eod.analyze_bars", lambda rows, **_kwargs: {"as_of_date": rows[-1]["date"], "indicators": {}, "patterns": [], "zones": []})
-    monkeypatch.setattr("protstock.eod.build_fibonacci_context", lambda _rows: {})
+    monkeypatch.setattr("protstock.eod.build_fibonacci_context", lambda *_args: {})
     monkeypatch.setattr("protstock.eod.classify_wyckoff_timeframe", lambda *_args, **_kwargs: {})
     monkeypatch.setattr("protstock.eod._decision_context", lambda *_args: {"period_events": {}, "data_date": day.isoformat(), "evaluation_date": day.isoformat(), "daily_snapshot": {}})
     monkeypatch.setattr("protstock.eod._benchmark_snapshot", lambda *_args: {"trend_state": "SIDEWAYS"})

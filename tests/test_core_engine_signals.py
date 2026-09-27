@@ -65,10 +65,10 @@ def test_core_v2_flows_through_active_rule_versions() -> None:
         "rule_version_id": "v2", "symbol_id": 42, "timeframe": "D", "as_of_date": "2026-09-11",
         "action": "WATCH", "source": "CORE_PACK", "score": 100,
         "reasons": ["TREND_UP", "CUP_HANDLE_QUALITY_SETUP", "NEAR_TRIGGER_CUP_HANDLE"],
-        "evidence": {"close": 100.0, "rsi14": 55.0, "trend_state": "UP", "volume_avg20": 5000000, "volume_ratio20": 1.0},
+        "evidence": {"algorithm_version": "core-rules-v3.0.0", "close": 100.0, "rsi14": 55.0, "trend_state": "UP", "volume_avg20": 5000000, "volume_ratio20": 1.0},
     }]
     assert client.consolidated_rows == [{
-        "symbol_id": 42, "timeframe": "D", "as_of_date": "2026-09-11", "composite_action": "WATCH",
+        "symbol_id": 42, "timeframe": "D", "as_of_date": "2026-09-11", "source_revision": "core-rules-v3.0.0", "composite_action": "WATCH",
         "confluence_score": 70, "confluence_count": 1, "consensus_engines": ["core_ladder_v2"],
         "reasons": ["TREND_UP", "CUP_HANDLE_QUALITY_SETUP", "NEAR_TRIGGER_CUP_HANDLE"],
         "signal_state": "WATCH_SETUP",

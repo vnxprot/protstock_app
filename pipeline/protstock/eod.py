@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+from calendar import monthrange
 from datetime import date, timedelta
 from time import monotonic, sleep
 from typing import Any
 
 from .analysis import ALGORITHM_VERSION, analyze_bars
+from .decision_context import reconcile_proposal
 from .fibonacci import build_fibonacci_context
 from .config import Settings
 from .engines import evaluate_named_engine, relative_strength_context_reasons
@@ -103,6 +105,7 @@ def run_eod(
         if symbols and (not benchmark_daily or benchmark_daily[-1]["date"] != trading_date.isoformat()):
             raise RuntimeError(f"VNINDEX EOD is unavailable for {trading_date}; signals were not published")
         confirmed_week_end = _confirmed_week_end(client, trading_date, benchmark_daily)
+        confirmed_month_end = _confirmed_month_end(client, trading_date, benchmark_daily)
         symbols = symbols[symbol_offset:]
         if symbol_limit:
             symbols = symbols[:symbol_limit]
@@ -129,12 +132,12 @@ def run_eod(
                 analysis_rows = [{**row, "date": row["trading_date"]} for row in history]
                 if analysis_rows:
                     timeframe_rows = {"D": analysis_rows}
-                    fibonacci_context = build_fibonacci_context(analysis_rows)
+                    fibonacci_context = build_fibonacci_context(analysis_rows, confirmed_week_end, confirmed_month_end)
                     benchmark_rows = {"D": benchmark_daily}
                     for timeframe in ("W", "M"):
-                        aggregated = aggregate_bars(analysis_rows, timeframe, confirmed_week_end if timeframe == "W" else None)
+                        aggregated = aggregate_bars(analysis_rows, timeframe, confirmed_week_end, confirmed_month_end)
                         timeframe_rows[timeframe] = aggregated
-                        benchmark_rows[timeframe] = aggregate_bars(benchmark_daily, timeframe, confirmed_week_end if timeframe == "W" else None)
+                        benchmark_rows[timeframe] = aggregate_bars(benchmark_daily, timeframe, confirmed_week_end, confirmed_month_end)
                         derived_rows = [{
                             "symbol_id": symbol_row["id"], "timeframe": timeframe,
                             "period_start": bar["period_start"], "period_end": bar["period_end"],
@@ -146,22 +149,26 @@ def run_eod(
                         counts["derived_bars"] += client.upsert(
                             "derived_bars", derived_rows, "symbol_id,timeframe,period_start"
                         )
-                    preliminary_rows = {**timeframe_rows, "W": [bar for bar in timeframe_rows["W"] if bar["is_complete"]]}
-                    preliminary = {timeframe: analyze_bars(scoped_rows, fibonacci_context=fibonacci_context) for timeframe, scoped_rows in preliminary_rows.items() if scoped_rows}
-                    results = {timeframe: analyze_bars(scoped_rows, weekly_patterns=preliminary.get("W", {}).get("patterns", []), monthly_snapshot=preliminary.get("M", {}).get("indicators", {}), benchmark_rows=benchmark_rows[timeframe], fibonacci_context=fibonacci_context) for timeframe, scoped_rows in timeframe_rows.items() if scoped_rows}
+                    decision_rows = {"D": analysis_rows, **{tf: [bar for bar in timeframe_rows[tf] if bar["is_complete"]] for tf in ("W", "M")}}
+                    decision_benchmark = {"D": benchmark_daily, **{tf: [bar for bar in benchmark_rows[tf] if bar["is_complete"]] for tf in ("W", "M")}}
+                    preliminary = {timeframe: analyze_bars(scoped_rows, fibonacci_context=fibonacci_context, timeframe=timeframe, include_classical=False) for timeframe, scoped_rows in decision_rows.items() if scoped_rows}
+                    results = {timeframe: analyze_bars(scoped_rows, weekly_patterns=preliminary.get("W", {}).get("patterns", []), monthly_snapshot=preliminary.get("M", {}).get("indicators", {}), benchmark_rows=decision_benchmark[timeframe], fibonacci_context=fibonacci_context, timeframe=timeframe) for timeframe, scoped_rows in decision_rows.items() if scoped_rows}
                     context = {
                         "weekly_patterns": results.get("W", {}).get("patterns", []),
+                        "weekly_classical_patterns": results.get("W", {}).get("classical_patterns", []),
                         "weekly_snapshot": results.get("W", {}).get("indicators", {}),
                         "monthly_snapshot": results.get("M", {}).get("indicators", {}),
                         "candidate_sector": symbol_row["sector"],
                     }
-                    for timeframe, scoped_rows in timeframe_rows.items():
+                    for timeframe, scoped_rows in decision_rows.items():
                         if timeframe in results:
                             if "period_events" not in context:
-                                context.update(_decision_context(analysis_rows, trading_date, {}, confirmed_week_end))
+                                context.update(_decision_context(analysis_rows, trading_date, {}, confirmed_week_end, confirmed_month_end, results.get("W")))
+                            if timeframe in {"W", "M"} and not context["period_events"][timeframe]:
+                                continue
                             timeframe_context = {**context, "wyckoff_context": classify_wyckoff_timeframe(timeframe, scoped_rows, period_event=context["period_events"].get(timeframe, False))}
-                            _write_analysis(client, symbol_row["id"], timeframe, scoped_rows, benchmark_rows[timeframe], active_rules, counts, results[timeframe], timeframe_context, evaluate_signals=False)
-                            pending_signals.append((symbol_row["id"], timeframe, scoped_rows, benchmark_rows[timeframe], results[timeframe], timeframe_context))
+                            _write_analysis(client, symbol_row["id"], timeframe, scoped_rows, decision_benchmark[timeframe], active_rules, counts, results[timeframe], timeframe_context, evaluate_signals=False)
+                            pending_signals.append((symbol_row["id"], timeframe, scoped_rows, decision_benchmark[timeframe], results[timeframe], timeframe_context))
                 counts["symbols"] += 1
                 client.create_job_item({
                     "job_run_id": job["id"], "symbol_id": symbol_row["id"],
@@ -194,7 +201,7 @@ def run_eod(
                 _write_analysis(client, symbol_id, timeframe, scoped_rows, index_rows, active_rules, counts, result, context, persist_evidence=False)
         status = "SUCCEEDED" if counts["failed"] == 0 else "PARTIAL"
         if status == "SUCCEEDED" and write_breadth_snapshot and symbol_offset == 0 and symbol_limit is None and benchmark_daily and benchmark_daily[-1]["date"] == trading_date.isoformat():
-            counts["published_signals"] = client.consolidated_signal_count(trading_date)
+            counts["published_signals"] = client.consolidated_signal_count(trading_date, ALGORITHM_VERSION)
         _persist_engine_stats(client, job["id"], trading_date, counts)
         client.finish_job(job["id"], {"status": status, "finished_at": _now(), "counts": counts, "warnings": warnings})
         return {"job_id": job["id"], "status": status, **counts}
@@ -260,6 +267,7 @@ def rebuild_signals(trading_date: date, *, symbol_offset: int = 0, symbol_limit:
         if not benchmark_daily or benchmark_daily[-1]["date"] != trading_date.isoformat():
             raise RuntimeError(f"VNINDEX EOD is unavailable for {trading_date}; signals were not published")
         confirmed_week_end = _confirmed_week_end(client, trading_date, benchmark_daily)
+        confirmed_month_end = _confirmed_month_end(client, trading_date, benchmark_daily)
         if prepared_market_context and prepared_market_context.get("trading_date") != trading_date.isoformat():
             raise ValueError("prepared market context date differs from signal date")
         if prepared_market_context:
@@ -271,7 +279,7 @@ def rebuild_signals(trading_date: date, *, symbol_offset: int = 0, symbol_limit:
                 analysis_rows = [{**row, "date": row["trading_date"]} for row in _rows_as_of(client.price_history(symbol_row["id"], MULTI_TIMEFRAME_HISTORY_LIMIT), trading_date)]
                 if not analysis_rows:
                     raise ValueError("no stored price history")
-                timeframe_rows = {"D": analysis_rows, "W": aggregate_bars(analysis_rows, "W", confirmed_week_end), "M": aggregate_bars(analysis_rows, "M")}
+                timeframe_rows = {"D": analysis_rows, "W": aggregate_bars(analysis_rows, "W", confirmed_week_end), "M": aggregate_bars(analysis_rows, "M", confirmed_month_end=confirmed_month_end)}
                 # A stored-price repair must also refresh the bars used by the
                 # W/M charts, not just snapshots and signals computed in memory.
                 for timeframe in (("W", "M") if prepared_market_context is None else ()):
@@ -285,24 +293,27 @@ def rebuild_signals(trading_date: date, *, symbol_offset: int = 0, symbol_limit:
                     counts["derived_bars"] += client.upsert(
                         "derived_bars", derived_rows, "symbol_id,timeframe,period_start"
                     )
-                fibonacci_context = build_fibonacci_context(analysis_rows)
-                benchmark_rows = {"D": benchmark_daily, "W": aggregate_bars(benchmark_daily, "W", confirmed_week_end), "M": aggregate_bars(benchmark_daily, "M")}
-                preliminary_rows = {**timeframe_rows, "W": [bar for bar in timeframe_rows["W"] if bar["is_complete"]]}
-                preliminary = {timeframe: analyze_bars(rows, fibonacci_context=fibonacci_context) for timeframe, rows in preliminary_rows.items() if rows}
-                results = {timeframe: analyze_bars(rows, weekly_patterns=preliminary.get("W", {}).get("patterns", []), monthly_snapshot=preliminary.get("M", {}).get("indicators", {}), benchmark_rows=benchmark_rows[timeframe], fibonacci_context=fibonacci_context) for timeframe, rows in timeframe_rows.items() if rows}
-                context = {"weekly_patterns": results.get("W", {}).get("patterns", []), "weekly_snapshot": results.get("W", {}).get("indicators", {}), "monthly_snapshot": results.get("M", {}).get("indicators", {}), "candidate_sector": symbol_row["sector"]}
-                for timeframe, rows in timeframe_rows.items():
+                fibonacci_context = build_fibonacci_context(analysis_rows, confirmed_week_end, confirmed_month_end)
+                benchmark_rows = {"D": benchmark_daily, "W": aggregate_bars(benchmark_daily, "W", confirmed_week_end), "M": aggregate_bars(benchmark_daily, "M", confirmed_month_end=confirmed_month_end)}
+                decision_rows = {"D": analysis_rows, **{tf: [bar for bar in timeframe_rows[tf] if bar["is_complete"]] for tf in ("W", "M")}}
+                decision_benchmark = {"D": benchmark_daily, **{tf: [bar for bar in benchmark_rows[tf] if bar["is_complete"]] for tf in ("W", "M")}}
+                preliminary = {timeframe: analyze_bars(rows, fibonacci_context=fibonacci_context, timeframe=timeframe, include_classical=False) for timeframe, rows in decision_rows.items() if rows}
+                results = {timeframe: analyze_bars(rows, weekly_patterns=preliminary.get("W", {}).get("patterns", []), monthly_snapshot=preliminary.get("M", {}).get("indicators", {}), benchmark_rows=decision_benchmark[timeframe], fibonacci_context=fibonacci_context, timeframe=timeframe) for timeframe, rows in decision_rows.items() if rows}
+                context = {"weekly_patterns": results.get("W", {}).get("patterns", []), "weekly_classical_patterns": results.get("W", {}).get("classical_patterns", []), "weekly_snapshot": results.get("W", {}).get("indicators", {}), "monthly_snapshot": results.get("M", {}).get("indicators", {}), "candidate_sector": symbol_row["sector"]}
+                for timeframe, rows in decision_rows.items():
                     if timeframe in results:
                         if "period_events" not in context:
-                            context.update(_decision_context(analysis_rows, trading_date, {}, confirmed_week_end))
+                            context.update(_decision_context(analysis_rows, trading_date, {}, confirmed_week_end, confirmed_month_end, results.get("W")))
+                        if timeframe in {"W", "M"} and not context["period_events"][timeframe]:
+                            continue
                         timeframe_context = {**context, "wyckoff_context": classify_wyckoff_timeframe(timeframe, rows, period_event=context["period_events"].get(timeframe, False))}
                         if prepared_market_context is None:
-                            _write_analysis(client, symbol_row["id"], timeframe, rows, benchmark_rows[timeframe], active_rules, counts, results[timeframe], timeframe_context, evaluate_signals=False)
-                            pending_signals.append((symbol_row["id"], timeframe, rows, benchmark_rows[timeframe], results[timeframe], timeframe_context))
+                            _write_analysis(client, symbol_row["id"], timeframe, rows, decision_benchmark[timeframe], active_rules, counts, results[timeframe], timeframe_context, evaluate_signals=False)
+                            pending_signals.append((symbol_row["id"], timeframe, rows, decision_benchmark[timeframe], results[timeframe], timeframe_context))
                         else:
                             timeframe_context["market_context"] = prepared_market_context
                             timeframe_context["portfolios"] = portfolios
-                            _write_analysis(client, symbol_row["id"], timeframe, rows, benchmark_rows[timeframe], active_rules, counts, results[timeframe], timeframe_context, persist_evidence=False)
+                            _write_analysis(client, symbol_row["id"], timeframe, rows, decision_benchmark[timeframe], active_rules, counts, results[timeframe], timeframe_context, persist_evidence=False)
                 counts["symbols"] += 1
                 client.create_job_item({"job_run_id": job["id"], "symbol_id": symbol_row["id"], "item_key": symbol_row["symbol"], "status": "SUCCEEDED", "rows_written": 0, "duration_ms": int((monotonic() - started) * 1000)})
             except Exception as exc:
@@ -321,7 +332,7 @@ def rebuild_signals(trading_date: date, *, symbol_offset: int = 0, symbol_limit:
                 _write_analysis(client, symbol_id, timeframe, rows, index_rows, active_rules, counts, result, context, persist_evidence=False)
         status = "SUCCEEDED" if not counts["failed"] else "PARTIAL"
         if status == "SUCCEEDED" and symbol_offset == 0 and symbol_limit is None and benchmark_daily and benchmark_daily[-1]["date"] == trading_date.isoformat():
-            counts["published_signals"] = client.consolidated_signal_count(trading_date)
+            counts["published_signals"] = client.consolidated_signal_count(trading_date, ALGORITHM_VERSION)
         _persist_engine_stats(client, job["id"], trading_date, counts)
         client.finish_job(job["id"], {"status": status, "finished_at": _now(), "counts": counts, "warnings": warnings})
         return {"job_id": job["id"], "status": status, **counts}
@@ -385,6 +396,19 @@ def _confirmed_week_end(client: SupabaseRestClient, trading_date: date, benchmar
         return None
     required = {trading_date + timedelta(days=offset) for offset in range(1, 5 - trading_date.weekday())}
     return trading_date if required.issubset(closed("HOSE", trading_date + timedelta(days=1), friday)) else None
+
+
+def _confirmed_month_end(client: SupabaseRestClient, trading_date: date, benchmark_daily: list[dict]) -> date | None:
+    """The final verified session may precede calendar month-end or a holiday."""
+    if not benchmark_daily or benchmark_daily[-1]["date"] != trading_date.isoformat():
+        return None
+    month_end = trading_date.replace(day=monthrange(trading_date.year, trading_date.month)[1])
+    remaining = {trading_date + timedelta(days=offset) for offset in range(1, (month_end - trading_date).days + 1)
+                 if (trading_date + timedelta(days=offset)).weekday() < 5}
+    if not remaining:
+        return trading_date
+    closed = getattr(client, "closed_trading_sessions", None)
+    return trading_date if closed and remaining.issubset(closed("HOSE", trading_date + timedelta(days=1), month_end)) else None
 
 
 def _benchmark_snapshot(rows: list[dict], trading_date: date) -> dict:
@@ -483,7 +507,7 @@ def _write_analysis(
         snapshot = {
             "symbol_id": symbol_id, "timeframe": timeframe,
             "as_of_date": result["as_of_date"], "input_last_date": result["as_of_date"],
-            "algorithm_version": ALGORITHM_VERSION, **result["indicators"],
+            "algorithm_version": ALGORITHM_VERSION, "classical_candidates": result.get("classical_patterns", []), **result["indicators"],
         }
         counts["snapshots"] += client.upsert(
             "technical_snapshots", [snapshot], "symbol_id,timeframe,as_of_date"
@@ -526,7 +550,7 @@ def _write_analysis(
             )
     if not evaluate_signals:
         return
-    if timeframe == "W" and not context.get("period_events", {}).get("W"):
+    if timeframe in {"W", "M"} and not context.get("period_events", {}).get(timeframe):
         client.delete_consolidated_signal(symbol_id, timeframe, context.get("evaluation_date", result["as_of_date"]))
         return
     signal_rows = []
@@ -549,8 +573,10 @@ def _write_analysis(
             stats["evaluated_count"] += 1
         engine_context = {
             "dsl": dsl,
+            "timeframe": timeframe,
             "bars": rows,
             "patterns": result["patterns"],
+            "classical_patterns": result.get("classical_patterns", []),
             "snapshot": result["indicators"],
             "zones": result["zones"],
             "fibonacci_context": result.get("fibonacci_context", {}),
@@ -581,6 +607,17 @@ def _write_analysis(
             passed, action, reasons = evaluate_named_engine(dsl.get("engine"), dsl.get("overrides"), proposal_context)
             engine_context["engine_evidence"] = proposal_context.get("engine_evidence", {})
         proposed_action = action
+        if passed:
+            action, reasons = reconcile_proposal(
+                action, reasons, timeframe=timeframe, patterns=[*result["patterns"], *result.get("classical_patterns", [])],
+                weekly_patterns=[*context.get("weekly_patterns", []), *context.get("weekly_classical_patterns", [])],
+            )
+            if timeframe == "D" and action in {"PROBE_BUY", "ADD"} and result["indicators"].get("flow_state") == "BLUE":
+                reasons = list(dict.fromkeys([*reasons, "FLOW_BAR_SELLING_PRESSURE"]))
+            if timeframe in {"W", "M"} and action in {"PROBE_BUY", "ADD"}:
+                action = "WATCH"
+                reasons = list(dict.fromkeys([*reasons, "DAILY_TRIGGER_REQUIRED"]))
+                engine_context.setdefault("engine_evidence", {})["context_only"] = True
         evidence = engine_context.setdefault("engine_evidence", {})
         matched = [p for p in result["patterns"] if p.get("state") == "CONFIRMED" and any(p.get("pattern_type", "?") in reason for reason in reasons)]
         if matched and not evidence.get("invalidation_price"):
@@ -595,11 +632,6 @@ def _write_analysis(
                 passed = False
             elif passed and timeframe == "D" and action in {"PROBE_BUY", "ADD"}:
                 reasons = list(dict.fromkeys([*reasons, *relative_strength_context_reasons(engine_context)]))
-        if passed and timeframe == "W" and dsl.get("engine") not in {None, "custom"} and proposed_action in {"PROBE_BUY", "ADD"} and action not in {"EXIT", "REDUCE"}:
-            # Weekly structure is context; a new D trigger must carry the entry.
-            action = "WATCH"
-            reasons = list(dict.fromkeys([*reasons, "DAILY_TRIGGER_REQUIRED"]))
-            engine_context.setdefault("engine_evidence", {})["context_only"] = True
         evaluation_date = context.get("evaluation_date", result["as_of_date"])
         if passed or reasons: evaluations.append({"rule_version_id": version["id"], "symbol_id": symbol_id, "timeframe": timeframe, "as_of_date": evaluation_date, "proposed_action": proposed_action, "action": action, "emitted": passed, "reasons": reasons or ["NO_MATCHING_SETUP"], "evidence": engine_context.get("engine_evidence") or {}})
         if passed:
@@ -611,6 +643,7 @@ def _write_analysis(
                 "action": action, "source": "CORE_PACK" if rule.get("kind") == "CORE_PACK" else "USER_RULE", "score": 100,
                 "reasons": reasons,
                 "evidence": {
+                    "algorithm_version": ALGORITHM_VERSION,
                     **{key: value for key, value in result["indicators"].items() if value is not None},
                     **(engine_context.get("engine_evidence") or {}),
                     **({"evidence_cluster": _pattern_evidence_cluster(reasons)} if _pattern_evidence_cluster(reasons) else {}),
@@ -633,6 +666,7 @@ def _write_analysis(
         counts.setdefault("consolidated_signals", 0)
         counts["consolidated_signals"] += client.upsert("consolidated_signals", [{
             "symbol_id": symbol_id, "timeframe": timeframe, "as_of_date": context.get("evaluation_date", result["as_of_date"]),
+            "source_revision": ALGORITHM_VERSION,
             **{key: consolidated[key] for key in ("composite_action", "confluence_score", "confluence_count", "consensus_engines", "reasons", "signal_state")},
         }], "symbol_id,timeframe,as_of_date")
     else:
@@ -668,18 +702,15 @@ def _load_portfolios(client, active_rules: list[dict], trading_date: date, *, hi
     return result
 
 
-def _decision_context(daily: list[dict], trading_date: date, portfolios: dict, confirmed_week_end: date | None = None) -> dict:
-    completed = {tf: [b for b in aggregate_bars(daily, tf, confirmed_week_end if tf == "W" else None) if b["is_complete"]] for tf in ("W", "M")}
-    weekly = analyze_bars(completed["W"]) if completed["W"] else {}
+def _decision_context(daily: list[dict], trading_date: date, portfolios: dict, confirmed_week_end: date | None = None, confirmed_month_end: date | None = None, weekly_analysis: dict | None = None) -> dict:
+    completed = {tf: [b for b in aggregate_bars(daily, tf, confirmed_week_end, confirmed_month_end) if b["is_complete"]] for tf in ("W", "M")}
+    weekly = weekly_analysis if weekly_analysis is not None else analyze_bars(completed["W"], timeframe="W") if completed["W"] else {}
     events = {}
     for tf in ("W", "M"):
-        if tf == "W":
-            events[tf] = bool(confirmed_week_end == trading_date and daily[-1]["date"] == trading_date.isoformat() and completed["W"] and completed["W"][-1]["source_last_date"] == trading_date.isoformat())
-        else:
-            current = aggregate_bars(daily, tf)
-            previous = aggregate_bars(daily[:-1], tf)
-            events[tf] = bool(current and previous and current[-1]["period_start"] != previous[-1]["period_start"])
-    return {"portfolios": portfolios, "evaluation_date": trading_date.isoformat(), "data_date": daily[-1]["date"], "daily_snapshot": calculate_indicators(daily).to_dict(), "weekly_snapshot": weekly.get("indicators", {}), "weekly_patterns": weekly.get("patterns", []), "monthly_snapshot": monthly_trend(completed["M"]), "period_events": events}
+        confirmed_end = confirmed_week_end if tf == "W" else confirmed_month_end
+        events[tf] = bool(confirmed_end == trading_date and daily[-1]["date"] == trading_date.isoformat()
+                          and completed[tf] and completed[tf][-1]["source_last_date"] == trading_date.isoformat())
+    return {"portfolios": portfolios, "evaluation_date": trading_date.isoformat(), "data_date": daily[-1]["date"], "daily_snapshot": calculate_indicators(daily).to_dict(), "weekly_snapshot": weekly.get("indicators", {}), "weekly_patterns": weekly.get("patterns", []), "weekly_classical_patterns": weekly.get("classical_patterns", []), "monthly_snapshot": monthly_trend(completed["M"]), "period_events": events}
 
 
 def _pattern_evidence_cluster(reasons: list[str]) -> str | None:

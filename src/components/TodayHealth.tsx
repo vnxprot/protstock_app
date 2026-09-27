@@ -29,8 +29,8 @@ export function TodayHealth() {
       ])
       if (priceError || coverageError || jobError || rebuildError || universeError) throw priceError || coverageError || jobError || rebuildError || universeError
       const [actionCount, watchCount] = newestDate ? await Promise.all([
-        supabase.from('consolidated_signals').select('id', { count: 'exact', head: true }).eq('as_of_date', newestDate).neq('composite_action', 'WATCH'),
-        supabase.from('consolidated_signals').select('id', { count: 'exact', head: true }).eq('as_of_date', newestDate).eq('composite_action', 'WATCH'),
+        supabase.from('consolidated_signals').select('id', { count: 'exact', head: true }).eq('as_of_date', newestDate).eq('source_revision', publication!.sourceRevision).neq('composite_action', 'WATCH'),
+        supabase.from('consolidated_signals').select('id', { count: 'exact', head: true }).eq('as_of_date', newestDate).eq('source_revision', publication!.sourceRevision).eq('composite_action', 'WATCH'),
       ]) : [{ count: 0, error: null }, { count: 0, error: null }]
       if (actionCount.error || watchCount.error) throw actionCount.error || watchCount.error
       const job = (jobs ?? []).find(candidate => candidate.trading_date === newestDate)

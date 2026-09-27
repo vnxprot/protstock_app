@@ -16,7 +16,10 @@ const exactReasons: Record<string, ReasonDescription> = {
   WEEKLY_BULLISH_SETUP: { group: 'Bối cảnh', text: 'Khung tuần đang tạo thiết lập tăng hỗ trợ cho điểm kích hoạt ngày.' },
   WEEKLY_BREAKOUT_CONFIRMED: { group: 'Xác nhận', text: 'Khung tuần đã xác nhận vượt vùng cản quan trọng.' },
   VOLUME_CONFIRMED: { group: 'Xác nhận', text: 'Khối lượng mở rộng tại điểm kích hoạt; cần đọc cùng hướng giá và bối cảnh thị trường.' },
-  DAILY_TRIGGER_REQUIRED: { group: 'Bộ lọc & rủi ro', text: 'Khung tuần là thiết lập; cần điểm kích hoạt mới ở khung ngày trước khi xem xét mua.' },
+  DAILY_TRIGGER_REQUIRED: { group: 'Bộ lọc & rủi ro', text: 'Khung tuần/tháng là bối cảnh; cần điểm kích hoạt mới ở khung ngày trước khi xem xét mua.' },
+  OPPOSING_BEARISH_READY: { group: 'Bộ lọc & rủi ro', text: 'Có cấu trúc giảm đang chờ xác nhận; chưa kết luận giá đã phá hỗ trợ.' },
+  OPPOSING_BEARISH_CONFIRMED: { group: 'Bộ lọc & rủi ro', text: 'Cấu trúc giảm đã xác nhận trên khung đánh giá hoặc tuần đã đóng; tạm chặn mua mới.' },
+  FLOW_BAR_SELLING_PRESSURE: { group: 'Bộ lọc & rủi ro', text: 'Nến ngày có áp lực bán mạnh theo giá–khối lượng; đây là cảnh báo, không tự phủ quyết một breakout hợp lệ.' },
   RSI_OK: { group: 'Xác nhận', text: 'RSI nằm trong vùng phù hợp với thiết lập.' },
   MACD_CONFIRMATION: { group: 'Xác nhận', text: 'MACD xác nhận động lượng theo hướng của setup.' },
   FIB_CONFLUENCE: { group: 'Xác nhận', text: 'Vùng giá trùng mức Fibonacci quan trọng; đây là yếu tố cộng hưởng, không tự tạo lệnh mua.' },
@@ -82,8 +85,10 @@ export function describeSignalReason(code: string): ReasonDescription {
 }
 
 export function signalReasonSummary(reasons: string[]) {
-  const texts = reasons.map(describeSignalReason).map(item => item.text)
-  return texts.slice(0, 2).join(' ') || 'Tín hiệu EOD tổng hợp từ các bộ máy đang bật.'
+  const important = ['OPPOSING_BEARISH_CONFIRMED', 'ENTRY_BLOCKED', 'OPPOSING_BEARISH_READY', 'FLOW_BAR_SELLING_PRESSURE', 'DAILY_TRIGGER_REQUIRED']
+  const setup = reasons.find(code => code.startsWith('PATTERN_') || code.startsWith('V0_NEAR_') || code.startsWith('V0_') && code.endsWith('_CONFIRMED'))
+  const chosen = [setup, ...important.filter(code => reasons.includes(code))].filter((code):code is string => Boolean(code)).slice(0, 2)
+  return (chosen.length ? chosen : reasons.slice(0, 2)).map(code => describeSignalReason(code).text).join(' ') || 'Tín hiệu EOD tổng hợp từ các bộ máy đang bật.'
 }
 
 export function explainSignal(action: string, reasons: string[]) {

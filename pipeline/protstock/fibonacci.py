@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import date
 from typing import Sequence
 
 from .indicators import calculate_indicators
@@ -49,9 +50,9 @@ def fibonacci_levels(bars: Sequence[dict], timeframe: str) -> list[dict]:
     return []
 
 
-def build_fibonacci_context(daily_bars: Sequence[dict]) -> dict:
-    weekly = aggregate_bars(daily_bars, "W")
-    monthly = aggregate_bars(daily_bars, "M")
+def build_fibonacci_context(daily_bars: Sequence[dict], confirmed_week_end: date | None = None, confirmed_month_end: date | None = None) -> dict:
+    weekly = aggregate_bars(daily_bars, "W", confirmed_week_end)
+    monthly = aggregate_bars(daily_bars, "M", confirmed_month_end=confirmed_month_end)
     complete_weekly = [bar for bar in weekly if bar["is_complete"]]
     weekly_snapshot = calculate_indicators(complete_weekly).to_dict() if complete_weekly else {}
     return {"levels": fibonacci_levels(weekly, "W") + fibonacci_levels(monthly, "M"),

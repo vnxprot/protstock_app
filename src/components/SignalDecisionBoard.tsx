@@ -12,9 +12,9 @@ const actionRank:Record<string,number>={EXIT:4,REDUCE:3,ADD:2,PROBE_BUY:1}
 async function loadBoard():Promise<Row[]> {
   const publication=await latestSignalPublication()
   if(!publication) return []
-  const {data,error}=await supabase!.from('consolidated_signals').select('id,composite_action,signal_state,confluence_score,confluence_count,timeframe,expiry_date,trigger_price,invalidation_price,reasons,symbols!inner(symbol,sector)').eq('as_of_date',publication.date).order('confluence_score',{ascending:false}).limit(500)
+  const {data,error}=await supabase!.from('consolidated_signals').select('id,composite_action,signal_state,confluence_score,confluence_count,timeframe,expiry_date,trigger_price,invalidation_price,reasons,symbols!inner(symbol,sector)').eq('as_of_date',publication.date).eq('source_revision',publication.sourceRevision).order('confluence_score',{ascending:false}).limit(500)
   if(error) throw error
-  return (data??[]).map((item:any)=>{const symbol=Array.isArray(item.symbols)?item.symbols[0]:item.symbols;return{id:item.id,symbol:symbol?.symbol??'—',sector:symbol?.sector??null,action:item.composite_action,state:item.signal_state,score:Number(item.confluence_score),count:Number(item.confluence_count),timeframe:item.timeframe,expiry:item.expiry_date,trigger:item.trigger_price==null?null:Number(item.trigger_price),stop:item.invalidation_price==null?null:Number(item.invalidation_price),reasons:item.reasons??[]}})
+  return (data??[]).map((item:any)=>{const symbol=Array.isArray(item.symbols)?item.symbols[0]:item.symbols;return{id:item.id,symbol:symbol?.symbol??'—',sector:symbol?.sector??null,action:item.composite_action,state:item.composite_action==='WATCH'&&item.signal_state==='ACTIONABLE'?'WATCH_CONTEXT':item.signal_state,score:Number(item.confluence_score),count:Number(item.confluence_count),timeframe:item.timeframe,expiry:item.expiry_date,trigger:item.trigger_price==null?null:Number(item.trigger_price),stop:item.invalidation_price==null?null:Number(item.invalidation_price),reasons:item.reasons??[]}})
 }
 
 export function SignalDecisionBoard({onSelect}:{onSelect:(symbol:string)=>void}) {

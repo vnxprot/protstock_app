@@ -5,7 +5,7 @@ from datetime import date, timedelta
 from typing import Sequence
 
 
-def aggregate_bars(bars: Sequence[dict], timeframe: str, confirmed_week_end: date | None = None) -> list[dict]:
+def aggregate_bars(bars: Sequence[dict], timeframe: str, confirmed_week_end: date | None = None, confirmed_month_end: date | None = None) -> list[dict]:
     """Aggregate sorted daily OHLCV bars into point-in-time weekly/monthly bars."""
     if timeframe not in {"W", "M"}:
         raise ValueError("timeframe must be W or M")
@@ -44,6 +44,7 @@ def aggregate_bars(bars: Sequence[dict], timeframe: str, confirmed_week_end: dat
             "volume": sum(int(row.get("volume", 0)) for row in rows),
             "source_last_date": source_last_date.isoformat(),
             "is_complete": (last_period_start is not None and period_start < last_period_start)
-            or (timeframe == "W" and confirmed_week_end == source_last_date),
+            or (timeframe == "W" and confirmed_week_end == source_last_date)
+            or (timeframe == "M" and confirmed_month_end == source_last_date),
         })
     return result
