@@ -234,10 +234,10 @@ def test_weekly_ignores_developing_bar_and_requires_period_event():
     assert evaluate_period_signal('W',ctx)[0] is False
 
 
-def test_calendar_confirmation_occurs_on_first_observed_next_period():
+def test_weekly_confirmation_occurs_on_last_verified_session_not_next_monday():
     rows=[{**bars(1)[0],'date':day} for day in ('2026-09-10','2026-09-11','2026-09-14')]
-    assert _decision_context(rows,date(2026,9,14),{})['period_events']['W'] is True
-    assert _decision_context(rows[:-1],date(2026,9,11),{})['period_events']['W'] is False
+    assert _decision_context(rows,date(2026,9,14),{})['period_events']['W'] is False
+    assert _decision_context(rows[:-1],date(2026,9,11),{},date(2026,9,11))['period_events']['W'] is True
 
 
 def test_stats_separate_day_week_month():
@@ -261,13 +261,23 @@ def test_momentum_series_matches_existing_indicators_and_is_prefix_stable():
 def test_weekly_event_reaches_consolidated_with_confirmation_date():
     rows=[{**bar,'is_complete':True} for bar in bars(21)]
     rows[-1].update(close=110,volume=2000)
-    ctx=context();ctx.update(period_events={'W':True},monthly_snapshot={'trend_state':'UP'},evaluation_date='2026-09-15')
+    ctx=context();ctx.update(period_events={'W':True},monthly_snapshot={'trend_state':'UP'},evaluation_date='2026-09-11',data_date='2026-09-11')
     result={'as_of_date':'2026-09-11','patterns':[],'zones':[],'indicators':{'close':110,'volume_avg20':1_000_000,'atr14':2}}
     client=Recorder()
     _write_analysis(client,1,'W',rows,[],[{'id':'v','dsl':{'engine':'core_ladder_v2','timeframes':['D','W','M']},'rules':{}}],{'signals':0},result,ctx,persist_evidence=False)
     row=client.tables['consolidated_signals'][0]
-    assert row['timeframe']=='W' and row['as_of_date']=='2026-09-15'
+    assert row['timeframe']=='W' and row['as_of_date']=='2026-09-11'
     assert row['composite_action']=='PROBE_BUY'
+
+
+def test_unclosed_week_never_publishes_from_any_engine(monkeypatch):
+    monkeypatch.setattr('protstock.eod.evaluate_named_engine', lambda *args: (True, 'PROBE_BUY', ['TEST_SETUP']))
+    ctx=context();ctx.update(period_events={'W':False})
+    result={'as_of_date':'2026-09-15','patterns':[],'zones':[],'indicators':ctx['snapshot']}
+    client=Recorder()
+    _write_analysis(client,1,'W',[{'date':'2026-09-15'}],[],[{'id':'v','dsl':{'engine':'custom','timeframes':['W']},'rules':{}}],{'signals':0},result,ctx,persist_evidence=False)
+    assert 'signals' not in client.tables
+    assert client.deleted == [(1,'W','2026-09-15')]
 
 
 def test_weekly_pullback_evidence_is_not_mislabeled_as_breakout():

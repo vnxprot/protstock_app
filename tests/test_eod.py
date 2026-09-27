@@ -1,7 +1,7 @@
 from datetime import date, timedelta
 from types import SimpleNamespace
 
-from protstock.eod import FAST_LANE_BENCHMARK_FETCH_DAYS, _benchmark_snapshot, _fetch_history_with_fallback, _fetch_history_with_retry, _load_portfolios, _rows_as_of, finalize_fast_lane, run_eod
+from protstock.eod import FAST_LANE_BENCHMARK_FETCH_DAYS, _benchmark_snapshot, _confirmed_week_end, _fetch_history_with_fallback, _fetch_history_with_retry, _load_portfolios, _rows_as_of, finalize_fast_lane, resolve_eod_session, run_eod
 
 
 class RateLimitedProvider:
@@ -129,6 +129,7 @@ def test_eod_evaluates_signals_only_after_same_day_market_snapshot(monkeypatch) 
         def market_index(self, _code): return {"id": 1}
         def index_price_history(self, *_args): return [row]
         def price_history(self, *_args): return [row]
+        def consolidated_signal_count(self, _date): return 0
         def upsert(self, *_args): return 1
         def create_job_item(self, _payload): pass
         def finish_job(self, *_args): pass
@@ -165,6 +166,33 @@ def test_eod_evaluates_signals_only_after_same_day_market_snapshot(monkeypatch) 
 
     assert run_eod(day, pause_seconds=0)["status"] == "SUCCEEDED"
     assert events == ["snapshot", "breadth", "signal"]
+
+
+def test_weekend_rerun_uses_friday_and_recorded_holiday_uses_previous_session() -> None:
+    class Client:
+        def closed_trading_sessions(self, _exchange, _start, _end): return self.closed
+        def market_index(self, _code): return {"id": 1}
+        def index_price_dates(self, _index_id, _start, _end): return ["2026-09-24"]
+
+    client = Client()
+    client.closed = set()
+    assert resolve_eod_session(client, date(2026, 9, 27)) == date(2026, 9, 25)
+    client.closed = {date(2026, 9, 25)}
+    assert resolve_eod_session(client, date(2026, 9, 27)) == date(2026, 9, 24)
+    assert resolve_eod_session(client, date(2026, 9, 25)) == date(2026, 9, 24)
+
+
+def test_week_closes_only_on_confirmed_last_session() -> None:
+    class Client:
+        def __init__(self, closed): self.closed = closed
+        def closed_trading_sessions(self, _exchange, _start, _end): return self.closed
+
+    friday = date(2026, 9, 25)
+    thursday = date(2026, 9, 24)
+    assert _confirmed_week_end(Client(set()), friday, [{"date": friday.isoformat()}]) == friday
+    assert _confirmed_week_end(Client(set()), thursday, [{"date": thursday.isoformat()}]) is None
+    assert _confirmed_week_end(Client({friday}), thursday, [{"date": thursday.isoformat()}]) == thursday
+    assert _confirmed_week_end(Client(set()), friday, [{"date": thursday.isoformat()}]) is None
 
 
 def test_stale_index_bar_cannot_supply_same_day_trend() -> None:

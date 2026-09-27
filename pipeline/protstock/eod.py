@@ -47,6 +47,11 @@ def run_eod(
     historical: bool = False,
 ) -> dict[str, Any]:
     client = SupabaseRestClient(Settings.from_env())
+    try:
+        trading_date = resolve_eod_session(client, trading_date)
+    except Exception:
+        client.close()
+        raise
     provider = VnstockProvider(source)
     fallback_source = "VCI" if source.upper() == "KBS" else "KBS"
     fallback_provider = VnstockProvider(fallback_source)
@@ -95,6 +100,9 @@ def run_eod(
                 benchmark_daily = [{**row, "date": row["trading_date"]} for row in _rows_as_of(benchmark_history, trading_date)]
         except Exception as exc:
             warnings.append(f"VNINDEX: {type(exc).__name__}")
+        if symbols and (not benchmark_daily or benchmark_daily[-1]["date"] != trading_date.isoformat()):
+            raise RuntimeError(f"VNINDEX EOD is unavailable for {trading_date}; signals were not published")
+        confirmed_week_end = _confirmed_week_end(client, trading_date, benchmark_daily)
         symbols = symbols[symbol_offset:]
         if symbol_limit:
             symbols = symbols[:symbol_limit]
@@ -124,9 +132,9 @@ def run_eod(
                     fibonacci_context = build_fibonacci_context(analysis_rows)
                     benchmark_rows = {"D": benchmark_daily}
                     for timeframe in ("W", "M"):
-                        aggregated = aggregate_bars(analysis_rows, timeframe)
+                        aggregated = aggregate_bars(analysis_rows, timeframe, confirmed_week_end if timeframe == "W" else None)
                         timeframe_rows[timeframe] = aggregated
-                        benchmark_rows[timeframe] = aggregate_bars(benchmark_daily, timeframe)
+                        benchmark_rows[timeframe] = aggregate_bars(benchmark_daily, timeframe, confirmed_week_end if timeframe == "W" else None)
                         derived_rows = [{
                             "symbol_id": symbol_row["id"], "timeframe": timeframe,
                             "period_start": bar["period_start"], "period_end": bar["period_end"],
@@ -138,7 +146,8 @@ def run_eod(
                         counts["derived_bars"] += client.upsert(
                             "derived_bars", derived_rows, "symbol_id,timeframe,period_start"
                         )
-                    preliminary = {timeframe: analyze_bars(scoped_rows, fibonacci_context=fibonacci_context) for timeframe, scoped_rows in timeframe_rows.items() if scoped_rows}
+                    preliminary_rows = {**timeframe_rows, "W": [bar for bar in timeframe_rows["W"] if bar["is_complete"]]}
+                    preliminary = {timeframe: analyze_bars(scoped_rows, fibonacci_context=fibonacci_context) for timeframe, scoped_rows in preliminary_rows.items() if scoped_rows}
                     results = {timeframe: analyze_bars(scoped_rows, weekly_patterns=preliminary.get("W", {}).get("patterns", []), monthly_snapshot=preliminary.get("M", {}).get("indicators", {}), benchmark_rows=benchmark_rows[timeframe], fibonacci_context=fibonacci_context) for timeframe, scoped_rows in timeframe_rows.items() if scoped_rows}
                     context = {
                         "weekly_patterns": results.get("W", {}).get("patterns", []),
@@ -149,7 +158,7 @@ def run_eod(
                     for timeframe, scoped_rows in timeframe_rows.items():
                         if timeframe in results:
                             if "period_events" not in context:
-                                context.update(_decision_context(analysis_rows, trading_date, {}))
+                                context.update(_decision_context(analysis_rows, trading_date, {}, confirmed_week_end))
                             timeframe_context = {**context, "wyckoff_context": classify_wyckoff_timeframe(timeframe, scoped_rows, period_event=context["period_events"].get(timeframe, False))}
                             _write_analysis(client, symbol_row["id"], timeframe, scoped_rows, benchmark_rows[timeframe], active_rules, counts, results[timeframe], timeframe_context, evaluate_signals=False)
                             pending_signals.append((symbol_row["id"], timeframe, scoped_rows, benchmark_rows[timeframe], results[timeframe], timeframe_context))
@@ -184,6 +193,8 @@ def run_eod(
                 context["portfolios"] = portfolios
                 _write_analysis(client, symbol_id, timeframe, scoped_rows, index_rows, active_rules, counts, result, context, persist_evidence=False)
         status = "SUCCEEDED" if counts["failed"] == 0 else "PARTIAL"
+        if status == "SUCCEEDED" and write_breadth_snapshot and symbol_offset == 0 and symbol_limit is None and benchmark_daily and benchmark_daily[-1]["date"] == trading_date.isoformat():
+            counts["published_signals"] = client.consolidated_signal_count(trading_date)
         _persist_engine_stats(client, job["id"], trading_date, counts)
         client.finish_job(job["id"], {"status": status, "finished_at": _now(), "counts": counts, "warnings": warnings})
         return {"job_id": job["id"], "status": status, **counts}
@@ -198,6 +209,7 @@ def finalize_fast_lane(trading_date: date) -> dict[str, Any]:
     """Publish the completed market snapshot before evaluating Fast Lane signals."""
     client = SupabaseRestClient(Settings.from_env())
     try:
+        trading_date = resolve_eod_session(client, trading_date)
         expected = {row["id"] for row in client.active_symbols()}
         snapshots = client.daily_snapshots_for_date(trading_date)
         covered = {row["symbol_id"] for row in snapshots}
@@ -206,6 +218,8 @@ def finalize_fast_lane(trading_date: date) -> dict[str, Any]:
             raise RuntimeError(f"Fast Lane incomplete: {len(covered)}/{len(expected)} daily snapshots")
         index = client.market_index("VNINDEX")
         benchmark = _rows_as_of(client.index_price_history(index["id"], MULTI_TIMEFRAME_HISTORY_LIMIT), trading_date)
+        if not benchmark or benchmark[-1]["trading_date"] != trading_date.isoformat():
+            raise RuntimeError(f"VNINDEX EOD is unavailable for {trading_date}; Fast Lane was not published")
         vnindex_snapshot = _benchmark_snapshot(benchmark, trading_date)
         breadth = _persist_universe_breadth(client, trading_date, vnindex_snapshot["trend_state"])
     finally:
@@ -219,6 +233,11 @@ def finalize_fast_lane(trading_date: date) -> dict[str, Any]:
 def rebuild_signals(trading_date: date, *, symbol_offset: int = 0, symbol_limit: int | None = None, historical: bool = False, prepared_market_context: dict | None = None) -> dict[str, Any]:
     """Re-evaluate stored EOD data only; this never calls an upstream price source."""
     client = SupabaseRestClient(Settings.from_env())
+    try:
+        trading_date = resolve_eod_session(client, trading_date)
+    except Exception:
+        client.close()
+        raise
     job = client.create_job({"job_type": "DERIVE_BARS", "trading_date": trading_date.isoformat(), "status": "RUNNING", "trigger_type": "MANUAL", "source_revision": ALGORITHM_VERSION})
     counts = {"symbols": 0, "derived_bars": 0, "snapshots": 0, "patterns": 0, "zones": 0, "signals": 0, "consolidated_signals": 0, "breadth_snapshots": 0, "failed": 0}
     warnings: list[str] = []
@@ -238,6 +257,9 @@ def rebuild_signals(trading_date: date, *, symbol_offset: int = 0, symbol_limit:
         index = client.market_index("VNINDEX")
         benchmark_history = client.index_price_history(index["id"], MULTI_TIMEFRAME_HISTORY_LIMIT)
         benchmark_daily = [{**row, "date": row["trading_date"]} for row in _rows_as_of(benchmark_history, trading_date)]
+        if not benchmark_daily or benchmark_daily[-1]["date"] != trading_date.isoformat():
+            raise RuntimeError(f"VNINDEX EOD is unavailable for {trading_date}; signals were not published")
+        confirmed_week_end = _confirmed_week_end(client, trading_date, benchmark_daily)
         if prepared_market_context and prepared_market_context.get("trading_date") != trading_date.isoformat():
             raise ValueError("prepared market context date differs from signal date")
         if prepared_market_context:
@@ -249,7 +271,7 @@ def rebuild_signals(trading_date: date, *, symbol_offset: int = 0, symbol_limit:
                 analysis_rows = [{**row, "date": row["trading_date"]} for row in _rows_as_of(client.price_history(symbol_row["id"], MULTI_TIMEFRAME_HISTORY_LIMIT), trading_date)]
                 if not analysis_rows:
                     raise ValueError("no stored price history")
-                timeframe_rows = {"D": analysis_rows, "W": aggregate_bars(analysis_rows, "W"), "M": aggregate_bars(analysis_rows, "M")}
+                timeframe_rows = {"D": analysis_rows, "W": aggregate_bars(analysis_rows, "W", confirmed_week_end), "M": aggregate_bars(analysis_rows, "M")}
                 # A stored-price repair must also refresh the bars used by the
                 # W/M charts, not just snapshots and signals computed in memory.
                 for timeframe in (("W", "M") if prepared_market_context is None else ()):
@@ -264,14 +286,15 @@ def rebuild_signals(trading_date: date, *, symbol_offset: int = 0, symbol_limit:
                         "derived_bars", derived_rows, "symbol_id,timeframe,period_start"
                     )
                 fibonacci_context = build_fibonacci_context(analysis_rows)
-                benchmark_rows = {"D": benchmark_daily, "W": aggregate_bars(benchmark_daily, "W"), "M": aggregate_bars(benchmark_daily, "M")}
-                preliminary = {timeframe: analyze_bars(rows, fibonacci_context=fibonacci_context) for timeframe, rows in timeframe_rows.items() if rows}
+                benchmark_rows = {"D": benchmark_daily, "W": aggregate_bars(benchmark_daily, "W", confirmed_week_end), "M": aggregate_bars(benchmark_daily, "M")}
+                preliminary_rows = {**timeframe_rows, "W": [bar for bar in timeframe_rows["W"] if bar["is_complete"]]}
+                preliminary = {timeframe: analyze_bars(rows, fibonacci_context=fibonacci_context) for timeframe, rows in preliminary_rows.items() if rows}
                 results = {timeframe: analyze_bars(rows, weekly_patterns=preliminary.get("W", {}).get("patterns", []), monthly_snapshot=preliminary.get("M", {}).get("indicators", {}), benchmark_rows=benchmark_rows[timeframe], fibonacci_context=fibonacci_context) for timeframe, rows in timeframe_rows.items() if rows}
                 context = {"weekly_patterns": results.get("W", {}).get("patterns", []), "weekly_snapshot": results.get("W", {}).get("indicators", {}), "monthly_snapshot": results.get("M", {}).get("indicators", {}), "candidate_sector": symbol_row["sector"]}
                 for timeframe, rows in timeframe_rows.items():
                     if timeframe in results:
                         if "period_events" not in context:
-                            context.update(_decision_context(analysis_rows, trading_date, {}))
+                            context.update(_decision_context(analysis_rows, trading_date, {}, confirmed_week_end))
                         timeframe_context = {**context, "wyckoff_context": classify_wyckoff_timeframe(timeframe, rows, period_event=context["period_events"].get(timeframe, False))}
                         if prepared_market_context is None:
                             _write_analysis(client, symbol_row["id"], timeframe, rows, benchmark_rows[timeframe], active_rules, counts, results[timeframe], timeframe_context, evaluate_signals=False)
@@ -297,6 +320,8 @@ def rebuild_signals(trading_date: date, *, symbol_offset: int = 0, symbol_limit:
                 context["portfolios"] = portfolios
                 _write_analysis(client, symbol_id, timeframe, rows, index_rows, active_rules, counts, result, context, persist_evidence=False)
         status = "SUCCEEDED" if not counts["failed"] else "PARTIAL"
+        if status == "SUCCEEDED" and symbol_offset == 0 and symbol_limit is None and benchmark_daily and benchmark_daily[-1]["date"] == trading_date.isoformat():
+            counts["published_signals"] = client.consolidated_signal_count(trading_date)
         _persist_engine_stats(client, job["id"], trading_date, counts)
         client.finish_job(job["id"], {"status": status, "finished_at": _now(), "counts": counts, "warnings": warnings})
         return {"job_id": job["id"], "status": status, **counts}
@@ -332,6 +357,34 @@ def _rows_as_of(rows: list[dict[str, Any]], trading_date: date) -> list[dict[str
     """Keep only bars known at the requested EOD cutoff (ISO dates sort chronologically)."""
     cutoff = trading_date.isoformat()
     return [row for row in rows if row["trading_date"] <= cutoff]
+
+
+def resolve_eod_session(client: SupabaseRestClient, requested: date) -> date:
+    """Map weekends/recorded holidays backward, never to a future session."""
+    candidate = requested if requested.weekday() < 5 else requested - timedelta(days=requested.weekday() - 4)
+    closed = getattr(client, "closed_trading_sessions", None)
+    if closed is None or candidate not in closed("HOSE", candidate, candidate):
+        return candidate
+    index = client.market_index("VNINDEX")
+    sessions = client.index_price_dates(index["id"], candidate - timedelta(days=7), candidate - timedelta(days=1))
+    if not sessions:
+        raise RuntimeError(f"No verified VNINDEX session before closed date {candidate}")
+    return date.fromisoformat(max(sessions))
+
+
+def _confirmed_week_end(client: SupabaseRestClient, trading_date: date, benchmark_daily: list[dict]) -> date | None:
+    if not benchmark_daily or benchmark_daily[-1]["date"] != trading_date.isoformat():
+        return None
+    if trading_date.weekday() == 4:
+        return trading_date
+    if trading_date.weekday() > 4:
+        return None
+    friday = trading_date + timedelta(days=4 - trading_date.weekday())
+    closed = getattr(client, "closed_trading_sessions", None)
+    if closed is None:
+        return None
+    required = {trading_date + timedelta(days=offset) for offset in range(1, 5 - trading_date.weekday())}
+    return trading_date if required.issubset(closed("HOSE", trading_date + timedelta(days=1), friday)) else None
 
 
 def _benchmark_snapshot(rows: list[dict], trading_date: date) -> dict:
@@ -472,6 +525,9 @@ def _write_analysis(
             )
     if not evaluate_signals:
         return
+    if timeframe == "W" and not context.get("period_events", {}).get("W"):
+        client.delete_consolidated_signal(symbol_id, timeframe, context.get("evaluation_date", result["as_of_date"]))
+        return
     signal_rows = []
     raw_evaluations = []
     evaluations = []
@@ -606,15 +662,17 @@ def _load_portfolios(client, active_rules: list[dict], trading_date: date, *, hi
     return result
 
 
-def _decision_context(daily: list[dict], trading_date: date, portfolios: dict) -> dict:
-    completed = {tf: [b for b in aggregate_bars(daily, tf) if b["is_complete"]] for tf in ("W", "M")}
+def _decision_context(daily: list[dict], trading_date: date, portfolios: dict, confirmed_week_end: date | None = None) -> dict:
+    completed = {tf: [b for b in aggregate_bars(daily, tf, confirmed_week_end if tf == "W" else None) if b["is_complete"]] for tf in ("W", "M")}
     weekly = analyze_bars(completed["W"]) if completed["W"] else {}
     events = {}
     for tf in ("W", "M"):
-        current = aggregate_bars(daily, tf)
-        previous = aggregate_bars(daily[:-1], tf)
-        # Confirm at first observed session of next period: conservative around holidays.
-        events[tf] = bool(current and previous and current[-1]["period_start"] != previous[-1]["period_start"])
+        if tf == "W":
+            events[tf] = bool(confirmed_week_end == trading_date and daily[-1]["date"] == trading_date.isoformat() and completed["W"] and completed["W"][-1]["source_last_date"] == trading_date.isoformat())
+        else:
+            current = aggregate_bars(daily, tf)
+            previous = aggregate_bars(daily[:-1], tf)
+            events[tf] = bool(current and previous and current[-1]["period_start"] != previous[-1]["period_start"])
     return {"portfolios": portfolios, "evaluation_date": trading_date.isoformat(), "data_date": daily[-1]["date"], "daily_snapshot": calculate_indicators(daily).to_dict(), "weekly_snapshot": weekly.get("indicators", {}), "weekly_patterns": weekly.get("patterns", []), "monthly_snapshot": monthly_trend(completed["M"]), "period_events": events}
 
 

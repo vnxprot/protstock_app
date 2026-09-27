@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { latestSignalPublication } from '../lib/signalPublication'
 import { ArrowDownAZ, ChevronDown, Download, FileSpreadsheet, FileText, Filter, LayoutGrid, List, Search, SlidersHorizontal, X } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { formatDate } from '../lib/date'
@@ -22,9 +23,7 @@ function Sparkline({ points }: { points:number[] }) { const values=points.slice(
 async function fetchConsolidatedSignals(showHistory:boolean):Promise<SignalResult> {
   const rows:any[]=[]
   const pageSize=1000
-  const {data:latestPrice,error:dateError}=await supabase!.from('daily_prices').select('trading_date').order('trading_date',{ascending:false}).limit(1).maybeSingle()
-  if(dateError)throw dateError
-  const latestDate=latestPrice?.trading_date??null
+  const latestDate=(await latestSignalPublication())?.date??null
   if(!showHistory&&!latestDate)return{rows:[],latestDate}
   for(let from=0;;from+=pageSize){
     let query=supabase!.from('consolidated_signals').select('id,symbol_id,as_of_date,timeframe,composite_action,confluence_score,confluence_count,consensus_engines,reasons,symbols!inner(symbol,sector)').order('as_of_date',{ascending:false}).order('confluence_score',{ascending:false})
@@ -41,7 +40,7 @@ export function ScreenerPage({ authenticated }: { authenticated: boolean }) {
   const [query,setQuery]=useState(''); const [action,setAction]=useState('ALL'); const [showHistory,setShowHistory]=useState(false); const [minScoreText,setMinScoreText]=useState(''); const [descending,setDescending]=useState(true); const [page,setPage]=useState(1); const [pageSize,setPageSize]=useState(25); const [view,setView]=useState<'table'|'cards'>(()=>localStorage.getItem('protstock-screener-view')==='cards'?'cards':'table'); const [favorites,setFavorites]=useState<string[]>(()=>{try{return JSON.parse(localStorage.getItem('protstock-favorites')??'[]')}catch{return[]}}); const [exportNotice,setExportNotice]=useState(''); const [exportOpen,setExportOpen]=useState(false); const [advancedOpen,setAdvancedOpen]=useState(false)
   const [explainingSignal,setExplainingSignal]=useState<SignalRow|null>(null)
   const wyckoffEvidence=useQuery({queryKey:['wyckoff-evidence',explainingSignal?.signal_id],enabled:authenticated&&Boolean(supabase)&&Boolean(explainingSignal?.reasons.some(reason=>reason.startsWith('WYCKOFF_'))),queryFn:async():Promise<WyckoffEvidence|null>=>{const signal=explainingSignal!;const {data,error}=await supabase!.from('signals').select('evidence').eq('symbol_id',signal.symbol_id).eq('timeframe',signal.timeframe).eq('as_of_date',signal.as_of_date);if(error)throw error;return(data??[]).map(row=>row.evidence?.wyckoff as WyckoffEvidence|undefined).find(item=>item?.event_date&&item.timeframe===signal.timeframe)??null}})
-  const signals=useQuery({queryKey:['consolidated-signals',showHistory],enabled:authenticated&&Boolean(supabase),queryFn:()=>fetchConsolidatedSignals(showHistory)})
+  const signals=useQuery({queryKey:['consolidated-signals',showHistory],enabled:authenticated&&Boolean(supabase),refetchInterval:60_000,queryFn:()=>fetchConsolidatedSignals(showHistory)})
   const activeEngines=useQuery({queryKey:['active-core-engines'],enabled:authenticated&&Boolean(supabase),queryFn:async()=>{const {data,error}=await supabase!.from('rules').select('name').eq('status','ACTIVE').ilike('name','Prot Core %');if(error)throw error;return(data??[]).map(item=>canonicalEngineName(item.name))}})
   const prices=useQuery({queryKey:['screener-sparklines'],enabled:authenticated&&Boolean(supabase),staleTime:300_000,queryFn:async()=>{const{data,error}=await supabase!.from('daily_prices').select('symbol_id,trading_date,close,symbols!inner(symbol)').order('trading_date',{ascending:false}).limit(5000);if(error)throw error;return data??[]}})
   useEffect(()=>{const sync=(event:Event)=>setFavorites((event as CustomEvent<string[]>).detail);addEventListener('protstock:favorites',sync);return()=>removeEventListener('protstock:favorites',sync)},[])

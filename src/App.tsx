@@ -11,6 +11,7 @@ import { formatDate } from './lib/date'
 import { version as appVersion } from '../package.json'
 import { ThemeToggle } from './components/ThemeToggle'
 import { SignalDecisionBoard } from './components/SignalDecisionBoard'
+import { latestSignalPublication } from './lib/signalPublication'
 
 const AnalysisPage = lazy(() => import('./components/AnalysisPage').then(m => ({ default: m.AnalysisPage })))
 const RuleBuilderPage = lazy(() => import('./components/RuleBuilderPage').then(m => ({ default: m.RuleBuilderPage })))
@@ -37,7 +38,7 @@ function App({ authenticated = false, profile = null }: { authenticated?: boolea
   const [page, setPage] = useState(currentPage); const [collapsed, setCollapsed] = useState(false); const [moreOpen, setMoreOpen] = useState(false); const [mobileNavCompact, setMobileNavCompact] = useState(false)
   const lastScrollY = useRef(0)
   const health = useDataHealth(authenticated); const symbols = useSymbols(authenticated)
-  const navCounts = useQuery({ queryKey: ['nav-counts'], enabled: authenticated && Boolean(supabase), queryFn: async () => { const [latestSignal, rules] = await Promise.all([supabase!.from('consolidated_signals').select('as_of_date').order('as_of_date', { ascending: false }).order('created_at', { ascending: false }).limit(1).maybeSingle(), supabase!.from('rules').select('id', { count: 'exact', head: true }).eq('status', 'ACTIVE')]); if (latestSignal.error || rules.error) throw latestSignal.error || rules.error; const latestDate = latestSignal.data?.as_of_date; if (!latestDate) return { signals: 0, rules: rules.count ?? 0 }; const { count, error } = await supabase!.from('consolidated_signals').select('id', { count: 'exact', head: true }).eq('as_of_date', latestDate); if (error) throw error; return { signals: count ?? 0, rules: rules.count ?? 0 } } })
+  const navCounts = useQuery({ queryKey: ['nav-counts'], enabled: authenticated && Boolean(supabase), refetchInterval: 60_000, queryFn: async () => { const [publication, rules] = await Promise.all([latestSignalPublication(), supabase!.from('rules').select('id', { count: 'exact', head: true }).eq('status', 'ACTIVE')]); if (rules.error) throw rules.error; return { signals: publication?.count ?? 0, rules: rules.count ?? 0 } } })
   const isAdmin = profile?.role === 'ADMIN'
   const permittedModules = isAdmin ? [...modules, { id: 'admin', icon: ShieldCheck, label: 'Quản trị' }] : [...clientModules.slice(0,3), { id: 'settings', icon: Settings, label: 'Giới thiệu Prot Stock' }]
   const navigation = permittedModules.map(item => ({ ...item, badge: item.id === 'screener' ? navCounts.data?.signals : item.id === 'rules' ? navCounts.data?.rules : undefined }))

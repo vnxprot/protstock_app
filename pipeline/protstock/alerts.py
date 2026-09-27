@@ -51,6 +51,8 @@ def send_eod_telegram_alerts(trading_date: date, action_dedupe_days: int = 5) ->
         return {"status": "DISABLED", "reason": "Telegram secrets are not configured"}
     client = SupabaseRestClient(Settings.from_env())
     try:
+        from .eod import resolve_eod_session
+        trading_date = resolve_eod_session(client, trading_date)
         response = client._client.get("/consolidated_signals", params={"select": "id,symbol_id,composite_action,confluence_score,confluence_count,consensus_engines,reasons,symbols!inner(symbol)", "as_of_date": f"eq.{trading_date.isoformat()}", "composite_action": "in.(PROBE_BUY,ADD,REDUCE,EXIT)"})
         response.raise_for_status()
         signals = [{**signal, "signal_id": signal.get("id") or signal.get("signal_id"), "action": signal.get("composite_action") or signal.get("action"), "symbol": signal.get("symbol") or (signal.get("symbols") or {}).get("symbol", "?"), "rule_name": "Prot Consensus", "kind": "CORE_PACK"} for signal in response.json() if signal.get("notification_mode", "TELEGRAM") == "TELEGRAM"]

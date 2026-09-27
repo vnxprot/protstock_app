@@ -134,6 +134,28 @@ class SupabaseRestClient:
                 "limit": "1000",
             },
         )
+
+    def closed_trading_sessions(self, exchange: str, start_date: date, end_date: date) -> set[date]:
+        response = self._client.get(
+            "/trading_sessions",
+            params=[("select", "trading_date,is_open"), ("exchange", f"eq.{exchange}"),
+                    ("trading_date", f"gte.{start_date.isoformat()}"),
+                    ("trading_date", f"lte.{end_date.isoformat()}")],
+        )
+        response.raise_for_status()
+        return {date.fromisoformat(row["trading_date"]) for row in response.json() if row["is_open"] is False}
+
+    def consolidated_signal_count(self, trading_date: date) -> int:
+        response = self._client.get(
+            "/consolidated_signals",
+            params={"select": "id", "as_of_date": f"eq.{trading_date.isoformat()}", "limit": "1"},
+            headers={"Prefer": "count=exact"},
+        )
+        response.raise_for_status()
+        content_range = response.headers.get("content-range", "")
+        if "/" not in content_range or content_range.endswith("/*"):
+            raise RuntimeError("Exact published signal count unavailable")
+        return int(content_range.rsplit("/", 1)[1])
         response.raise_for_status()
         return response.json()
 

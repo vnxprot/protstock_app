@@ -24,6 +24,21 @@ def test_active_rule_versions_uses_explicit_active_rule_query() -> None:
         client.close()
 
 
+def test_published_signal_count_uses_exact_database_total_not_upserts() -> None:
+    from datetime import date
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.params["as_of_date"] == "eq.2026-09-25"
+        assert request.headers["prefer"] == "count=exact"
+        return httpx.Response(206, headers={"Content-Range": "0-0/18"}, json=[{"id": "first"}])
+
+    client = SupabaseRestClient(Settings("https://example.supabase.co", "service"), transport=httpx.MockTransport(handler))
+    try:
+        assert client.consolidated_signal_count(date(2026, 9, 25)) == 18
+    finally:
+        client.close()
+
+
 def test_pattern_snapshot_removes_only_superseded_same_day_geometry() -> None:
     requests: list[httpx.Request] = []
 
