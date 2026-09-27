@@ -33,6 +33,14 @@ def evaluate_period_signal(timeframe: str, context: dict) -> tuple[bool, str, li
     stop = min(float(bar["low"]) for bar in bars[-4:])
     context["engine_evidence"].update(pattern_type="WEEKLY_BREAKOUT_13", trigger_price=resistance, invalidation_price=stop, evidence_cluster="WEEKLY_BREAKOUT_13")
     if close > resistance and volume_average > 0 and float(latest["volume"]) >= 1.3 * volume_average:
+        # A second qualifying week is the same running breakout, not a fresh
+        # setup to re-publish.  Re-arm after a non-qualifying closed week.
+        prior_week = bars[-2]
+        prior_base = bars[-15:-2]
+        prior_average = sum(float(bar["volume"]) for bar in prior_base) / 13
+        if (float(prior_week["close"]) > max(float(bar["high"]) for bar in prior_base)
+                and prior_average > 0 and float(prior_week["volume"]) >= 1.3 * prior_average):
+            return False, "WATCH", []
         return True, "PROBE_BUY", ["WEEKLY_BREAKOUT_13_CONFIRMED", "CLOSED_PERIOD_ONLY"]
     if float(latest["low"]) <= ema20 < close and close > float(latest["open"]):
         context["engine_evidence"].update(pattern_type="WEEKLY_PULLBACK_EMA20", trigger_price=ema20, evidence_cluster="WEEKLY_PULLBACK_EMA20")

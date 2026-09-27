@@ -7,6 +7,7 @@ from .classical_patterns import MODEL_LABELS, detect_classical_patterns
 from .fibonacci import enrich_pattern_fibonacci, matching_fibonacci
 from .rules import evaluate_rule, multi_timeframe_gate
 from .divergence import evaluate_rsi_macd_confirmation
+from .pattern_events import double_bottom_first_confirmation
 
 
 CORE_PACK_METADATA = {
@@ -110,9 +111,14 @@ def evaluate_classical_patterns_v0(context: dict[str, Any], overrides: dict[str,
     )
     candidates = [candidate for candidate in candidates if enabled_models.get(candidate["model"], True) and candidate.get("pattern_type") != "ROUNDING_BOTTOM"]
     candidates = [enrich_pattern_fibonacci(candidate, context.get("fibonacci_context") or {}, context.get("zones", [])) for candidate in candidates]
+    bars = context.get("bars") or []
+    for candidate in candidates:
+        if candidate.get("pattern_type") == "DOUBLE_BOTTOM" and candidate.get("state") == "CONFIRMED" and bars:
+            first = double_bottom_first_confirmation(bars, candidate, minimum_bars=45, inclusive_volume=True)
+            candidate["evidence"] = {**(candidate.get("evidence") or {}), "first_confirmed_on": first, "new_confirmation": first == bars[-1]["date"]}
     snapshot = context.get("snapshot", {})
     position = context.get("position")
-    confirmed = [candidate for candidate in candidates if candidate["state"] == "CONFIRMED"]
+    confirmed = [candidate for candidate in candidates if candidate["state"] == "CONFIRMED" and (candidate.get("evidence") or {}).get("new_confirmation") is not False]
     bears = [candidate for candidate in confirmed if candidate["direction"] == "BEARISH" and candidate["quality_score"] >= 75]
     if bears:
         top = max(bears, key=lambda candidate: candidate["quality_score"])
@@ -163,7 +169,7 @@ def evaluate_core_v1(context: dict[str, Any]) -> tuple[bool, str, list[str]]:
         return True, "REDUCE", ["CORE_V1_DOUBLE_TOP_CONFIRMED"]
 
     for pattern_type, minimum_volume in (("ACCUMULATION_BASE", 1.5), ("DOUBLE_BOTTOM", 1.3)):
-        if any(pattern.get("pattern_type") == pattern_type and pattern.get("state") == "CONFIRMED" for pattern in patterns) and volume > minimum_volume and rsi_ok:
+        if any(pattern.get("pattern_type") == pattern_type and pattern.get("state") == "CONFIRMED" and (pattern.get("evidence") or {}).get("new_confirmation") is not False for pattern in patterns) and volume > minimum_volume and rsi_ok:
             reasons = [f"CORE_V1_{pattern_type}_CONFIRMED", "VOLUME_CONFIRMED", "RSI_OK"]
             if context.get("multi_timeframe_context") is not None:
                 ok, gate_reasons = multi_timeframe_gate(context["multi_timeframe_context"])

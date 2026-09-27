@@ -234,6 +234,14 @@ def test_weekly_ignores_developing_bar_and_requires_period_event():
     assert evaluate_period_signal('W',ctx)[0] is False
 
 
+def test_weekly_breakout_is_not_repeated_on_consecutive_closed_weeks():
+    rows=[{**bar,'is_complete':True} for bar in bars(22)]
+    rows[-2].update(close=110,high=110,volume=2000)
+    rows[-1].update(close=120,high=120,volume=2000)
+    ctx={'bars':rows,'period_event':True,'evaluation_date':'2026-09-18'}
+    assert evaluate_period_signal('W',ctx)==(False,'WATCH',[])
+
+
 def test_weekly_confirmation_occurs_on_last_verified_session_not_next_monday():
     rows=[{**bars(1)[0],'date':day} for day in ('2026-09-10','2026-09-11','2026-09-14')]
     assert _decision_context(rows,date(2026,9,14),{})['period_events']['W'] is False
@@ -267,7 +275,8 @@ def test_weekly_event_reaches_consolidated_with_confirmation_date():
     _write_analysis(client,1,'W',rows,[],[{'id':'v','dsl':{'engine':'core_ladder_v2','timeframes':['D','W','M']},'rules':{}}],{'signals':0},result,ctx,persist_evidence=False)
     row=client.tables['consolidated_signals'][0]
     assert row['timeframe']=='W' and row['as_of_date']=='2026-09-11'
-    assert row['composite_action']=='PROBE_BUY'
+    assert row['composite_action']=='WATCH'
+    assert 'DAILY_TRIGGER_REQUIRED' in row['reasons']
 
 
 def test_unclosed_week_never_publishes_from_any_engine(monkeypatch):

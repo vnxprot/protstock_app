@@ -494,6 +494,7 @@ def _write_analysis(
             "start_date": rows[pattern["start_index"]]["date"],
             "end_date": rows[pattern["end_index"]]["date"],
             "as_of_date": result["as_of_date"], "trigger_price": pattern["trigger_price"],
+            "confirmed_at": pattern.get("confirmed_at"),
             "invalidation_price": pattern["invalidation_price"],
             "quality_score": pattern["quality_score"], "direction": pattern["direction"],
             "evidence": pattern["evidence"], "reasons": pattern["reasons"],
@@ -594,6 +595,11 @@ def _write_analysis(
                 passed = False
             elif passed and timeframe == "D" and action in {"PROBE_BUY", "ADD"}:
                 reasons = list(dict.fromkeys([*reasons, *relative_strength_context_reasons(engine_context)]))
+        if passed and timeframe == "W" and dsl.get("engine") not in {None, "custom"} and proposed_action in {"PROBE_BUY", "ADD"} and action not in {"EXIT", "REDUCE"}:
+            # Weekly structure is context; a new D trigger must carry the entry.
+            action = "WATCH"
+            reasons = list(dict.fromkeys([*reasons, "DAILY_TRIGGER_REQUIRED"]))
+            engine_context.setdefault("engine_evidence", {})["context_only"] = True
         evaluation_date = context.get("evaluation_date", result["as_of_date"])
         if passed or reasons: evaluations.append({"rule_version_id": version["id"], "symbol_id": symbol_id, "timeframe": timeframe, "as_of_date": evaluation_date, "proposed_action": proposed_action, "action": action, "emitted": passed, "reasons": reasons or ["NO_MATCHING_SETUP"], "evidence": engine_context.get("engine_evidence") or {}})
         if passed:

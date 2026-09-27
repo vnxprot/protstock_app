@@ -11,6 +11,7 @@ from .rules import multi_timeframe_gate
 from .risk import DEFAULT_MAX_SECTOR_WEIGHT_PCT, invalidation_width_warning, portfolio_exposure, position_size
 from .zones import detect_zones, zone_confluence_bonus
 from .signal_policy import average_turnover_vnd, MIN_AVERAGE_TURNOVER_VND
+from .pattern_events import annotate_double_bottom_events
 
 
 ALGORITHM_VERSION = "core-rules-v2.1"
@@ -36,7 +37,7 @@ def analyze_bars(bars: Sequence[dict], position: dict | None = None, weekly_patt
         aligned = [(float(item["close"]), benchmark_by_date[item["date"]]) for item in ordered if item["date"] in benchmark_by_date]
         snapshot_dict["relative_strength_market"] = relative_strength([item[0] for item in aligned], [item[1] for item in aligned]) if aligned else None
     pattern_dicts = _apply_zone_confluence([{**item.to_dict(), "start_date": ordered[item.start_index]["date"]} for item in patterns], zones)
-    pattern_dicts = [enrich_pattern_fibonacci(pattern, fibonacci_context or {}, zones) for pattern in pattern_dicts]
+    pattern_dicts = annotate_double_bottom_events(ordered, [enrich_pattern_fibonacci(pattern, fibonacci_context or {}, zones) for pattern in pattern_dicts])
     multi_timeframe_context = {"weekly_patterns": weekly_patterns or [], "monthly_snapshot": monthly_snapshot or {}} if weekly_patterns is not None or monthly_snapshot is not None else None
     signal, reasons = resolve_signal(pattern_dicts, snapshot_dict, position, market_context=market_context, multi_timeframe_context=multi_timeframe_context, portfolio_positions=portfolio_positions, candidate_sector=candidate_sector, capital=capital)
     reasons = [f"TREND_{snapshot.trend_state}", *reasons]
@@ -66,6 +67,7 @@ def resolve_signal(patterns: list[dict], snapshot: dict, position: dict | None =
         if p["direction"] == "BULLISH"
         and p["state"] == "CONFIRMED"
         and p.get("pattern_type") != "ROUNDING_BOTTOM"
+        and (p.get("evidence") or {}).get("new_confirmation") is not False
     ]
     top = max(bull, key=lambda p: p["quality_score"], default=None)
     liquid = average_turnover_vnd(snapshot) >= MIN_AVERAGE_TURNOVER_VND

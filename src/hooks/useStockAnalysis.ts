@@ -36,6 +36,8 @@ export interface TechnicalSnapshot {
 
 export interface PatternInstance {
   id: string
+  as_of_date: string
+  confirmed_at: string | null
   pattern_type: string
   state: string
   timeframe: string
@@ -103,7 +105,7 @@ export function useStockAnalysis(symbol: string | null, timeframe: 'D' | 'W' | '
         symbol: symbolRow,
         prices: ((prices.data ?? []) as PriceBar[]).reverse(),
         technical: (technical.data ?? []) as TechnicalSnapshot[],
-        patterns: (patterns.data ?? []) as PatternInstance[],
+        patterns: ((patterns.data ?? []) as PatternInstance[]).filter(row => row.as_of_date === technical.data?.[0]?.as_of_date),
         zones: latestUniqueZones((zones.data ?? []) as PriceZone[]),
         disclosures: disclosures.data ?? [],
         fundamentals: (fundamentals.data ?? []) as FundamentalPeriod[],
