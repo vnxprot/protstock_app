@@ -17,7 +17,7 @@ from .supabase_rest import SupabaseRestClient
 from .timeframes import aggregate_bars
 from .signal_policy import STOCK_PRICE_TO_VND, apply_signal_policy
 from .period_signals import monthly_trend, evaluate_period_signal
-from .wyckoff import classify_wyckoff
+from .wyckoff import classify_wyckoff_timeframe
 
 # VNINDEX's first session was 28/07/2000. This keeps its benchmark history full
 # through the app's operational planning horizon without expanding symbol fetches.
@@ -145,14 +145,14 @@ def run_eod(
                         "weekly_snapshot": results.get("W", {}).get("indicators", {}),
                         "monthly_snapshot": results.get("M", {}).get("indicators", {}),
                         "candidate_sector": symbol_row["sector"],
-                        "wyckoff_context": classify_wyckoff(analysis_rows),
                     }
                     for timeframe, scoped_rows in timeframe_rows.items():
                         if timeframe in results:
                             if "period_events" not in context:
                                 context.update(_decision_context(analysis_rows, trading_date, {}))
-                            _write_analysis(client, symbol_row["id"], timeframe, scoped_rows, benchmark_rows[timeframe], active_rules, counts, results[timeframe], context, evaluate_signals=False)
-                            pending_signals.append((symbol_row["id"], timeframe, scoped_rows, benchmark_rows[timeframe], results[timeframe], context))
+                            timeframe_context = {**context, "wyckoff_context": classify_wyckoff_timeframe(timeframe, scoped_rows, period_event=context["period_events"].get(timeframe, False))}
+                            _write_analysis(client, symbol_row["id"], timeframe, scoped_rows, benchmark_rows[timeframe], active_rules, counts, results[timeframe], timeframe_context, evaluate_signals=False)
+                            pending_signals.append((symbol_row["id"], timeframe, scoped_rows, benchmark_rows[timeframe], results[timeframe], timeframe_context))
                 counts["symbols"] += 1
                 client.create_job_item({
                     "job_run_id": job["id"], "symbol_id": symbol_row["id"],
@@ -267,18 +267,19 @@ def rebuild_signals(trading_date: date, *, symbol_offset: int = 0, symbol_limit:
                 benchmark_rows = {"D": benchmark_daily, "W": aggregate_bars(benchmark_daily, "W"), "M": aggregate_bars(benchmark_daily, "M")}
                 preliminary = {timeframe: analyze_bars(rows, fibonacci_context=fibonacci_context) for timeframe, rows in timeframe_rows.items() if rows}
                 results = {timeframe: analyze_bars(rows, weekly_patterns=preliminary.get("W", {}).get("patterns", []), monthly_snapshot=preliminary.get("M", {}).get("indicators", {}), benchmark_rows=benchmark_rows[timeframe], fibonacci_context=fibonacci_context) for timeframe, rows in timeframe_rows.items() if rows}
-                context = {"weekly_patterns": results.get("W", {}).get("patterns", []), "weekly_snapshot": results.get("W", {}).get("indicators", {}), "monthly_snapshot": results.get("M", {}).get("indicators", {}), "candidate_sector": symbol_row["sector"], "wyckoff_context": classify_wyckoff(analysis_rows)}
+                context = {"weekly_patterns": results.get("W", {}).get("patterns", []), "weekly_snapshot": results.get("W", {}).get("indicators", {}), "monthly_snapshot": results.get("M", {}).get("indicators", {}), "candidate_sector": symbol_row["sector"]}
                 for timeframe, rows in timeframe_rows.items():
                     if timeframe in results:
                         if "period_events" not in context:
                             context.update(_decision_context(analysis_rows, trading_date, {}))
+                        timeframe_context = {**context, "wyckoff_context": classify_wyckoff_timeframe(timeframe, rows, period_event=context["period_events"].get(timeframe, False))}
                         if prepared_market_context is None:
-                            _write_analysis(client, symbol_row["id"], timeframe, rows, benchmark_rows[timeframe], active_rules, counts, results[timeframe], context, evaluate_signals=False)
-                            pending_signals.append((symbol_row["id"], timeframe, rows, benchmark_rows[timeframe], results[timeframe], context))
+                            _write_analysis(client, symbol_row["id"], timeframe, rows, benchmark_rows[timeframe], active_rules, counts, results[timeframe], timeframe_context, evaluate_signals=False)
+                            pending_signals.append((symbol_row["id"], timeframe, rows, benchmark_rows[timeframe], results[timeframe], timeframe_context))
                         else:
-                            context["market_context"] = prepared_market_context
-                            context["portfolios"] = portfolios
-                            _write_analysis(client, symbol_row["id"], timeframe, rows, benchmark_rows[timeframe], active_rules, counts, results[timeframe], context, persist_evidence=False)
+                            timeframe_context["market_context"] = prepared_market_context
+                            timeframe_context["portfolios"] = portfolios
+                            _write_analysis(client, symbol_row["id"], timeframe, rows, benchmark_rows[timeframe], active_rules, counts, results[timeframe], timeframe_context, persist_evidence=False)
                 counts["symbols"] += 1
                 client.create_job_item({"job_run_id": job["id"], "symbol_id": symbol_row["id"], "item_key": symbol_row["symbol"], "status": "SUCCEEDED", "rows_written": 0, "duration_ms": int((monotonic() - started) * 1000)})
             except Exception as exc:
@@ -562,7 +563,7 @@ def _write_analysis(
         client.upsert("signal_evaluations", evaluations, "rule_version_id,symbol_id,timeframe,as_of_date")
     if raw_evaluations:
         consolidated = resolve_consolidated_signal(raw_evaluations)
-        winners = {item["rule_version_id"] for item in raw_evaluations if item["action"] == consolidated["composite_action"]}
+        winners = {item["rule_version_id"] for item in raw_evaluations if item["action"] == consolidated["composite_action"] and not (item.get("evidence") or {}).get("context_only")}
         for version_id in winners:
             stats = counts.get("engine_stats", {}).get(_stats_key(version_id, timeframe))
             if stats is not None:

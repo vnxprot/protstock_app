@@ -53,9 +53,9 @@ def apply_signal_policy(action: str, reasons: list[str], context: dict) -> tuple
         if (market.get("vnindex_snapshot") or {}).get("trend_state") in {None, "UNKNOWN"}:
             blocked.append("VNINDEX_CONTEXT_UNAVAILABLE")
     wyckoff = context.get("wyckoff_context") or {}
-    if wyckoff.get("state") == "DISTRIBUTION":
+    if wyckoff.get("state") in {"DISTRIBUTION", "BEARISH_CONTEXT"}:
         blocked.append("WYCKOFF_DISTRIBUTION_CONTEXT")
-    elif wyckoff.get("state") == "ACCUMULATION":
+    elif wyckoff.get("state") in {"ACCUMULATION", "BULLISH_CONTEXT"}:
         reasons.extend(wyckoff.get("reasons") or [])
     mtf = context.get("multi_timeframe_context") or {}
     monthly = (mtf.get("monthly_snapshot") or {}).get("trend_state")

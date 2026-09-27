@@ -249,7 +249,7 @@ def evaluate_wyckoff_context_v1(context: dict[str, Any]) -> tuple[bool, str, lis
     wyckoff = context.get("wyckoff_context") or {}
     if not wyckoff.get("event"):
         return False, "WATCH", []
-    context["engine_evidence"] = {"wyckoff": wyckoff}
+    context["engine_evidence"] = {"wyckoff": wyckoff, "context_only": True}
     return True, "WATCH", list(wyckoff.get("reasons") or [])
 
 

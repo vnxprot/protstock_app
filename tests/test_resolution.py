@@ -33,3 +33,13 @@ def test_resolution_three_aligned_engines_are_strongly_aligned() -> None:
         for engine in ("Core v2", "VCP", "RS Leader")
     ])
     assert (result["confluence_score"], result["confluence_count"], result["confluence_badge"]) == (98, 3, "STRONG_ALIGNED")
+
+
+def test_wyckoff_context_does_not_add_a_watch_confluence_vote() -> None:
+    result = resolve_consolidated_signal([
+        {"action": "WATCH", "engine": "Setup", "reasons": ["NEAR_TRIGGER"]},
+        {"action": "WATCH", "engine": "Wyckoff", "reasons": ["WYCKOFF_SPRING"], "evidence": {"context_only": True}},
+    ])
+    assert result["confluence_count"] == 1
+    assert result["consensus_engines"] == ["Setup"]
+    assert "WYCKOFF_SPRING" in result["reasons"]

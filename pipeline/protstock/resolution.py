@@ -32,9 +32,10 @@ def resolve_consolidated_signal(raw_signals: list[dict[str, Any]]) -> dict[str, 
     winner = max(raw_signals, key=lambda signal: ACTION_PRIORITY.get(str(signal.get("action")), 0))
     action = str(winner["action"])
     agreeing = [signal for signal in raw_signals if signal.get("action") == action]
-    engines = list(dict.fromkeys(str(signal.get("engine") or signal.get("rule_name") or "Unknown engine") for signal in agreeing))
-    clusters = {str((signal.get("evidence") or {}).get("evidence_cluster") or f"engine:{signal.get('engine') or signal.get('rule_name') or 'unknown'}") for signal in agreeing}
-    count = len(clusters)
+    voters = [signal for signal in agreeing if not (signal.get("evidence") or {}).get("context_only")]
+    engines = list(dict.fromkeys(str(signal.get("engine") or signal.get("rule_name") or "Unknown engine") for signal in (voters or agreeing)))
+    clusters = {str((signal.get("evidence") or {}).get("evidence_cluster") or f"engine:{signal.get('engine') or signal.get('rule_name') or 'unknown'}") for signal in voters}
+    count = max(1, len(clusters))
     score, badge = CONFLUENCE.get(count, (98, "STRONG_ALIGNED"))
     reasons = list(dict.fromkeys(reason for signal in agreeing for reason in (signal.get("reasons") or [])))
     reason_set = set(reasons)
