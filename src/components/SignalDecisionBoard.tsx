@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 import { formatDate } from '../lib/date'
 import { formatMarketPrice } from '../lib/marketUnits'
+import { latestSignalPublication } from '../lib/signalPublication'
 
 type Row = { id:string; symbol:string; sector:string|null; action:string; state:string; score:number; count:number; timeframe:string; expiry:string|null; trigger:number|null; stop:number|null; reasons:string[] }
 const stateLabel:Record<string,string>={EXTENDED:'Đã kéo xa nền',MOMENTUM_CONTINUATION:'Theo dõi xu hướng',WATCH_CONTEXT:'Không đủ điều kiện'}
@@ -9,16 +10,15 @@ const actionLabel:Record<string,string>={EXIT:'Thoát vị thế',REDUCE:'Giảm
 const actionRank:Record<string,number>={EXIT:4,REDUCE:3,ADD:2,PROBE_BUY:1}
 
 async function loadBoard():Promise<Row[]> {
-  const {data: latest,error:latestError}=await supabase!.from('consolidated_signals').select('as_of_date').order('as_of_date',{ascending:false}).limit(1).maybeSingle()
-  if(latestError) throw latestError
-  if(!latest) return []
-  const {data,error}=await supabase!.from('consolidated_signals').select('id,composite_action,signal_state,confluence_score,confluence_count,timeframe,expiry_date,trigger_price,invalidation_price,reasons,symbols!inner(symbol,sector)').eq('as_of_date',latest.as_of_date).order('confluence_score',{ascending:false}).limit(500)
+  const publication=await latestSignalPublication()
+  if(!publication) return []
+  const {data,error}=await supabase!.from('consolidated_signals').select('id,composite_action,signal_state,confluence_score,confluence_count,timeframe,expiry_date,trigger_price,invalidation_price,reasons,symbols!inner(symbol,sector)').eq('as_of_date',publication.date).order('confluence_score',{ascending:false}).limit(500)
   if(error) throw error
   return (data??[]).map((item:any)=>{const symbol=Array.isArray(item.symbols)?item.symbols[0]:item.symbols;return{id:item.id,symbol:symbol?.symbol??'—',sector:symbol?.sector??null,action:item.composite_action,state:item.signal_state,score:Number(item.confluence_score),count:Number(item.confluence_count),timeframe:item.timeframe,expiry:item.expiry_date,trigger:item.trigger_price==null?null:Number(item.trigger_price),stop:item.invalidation_price==null?null:Number(item.invalidation_price),reasons:item.reasons??[]}})
 }
 
 export function SignalDecisionBoard({onSelect}:{onSelect:(symbol:string)=>void}) {
-  const query=useQuery({queryKey:['signal-decision-board'],enabled:Boolean(supabase),staleTime:60_000,queryFn:loadBoard})
+  const query=useQuery({queryKey:['signal-decision-board'],enabled:Boolean(supabase),staleTime:60_000,refetchInterval:60_000,queryFn:loadBoard})
   const rows=query.data??[]
   const actionable=rows.filter(row=>row.state==='ACTIONABLE'&&row.action!=='WATCH').sort((a,b)=>(actionRank[b.action]-actionRank[a.action])||(b.count-a.count)||(b.score-a.score)).slice(0,8)
   const watch=rows.filter(row=>row.action==='WATCH'&&row.state==='WATCH_SETUP'&&row.trigger!=null&&row.stop!=null&&row.expiry!=null).sort((a,b)=>(a.expiry??'9999').localeCompare(b.expiry??'9999')||b.score-a.score).slice(0,12)

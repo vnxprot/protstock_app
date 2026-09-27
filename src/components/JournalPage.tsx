@@ -5,6 +5,7 @@ import { supabase } from "../lib/supabase";
 import { SoftSelect } from "./SoftSelect";
 import { SymbolAutocomplete } from "./SymbolAutocomplete";
 import { useSymbols } from "../hooks/useStockAnalysis";
+import { latestSignalPublication } from "../lib/signalPublication";
 
 const emotions = [
   ["DISCIPLINED", "🟢 Kỷ luật"],
@@ -108,11 +109,14 @@ export function JournalPage({ authenticated }: { authenticated: boolean }) {
   const activeSignals = useQuery({
     queryKey: ["journal-active-signals"],
     enabled: authenticated && Boolean(supabase),
+    refetchInterval: 60_000,
     queryFn: async () => {
+      const publication = await latestSignalPublication();
+      if (!publication) return [];
       const { data, error } = await supabase!
         .from("consolidated_signals")
         .select("composite_action,as_of_date,symbols!inner(symbol)")
-        .order("as_of_date", { ascending: false })
+        .eq("as_of_date", publication.date)
         .limit(1000);
       if (error) throw error;
       return (data ?? []).map((item: any) => ({

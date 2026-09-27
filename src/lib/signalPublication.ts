@@ -1,15 +1,18 @@
 import { supabase } from './supabase'
 
-export async function latestSignalPublication(): Promise<{ date: string; count: number } | null> {
+export async function latestSignalPublication(): Promise<{ date: string; count: number; finishedAt: string | null } | null> {
   const { data, error } = await supabase!.from('job_runs')
-    .select('trading_date,counts')
+    .select('trading_date,counts,finished_at')
     .eq('status', 'SUCCEEDED')
     .not('counts->>published_signals', 'is', null)
     .order('trading_date', { ascending: false })
     .order('finished_at', { ascending: false })
-    .limit(1)
-    .maybeSingle()
+    .limit(20)
   if (error) throw error
-  if (!data) return null
-  return { date: data.trading_date, count: Number(data.counts?.published_signals ?? 0) }
+  const latest = (data ?? []).find(item => {
+    const day = new Date(`${item.trading_date}T00:00:00Z`).getUTCDay()
+    return day >= 1 && day <= 5
+  })
+  if (!latest) return null
+  return { date: latest.trading_date, count: Number(latest.counts?.published_signals ?? 0), finishedAt: latest.finished_at }
 }

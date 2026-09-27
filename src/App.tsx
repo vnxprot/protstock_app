@@ -74,18 +74,19 @@ function App({ authenticated = false, profile = null }: { authenticated?: boolea
 
 function LoadingPage() { return <div className="skeleton-page"><div className="skeleton skeleton-title"/><div className="skeleton skeleton-card"/><div className="skeleton-grid">{[1,2,3,4].map(i => <div className="skeleton" key={i}/>)}</div></div> }
 function useMarketContext() {
-  return useQuery({ queryKey: ['dashboard-vnindex'], enabled: Boolean(supabase), staleTime: 60_000, queryFn: async () => {
+  return useQuery({ queryKey: ['dashboard-vnindex'], enabled: Boolean(supabase), staleTime: 60_000, refetchInterval: 60_000, queryFn: async () => {
+    const publication = await latestSignalPublication()
+    if (!publication) return { latest: null, change: null, breadth: null }
     const { data: index, error: indexError } = await supabase!.from('market_indices').select('id').eq('code', 'VNINDEX').single()
     if (indexError) throw indexError
-    const [{ data: prices, error: pricesError }, { data: breadth, error: breadthError }] = await Promise.all([
-      supabase!.from('market_index_prices').select('trading_date,close,source,collected_at').eq('index_id', index.id).order('trading_date', { ascending: false }).limit(2),
-      supabase!.from('market_breadth_snapshots').select('trading_date,pct_above_sma50,pct_above_sma20,pct_above_sma200,pct_ma_stack,market_health_score,market_health_state,sample_size,universe_size,eligible_count,observed_count,coverage_ratio,coverage_status,vnindex_trend_state,advance_count,decline_count,unchanged_count,advance_decline_ratio,new_high20_count,new_low20_count,up_down_volume_ratio,sector_breadth,calculated_at').in('coverage_status', ['COMPLETE','DEGRADED']).order('trading_date', { ascending: false }).limit(1),
+    const [{ data: latest, error: latestError }, { data: prior, error: priorError }, { data: breadth, error: breadthError }] = await Promise.all([
+      supabase!.from('market_index_prices').select('trading_date,close,source,collected_at').eq('index_id', index.id).eq('trading_date', publication.date).maybeSingle(),
+      supabase!.from('market_index_prices').select('trading_date,close').eq('index_id', index.id).lt('trading_date', publication.date).order('trading_date', { ascending: false }).limit(1).maybeSingle(),
+      supabase!.from('market_breadth_snapshots').select('trading_date,pct_above_sma50,pct_above_sma20,pct_above_sma200,pct_ma_stack,market_health_score,market_health_state,sample_size,universe_size,eligible_count,observed_count,coverage_ratio,coverage_status,vnindex_trend_state,advance_count,decline_count,unchanged_count,advance_decline_ratio,new_high20_count,new_low20_count,up_down_volume_ratio,sector_breadth,calculated_at').eq('trading_date', publication.date).maybeSingle(),
     ])
-    if (pricesError || breadthError) throw pricesError || breadthError
-    const latest = prices?.[0]
-    const prior = prices?.[1]
+    if (latestError || priorError || breadthError) throw latestError || priorError || breadthError
     const change = latest && prior ? ((Number(latest.close) - Number(prior.close)) / Number(prior.close)) * 100 : null
-    return { latest, change, breadth: breadth?.[0] }
+    return { latest, change, breadth }
   } })
 }
 function MarketContextCard() {
@@ -122,19 +123,17 @@ function MarketContextCard() {
 }
 function ExecutiveKpiStrip({ favorites }: { favorites: string[] }) {
   const summary = useQuery({
-    queryKey: ['overview-signal-summary', favorites.join(',')], enabled: Boolean(supabase), staleTime: 60_000,
+    queryKey: ['overview-signal-summary', favorites.join(',')], enabled: Boolean(supabase), staleTime: 60_000, refetchInterval: 60_000,
     queryFn: async () => {
-      const { data: latest, error: latestError } = await supabase!.from('consolidated_signals').select('as_of_date').order('as_of_date', { ascending: false }).limit(1).maybeSingle()
-      if (latestError) throw latestError
-      if (!latest) return { total: 0, high: 0, watched: 0, date: null }
-      const [total, high, watched] = await Promise.all([
-        supabase!.from('consolidated_signals').select('id', { count: 'exact', head: true }).eq('as_of_date', latest.as_of_date),
-        supabase!.from('consolidated_signals').select('id', { count: 'exact', head: true }).eq('as_of_date', latest.as_of_date).gte('confluence_count', 2),
-        favorites.length ? supabase!.from('consolidated_signals').select('symbols!inner(symbol)').eq('as_of_date', latest.as_of_date).neq('composite_action', 'WATCH').in('symbols.symbol', favorites).range(0, 999) : Promise.resolve({ data: [], error: null }),
+      const publication = await latestSignalPublication()
+      if (!publication) return { total: 0, high: 0, watched: 0, date: null }
+      const [high, watched] = await Promise.all([
+        supabase!.from('consolidated_signals').select('id', { count: 'exact', head: true }).eq('as_of_date', publication.date).gte('confluence_count', 2),
+        favorites.length ? supabase!.from('consolidated_signals').select('symbols!inner(symbol)').eq('as_of_date', publication.date).neq('composite_action', 'WATCH').in('symbols.symbol', favorites).range(0, 999) : Promise.resolve({ data: [], error: null }),
       ])
-      if (total.error || high.error || watched.error) throw total.error || high.error || watched.error
+      if (high.error || watched.error) throw high.error || watched.error
       const tracked = new Set((watched.data ?? []).map((item: any) => (Array.isArray(item.symbols) ? item.symbols[0] : item.symbols)?.symbol).filter(Boolean))
-      return { total: total.count ?? 0, high: high.count ?? 0, watched: tracked.size, date: latest.as_of_date }
+      return { total: publication.count, high: high.count ?? 0, watched: tracked.size, date: publication.date }
     },
   })
   return <section className="overview-kpis" aria-label="Tóm tắt phiên gần nhất">
@@ -143,26 +142,12 @@ function ExecutiveKpiStrip({ favorites }: { favorites: string[] }) {
   </section>
 }
 function Dashboard() {
-  const signals = useQuery({
-    queryKey: ['today-consolidated-signals'], enabled: Boolean(supabase),
-    queryFn: async () => {
-      const { data, error } = await supabase!.from('consolidated_signals')
-        .select('id,composite_action,confluence_score,confluence_count,timeframe,as_of_date,reasons,symbols(symbol,sector)')
-        .order('as_of_date', { ascending: false }).order('confluence_score', { ascending: false }).limit(6)
-      if (error) throw error
-      return (data ?? []).map((item: any) => {
-        const symbol = Array.isArray(item.symbols) ? item.symbols[0] : item.symbols
-        return { ...item, symbol: symbol?.symbol ?? '—', sector: symbol?.sector, action: item.composite_action, score: Number(item.confluence_score), count: Number(item.confluence_count) }
-      })
-    },
-  })
   const [favorites, setFavorites] = useState<string[]>(() => { try { return JSON.parse(localStorage.getItem('protstock-favorites') ?? '[]') } catch { return [] } })
   useEffect(() => {
     const update = (event: Event) => setFavorites((event as CustomEvent<string[]>).detail)
     addEventListener('protstock:favorites', update)
     return () => removeEventListener('protstock:favorites', update)
   }, [])
-  const feed = signals.data ?? []
   const selectSymbol = (symbol: string) => {
     localStorage.setItem('protstock-symbol', symbol)
     dispatchEvent(new CustomEvent('protstock:symbol', { detail: symbol }))
