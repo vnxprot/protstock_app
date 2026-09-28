@@ -371,7 +371,16 @@ def rebuild_market_health(start_date: date, end_date: date) -> dict[str, Any]:
         snapshots = build_market_health_history(symbols, rows, start_date, end_date, index_rows=index_rows)
         for offset in range(0, len(snapshots), 500):
             client.upsert("market_breadth_snapshots", snapshots[offset:offset + 500], "trading_date")
-        return {"status": "SUCCEEDED", "start_date": start_date.isoformat(), "end_date": end_date.isoformat(), "snapshots": len(snapshots)}
+        latest = snapshots[-1] if snapshots else None
+        return {
+            "status": "SUCCEEDED", "start_date": start_date.isoformat(), "end_date": end_date.isoformat(), "snapshots": len(snapshots),
+            "latest": None if latest is None else {
+                "trading_date": latest["trading_date"], "observed_count": latest["observed_count"],
+                "eligible_count": latest["eligible_count"], "coverage_status": latest["coverage_status"],
+                "sector_count": len(latest["sector_breadth"]),
+                "sectors_with_flow": sum(row["flow_observed_count"] > 0 for row in latest["sector_breadth"]),
+            },
+        }
     finally:
         client.close()
 
