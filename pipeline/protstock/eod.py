@@ -212,17 +212,20 @@ def run_eod(
         client.close()
 
 
-def finalize_fast_lane(trading_date: date) -> dict[str, Any]:
-    """Publish the completed market snapshot before evaluating Fast Lane signals."""
+def finalize_fast_lane(trading_date: date, *, allow_partial: bool = False) -> dict[str, Any]:
+    """Publish same-day market context; the final watchdog may accept partial coverage."""
     client = SupabaseRestClient(Settings.from_env())
     try:
         trading_date = resolve_eod_session(client, trading_date)
-        expected = {row["id"] for row in client.active_symbols()}
+        active_symbols = client.active_symbols()
+        expected = {row["id"] for row in active_symbols}
         snapshots = client.daily_snapshots_for_date(trading_date)
         covered = {row["symbol_id"] for row in snapshots}
         missing = expected - covered
-        if missing:
+        if missing and not allow_partial:
             raise RuntimeError(f"Fast Lane incomplete: {len(covered)}/{len(expected)} daily snapshots")
+        if not covered:
+            raise RuntimeError(f"No same-day snapshots for {trading_date}; Market Health and signals cannot be evaluated")
         index = client.market_index("VNINDEX")
         benchmark = _rows_as_of(client.index_price_history(index["id"], MULTI_TIMEFRAME_HISTORY_LIMIT), trading_date)
         if not benchmark or benchmark[-1]["trading_date"] != trading_date.isoformat():
@@ -234,7 +237,13 @@ def finalize_fast_lane(trading_date: date) -> dict[str, Any]:
     rebuilt = rebuild_signals(trading_date, prepared_market_context=_same_day_market_context(trading_date, breadth, vnindex_snapshot))
     if rebuilt["status"] != "SUCCEEDED":
         raise RuntimeError(f"Fast Lane signal evaluation was {rebuilt['status']}")
-    return {"status": "SUCCEEDED", "covered": len(covered), "expected": len(expected), "breadth": breadth, "signals": rebuilt["signals"]}
+    return {
+        "status": "PARTIAL" if missing else "SUCCEEDED",
+        "covered": len(covered), "expected": len(expected),
+        "missing_symbols": sorted(row["symbol"] for row in active_symbols if row["id"] in missing),
+        "breadth": breadth, "signals": rebuilt["signals"],
+        "published_signals": rebuilt.get("published_signals", 0),
+    }
 
 
 def rebuild_signals(trading_date: date, *, symbol_offset: int = 0, symbol_limit: int | None = None, historical: bool = False, prepared_market_context: dict | None = None) -> dict[str, Any]:
@@ -277,6 +286,14 @@ def rebuild_signals(trading_date: date, *, symbol_offset: int = 0, symbol_limit:
             started = monotonic()
             try:
                 analysis_rows = [{**row, "date": row["trading_date"]} for row in _rows_as_of(client.price_history(symbol_row["id"], MULTI_TIMEFRAME_HISTORY_LIMIT), trading_date)]
+                if prepared_market_context is not None and (not analysis_rows or analysis_rows[-1]["date"] != trading_date.isoformat()):
+                    # Partial publication uses only prices from this EOD.
+                    counts["skipped_missing_price"] = counts.get("skipped_missing_price", 0) + 1
+                    warnings.append(f"{symbol_row['symbol']}: STALE_PRICE_DATA")
+                    for timeframe in ("D", "W", "M"):
+                        client.delete_consolidated_signal(symbol_row["id"], timeframe, trading_date.isoformat())
+                    client.create_job_item({"job_run_id": job["id"], "symbol_id": symbol_row["id"], "item_key": symbol_row["symbol"], "status": "SKIPPED", "warning_codes": ["STALE_PRICE_DATA"], "rows_written": 0, "duration_ms": int((monotonic() - started) * 1000)})
+                    continue
                 if not analysis_rows:
                     raise ValueError("no stored price history")
                 timeframe_rows = {"D": analysis_rows, "W": aggregate_bars(analysis_rows, "W", confirmed_week_end), "M": aggregate_bars(analysis_rows, "M", confirmed_month_end=confirmed_month_end)}

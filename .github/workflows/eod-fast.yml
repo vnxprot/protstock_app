@@ -84,9 +84,9 @@ jobs:
           args=()
           if [ -n "$TRADING_DATE" ]; then args+=(--date "$TRADING_DATE"); fi
           protstock finalize-fast-eod "${args[@]}"
-      - name: Report incomplete coverage
+      - name: Report coverage awaiting the final Watchdog retry
         if: steps.finalize.outcome == 'failure'
-        run: echo "::warning::Fast Lane coverage was incomplete; Telegram alerts will still send any eligible stored signals."
+        run: echo "::warning::Fast Lane coverage is incomplete; the final Watchdog will retry missing symbols, then publish Market Health and same-day signals from the available sample."
       - name: Send final concise Telegram EOD alerts
         if: steps.finalize.outcome == 'success' && inputs.skip_alerts != true
         env:

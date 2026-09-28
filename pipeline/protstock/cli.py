@@ -75,6 +75,7 @@ def main() -> None:
     eod.add_argument("--historical", action="store_true", help="Do not use today's portfolio for a historical EOD date")
     finalize_fast = subparsers.add_parser("finalize-fast-eod")
     finalize_fast.add_argument("--date", dest="trading_date", type=date.fromisoformat, default=date.today())
+    finalize_fast.add_argument("--allow-partial", action="store_true", help="Publish available same-day data after the final Watchdog retry")
     health = subparsers.add_parser("rebuild-market-health")
     health.add_argument("--start-date", type=date.fromisoformat, default=date(2021, 1, 1))
     health.add_argument("--end-date", type=date.fromisoformat, default=date.today())
@@ -138,7 +139,7 @@ def main() -> None:
         print(json.dumps(result, indent=2))
         raise SystemExit(0 if result["status"] in {"SUCCEEDED", "PARTIAL"} else 1)
     if args.command == "finalize-fast-eod":
-        print(json.dumps(finalize_fast_lane(args.trading_date), ensure_ascii=False))
+        print(json.dumps(finalize_fast_lane(args.trading_date, allow_partial=args.allow_partial), ensure_ascii=False))
         raise SystemExit(0)
     if args.command == "rebuild-market-health":
         print(json.dumps(rebuild_market_health(args.start_date, args.end_date), ensure_ascii=False))

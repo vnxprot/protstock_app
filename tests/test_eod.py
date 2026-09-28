@@ -117,6 +117,55 @@ def test_finalize_fast_lane_requires_all_active_symbols(monkeypatch) -> None:
         raise AssertionError("incomplete Fast Lane must not finalize")
 
 
+def test_final_watchdog_publishes_partial_same_day_coverage(monkeypatch) -> None:
+    day = date(2026, 9, 28)
+    calls = []
+
+    class Client:
+        def active_symbols(self): return [{"id": 1, "symbol": "AAA"}, {"id": 2, "symbol": "BBB"}]
+        def daily_snapshots_for_date(self, _day): return [{"symbol_id": 1}]
+        def market_index(self, _code): return {"id": 1}
+        def index_price_history(self, *_args): return [{"trading_date": day.isoformat()}]
+        def close(self): pass
+
+    def persist(_client, _day, trend):
+        calls.append(("breadth", _day, trend))
+        return {"coverage_status": "DEGRADED", "observed_count": 1, "eligible_count": 2}
+
+    def rebuild(_day, **kwargs):
+        calls.append(("signals", _day, kwargs["prepared_market_context"]["trading_date"]))
+        return {"status": "SUCCEEDED", "signals": 2, "published_signals": 2}
+
+    monkeypatch.setattr("protstock.eod.SupabaseRestClient", lambda _settings: Client())
+    monkeypatch.setattr("protstock.eod.Settings.from_env", lambda: object())
+    monkeypatch.setattr("protstock.eod._benchmark_snapshot", lambda *_args: {"trend_state": "SIDEWAYS"})
+    monkeypatch.setattr("protstock.eod._persist_universe_breadth", persist)
+    monkeypatch.setattr("protstock.eod.rebuild_signals", rebuild)
+
+    result = finalize_fast_lane(day, allow_partial=True)
+    assert result["status"] == "PARTIAL"
+    assert result["covered"] == 1 and result["expected"] == 2
+    assert result["missing_symbols"] == ["BBB"]
+    assert result["published_signals"] == 2
+    assert calls == [("breadth", day, "SIDEWAYS"), ("signals", day, day.isoformat())]
+
+
+def test_final_watchdog_rejects_zero_same_day_snapshots(monkeypatch) -> None:
+    class Client:
+        def active_symbols(self): return [{"id": 1, "symbol": "AAA"}]
+        def daily_snapshots_for_date(self, _day): return []
+        def close(self): pass
+
+    monkeypatch.setattr("protstock.eod.SupabaseRestClient", lambda _settings: Client())
+    monkeypatch.setattr("protstock.eod.Settings.from_env", lambda: object())
+    try:
+        finalize_fast_lane(date(2026, 9, 28), allow_partial=True)
+    except RuntimeError as exc:
+        assert "No same-day snapshots" in str(exc)
+    else:
+        raise AssertionError("zero coverage cannot produce a meaningful market context")
+
+
 def test_eod_evaluates_signals_only_after_same_day_market_snapshot(monkeypatch) -> None:
     day = date(2026, 9, 25)
     events = []

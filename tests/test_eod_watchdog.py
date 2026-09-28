@@ -10,7 +10,9 @@ def test_eod_watchdog_has_both_recovery_stages_and_targeted_retry() -> None:
     assert "needs.inspect.outputs.action == 'DISPATCH_FAST_LANE'" in workflow
     assert "--source VCI --symbol-offset" in workflow
     assert "--source KBS --symbol-offset" in workflow
-    assert "Dữ liệu tạm thời:" in workflow
+    assert "protstock finalize-fast-eod --allow-partial" in workflow
+    assert "needs.inspect.outputs.action == 'IN_PROGRESS'" in workflow
+    assert "gh workflow run eod-watchdog.yml" in workflow
     assert "protstock send-eod-alerts" in workflow
 
 
