@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from protstock.universe import load_universe
+from protstock.universe import PROT_SECTORS, load_universe
 
 
 def test_locked_universe() -> None:
@@ -15,3 +15,12 @@ def test_locked_universe() -> None:
     ]
     # Regenerate after an approved universe revision with: sha256sum data/universe.csv
     assert result.sha256 == "d037904c802128dfa9c9df7a73e9e6267407f61a296d4760a5bb409ba5c04688"
+    assert {row.sector for row in result.rows} == PROT_SECTORS
+
+
+def test_new_universe_symbol_must_use_existing_prot_sector(tmp_path) -> None:
+    path = tmp_path / "universe.csv"
+    path.write_text("symbol,sector,active\nAAA,NEW_UNKNOWN_GROUP,true\n", encoding="utf-8")
+    validation = load_universe(path)
+    assert not validation.is_valid
+    assert "unknown_sector" in validation.invalid[0][1]

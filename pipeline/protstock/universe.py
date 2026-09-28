@@ -8,6 +8,17 @@ from pathlib import Path
 from .models import UniverseRow
 
 
+# Prot's existing 27 industry groups are the canonical vocabulary for both
+# trading and market observation. New listings need an explicit classification.
+PROT_SECTORS = frozenset({
+    "BAN LE", "BAO HIEM", "BDS", "BDS_KCN", "BE TONG_NHUA DUONG", "CANG BIEN",
+    "CAO SU", "CHUNG KHOAN", "DAU KHI", "DAU TU CONG", "DIEN_NUOC", "DUOC",
+    "DUONG", "GAO", "GIAY_BAO BI", "GO", "HANG KHONG", "HOA CHAT_PHAN BON",
+    "KHOANG SAN", "NGAN HANG", "THAN", "THEP", "THUC PHAM", "THUY SAN",
+    "VIETTEL", "XAY DUNG", "XUAT KHAU",
+})
+
+
 @dataclass(frozen=True)
 class UniverseValidation:
     rows: tuple[UniverseRow, ...]
@@ -43,6 +54,8 @@ def load_universe(path: str | Path) -> UniverseValidation:
                 active=active_text in {"true", "1", "yes"},
             )
             errors = parsed.validate()
+            if parsed.sector not in PROT_SECTORS:
+                errors.append("unknown_sector")
             if active_text not in {"true", "false", "1", "0", "yes", "no"}:
                 errors.append("invalid_active")
             if symbol in seen:

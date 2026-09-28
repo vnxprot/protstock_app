@@ -367,7 +367,7 @@ def rebuild_market_health(start_date: date, end_date: date) -> dict[str, Any]:
         symbols = client.active_symbols()
         rows = client.all_daily_prices(start_date - timedelta(days=365), end_date)
         index = client.market_index("VNINDEX")
-        index_rows = _rows_as_of(client.index_price_history(index["id"], MULTI_TIMEFRAME_HISTORY_LIMIT), end_date)
+        index_rows = client.index_prices_in_range(index["id"], start_date - timedelta(days=100), end_date)
         snapshots = build_market_health_history(symbols, rows, start_date, end_date, index_rows=index_rows)
         for offset in range(0, len(snapshots), 500):
             client.upsert("market_breadth_snapshots", snapshots[offset:offset + 500], "trading_date")

@@ -176,13 +176,29 @@ class SupabaseRestClient:
         for offset in range(0, 1_000_000, 1000):
             response = self._client.get(
                 "/daily_prices",
-                params={"select": "symbol_id,trading_date,close,volume", "trading_date": f"gte.{start_date.isoformat()}", "order": "trading_date.asc,symbol_id.asc"},
+                params=[("select", "symbol_id,trading_date,high,low,close,volume"), ("trading_date", f"gte.{start_date.isoformat()}"), ("trading_date", f"lte.{end_date.isoformat()}"), ("order", "trading_date.asc,symbol_id.asc")],
                 headers={"Range": f"{offset}-{offset + 999}"},
             )
             response.raise_for_status()
             page = response.json()
             rows.extend(page)
             if len(page) < 1000:
+                break
+        return rows
+
+    def index_prices_in_range(self, index_id: int, start_date: date, end_date: date) -> list[dict[str, Any]]:
+        """Page the full benchmark history instead of silently truncating 2021+ rebuilds."""
+        rows: list[dict[str, Any]] = []
+        for offset in range(0, 10_000, 1_000):
+            response = self._client.get(
+                "/market_index_prices",
+                params=[("select", "trading_date,close"), ("index_id", f"eq.{index_id}"), ("trading_date", f"gte.{start_date.isoformat()}"), ("trading_date", f"lte.{end_date.isoformat()}"), ("order", "trading_date.asc")],
+                headers={"Range": f"{offset}-{offset + 999}"},
+            )
+            response.raise_for_status()
+            page = response.json()
+            rows.extend(page)
+            if len(page) < 1_000:
                 break
         return rows
 
@@ -238,7 +254,7 @@ class SupabaseRestClient:
         response = self._client.get(
             "/technical_snapshots",
             params={
-                "select": "symbol_id,close,sma20,sma50,sma200,ma_stack,last_volume,close_high20,close_low20",
+                "select": "symbol_id,close,sma20,sma50,sma200,ma_stack,last_volume,close_high20,close_low20,flow_score,flow_state",
                 "timeframe": "eq.D",
                 "as_of_date": f"eq.{trading_date.isoformat()}",
             },

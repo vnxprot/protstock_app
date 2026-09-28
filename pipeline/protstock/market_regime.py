@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from statistics import median
 from typing import Sequence
 
 
@@ -31,6 +32,24 @@ def _health_state(score: float | None) -> str:
     return "RISK_ON" if score is not None and score >= 65 else "RISK_OFF" if score is not None and score < 35 else "NEUTRAL"
 
 
+def _sector_flow(members: Sequence[dict]) -> dict:
+    """Sector-level OHLCV pressure proxy; never an investor-identity or buy signal."""
+    observed = [item for item in members if item.get("flow_score") is not None]
+    states = [str(item.get("flow_state") or "UNKNOWN") for item in observed]
+    scores = [float(item["flow_score"]) for item in observed]
+    return {
+        "flow_observed_count": len(observed),
+        "flow_coverage_ratio": round(len(observed) / len(members), 4) if members else None,
+        "flow_positive_count": sum(score > 0 for score in scores),
+        "flow_negative_count": sum(score < 0 for score in scores),
+        "flow_median_score": round(median(scores), 1) if scores else None,
+        "flow_in_count": sum(state in {"GREEN", "PURPLE"} for state in states),
+        "flow_out_count": sum(state in {"RED", "BLUE"} for state in states),
+        "flow_strong_in_count": states.count("PURPLE"),
+        "flow_strong_out_count": states.count("BLUE"),
+    }
+
+
 def compute_breadth(snapshots: Sequence[dict], prior_by_symbol: dict | None = None, sector_by_symbol: dict | None = None) -> dict:
     """Calculate point-in-time breadth from stored, free EOD OHLCV fields."""
     eligible = [item for item in snapshots if _valid_snapshot(item)]
@@ -38,6 +57,9 @@ def compute_breadth(snapshots: Sequence[dict], prior_by_symbol: dict | None = No
     advances = declines = unchanged = new_high20 = new_low20 = 0
     up_volume = down_volume = 0.0
     grouped: dict[str, list[dict]] = defaultdict(list)
+    sector_totals: dict[str, int] = defaultdict(int)
+    for sector in sector_by_symbol.values():
+        sector_totals[str(sector or "Khác")] += 1
     for item in eligible:
         symbol_id = item.get("symbol_id")
         grouped[str(sector_by_symbol.get(symbol_id) or "Khác")].append(item)
@@ -70,9 +92,12 @@ def compute_breadth(snapshots: Sequence[dict], prior_by_symbol: dict | None = No
         sector_score = _health_score(members, sector_advances, sector_declines)
         sector_breadth.append({
             "sector": sector, "sample_size": len(members),
+            "universe_count": sector_totals.get(sector, len(members)),
+            "coverage_ratio": round(len(members) / sector_totals[sector], 4) if sector_totals.get(sector) else None,
             "pct_above_sma50": _pct(members, lambda item: float(item["close"]) > float(item["sma50"])),
             "advance_count": sector_advances, "decline_count": sector_declines,
             "market_health_score": sector_score, "market_health_state": _health_state(sector_score),
+            **_sector_flow(members),
         })
     return {
         "pct_above_sma50": _pct(eligible, lambda item: float(item["close"]) > float(item["sma50"])),

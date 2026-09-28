@@ -126,3 +126,49 @@ def test_breadth_depth_uses_prior_close_and_stored_eod_fields_only():
     assert breadth["new_low20_count"] == 1
     assert breadth["up_down_volume_ratio"] == 2
     assert breadth["sector_breadth"][0]["sector"] == "Ngân hàng"
+
+
+def test_sector_flow_is_separate_from_health_and_audits_missing_members():
+    symbols = [{"id": 1, "sector": "NGAN HANG"}, {"id": 2, "sector": "NGAN HANG"}, {"id": 3, "sector": "NGAN HANG"}]
+    current = [
+        {"symbol_id": 1, "close": 11, "sma20": 10, "sma50": 9, "sma200": 8, "ma_stack": True, "flow_score": 20, "flow_state": "PURPLE"},
+        {"symbol_id": 2, "close": 11, "sma20": 10, "sma50": 9, "sma200": 8, "ma_stack": True, "flow_score": -10, "flow_state": "BLUE"},
+    ]
+    breadth, _ = build_breadth_membership(symbols, current, current, "2026-09-28")
+    sector = breadth["sector_breadth"][0]
+    assert sector["market_health_score"] == 100
+    assert sector["universe_count"] == 3
+    assert sector["sample_size"] == 2
+    assert sector["coverage_ratio"] == 0.6667
+    assert sector["flow_median_score"] == 5
+    assert sector["flow_positive_count"] == sector["flow_negative_count"] == 1
+    assert sector["flow_strong_in_count"] == sector["flow_strong_out_count"] == 1
+    assert regime_ok(breadth, {"trend_state": "UP"}) == (True, [])
+
+
+def test_historical_sector_flow_has_no_future_price_leakage():
+    from datetime import timedelta
+
+    first = date(2026, 7, 1)
+    prices = [{"symbol_id": 1, "trading_date": (first + timedelta(days=i)).isoformat(), "high": 105 + i, "low": 95 + i, "close": 100 + i, "volume": 100 + i} for i in range(65)]
+    day = date.fromisoformat(prices[55]["trading_date"])
+    symbols = [{"id": 1, "sector": "TEST"}]
+    full = build_market_health_history(symbols, prices, day, day)
+    truncated = build_market_health_history(symbols, prices[:56], day, day)
+    assert full[0]["sector_breadth"] == truncated[0]["sector_breadth"]
+    assert full[0]["sector_breadth"][0]["flow_observed_count"] == 1
+
+
+def test_historical_breadth_preserves_missing_eligible_symbols():
+    from datetime import timedelta
+
+    first = date(2026, 7, 1)
+    bars = [
+        {"symbol_id": symbol_id, "trading_date": (first + timedelta(days=i)).isoformat(), "high": 12, "low": 8, "close": 10, "volume": 100}
+        for symbol_id in (1, 2) for i in range(60 if symbol_id == 1 else 59)
+    ]
+    day = first + timedelta(days=59)
+    result = build_market_health_history([{"id": 1, "sector": "A"}, {"id": 2, "sector": "A"}], bars, day, day)[0]
+    assert result["observed_count"] == 1
+    assert result["eligible_count"] == 2
+    assert result["coverage_status"] == "INCOMPLETE"

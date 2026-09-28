@@ -39,6 +39,25 @@ def test_published_signal_count_uses_exact_database_total_not_upserts() -> None:
         client.close()
 
 
+def test_market_history_pages_benchmark_and_preserves_date_bounds() -> None:
+    from datetime import date
+
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        assert request.url.params.get_list("trading_date") == ["gte.2021-01-01", "lte.2026-09-28"]
+        return httpx.Response(200, json=[{"trading_date": "2021-01-01", "close": 100}] * (1000 if len(requests) == 1 else 1))
+
+    client = SupabaseRestClient(Settings("https://example.supabase.co", "service"), transport=httpx.MockTransport(handler))
+    try:
+        rows = client.index_prices_in_range(1, date(2021, 1, 1), date(2026, 9, 28))
+        assert len(rows) == 1001
+        assert [request.headers["range"] for request in requests] == ["0-999", "1000-1999"]
+    finally:
+        client.close()
+
+
 def test_pattern_snapshot_removes_only_superseded_same_day_geometry() -> None:
     requests: list[httpx.Request] = []
 
