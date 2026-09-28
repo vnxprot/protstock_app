@@ -369,8 +369,18 @@ def rebuild_market_health(start_date: date, end_date: date) -> dict[str, Any]:
         index = client.market_index("VNINDEX")
         index_rows = client.index_prices_in_range(index["id"], start_date - timedelta(days=100), end_date)
         snapshots = build_market_health_history(symbols, rows, start_date, end_date, index_rows=index_rows)
-        for offset in range(0, len(snapshots), 500):
-            client.upsert("market_breadth_snapshots", snapshots[offset:offset + 500], "trading_date")
+        published_dates = client.published_signal_dates(start_date, end_date)
+        estimates = [item for item in snapshots if date.fromisoformat(item["trading_date"]) not in published_dates]
+        for offset in range(0, len(estimates), 500):
+            client.upsert("market_breadth_snapshots", estimates[offset:offset + 500], "trading_date")
+        by_date = {date.fromisoformat(item["trading_date"]): item for item in snapshots}
+        for published_day in sorted(published_dates & by_date.keys()):
+            # Published sessions use the exact technical snapshots and
+            # membership evaluated by Core Engine, never a price-only estimate.
+            if not client.daily_snapshots_for_date(published_day):
+                continue
+            live_breadth = _persist_universe_breadth(client, published_day, by_date[published_day]["vnindex_trend_state"])
+            by_date[published_day].update(live_breadth)
         latest = snapshots[-1] if snapshots else None
         return {
             "status": "SUCCEEDED", "start_date": start_date.isoformat(), "end_date": end_date.isoformat(), "snapshots": len(snapshots),

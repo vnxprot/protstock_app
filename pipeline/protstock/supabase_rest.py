@@ -170,6 +170,24 @@ class SupabaseRestClient:
         return next((row.get("source_revision") or "legacy" for row in response.json()
                      if (row.get("counts") or {}).get("published_signals") is not None), None)
 
+    def published_signal_dates(self, start_date: date, end_date: date) -> set[date]:
+        """Protect authoritative published EOD breadth from historical estimates."""
+        dates: set[date] = set()
+        for offset in range(0, 10_000, 1_000):
+            response = self._client.get(
+                "/job_runs",
+                params=[("select", "trading_date,counts"), ("status", "eq.SUCCEEDED"),
+                        ("trading_date", f"gte.{start_date.isoformat()}"), ("trading_date", f"lte.{end_date.isoformat()}"),
+                        ("order", "trading_date.asc")],
+                headers={"Range": f"{offset}-{offset + 999}"},
+            )
+            response.raise_for_status()
+            page = response.json()
+            dates.update(date.fromisoformat(row["trading_date"]) for row in page if (row.get("counts") or {}).get("published_signals") is not None)
+            if len(page) < 1_000:
+                break
+        return dates
+
     def all_daily_prices(self, start_date: date, end_date: date) -> list[dict[str, Any]]:
         """Read stored OHLCV in pages for point-in-time Market Health rebuilds."""
         rows: list[dict[str, Any]] = []

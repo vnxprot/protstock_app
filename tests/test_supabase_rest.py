@@ -58,6 +58,23 @@ def test_market_history_pages_benchmark_and_preserves_date_bounds() -> None:
         client.close()
 
 
+def test_published_signal_dates_only_include_completed_publications() -> None:
+    from datetime import date
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.params["status"] == "eq.SUCCEEDED"
+        return httpx.Response(200, json=[
+            {"trading_date": "2026-09-25", "counts": {"published_signals": 0}},
+            {"trading_date": "2026-09-28", "counts": {"signals": 23}},
+        ])
+
+    client = SupabaseRestClient(Settings("https://example.supabase.co", "service"), transport=httpx.MockTransport(handler))
+    try:
+        assert client.published_signal_dates(date(2026, 9, 1), date(2026, 9, 30)) == {date(2026, 9, 25)}
+    finally:
+        client.close()
+
+
 def test_pattern_snapshot_removes_only_superseded_same_day_geometry() -> None:
     requests: list[httpx.Request] = []
 

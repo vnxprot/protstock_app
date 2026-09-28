@@ -1,6 +1,6 @@
 from datetime import date
 
-from protstock.eod import _prior_market_context, _stored_universe_breadth
+from protstock.eod import _prior_market_context, _stored_universe_breadth, rebuild_market_health
 from protstock.market_regime import build_breadth_membership, regime_ok
 from protstock.market_health_history import _index_trends, build_market_health_history
 
@@ -172,3 +172,28 @@ def test_historical_breadth_preserves_missing_eligible_symbols():
     assert result["observed_count"] == 1
     assert result["eligible_count"] == 2
     assert result["coverage_status"] == "INCOMPLETE"
+
+
+def test_history_rebuild_preserves_published_eod_membership(monkeypatch):
+    day = date(2026, 9, 28)
+    writes = []
+
+    class HistoryClient:
+        def active_symbols(self): return [{"id": 1, "sector": "A"}]
+        def all_daily_prices(self, *_args): return []
+        def market_index(self, _code): return {"id": 1}
+        def index_prices_in_range(self, *_args): return []
+        def published_signal_dates(self, *_args): return {day}
+        def daily_snapshots_for_date(self, _day): return [{"symbol_id": 1}]
+        def upsert(self, table, rows, _conflict): writes.append((table, rows)); return len(rows)
+        def close(self): pass
+
+    estimate = {"trading_date": day.isoformat(), "observed_count": 1, "eligible_count": 1, "coverage_status": "COMPLETE", "vnindex_trend_state": "UP", "sector_breadth": []}
+    monkeypatch.setattr("protstock.eod.SupabaseRestClient", lambda _settings: HistoryClient())
+    monkeypatch.setattr("protstock.eod.Settings.from_env", lambda: object())
+    monkeypatch.setattr("protstock.eod.build_market_health_history", lambda *_args, **_kwargs: [estimate])
+    monkeypatch.setattr("protstock.eod._persist_universe_breadth", lambda _client, _day, _trend: {"observed_count": 1, "eligible_count": 2, "coverage_status": "DEGRADED", "sector_breadth": [{"flow_observed_count": 1}]})
+    result = rebuild_market_health(day, day)
+    assert not writes  # No price-only estimate may overwrite a published EOD.
+    assert result["latest"]["eligible_count"] == 2
+    assert result["latest"]["sectors_with_flow"] == 1
