@@ -5,6 +5,8 @@ from datetime import date, timedelta
 from time import monotonic, sleep
 from typing import Any
 
+import httpx
+
 from .analysis import ALGORITHM_VERSION, analyze_bars
 from .decision_context import reconcile_proposal
 from .fibonacci import build_fibonacci_context
@@ -371,8 +373,18 @@ def rebuild_market_health(start_date: date, end_date: date) -> dict[str, Any]:
         snapshots = build_market_health_history(symbols, rows, start_date, end_date, index_rows=index_rows)
         published_dates = client.published_signal_dates(start_date, end_date)
         estimates = [item for item in snapshots if date.fromisoformat(item["trading_date"]) not in published_dates]
-        for offset in range(0, len(estimates), 500):
-            client.upsert("market_breadth_snapshots", estimates[offset:offset + 500], "trading_date")
+        # Sector JSON makes a 500-day payload too large for Supabase's REST
+        # timeout. Smaller idempotent date batches can be retried safely.
+        for offset in range(0, len(estimates), 50):
+            batch = estimates[offset:offset + 50]
+            for attempt in range(3):
+                try:
+                    client.upsert("market_breadth_snapshots", batch, "trading_date")
+                    break
+                except httpx.TimeoutException:
+                    if attempt == 2:
+                        raise
+                    sleep(2 ** attempt)
         by_date = {date.fromisoformat(item["trading_date"]): item for item in snapshots}
         for published_day in sorted(published_dates & by_date.keys()):
             # Published sessions use the exact technical snapshots and
