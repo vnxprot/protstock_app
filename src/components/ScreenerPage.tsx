@@ -4,6 +4,7 @@ import { latestSignalPublication } from '../lib/signalPublication'
 import { ArrowDownAZ, ChevronDown, Download, FileSpreadsheet, FileText, Filter, LayoutGrid, List, Search, SlidersHorizontal, X } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { formatDate } from '../lib/date'
+import { loadWatchlist, toggleWatchlistSymbol } from '../lib/watchlist'
 
 import { SoftSelect } from './SoftSelect'
 import { DateField } from './DateField'
@@ -40,7 +41,7 @@ async function fetchConsolidatedSignals(showHistory:boolean):Promise<SignalResul
 }
 
 export function ScreenerPage({ authenticated }: { authenticated: boolean }) {
-  const [query,setQuery]=useState(''); const [action,setAction]=useState('ALL'); const [showHistory,setShowHistory]=useState(false); const [minScoreText,setMinScoreText]=useState(''); const [descending,setDescending]=useState(true); const [page,setPage]=useState(1); const [pageSize,setPageSize]=useState(25); const [view,setView]=useState<'table'|'cards'>(()=>localStorage.getItem('protstock-screener-view')==='cards'?'cards':'table'); const [favorites,setFavorites]=useState<string[]>(()=>{try{return JSON.parse(localStorage.getItem('protstock-favorites')??'[]')}catch{return[]}}); const [exportNotice,setExportNotice]=useState(''); const [exportOpen,setExportOpen]=useState(false); const [advancedOpen,setAdvancedOpen]=useState(false)
+  const [query,setQuery]=useState(''); const [action,setAction]=useState('ALL'); const [showHistory,setShowHistory]=useState(false); const [minScoreText,setMinScoreText]=useState(''); const [descending,setDescending]=useState(true); const [page,setPage]=useState(1); const [pageSize,setPageSize]=useState(25); const [view,setView]=useState<'table'|'cards'>(()=>localStorage.getItem('protstock-screener-view')==='cards'?'cards':'table'); const [favorites,setFavorites]=useState<string[]>(()=>loadWatchlist().map(item=>item.symbol)); const [exportNotice,setExportNotice]=useState(''); const [exportOpen,setExportOpen]=useState(false); const [advancedOpen,setAdvancedOpen]=useState(false)
   const [explainingSignal,setExplainingSignal]=useState<SignalRow|null>(null)
   const wyckoffEvidence=useQuery({queryKey:['wyckoff-evidence',explainingSignal?.signal_id],enabled:authenticated&&Boolean(supabase)&&Boolean(explainingSignal?.reasons.some(reason=>reason.startsWith('WYCKOFF_'))),queryFn:async():Promise<WyckoffEvidence|null>=>{const signal=explainingSignal!;const {data,error}=await supabase!.from('signals').select('evidence').eq('symbol_id',signal.symbol_id).eq('timeframe',signal.timeframe).eq('as_of_date',signal.as_of_date);if(error)throw error;return(data??[]).map(row=>row.evidence?.wyckoff as WyckoffEvidence|undefined).find(item=>item?.event_date&&item.timeframe===signal.timeframe)??null}})
   const signals=useQuery({queryKey:['consolidated-signals',showHistory],enabled:authenticated&&Boolean(supabase),refetchInterval:60_000,queryFn:()=>fetchConsolidatedSignals(showHistory)})
@@ -61,7 +62,7 @@ export function ScreenerPage({ authenticated }: { authenticated: boolean }) {
   function chooseChip(chip:string){setAction(chip);setPage(1)}
   function setViewMode(next:'table'|'cards'){setView(next);localStorage.setItem('protstock-screener-view',next)}
   function openChart(symbol:string){localStorage.setItem('protstock-symbol',symbol);dispatchEvent(new CustomEvent('protstock:symbol',{detail:symbol}));location.hash='analysis'}
-  function toggleFavorite(symbol:string){setFavorites(current=>{const next=current.includes(symbol)?current.filter(value=>value!==symbol):[...current,symbol];localStorage.setItem('protstock-favorites',JSON.stringify(next));dispatchEvent(new CustomEvent('protstock:favorites',{detail:next}));return next})}
+  function toggleFavorite(symbol:string){toggleWatchlistSymbol(symbol)}
   function openJournal(symbol:string){localStorage.setItem('protstock-symbol',symbol);location.hash='journal'}
   async function exportSignals(format:'csv'|'excel'|'pdf'){if(!rows.length){setExportNotice('Không có tín hiệu khớp bộ lọc để xuất.');return}const output=rows.map(x=>({symbol:x.symbol,sector:x.sector,action:x.action,timeframe:x.timeframe,score:x.score,confluenceCount:x.confluence_count,date:x.as_of_date,engines:x.consensus_engines.map(displayEngine).join(' / '),reasons:signalReasonSummary(x.reasons)}));try{if(format==='csv')downloadSignalCsv(output);else if(format==='excel')await downloadSignalExcel(output);else await downloadSignalPdf(output);setExportNotice(`Đã xuất ${rows.length} tín hiệu theo bộ lọc hiện tại.`);setExportOpen(false)}catch{setExportNotice('Không thể tạo tệp xuất. Thử lại sau.')}}
   const engineDetail=(signal:SignalRow)=><span className="signal-engine-detail">{[...new Set(signal.consensus_engines.map(displayEngine))].join(' · ')||'—'}<small className="signal-revision">{revisionLabel(signal)}</small></span>

@@ -238,6 +238,7 @@ kbd { display:inline-flex; align-items:center; gap:3px; padding:3px 7px; border:
 .status-chip { display:flex; align-items:center; padding:8px 12px; border:1px solid var(--line); border-radius:999px; color:#9fb1a8; background:#09130f; font-size:12px; }
 .notification i { position:absolute; top:7px; right:7px; width:6px; height:6px; border-radius:50%; background:var(--lime); }
 .mobile-header,.bottom-nav { display:none; }
+@media(max-width:760px) { .bottom-nav.six-items { grid-template-columns:repeat(6,minmax(0,1fr)); } .bottom-nav.six-items a span,.bottom-nav.six-items button span { font-size:10px; } }
 .dashboard-header { align-items:flex-end; margin:0 0 25px; }
 .dashboard-header h1 { margin-bottom:8px; font-size:clamp(32px,4vw,48px); }
 .dashboard-header p { color:var(--muted); font-size:15px; }

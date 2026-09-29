@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import type { UserProfile } from './AuthGate'
 import { useQuery } from '@tanstack/react-query'
-import { BarChart3, Bell, BookOpen, BriefcaseBusiness, ChevronDown, ChevronLeft, Command, FlaskConical, LayoutDashboard, Menu, Search, Settings, ShieldCheck, TrendingUp, UserRound, Workflow, X } from 'lucide-react'
+import { BarChart3, Bell, BookOpen, BriefcaseBusiness, ChevronDown, ChevronLeft, Command, FlaskConical, LayoutDashboard, Menu, Search, Settings, ShieldCheck, Star, TrendingUp, UserRound, Workflow, X } from 'lucide-react'
 import { useDataHealth, type DataHealth } from './hooks/useDataHealth'
 import { useSymbols } from './hooks/useStockAnalysis'
 import { isSupabaseConfigured, supabase } from './lib/supabase'
@@ -12,6 +12,7 @@ import { version as appVersion } from '../package.json'
 import { ThemeToggle } from './components/ThemeToggle'
 import { SignalDecisionBoard } from './components/SignalDecisionBoard'
 import { latestSignalPublication } from './lib/signalPublication'
+import { useWatchlist } from './lib/watchlist'
 
 const AnalysisPage = lazy(() => import('./components/AnalysisPage').then(m => ({ default: m.AnalysisPage })))
 const RuleBuilderPage = lazy(() => import('./components/RuleBuilderPage').then(m => ({ default: m.RuleBuilderPage })))
@@ -23,15 +24,16 @@ const SettingsPage = lazy(() => import('./components/SettingsPage').then(m => ({
 const AdminPage = lazy(() => import('./components/AdminPage').then(m => ({ default: m.AdminPage })))
 const UniversePage = lazy(() => import('./components/UniversePage').then(m => ({ default: m.UniversePage })))
 const MarketPage = lazy(() => import('./components/MarketPage').then(m => ({ default: m.MarketPage })))
+const WatchlistPage = lazy(() => import('./components/WatchlistPage').then(m => ({ default: m.WatchlistPage })))
 
 const modules = [
   { id: 'today', icon: LayoutDashboard, label: 'Tổng quan' }, { id: 'market', icon: TrendingUp, label: 'Thị trường' }, { id: 'analysis', icon: BarChart3, label: 'Phân tích mã' },
-  { id: 'screener', icon: Search, label: 'Bộ lọc tín hiệu' }, { id: 'rules', icon: Workflow, label: 'Thiết lập quy tắc' },
+  { id: 'screener', icon: Search, label: 'Bộ lọc tín hiệu' }, { id: 'watchlist', icon: Star, label: 'Watchlist' }, { id: 'rules', icon: Workflow, label: 'Thiết lập quy tắc' },
   { id: 'backtest', icon: FlaskConical, label: 'Kiểm thử lịch sử' }, { id: 'portfolio', icon: BriefcaseBusiness, label: 'Danh mục' },
   { id: 'journal', icon: BookOpen, label: 'Nhật ký' }, { id: 'settings', icon: Settings, label: 'Cài đặt' },
 ]
-const clientModules = modules.filter(item => ['today', 'market', 'analysis', 'screener', 'settings'].includes(item.id))
-const primaryMobile = modules.filter(item => ['today', 'market', 'analysis', 'screener'].includes(item.id))
+const clientModules = modules.filter(item => ['today', 'market', 'analysis', 'screener', 'watchlist', 'settings'].includes(item.id))
+const primaryMobile = modules.filter(item => ['today', 'market', 'analysis', 'screener', 'watchlist'].includes(item.id))
 const moreMobile = modules.filter(item => ['rules', 'backtest', 'portfolio', 'journal', 'settings'].includes(item.id))
 function currentPage() { const value = location.hash.replace('#', '').split('?')[0]; return [...modules, { id: 'admin' }, { id: 'universe' }].some(item => item.id === value) ? value : 'today' }
 
@@ -62,12 +64,12 @@ function App({ authenticated = false, profile = null }: { authenticated?: boolea
   const connectionLabel = !isSupabaseConfigured ? 'Chưa kết nối Supabase' : health.isLoading ? 'Đang kết nối dữ liệu' : health.isError ? 'Kết nối cần kiểm tra' : 'Đã kết nối dữ liệu'
   const connectionState = !isSupabaseConfigured || health.isError ? 'error' : health.isLoading ? 'pending' : 'ready'
   const activePage = permittedModules.some(item => item.id === page) || page === 'universe' ? page : 'today'
-  const pages: Record<string, React.ReactNode> = { market: <MarketPage authenticated={authenticated}/>, analysis: <AnalysisPage authenticated={authenticated}/>, screener: <ScreenerPage authenticated={authenticated}/>, rules: <RuleBuilderPage authenticated={authenticated}/>, backtest: <BacktestPage authenticated={authenticated}/>, portfolio: <PortfolioPage authenticated={authenticated}/>, journal: <JournalPage authenticated={authenticated}/>, settings: <SettingsPage authenticated={authenticated} isAdmin={isAdmin}/>, universe: <UniversePage authenticated={authenticated}/>, admin: <AdminPage/> }
+  const pages: Record<string, React.ReactNode> = { market: <MarketPage authenticated={authenticated}/>, analysis: <AnalysisPage authenticated={authenticated}/>, screener: <ScreenerPage authenticated={authenticated}/>, watchlist: <WatchlistPage authenticated={authenticated}/>, rules: <RuleBuilderPage authenticated={authenticated}/>, backtest: <BacktestPage authenticated={authenticated}/>, portfolio: <PortfolioPage authenticated={authenticated}/>, journal: <JournalPage authenticated={authenticated}/>, settings: <SettingsPage authenticated={authenticated} isAdmin={isAdmin}/>, universe: <UniversePage authenticated={authenticated}/>, admin: <AdminPage/> }
   return <div className={collapsed ? 'app-shell sidebar-collapsed' : 'app-shell'}>
     <aside className="sidebar"><div className="sidebar-head"><a className="brand" href="#today"><span className="brand-mark">P</span><span className="brand-copy">Prot<span>Stock</span></span></a><button className="icon-button collapse-button" onClick={() => setCollapsed(v => !v)} aria-label="Thu gọn thanh bên"><ChevronLeft size={18}/></button></div><nav aria-label="Điều hướng chính">{navigation.map(item => <a className={activePage === item.id ? 'nav-item active' : 'nav-item'} data-tooltip={item.label} href={`#${item.id}`} key={item.id}><item.icon size={19}/><span className="nav-label">{item.label}</span>{item.badge != null && <small className="nav-badge">{item.badge}</small>}</a>)}</nav><div className="sidebar-note"><UserRound size={14}/><span className="sidebar-note-copy">{profile?.username} · {isAdmin?'Admin':'Client'}</span></div><button className="signout" onClick={() => supabase?.auth.signOut()}><span className="nav-label">Đăng xuất</span></button></aside>
     <main id="top"><div className="topbar"><button className="command-trigger" onClick={() => openCommandPalette()}><Search size={17}/><span>Tìm mã hoặc chức năng…</span><kbd><Command size={12}/> K</kbd></button><div className="topbar-actions"><span className="account-chip"><UserRound size={15}/>{profile?.username} · {isAdmin?'Admin':'Client'}</span><ThemeToggle/><div className={'status-chip '+connectionState} role="status" aria-live="polite"><span className="live-dot"/>{connectionLabel}</div><button className="icon-button notification" aria-label="Thông báo"><Bell size={18}/><i/></button></div></div><div className="mobile-header"><a className="brand" href="#today"><span className="brand-mark">P</span><span className="brand-copy">Prot<span>Stock</span></span></a><div><ThemeToggle/><button className="icon-button" onClick={() => openCommandPalette()}><Search size={19}/></button><span className="mobile-live">{profile?.username}</span></div></div>
       {activePage === 'today' ? <Dashboard/> : <Suspense fallback={<LoadingPage/>}>{pages[activePage]}</Suspense>}<footer className="app-footer"><span>Prot Stock · Big movements take time to develop</span><span className="app-version" aria-label="Phiên bản ứng dụng">v{appVersion}</span></footer></main>
-    <nav className={`bottom-nav${mobileNavCompact ? ' is-compact' : ''}`} aria-label="Điều hướng di động">{!isAdmin ? clientModules.map(item => <a className={activePage === item.id ? 'active' : ''} href={`#${item.id}`} aria-label={item.label} key={item.id}><item.icon size={21}/><span>{item.id === 'analysis' ? 'Phân tích' : item.id === 'screener' ? 'Tín hiệu' : item.id === 'settings' ? 'Giới thiệu' : item.label}</span></a>) : <>{primaryMobile.map(item => <a className={activePage === item.id ? 'active' : ''} href={`#${item.id}`} aria-label={item.label} key={item.id}><item.icon size={21}/><span>{item.id === 'analysis' ? 'Phân tích' : item.id === 'screener' ? 'Tín hiệu' : item.label}</span></a>)}<button className={moreOpen || moreMobile.some(item => item.id === activePage) ? 'active' : ''} onClick={() => setMoreOpen(true)} aria-label="Thêm công cụ"><Menu size={21}/><span>Thêm</span></button></>}</nav>
+    <nav className={`bottom-nav six-items${mobileNavCompact ? ' is-compact' : ''}`} aria-label="Điều hướng di động">{!isAdmin ? clientModules.map(item => <a className={activePage === item.id ? 'active' : ''} href={`#${item.id}`} aria-label={item.label} key={item.id}><item.icon size={21}/><span>{item.id === 'analysis' ? 'Phân tích' : item.id === 'screener' ? 'Tín hiệu' : item.id === 'watchlist' ? 'Theo dõi' : item.id === 'settings' ? 'Giới thiệu' : item.label}</span></a>) : <>{primaryMobile.map(item => <a className={activePage === item.id ? 'active' : ''} href={`#${item.id}`} aria-label={item.label} key={item.id}><item.icon size={21}/><span>{item.id === 'analysis' ? 'Phân tích' : item.id === 'screener' ? 'Tín hiệu' : item.id === 'watchlist' ? 'Theo dõi' : item.label}</span></a>)}<button className={moreOpen || moreMobile.some(item => item.id === activePage) ? 'active' : ''} onClick={() => setMoreOpen(true)} aria-label="Thêm công cụ"><Menu size={21}/><span>Thêm</span></button></>}</nav>
     {moreOpen && <div className="sheet-backdrop" onMouseDown={() => setMoreOpen(false)}><section className="bottom-sheet" onMouseDown={e => e.stopPropagation()}><div className="sheet-handle"/><div className="sheet-title"><div><h2>Mở thêm công cụ</h2></div><button className="icon-button" onClick={() => setMoreOpen(false)}><X size={20}/></button></div><div className="sheet-grid">{(isAdmin?[...moreMobile,{id:'admin',icon:ShieldCheck,label:'Quản trị'}]:clientModules.filter(item=>item.id==='market'||item.id==='settings')).map(item => <a href={`#${item.id}`} key={item.id}><span><item.icon size={21}/></span><strong>{item.label}</strong><small>{item.id === 'admin'?'Tài khoản và phiên':item.id === 'settings'?'Giới thiệu và hệ thống':'Công cụ'}</small></a>)}</div></section></div>}
     <CommandPalette symbols={symbols.data ?? []}/>
   </div>
@@ -143,12 +145,8 @@ function ExecutiveKpiStrip({ favorites }: { favorites: string[] }) {
   </section>
 }
 function Dashboard() {
-  const [favorites, setFavorites] = useState<string[]>(() => { try { return JSON.parse(localStorage.getItem('protstock-favorites') ?? '[]') } catch { return [] } })
-  useEffect(() => {
-    const update = (event: Event) => setFavorites((event as CustomEvent<string[]>).detail)
-    addEventListener('protstock:favorites', update)
-    return () => removeEventListener('protstock:favorites', update)
-  }, [])
+  const watchlist = useWatchlist()
+  const favorites = watchlist.map(item => item.symbol)
   const selectSymbol = (symbol: string) => {
     localStorage.setItem('protstock-symbol', symbol)
     dispatchEvent(new CustomEvent('protstock:symbol', { detail: symbol }))
@@ -163,8 +161,8 @@ function Dashboard() {
     <SignalDecisionBoard onSelect={selectSymbol}/>
     <section className="overview-support-grid">
         <article className="panel overview-watch-card">
-          <div className="overview-card-heading"><div><h2>Đang theo dõi <small>{favorites.length} mã</small></h2></div><button type="button" className="text-button" onClick={() => openCommandPalette('symbols')}>+ Thêm mã</button></div>
-          <div className="overview-watch-list">{favorites.length ? favorites.map(symbol => <a href="#analysis" className="overview-watch-row" key={symbol} onClick={() => selectSymbol(symbol)}><strong>{symbol}</strong><span>Xem phân tích</span></a>) : <p className="overview-empty">Chưa có mã nào trong danh sách theo dõi.</p>}</div>
+          <div className="overview-card-heading"><div><h2>Đang theo dõi <small>{favorites.length} mã</small></h2></div><a className="text-button" href="#watchlist">Mở Watchlist</a></div>
+          <div className="overview-watch-list">{watchlist.length ? watchlist.slice(0, 8).map(item => <a href="#analysis" className="overview-watch-row" key={item.symbol} onClick={() => selectSymbol(item.symbol)}><strong>{item.symbol}</strong><span>Tier {item.tier} · Xem phân tích</span></a>) : <p className="overview-empty">Chưa có mã nào. <a href="#watchlist">Tạo Watchlist</a></p>}</div>
         </article>
         <TodayHealth/>
     </section>
