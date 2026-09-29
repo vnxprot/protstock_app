@@ -8,14 +8,15 @@ from pathlib import Path
 from .models import UniverseRow
 
 
-# Prot's existing 27 industry groups are the canonical vocabulary for both
-# trading and market observation. New listings need an explicit classification.
+# Prot's industry groups are the canonical vocabulary for both trading and
+# market observation. New listings need an explicit classification.
 PROT_SECTORS = frozenset({
     "BAN LE", "BAO HIEM", "BDS", "BDS_KCN", "BE TONG_NHUA DUONG", "CANG BIEN",
     "CAO SU", "CHUNG KHOAN", "DAU KHI", "DAU TU CONG", "DIEN_NUOC", "DUOC",
     "DUONG", "GAO", "GIAY_BAO BI", "GO", "HANG KHONG", "HOA CHAT_PHAN BON",
     "KHOANG SAN", "NGAN HANG", "THAN", "THEP", "THUC PHAM", "THUY SAN",
-    "VIETTEL", "XAY DUNG", "XUAT KHAU",
+    "VIETTEL", "XAY DUNG", "XUAT KHAU", "CONG NGHE", "DU LICH_GIAI TRI",
+    "VAN TAI CONG NGHIEP",
 })
 
 
@@ -41,7 +42,7 @@ def load_universe(path: str | Path) -> UniverseValidation:
 
     with csv_path.open("r", encoding="utf-8-sig", newline="") as handle:
         reader = csv.DictReader(handle)
-        required = {"symbol", "sector", "active"}
+        required = {"symbol", "company_name", "sector", "exchange", "trading_status", "active"}
         if set(reader.fieldnames or ()) != required:
             raise ValueError(f"Expected CSV headers {sorted(required)}")
 
@@ -52,6 +53,9 @@ def load_universe(path: str | Path) -> UniverseValidation:
                 symbol=symbol,
                 sector=(raw.get("sector") or "").strip(),
                 active=active_text in {"true", "1", "yes"},
+                company_name=(raw.get("company_name") or "").strip(),
+                exchange=(raw.get("exchange") or "UNKNOWN").strip().upper(),
+                trading_status=(raw.get("trading_status") or "UNKNOWN").strip().upper(),
             )
             errors = parsed.validate()
             if parsed.sector not in PROT_SECTORS:

@@ -18,6 +18,11 @@ on:
         required: false
         default: ""
         type: string
+      full_range:
+        description: Fetch all available historical bars for the explicitly listed symbols only
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -41,8 +46,11 @@ jobs:
         env:
           SUPABASE_URL: https://upmqxwktvvguegqeqibn.supabase.co
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-        run: >-
-          protstock repair-history
-          --start-date "${{ inputs.start_date }}"
-          --end-date "${{ inputs.end_date }}"
-          --symbols "${{ inputs.symbols }}"
+          START_DATE: ${{ inputs.start_date }}
+          END_DATE: ${{ inputs.end_date }}
+          SYMBOLS: ${{ inputs.symbols }}
+          FULL_RANGE: ${{ inputs.full_range }}
+        run: |
+          args=(--start-date "$START_DATE" --end-date "$END_DATE" --symbols "$SYMBOLS")
+          if [ "$FULL_RANGE" = "true" ]; then args+=(--full-range); fi
+          protstock repair-history "${args[@]}"

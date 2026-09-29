@@ -19,12 +19,41 @@ def repair_missing_history(
     symbol_limit: int | None = None,
     symbols: set[str] | None = None,
     pause_seconds: float = 3.0,
+    full_range: bool = False,
 ) -> dict[str, Any]:
     """Fill only missing daily sessions using VNINDEX as the trading calendar."""
+    if full_range and not symbols:
+        raise ValueError("Full-range backfill requires an explicit symbol list")
     client = SupabaseRestClient(Settings.from_env())
     counts = {"symbols": 0, "already_complete": 0, "missing_sessions": 0, "rows_written": 0, "unresolved_sessions": 0, "pre_listing_sessions": 0, "unclassified_before_first_observation_sessions": 0, "failed": 0}
     unresolved: dict[str, int] = {}
     try:
+        if full_range:
+            selected = [row for row in client.active_symbols() if row["symbol"] in symbols]
+            unknown = symbols - {row["symbol"] for row in selected}
+            if unknown:
+                raise ValueError(f"Unknown or inactive symbols: {', '.join(sorted(unknown))}")
+            no_source_data: list[str] = []
+            for symbol in selected:
+                counts["symbols"] += 1
+                try:
+                    existing = set(client.symbol_price_dates(symbol["id"], start_date, end_date))
+                    bars = _fetch_with_fallback(symbol["symbol"], start_date, end_date, source)
+                    if not bars:
+                        no_source_data.append(symbol["symbol"])
+                        continue
+                    missing = {bar.trading_date.isoformat() for bar in bars} - existing
+                    counts["missing_sessions"] += len(missing)
+                    rows = _price_rows(symbol["id"], bars, missing)
+                    for offset in range(0, len(rows), 250):
+                        counts["rows_written"] += client.upsert("daily_prices", rows[offset:offset + 250], "symbol_id,trading_date")
+                    if not missing:
+                        counts["already_complete"] += 1
+                except Exception:
+                    counts["failed"] += 1
+                    unresolved[symbol["symbol"]] = -1
+                sleep(pause_seconds)
+            return {"status": "SUCCEEDED" if not counts["failed"] and not no_source_data else "PARTIAL", "start_date": start_date.isoformat(), "end_date": end_date.isoformat(), **counts, "no_source_data": no_source_data, "failed_symbols": sorted(unresolved)}
         index = client.market_index("VNINDEX")
         existing_index_dates = set(client.index_price_dates(index["id"], start_date, end_date))
         index_bars = _fetch_with_fallback("VNINDEX", start_date, end_date, source)

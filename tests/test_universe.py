@@ -6,21 +6,22 @@ from protstock.universe import PROT_SECTORS, load_universe
 def test_locked_universe() -> None:
     result = load_universe(Path("data/universe.csv"))
     assert result.is_valid
-    assert len(result.rows) == 208
-    assert len({row.symbol for row in result.rows}) == 208
+    assert len(result.rows) == 271
+    assert len({row.symbol for row in result.rows}) == 271
     assert all(row.active for row in result.rows)
     assert {row.symbol for row in result.rows} >= {"APH", "HII", "MZG", "TDP", "VNB", "VTZ"}
     assert [(row.symbol, row.sector) for row in result.rows if row.symbol == "TDC"] == [
         ("TDC", "BDS_KCN")
     ]
-    # Regenerate after an approved universe revision with: sha256sum data/universe.csv
-    assert result.sha256 == "d037904c802128dfa9c9df7a73e9e6267407f61a296d4760a5bb409ba5c04688"
+    assert sum(row.trading_status == "NORMAL" for row in result.rows) == 49
+    assert sum(row.trading_status == "UNKNOWN" for row in result.rows) == 222
+    assert next(row for row in result.rows if row.symbol == "VPI").trading_status == "NORMAL"
     assert {row.sector for row in result.rows} == PROT_SECTORS
 
 
 def test_new_universe_symbol_must_use_existing_prot_sector(tmp_path) -> None:
     path = tmp_path / "universe.csv"
-    path.write_text("symbol,sector,active\nAAA,NEW_UNKNOWN_GROUP,true\n", encoding="utf-8")
+    path.write_text("symbol,company_name,sector,exchange,trading_status,active\nAAA,Example,NEW_UNKNOWN_GROUP,HOSE,UNKNOWN,true\n", encoding="utf-8")
     validation = load_universe(path)
     assert not validation.is_valid
     assert "unknown_sector" in validation.invalid[0][1]

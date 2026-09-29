@@ -4,9 +4,10 @@ export type StockUniverseExportRow = {
   companyName: string
   sector: string
   exchange: string
+  tradingStatus: string
 }
 
-const headers = ['STT', 'Mã chứng khoán', 'Tên công ty', 'Nhóm ngành', 'Sàn']
+const headers = ['STT', 'Mã chứng khoán', 'Tên công ty', 'Nhóm ngành', 'Sàn', 'Tình trạng']
 
 function downloadFile(contents: BlobPart, mimeType: string, filename: string) {
   const url = URL.createObjectURL(new Blob([contents], { type: mimeType }))
@@ -18,7 +19,7 @@ function downloadFile(contents: BlobPart, mimeType: string, filename: string) {
 }
 
 function rowsForExport(rows: StockUniverseExportRow[]) {
-  return rows.map(row => [String(row.index), row.symbol, row.companyName, row.sector, row.exchange])
+  return rows.map(row => [String(row.index), row.symbol, row.companyName, row.sector, row.exchange, row.tradingStatus])
 }
 
 export function downloadUniverseCsv(rows: StockUniverseExportRow[]) {
@@ -88,7 +89,7 @@ function zipStored(files: Array<{ name: string; content: string }>) {
 
 export function downloadUniverseExcel(rows: StockUniverseExportRow[]) {
   const allRows = [headers, ...rowsForExport(rows)]
-  const colNames = ['A', 'B', 'C', 'D', 'E']
+  const colNames = ['A', 'B', 'C', 'D', 'E', 'F']
   const sheetRows = allRows.map((row, rowIndex) => `<row r="${rowIndex + 1}">${row.map((value, columnIndex) => {
     const reference = `${colNames[columnIndex]}${rowIndex + 1}`
     return `<c r="${reference}" t="inlineStr"><is><t xml:space="preserve">${xmlEscape(value)}</t></is></c>`
@@ -98,7 +99,7 @@ export function downloadUniverseExcel(rows: StockUniverseExportRow[]) {
     { name: '_rels/.rels', content: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>' },
     { name: 'xl/workbook.xml', content: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Danh sách cổ phiếu" sheetId="1" r:id="rId1"/></sheets></workbook>' },
     { name: 'xl/_rels/workbook.xml.rels', content: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/></Relationships>' },
-    { name: 'xl/worksheets/sheet1.xml', content: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><dimension ref="A1:E${allRows.length}"/><sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews><cols><col min="1" max="1" width="8" customWidth="1"/><col min="2" max="2" width="18" customWidth="1"/><col min="3" max="3" width="48" customWidth="1"/><col min="4" max="4" width="26" customWidth="1"/><col min="5" max="5" width="14" customWidth="1"/></cols><sheetData>${sheetRows}</sheetData><autoFilter ref="A1:E${allRows.length}"/></worksheet>` },
+    { name: 'xl/worksheets/sheet1.xml', content: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><dimension ref="A1:F${allRows.length}"/><sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews><cols><col min="1" max="1" width="8" customWidth="1"/><col min="2" max="2" width="18" customWidth="1"/><col min="3" max="3" width="48" customWidth="1"/><col min="4" max="4" width="26" customWidth="1"/><col min="5" max="5" width="14" customWidth="1"/><col min="6" max="6" width="22" customWidth="1"/></cols><sheetData>${sheetRows}</sheetData><autoFilter ref="A1:F${allRows.length}"/></worksheet>` },
   ]
   downloadFile(zipStored(files), 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'prot-stock-danh-sach-co-phieu.xlsx')
 }
@@ -160,8 +161,8 @@ function renderPdfPage(rows: StockUniverseExportRow[], pageNumber: number, pageC
   context.fillStyle = '#10251b'; context.font = '700 36px Inter, Arial, sans-serif'; context.fillText('Danh sách cổ phiếu Prot Stock', 72, 82)
   context.fillStyle = '#52665b'; context.font = '400 20px Inter, Arial, sans-serif'; context.fillText(`${rows.length} mã đang hoạt động · Sắp xếp A–Z · Trang ${pageNumber}/${pageCount}`, 72, 121)
 
-  const x = [72, 148, 350, 1135, 1505]
-  const widths = [76, 202, 785, 370, 223]
+  const x = [72, 138, 300, 1015, 1335, 1465]
+  const widths = [66, 162, 715, 320, 130, 263]
   let y = 164
   const rowHeight = 36
   context.fillStyle = '#eaf1eb'; context.fillRect(72, y, 1656, 44)
@@ -170,7 +171,7 @@ function renderPdfPage(rows: StockUniverseExportRow[], pageNumber: number, pageC
   y += 44
   rows.forEach((row, rowIndex) => {
     if (rowIndex % 2 === 1) { context.fillStyle = '#f7faf7'; context.fillRect(72, y, 1656, rowHeight) }
-    const values = [String(row.index), row.symbol, row.companyName, row.sector, row.exchange]
+    const values = [String(row.index), row.symbol, row.companyName, row.sector, row.exchange, row.tradingStatus]
     context.fillStyle = '#20342a'; context.font = rowIndex % 2 === 0 ? '400 16px Inter, Arial, sans-serif' : '400 16px Inter, Arial, sans-serif'
     values.forEach((value, index) => context.fillText(value, x[index] + 9, y + 24, widths[index] - 18))
     context.strokeStyle = '#e3ebe4'; context.lineWidth = 1; context.beginPath(); context.moveTo(72, y + rowHeight); context.lineTo(1728, y + rowHeight); context.stroke()

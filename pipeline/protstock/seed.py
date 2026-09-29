@@ -30,7 +30,10 @@ def seed_universe(path: str | Path) -> dict[str, int | str]:
         rows = [
             {
                 "symbol": item.symbol,
+                "company_name": item.company_name,
                 "sector": item.sector,
+                "exchange": item.exchange,
+                "trading_status": item.trading_status,
                 "active": item.active,
                 "metadata": {"source": "data/universe.csv", "sha256": validation.sha256},
             }

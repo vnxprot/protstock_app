@@ -14,6 +14,9 @@ class UniverseRow:
     symbol: str
     sector: str
     active: bool = True
+    company_name: str = ""
+    exchange: str = "UNKNOWN"
+    trading_status: str = "UNKNOWN"
 
     def validate(self) -> list[str]:
         errors: list[str] = []
@@ -21,6 +24,10 @@ class UniverseRow:
             errors.append("invalid_symbol")
         if not self.sector.strip():
             errors.append("missing_sector")
+        if self.exchange not in {"HOSE", "HNX", "UPCOM", "UNKNOWN"}:
+            errors.append("invalid_exchange")
+        if self.trading_status not in {"NORMAL", "RESTRICTED", "SUSPENDED", "DELISTED", "UNKNOWN"}:
+            errors.append("invalid_trading_status")
         return errors
 
 
