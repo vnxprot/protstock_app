@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useRef, useState } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
 import type { UserProfile } from './AuthGate'
 import { useQuery } from '@tanstack/react-query'
 import { BarChart3, Bell, BookOpen, BriefcaseBusiness, ChevronDown, ChevronLeft, Command, FlaskConical, LayoutDashboard, Menu, Search, Settings, ShieldCheck, Star, TrendingUp, UserRound, Workflow, X } from 'lucide-react'
@@ -12,7 +12,7 @@ import { version as appVersion } from '../package.json'
 import { ThemeToggle } from './components/ThemeToggle'
 import { SignalDecisionBoard } from './components/SignalDecisionBoard'
 import { latestSignalPublication } from './lib/signalPublication'
-import { useWatchlist } from './lib/watchlist'
+import { useWatchlist, useWatchlistCloud } from './lib/watchlist'
 
 const AnalysisPage = lazy(() => import('./components/AnalysisPage').then(m => ({ default: m.AnalysisPage })))
 const RuleBuilderPage = lazy(() => import('./components/RuleBuilderPage').then(m => ({ default: m.RuleBuilderPage })))
@@ -38,38 +38,24 @@ const moreMobile = modules.filter(item => ['rules', 'backtest', 'portfolio', 'jo
 function currentPage() { const value = location.hash.replace('#', '').split('?')[0]; return [...modules, { id: 'admin' }, { id: 'universe' }].some(item => item.id === value) ? value : 'today' }
 
 function App({ authenticated = false, profile = null }: { authenticated?: boolean; profile?: UserProfile | null }) {
-  const [page, setPage] = useState(currentPage); const [collapsed, setCollapsed] = useState(false); const [moreOpen, setMoreOpen] = useState(false); const [mobileNavCompact, setMobileNavCompact] = useState(false)
-  const lastScrollY = useRef(0)
+  const [page, setPage] = useState(currentPage); const [collapsed, setCollapsed] = useState(false); const [moreOpen, setMoreOpen] = useState(false)
+  const watchlistSync = useWatchlistCloud(profile?.user_id, supabase)
   const health = useDataHealth(authenticated); const symbols = useSymbols(authenticated)
   const navCounts = useQuery({ queryKey: ['nav-counts'], enabled: authenticated && Boolean(supabase), refetchInterval: 60_000, queryFn: async () => { const [publication, rules] = await Promise.all([latestSignalPublication(), supabase!.from('rules').select('id', { count: 'exact', head: true }).eq('status', 'ACTIVE')]); if (rules.error) throw rules.error; return { signals: publication?.count ?? 0, rules: rules.count ?? 0 } } })
   const isAdmin = profile?.role === 'ADMIN'
   const permittedModules = isAdmin ? [...modules, { id: 'admin', icon: ShieldCheck, label: 'Quản trị' }] : [...clientModules.filter(item => item.id !== 'settings'), { id: 'settings', icon: Settings, label: 'Giới thiệu Prot Stock' }]
   const navigation = permittedModules.map(item => ({ ...item, badge: item.id === 'screener' ? navCounts.data?.signals : item.id === 'rules' ? navCounts.data?.rules : undefined }))
-  useEffect(() => { const update = () => { setPage(currentPage()); setMoreOpen(false); setMobileNavCompact(false); scrollTo({ top: 0, behavior: 'smooth' }) }; addEventListener('hashchange', update); return () => removeEventListener('hashchange', update) }, [])
-  useEffect(() => {
-    let frame = 0
-    const update = () => {
-      const currentY = window.scrollY
-      const delta = currentY - lastScrollY.current
-      if (currentY < 48) setMobileNavCompact(false)
-      else if (Math.abs(delta) > 10) setMobileNavCompact(delta > 0)
-      lastScrollY.current = currentY
-      frame = 0
-    }
-    const onScroll = () => { if (!frame) frame = requestAnimationFrame(update) }
-    lastScrollY.current = window.scrollY
-    addEventListener('scroll', onScroll, { passive: true })
-    return () => { removeEventListener('scroll', onScroll); if (frame) cancelAnimationFrame(frame) }
-  }, [])
+  useEffect(() => { const update = () => { setPage(currentPage()); setMoreOpen(false); scrollTo({ top: 0, behavior: 'auto' }) }; addEventListener('hashchange', update); return () => removeEventListener('hashchange', update) }, [])
   const connectionLabel = !isSupabaseConfigured ? 'Chưa kết nối Supabase' : health.isLoading ? 'Đang kết nối dữ liệu' : health.isError ? 'Kết nối cần kiểm tra' : 'Đã kết nối dữ liệu'
   const connectionState = !isSupabaseConfigured || health.isError ? 'error' : health.isLoading ? 'pending' : 'ready'
   const activePage = permittedModules.some(item => item.id === page) || page === 'universe' ? page : 'today'
-  const pages: Record<string, React.ReactNode> = { market: <MarketPage authenticated={authenticated}/>, analysis: <AnalysisPage authenticated={authenticated}/>, screener: <ScreenerPage authenticated={authenticated}/>, watchlist: <WatchlistPage authenticated={authenticated}/>, rules: <RuleBuilderPage authenticated={authenticated}/>, backtest: <BacktestPage authenticated={authenticated}/>, portfolio: <PortfolioPage authenticated={authenticated}/>, journal: <JournalPage authenticated={authenticated}/>, settings: <SettingsPage authenticated={authenticated} isAdmin={isAdmin}/>, universe: <UniversePage authenticated={authenticated}/>, admin: <AdminPage/> }
+  const pages: Record<string, React.ReactNode> = { market: <MarketPage authenticated={authenticated}/>, analysis: <AnalysisPage authenticated={authenticated}/>, screener: <ScreenerPage authenticated={authenticated}/>, watchlist: <WatchlistPage authenticated={authenticated} syncStatus={watchlistSync}/>, rules: <RuleBuilderPage authenticated={authenticated}/>, backtest: <BacktestPage authenticated={authenticated}/>, portfolio: <PortfolioPage authenticated={authenticated}/>, journal: <JournalPage authenticated={authenticated}/>, settings: <SettingsPage authenticated={authenticated} isAdmin={isAdmin}/>, universe: <UniversePage authenticated={authenticated}/>, admin: <AdminPage/> }
+  if (watchlistSync === 'loading') return <div className="auth-screen"><div className="auth-card">Đang đồng bộ Watchlist…</div></div>
   return <div className={collapsed ? 'app-shell sidebar-collapsed' : 'app-shell'}>
     <aside className="sidebar"><div className="sidebar-head"><a className="brand" href="#today"><span className="brand-mark">P</span><span className="brand-copy">Prot<span>Stock</span></span></a><button className="icon-button collapse-button" onClick={() => setCollapsed(v => !v)} aria-label="Thu gọn thanh bên"><ChevronLeft size={18}/></button></div><nav aria-label="Điều hướng chính">{navigation.map(item => <a className={activePage === item.id ? 'nav-item active' : 'nav-item'} data-tooltip={item.label} href={`#${item.id}`} key={item.id}><item.icon size={19}/><span className="nav-label">{item.label}</span>{item.badge != null && <small className="nav-badge">{item.badge}</small>}</a>)}</nav><div className="sidebar-note"><UserRound size={14}/><span className="sidebar-note-copy">{profile?.username} · {isAdmin?'Admin':'Client'}</span></div><button className="signout" onClick={() => supabase?.auth.signOut()}><span className="nav-label">Đăng xuất</span></button></aside>
     <main id="top"><div className="topbar"><button className="command-trigger" onClick={() => openCommandPalette()}><Search size={17}/><span>Tìm mã hoặc chức năng…</span><kbd><Command size={12}/> K</kbd></button><div className="topbar-actions"><span className="account-chip"><UserRound size={15}/>{profile?.username} · {isAdmin?'Admin':'Client'}</span><ThemeToggle/><div className={'status-chip '+connectionState} role="status" aria-live="polite"><span className="live-dot"/>{connectionLabel}</div><button className="icon-button notification" aria-label="Thông báo"><Bell size={18}/><i/></button></div></div><div className="mobile-header"><a className="brand" href="#today"><span className="brand-mark">P</span><span className="brand-copy">Prot<span>Stock</span></span></a><div><ThemeToggle/><button className="icon-button" onClick={() => openCommandPalette()}><Search size={19}/></button><span className="mobile-live">{profile?.username}</span></div></div>
-      {activePage === 'today' ? <Dashboard/> : <Suspense fallback={<LoadingPage/>}>{pages[activePage]}</Suspense>}<footer className="app-footer"><span>Prot Stock · Big movements take time to develop</span><span className="app-version" aria-label="Phiên bản ứng dụng">v{appVersion}</span></footer></main>
-    <nav className={`bottom-nav six-items${mobileNavCompact ? ' is-compact' : ''}`} aria-label="Điều hướng di động">{!isAdmin ? clientModules.map(item => <a className={activePage === item.id ? 'active' : ''} href={`#${item.id}`} aria-label={item.label} key={item.id}><item.icon size={21}/><span>{item.id === 'analysis' ? 'Phân tích' : item.id === 'screener' ? 'Tín hiệu' : item.id === 'watchlist' ? 'Theo dõi' : item.id === 'settings' ? 'Giới thiệu' : item.label}</span></a>) : <>{primaryMobile.map(item => <a className={activePage === item.id ? 'active' : ''} href={`#${item.id}`} aria-label={item.label} key={item.id}><item.icon size={21}/><span>{item.id === 'analysis' ? 'Phân tích' : item.id === 'screener' ? 'Tín hiệu' : item.id === 'watchlist' ? 'Theo dõi' : item.label}</span></a>)}<button className={moreOpen || moreMobile.some(item => item.id === activePage) ? 'active' : ''} onClick={() => setMoreOpen(true)} aria-label="Thêm công cụ"><Menu size={21}/><span>Thêm</span></button></>}</nav>
+      {activePage === 'today' ? <Dashboard syncStatus={watchlistSync}/> : <Suspense fallback={<LoadingPage/>}>{pages[activePage]}</Suspense>}<footer className="app-footer"><span>Prot Stock · Big movements take time to develop</span><span className="app-version" aria-label="Phiên bản ứng dụng">v{appVersion}</span></footer></main>
+    <nav className="bottom-nav six-items" aria-label="Điều hướng di động">{!isAdmin ? clientModules.map(item => <a className={activePage === item.id ? 'active' : ''} href={`#${item.id}`} aria-label={item.label} key={item.id}><item.icon size={21}/><span>{item.id === 'analysis' ? 'Phân tích' : item.id === 'screener' ? 'Tín hiệu' : item.id === 'watchlist' ? 'Theo dõi' : item.id === 'settings' ? 'Giới thiệu' : item.label}</span></a>) : <>{primaryMobile.map(item => <a className={activePage === item.id ? 'active' : ''} href={`#${item.id}`} aria-label={item.label} key={item.id}><item.icon size={21}/><span>{item.id === 'analysis' ? 'Phân tích' : item.id === 'screener' ? 'Tín hiệu' : item.id === 'watchlist' ? 'Theo dõi' : item.label}</span></a>)}<button className={moreOpen || moreMobile.some(item => item.id === activePage) ? 'active' : ''} onClick={() => setMoreOpen(true)} aria-label="Thêm công cụ"><Menu size={21}/><span>Thêm</span></button></>}</nav>
     {moreOpen && <div className="sheet-backdrop" onMouseDown={() => setMoreOpen(false)}><section className="bottom-sheet" onMouseDown={e => e.stopPropagation()}><div className="sheet-handle"/><div className="sheet-title"><div><h2>Mở thêm công cụ</h2></div><button className="icon-button" onClick={() => setMoreOpen(false)}><X size={20}/></button></div><div className="sheet-grid">{(isAdmin?[...moreMobile,{id:'admin',icon:ShieldCheck,label:'Quản trị'}]:clientModules.filter(item=>item.id==='market'||item.id==='settings')).map(item => <a href={`#${item.id}`} key={item.id}><span><item.icon size={21}/></span><strong>{item.label}</strong><small>{item.id === 'admin'?'Tài khoản và phiên':item.id === 'settings'?'Giới thiệu và hệ thống':'Công cụ'}</small></a>)}</div></section></div>}
     <CommandPalette symbols={symbols.data ?? []}/>
   </div>
@@ -144,7 +130,7 @@ function ExecutiveKpiStrip({ favorites }: { favorites: string[] }) {
     <article className="overview-kpi"><span className="overview-kpi-label">THEO DÕI</span><strong>{favorites.length}</strong><small>{summary.data ? `${summary.data.watched} mã có tín hiệu hành động` : 'Đang tải tín hiệu watchlist…'}</small></article>
   </section>
 }
-function Dashboard() {
+function Dashboard({ syncStatus }: { syncStatus: 'loading' | 'ready' | 'error' }) {
   const watchlist = useWatchlist()
   const favorites = watchlist.map(item => item.symbol)
   const selectSymbol = (symbol: string) => {
@@ -161,7 +147,8 @@ function Dashboard() {
     <SignalDecisionBoard onSelect={selectSymbol}/>
     <section className="overview-support-grid">
         <article className="panel overview-watch-card">
-          <div className="overview-card-heading"><div><h2>Đang theo dõi <small>{favorites.length} mã</small></h2></div><a className="text-button" href="#watchlist">Mở Watchlist</a></div>
+          <div className="overview-card-heading"><div><h2>Watchlist <small>{favorites.length} mã</small></h2></div><a className="text-button" href="#watchlist">Mở Watchlist</a></div>
+          {syncStatus === 'error' && <p className="watchlist-sync-warning" role="status">Chưa đồng bộ được với tài khoản. Thay đổi trên thiết bị này có thể chưa xuất hiện ở thiết bị khác.</p>}
           <div className="overview-watch-list">{watchlist.length ? watchlist.slice(0, 8).map(item => <a href="#analysis" className="overview-watch-row" key={item.symbol} onClick={() => selectSymbol(item.symbol)}><strong>{item.symbol}</strong><span>Tier {item.tier} · Xem phân tích</span></a>) : <p className="overview-empty">Chưa có mã nào. <a href="#watchlist">Tạo Watchlist</a></p>}</div>
         </article>
         <TodayHealth/>
