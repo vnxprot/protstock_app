@@ -146,6 +146,18 @@ def test_sector_flow_is_separate_from_health_and_audits_missing_members():
     assert regime_ok(breadth, {"trend_state": "UP"}) == (True, [])
 
 
+def test_sector_trading_value_share_uses_observed_close_and_volume_only():
+    symbols = [{"id": 1, "sector": "A"}, {"id": 2, "sector": "B"}]
+    current = [
+        {"symbol_id": 1, "close": 10, "sma50": 9, "last_volume": 100},
+        {"symbol_id": 2, "close": 20, "sma50": 19, "last_volume": 200},
+    ]
+    breadth, _ = build_breadth_membership(symbols, current, current, "2026-09-29")
+    sectors = {row["sector"]: row for row in breadth["sector_breadth"]}
+    assert sectors["A"]["turnover_share_pct"] == 20
+    assert sectors["B"]["turnover_share_pct"] == 80
+
+
 def test_historical_sector_flow_has_no_future_price_leakage():
     from datetime import timedelta
 

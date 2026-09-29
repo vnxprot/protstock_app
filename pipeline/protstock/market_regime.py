@@ -58,11 +58,18 @@ def compute_breadth(snapshots: Sequence[dict], prior_by_symbol: dict | None = No
     up_volume = down_volume = 0.0
     grouped: dict[str, list[dict]] = defaultdict(list)
     sector_totals: dict[str, int] = defaultdict(int)
+    turnover_by_sector: dict[str, float] = defaultdict(float)
+    universe_turnover = 0.0
     for sector in sector_by_symbol.values():
         sector_totals[str(sector or "Khác")] += 1
     for item in eligible:
         symbol_id = item.get("symbol_id")
-        grouped[str(sector_by_symbol.get(symbol_id) or "Khác")].append(item)
+        sector = str(sector_by_symbol.get(symbol_id) or "Khác")
+        grouped[sector].append(item)
+        # Close × volume is an EOD trading-value estimate, not net money flow.
+        turnover = max(0.0, float(item["close"])) * max(0.0, float(item.get("last_volume") or 0))
+        turnover_by_sector[sector] += turnover
+        universe_turnover += turnover
         prior = prior_by_symbol.get(symbol_id)
         if prior and prior.get("close") is not None:
             change = float(item["close"]) - float(prior["close"])
@@ -97,6 +104,7 @@ def compute_breadth(snapshots: Sequence[dict], prior_by_symbol: dict | None = No
             "pct_above_sma50": _pct(members, lambda item: float(item["close"]) > float(item["sma50"])),
             "advance_count": sector_advances, "decline_count": sector_declines,
             "market_health_score": sector_score, "market_health_state": _health_state(sector_score),
+            "turnover_share_pct": round(turnover_by_sector[sector] / universe_turnover * 100, 2) if universe_turnover else None,
             **_sector_flow(members),
         })
     return {
