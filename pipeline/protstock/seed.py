@@ -4,6 +4,8 @@ import logging
 from datetime import date
 from pathlib import Path
 
+import httpx
+
 from .config import Settings
 from .provider_vnstock import VnstockProvider
 from .supabase_rest import SupabaseRestClient
@@ -39,7 +41,10 @@ def seed_universe(path: str | Path) -> dict[str, int | str]:
             }
             for item in validation.rows
         ]
-        written = client.upsert("symbols", rows, "symbol")
+        try:
+            written = client.upsert("symbols", rows, "symbol")
+        except httpx.HTTPStatusError as exc:
+            raise RuntimeError(f"Universe seed rejected: {exc.response.text[:500]}") from exc
         client.finish_job(job["id"], {
             "status": "SUCCEEDED",
             "finished_at": _now(),
