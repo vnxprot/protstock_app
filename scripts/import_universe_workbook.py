@@ -18,7 +18,7 @@ STATUS = {None: "UNKNOWN", "": "UNKNOWN", "Bình thường": "NORMAL", "Hạn ch
 EXCHANGE = {"HSX": "HOSE", "HOSE": "HOSE", "HNX": "HNX", "UPCOM": "UPCOM"}
 
 
-def convert(source: Path, destination: Path) -> tuple[int, int]:
+def convert(source: Path, destination: Path, *, merge_existing: bool = False, exclude: frozenset[str] = frozenset()) -> tuple[int, int]:
     workbook = load_workbook(source, read_only=True, data_only=True)
     try:
         sheet = workbook.active
@@ -54,6 +54,17 @@ def convert(source: Path, destination: Path) -> tuple[int, int]:
                 if prior["trading_status"] != "UNKNOWN" and item["trading_status"] == "UNKNOWN":
                     continue
             by_symbol[symbol] = item
+        if merge_existing:
+            with destination.open("r", encoding="utf-8-sig", newline="") as handle:
+                existing = {row["symbol"]: row for row in csv.DictReader(handle)}
+            if set(by_symbol) != set(existing) - exclude:
+                raise ValueError("Workbook symbols differ from the existing universe beyond explicit exclusions")
+            for symbol, item in by_symbol.items():
+                item["company_name"] = existing[symbol]["company_name"]
+                item["exchange"] = existing[symbol]["exchange"]
+                item["active"] = existing[symbol]["active"]
+        if exclude & set(by_symbol):
+            raise ValueError("Excluded symbol is still present in workbook")
         with destination.open("w", encoding="utf-8", newline="") as handle:
             writer = csv.DictWriter(handle, fieldnames=["symbol", "company_name", "sector", "exchange", "trading_status", "active"], lineterminator="\n")
             writer.writeheader()
@@ -67,5 +78,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("source", type=Path)
     parser.add_argument("destination", type=Path)
+    parser.add_argument("--merge-existing", action="store_true")
+    parser.add_argument("--exclude", action="append", default=[])
     args = parser.parse_args()
-    print(convert(args.source, args.destination))
+    print(convert(args.source, args.destination, merge_existing=args.merge_existing, exclude=frozenset(args.exclude)))
