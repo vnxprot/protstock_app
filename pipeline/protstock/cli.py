@@ -8,7 +8,6 @@ from pathlib import Path
 from .analysis import analyze_bars
 from .backtest_worker import process_backtests
 from .eod import finalize_fast_lane, rebuild_market_health, rebuild_signals, run_eod
-from .disclosures import run_hnx_disclosures
 from .fundamentals import run_fundamentals
 from .alerts import send_eod_telegram_alerts
 from .calibrate import calibrate_patterns
@@ -76,7 +75,7 @@ def main() -> None:
     eod.add_argument("--historical", action="store_true", help="Do not use today's portfolio for a historical EOD date")
     finalize_fast = subparsers.add_parser("finalize-fast-eod")
     finalize_fast.add_argument("--date", dest="trading_date", type=date.fromisoformat, default=date.today())
-    finalize_fast.add_argument("--allow-partial", action="store_true", help="Publish available same-day data after the final Watchdog retry")
+    finalize_fast.add_argument("--allow-partial", action="store_true", help="Publish available same-day data without retrying missing symbols")
     health = subparsers.add_parser("rebuild-market-health")
     health.add_argument("--start-date", type=date.fromisoformat, default=date(2021, 1, 1))
     health.add_argument("--end-date", type=date.fromisoformat, default=date.today())
@@ -87,7 +86,6 @@ def main() -> None:
     rebuild.add_argument("--historical", action="store_true", help="Do not use today's portfolio for a historical rebuild")
     worker = subparsers.add_parser("backtest-worker")
     worker.add_argument("--limit", type=int, default=3)
-    subparsers.add_parser("collect-hnx-disclosures")
     fundamentals = subparsers.add_parser("collect-fundamentals")
     fundamentals.add_argument("--limit", type=int, default=5)
     fundamentals.add_argument("--symbol-offset", type=int, default=0)
@@ -153,9 +151,6 @@ def main() -> None:
         result = process_backtests(args.limit)
         print(json.dumps(result, indent=2))
         raise SystemExit(0 if result["failed"] == 0 else 1)
-    if args.command == "collect-hnx-disclosures":
-        print(json.dumps(run_hnx_disclosures(), ensure_ascii=False))
-        raise SystemExit(0)
     if args.command == "collect-fundamentals":
         result = run_fundamentals(args.limit, args.symbols.split(",") if args.symbols else None, args.symbol_offset)
         print(json.dumps(result, ensure_ascii=False))

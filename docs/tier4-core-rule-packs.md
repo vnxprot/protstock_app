@@ -240,10 +240,9 @@ sequenced prompt once Tier 4 is stable:
   sector-average-return aggregation alongside the existing benchmark comparison).
 - **Core Event Risk** — warn on/block new entries near earnings, dividend, or share
   issuance events, using point-in-time official disclosure data. Partial foundation
-  already exists (`disclosures.py` ingests HNX RSS disclosures with
-  `published_at`/`available_from`), but needs a classification layer to identify
-  *which* disclosures are earnings/dividend/issuance events specifically — that
-  classification work isn't done yet. This is the pack that will actually use the
+  is not currently collected; the previous HNX RSS ingester was retired.
+  An official point-in-time source and classification layer would be needed to identify
+  *which* disclosures are earnings/dividend/issuance events specifically. This is the pack that will actually use the
   `blocks_new_entries` column reserved in §1.
 - **Core Position Defense** — ATR trailing stop, time-stop, and a defensive
   reduce/exit when a setup hasn't performed as expected after N sessions. Builds on

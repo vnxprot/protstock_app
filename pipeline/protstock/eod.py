@@ -213,7 +213,7 @@ def run_eod(
 
 
 def finalize_fast_lane(trading_date: date, *, allow_partial: bool = False) -> dict[str, Any]:
-    """Publish same-day market context; the final watchdog may accept partial coverage."""
+    """Publish same-day market context from the available Fast Lane coverage."""
     client = SupabaseRestClient(Settings.from_env())
     try:
         trading_date = resolve_eod_session(client, trading_date)
