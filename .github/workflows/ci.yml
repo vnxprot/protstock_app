@@ -21,6 +21,7 @@ jobs:
       - run: npm run build
       - run: npm run test:sector
       - run: npm run test:watchlist
+      - run: npm run test:signals
 
   pipeline:
     runs-on: ubuntu-latest

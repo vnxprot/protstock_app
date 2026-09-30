@@ -19,6 +19,8 @@ async function main() {
     await page.getByRole('button',{name:'Đăng nhập',exact:true}).click()
     await page.waitForSelector('.app-shell')
     await page.goto(`${base}/#screener`)
+    await page.waitForSelector('.signal-triage-group',{timeout:60000})
+    await page.getByRole('button',{name:'Xem bảng chi tiết từng tín hiệu'}).click()
     await page.waitForSelector('.screener-row',{timeout:60000})
     await page.getByLabel('Tìm mã cổ phiếu',{exact:true}).fill('FPT')
     await page.waitForFunction(()=>[...document.querySelectorAll('.screener-symbol')].every(x=>x.textContent.startsWith('FPT')))

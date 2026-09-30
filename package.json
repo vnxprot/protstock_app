@@ -8,7 +8,8 @@
     "build": "tsc --noEmit -p tsconfig.app.json && vite build",
     "preview": "vite preview",
     "test:sector": "node --experimental-strip-types --test tests/sector-history.test.mjs",
-    "test:watchlist": "node --experimental-strip-types --test tests/watchlist.test.mjs"
+    "test:watchlist": "node --experimental-strip-types --test tests/watchlist.test.mjs",
+    "test:signals": "node --experimental-strip-types --test tests/signal-triage.test.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.116.0",

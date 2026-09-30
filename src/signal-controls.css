@@ -42,3 +42,31 @@ input:focus-visible,textarea:focus-visible,button:focus-visible,[role="combobox"
 @media(max-width:1200px) { .signal-search-advanced { grid-template-columns:repeat(3,minmax(0,1fr)); } }
 @media(max-width:760px) { .signal-search-advanced { grid-template-columns:repeat(2,minmax(0,1fr)); padding:12px; } .replay-panel { padding:16px; } .replay-form { grid-template-columns:minmax(0,1fr); } .settings-page .replay-submit { margin-top:0; width:100%; } .date-field .date-input-wrap>input { font-size:16px; } }
 @media(prefers-reduced-motion:reduce) { .soft-select-menu { animation:none; } }
+
+/* One review item per symbol; source signals remain available on expansion. */
+.signal-triage { display:grid; gap:8px; margin:14px 0; }
+.signal-triage-summary { display:flex; flex-wrap:wrap; align-items:baseline; gap:8px 16px; margin-bottom:4px; }
+.signal-triage-summary strong { color:var(--text); font-size:15px; }
+.signal-triage-summary span,.triage-details>small { color:var(--muted); font-size:12px; }
+.signal-triage-group { border:1px solid var(--line); border-radius:12px; background:var(--surface); }
+.signal-triage-group[open] { border-color:var(--control-accent); }
+.signal-triage-group summary { display:grid; grid-template-columns:100px minmax(190px,1fr) 155px minmax(220px,1.4fr) 90px; align-items:center; gap:12px; padding:12px 15px; cursor:pointer; list-style:none; }
+.signal-triage-group summary::-webkit-details-marker { display:none; }
+.signal-triage-group summary:hover { background:color-mix(in srgb,var(--control-accent) 6%,transparent); }
+.triage-symbol,.triage-snapshot { display:grid; gap:3px; }
+.triage-symbol strong { color:var(--text); font-size:15px; }
+.triage-symbol small,.triage-snapshot small { color:var(--muted); font-size:11px; }
+.triage-snapshot b { color:var(--text); font-size:12px; }
+.triage-labels { display:flex; flex-wrap:wrap; gap:4px; }
+.triage-labels b { padding:4px 7px; border:1px solid var(--line); border-radius:999px; color:var(--muted); font-size:11px; font-weight:600; line-height:1.2; }
+.triage-labels .triage-held { color:var(--control-accent); border-color:var(--control-accent); }
+.triage-labels .triage-risk { color:var(--red); border-color:var(--red); }
+.triage-labels .triage-opportunity { color:var(--lime); border-color:var(--lime); }
+.triage-reason { color:var(--text); font-size:12px; line-height:1.4; }
+.triage-count { color:var(--control-accent); font-size:11px; text-align:right; white-space:nowrap; }
+.triage-details { display:grid; gap:8px; padding:12px 15px 14px; border-top:1px solid var(--line); }
+.triage-detail-row { display:grid; grid-template-columns:120px minmax(0,1fr) auto; gap:12px; align-items:start; color:var(--text); font-size:12px; line-height:1.5; }
+.triage-detail-row button { padding:4px 8px; border:1px solid var(--line); border-radius:7px; background:transparent; color:var(--control-accent); cursor:pointer; }
+.signal-raw-toggle { margin:8px 0 15px; }
+@media(max-width:900px) { .signal-triage-group summary { grid-template-columns:90px 1fr auto; } .triage-reason { grid-column:1/-1; } .triage-count { grid-column:3; grid-row:1; } }
+@media(max-width:560px) { .signal-triage-group summary { grid-template-columns:1fr auto; } .triage-labels,.triage-snapshot,.triage-reason { grid-column:1/-1; } .triage-count { grid-column:2; grid-row:1; } .triage-detail-row { grid-template-columns:1fr; gap:3px; padding-bottom:8px; border-bottom:1px solid var(--line); } .triage-detail-row button { justify-self:start; } }
