@@ -75,7 +75,7 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           TRADING_DATE: ${{ inputs.trading_date }}
         run: |
-          args=(--fast-lane --skip-breadth-snapshot --source "${{ matrix.source }}" --symbol-offset "${{ matrix.offset }}" --symbol-limit "${{ matrix.limit }}")
+          args=(--fast-lane --skip-breadth-snapshot --source "${{ matrix.source }}" --symbol-offset "${{ matrix.offset }}" --symbol-limit "${{ matrix.limit }}" --pause-seconds 13)
           if [ -n "$TRADING_DATE" ]; then args+=(--date "$TRADING_DATE"); fi
           protstock eod "${args[@]}"
       - name: Report partial shard
