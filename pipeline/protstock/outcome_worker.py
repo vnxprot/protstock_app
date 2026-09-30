@@ -14,6 +14,7 @@ def evaluate_pending_outcomes(today: date | None = None) -> dict:
     try:
         cutoff = today or date.today()
         histories = {}
+        pending_rows: list[dict] = []
         for signal in client.signals_missing_outcomes(cutoff - timedelta(days=5)):
             existing = {row["horizon_days"]: row for row in signal.get("signal_outcomes", [])}
             counts["signals"] += 1
@@ -32,8 +33,12 @@ def evaluate_pending_outcomes(today: date | None = None) -> dict:
                         or previous.get("calculation_version") != CALCULATION_VERSION
                         or previous.get("price_fingerprint") != outcome["price_fingerprint"]):
                     rows.append(outcome)
-            if rows:
-                counts["outcomes"] += client.upsert("signal_outcomes", rows, "signal_id,horizon_days")
+            pending_rows.extend(rows)
+            if len(pending_rows) >= 100:
+                counts["outcomes"] += client.upsert("signal_outcomes", pending_rows, "signal_id,horizon_days")
+                pending_rows = []
+        if pending_rows:
+            counts["outcomes"] += client.upsert("signal_outcomes", pending_rows, "signal_id,horizon_days")
         return counts
     finally:
         client.close()
