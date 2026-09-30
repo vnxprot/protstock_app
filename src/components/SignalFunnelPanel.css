@@ -1,0 +1,13 @@
+.signal-funnel-panel { margin-block: 1rem; }
+.signal-funnel-panel .panel-title { display: flex; justify-content: space-between; gap: 1rem; align-items: flex-start; }
+.signal-funnel-panel .panel-title p { margin: .3rem 0 0; }
+.signal-funnel-counts { display: flex; flex-wrap: wrap; gap: .4rem; margin: 1rem 0; }
+.signal-funnel-counts button { border: 1px solid var(--border, #ccd2d9); border-radius: .6rem; padding: .45rem .6rem; background: transparent; color: inherit; cursor: pointer; }
+.signal-funnel-counts button.selected { border-color: var(--accent, #4b77b7); background: rgba(75,119,183,.12); }
+.signal-funnel-counts strong { margin-left: .4rem; }
+.signal-funnel-table { overflow-x: auto; }
+.signal-funnel-head, .signal-funnel-row { display: grid; grid-template-columns: 4rem 5rem 11rem 15rem 7rem minmax(14rem,1fr); min-width: 760px; align-items: center; gap: .7rem; padding: .6rem .5rem; border-bottom: 1px solid var(--border, #ccd2d9); }
+.signal-funnel-head { font-weight: 700; }
+.signal-funnel-row small { overflow-wrap: anywhere; }
+.signal-funnel-pagination { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding-top: .7rem; }
+.signal-funnel-pagination button { margin-left: .4rem; }
