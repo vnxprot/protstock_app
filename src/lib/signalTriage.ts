@@ -24,6 +24,29 @@ export type SignalGroup<T extends TriageSignal> = {
   priority: number
 }
 
+export type TriageFocus = 'all' | 'changed' | 'held_risk' | 'opportunity' | 'other'
+export type TriageHolding = 'all' | 'held' | 'unheld'
+
+export function filterSignalGroups<T extends TriageSignal>(
+  groups: SignalGroup<T>[], focus: TriageFocus, holding: TriageHolding,
+): SignalGroup<T>[] {
+  return groups.filter(group => {
+    if (holding === 'held' && !group.held || holding === 'unheld' && group.held) return false
+    const changed = group.change === 'new' || group.change === 'action' || group.change === 'reasons'
+    const heldRisk = group.held && (group.risk || group.signals.some(signal => signal.action === 'EXIT' || signal.action === 'REDUCE'))
+    if (focus === 'changed') return changed
+    if (focus === 'held_risk') return heldRisk
+    if (focus === 'opportunity') return group.opportunity
+    if (focus === 'other') return !changed && !heldRisk && !group.opportunity
+    return true
+  })
+}
+
+export function signalGroupPage<T extends TriageSignal>(groups: SignalGroup<T>[], page: number, pageSize = 10): SignalGroup<T>[] {
+  const start = (Math.max(1, page) - 1) * pageSize
+  return groups.slice(start, start + pageSize)
+}
+
 const actionRank: Record<string, number> = { EXIT: 5, REDUCE: 4, ADD: 3, PROBE_BUY: 2, WATCH: 1 }
 const riskReasons = new Set([
   'TREND_DOWN', 'MONTHLY_BEARISH', 'OPPOSING_BEARISH_READY',
@@ -68,9 +91,10 @@ export function groupSignals<T extends TriageSignal>(
         return opportunityReasons.has(code) || code.startsWith('NEAR_TRIGGER_') || code.startsWith('NEAR_')
       }))
     const hasSell = items.some(signal => signal.action === 'EXIT' || signal.action === 'REDUCE')
-    const priority = (held && hasSell ? 120 : held && risk ? 100 : hasSell ? 80 : 0)
-      + (change === 'new' || change === 'action' ? 30 : change === 'reasons' ? 15 : 0)
-      + (held ? 10 : 0) + (opportunity ? 5 : 0)
+    const changed = change === 'new' || change === 'action' || change === 'reasons'
+    const priority = (changed ? 300 : held && (risk || hasSell) ? 200 : opportunity ? 100 : 0)
+      + (held && hasSell ? 40 : hasSell ? 30 : held ? 20 : 0)
+      + (change === 'new' || change === 'action' ? 10 : change === 'reasons' ? 5 : 0)
     return { symbol: primary.symbol, symbol_id: primary.symbol_id, sector: primary.sector,
       signals: ordered, primary, held, change, risk, opportunity, priority }
   }).sort((a, b) => b.priority - a.priority || b.primary.score - a.primary.score || a.symbol.localeCompare(b.symbol))
