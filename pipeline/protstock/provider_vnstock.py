@@ -7,6 +7,10 @@ import httpx
 
 from .models import DailyBar
 
+KBS_SOURCE_VERSION = "KBS_PUBLIC_V2_20260930"
+STOCK_PRICE_UNIT = "THOUSAND_VND_PER_SHARE"
+INDEX_PRICE_UNIT = "INDEX_POINTS"
+
 
 class VnstockProvider:
     """Free, no-key adapter for KBS's public end-of-day OHLCV endpoint."""
@@ -14,7 +18,9 @@ class VnstockProvider:
     API_BASE = "https://kbbuddywts.kbsec.com.vn/iis-server/investment"
 
     def __init__(self, source: str = "KBS") -> None:
-        self.source = source.upper()
+        if source.upper() != "KBS":
+            raise ValueError("Only the KBS price adapter is implemented")
+        self.source = "KBS"
 
     def history(self, symbol: str, start: date, end: date) -> list[DailyBar]:
         endpoint = "index" if symbol.upper().endswith("INDEX") else "stocks"

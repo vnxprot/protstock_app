@@ -56,7 +56,7 @@ jobs:
             offset: 0
             limit: 104
           - label: L–Z
-            source: VCI
+            source: KBS
             offset: 104
             limit: 1000
     steps:

@@ -74,7 +74,8 @@ def _history(closes: list[tuple[float, float]]) -> list[dict]:
 def test_signal_outcome_handles_breach_and_no_breach() -> None:
     signal = {"id": "signal-1", "as_of_date": "2026-01-01", "evidence": {"invalidation_price": 95}}
     breached = evaluate_signal_outcome(signal, _history([(100, 100), (104, 104), (94, 94), (110, 110)]), 3)
-    assert breached == {"signal_id": "signal-1", "horizon_days": 3, "forward_return_pct": pytest.approx(0.1), "max_drawdown_pct": pytest.approx(-0.09615384615384615), "hit_invalidation": True}
+    assert {key: breached[key] for key in ("signal_id", "horizon_days", "forward_return_pct", "max_drawdown_pct", "hit_invalidation")} == {"signal_id": "signal-1", "horizon_days": 3, "forward_return_pct": pytest.approx(0.1), "max_drawdown_pct": pytest.approx(-0.09615384615384615), "hit_invalidation": True}
+    assert breached["status"] == "VALID" and len(breached["price_fingerprint"]) == 64
     safe = evaluate_signal_outcome(signal, _history([(100, 100), (105, 105), (102, 102), (110, 110)]), 3)
     assert safe["hit_invalidation"] is False
     assert safe["max_drawdown_pct"] == pytest.approx(-0.02857142857142858)

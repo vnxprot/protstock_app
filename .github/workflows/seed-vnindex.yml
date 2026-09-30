@@ -13,13 +13,12 @@ on:
         required: false
         type: string
       source:
-        description: Primary free data source; the CLI automatically tries the other source on failure
+        description: Implemented KBS public price source
         required: true
         default: KBS
         type: choice
         options:
           - KBS
-          - VCI
 
 permissions:
   contents: read

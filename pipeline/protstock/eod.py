@@ -15,12 +15,13 @@ from .engines import evaluate_named_engine, relative_strength_context_reasons
 from .indicators import calculate_indicators
 from .market_regime import build_breadth_membership
 from .market_health_history import build_market_health_history
-from .provider_vnstock import VnstockProvider
+from .provider_vnstock import VnstockProvider, INDEX_PRICE_UNIT, KBS_SOURCE_VERSION, STOCK_PRICE_UNIT
 from .resolution import resolve_consolidated_signal
 from .supabase_rest import SupabaseRestClient
 from .timeframes import aggregate_bars
 from .signal_policy import STOCK_PRICE_TO_VND, apply_signal_policy
 from .period_signals import monthly_trend, evaluate_period_signal
+from .signal_funnel import assess_funnel
 from .wyckoff import classify_wyckoff_timeframe
 
 # VNINDEX's first session was 28/07/2000. This keeps its benchmark history full
@@ -57,8 +58,6 @@ def run_eod(
         client.close()
         raise
     provider = VnstockProvider(source)
-    fallback_source = "VCI" if source.upper() == "KBS" else "KBS"
-    fallback_provider = VnstockProvider(fallback_source)
     job = client.create_job({
         "job_type": "EOD_INGEST", "trading_date": trading_date.isoformat(),
         "status": "RUNNING", "trigger_type": "MANUAL" if historical else "SCHEDULED",
@@ -82,6 +81,8 @@ def run_eod(
                 "open": float(bar.open), "high": float(bar.high), "low": float(bar.low),
                 "close": float(bar.close), "volume": bar.volume, "source": bar.source,
                 "collected_at": bar.collected_at.isoformat(),
+                "price_unit": INDEX_PRICE_UNIT,
+                "source_version": KBS_SOURCE_VERSION,
             } for bar in index_bars]
             client.upsert("market_index_prices", index_rows, "index_id,trading_date")
             benchmark_history = client.index_price_history(index["id"], MULTI_TIMEFRAME_HISTORY_LIMIT)
@@ -98,6 +99,8 @@ def run_eod(
                     "open": float(bar.open), "high": float(bar.high), "low": float(bar.low),
                     "close": float(bar.close), "volume": bar.volume, "source": bar.source,
                     "collected_at": bar.collected_at.isoformat(),
+                    "price_unit": INDEX_PRICE_UNIT,
+                    "source_version": KBS_SOURCE_VERSION,
                 } for bar in index_bars]
                 client.upsert("market_index_prices", index_rows, "index_id,trading_date")
                 benchmark_history = client.index_price_history(index["id"], MULTI_TIMEFRAME_HISTORY_LIMIT)
@@ -114,25 +117,30 @@ def run_eod(
         for symbol_row in symbols:
             started = monotonic()
             try:
-                fetched, used_fallback = _fetch_history_with_fallback(
-                    provider,
-                    fallback_provider,
-                    symbol_row["symbol"],
-                    trading_date - timedelta(days=lookback_days),
-                    trading_date,
+                fetched = _fetch_history_with_retry(
+                    provider, symbol_row["symbol"],
+                    trading_date - timedelta(days=lookback_days), trading_date,
                 )
-                if used_fallback:
-                    warnings.append(f"{symbol_row['symbol']}: fallback {source.upper()}->{fallback_source}")
                 price_rows = [{
                     "symbol_id": symbol_row["id"], "trading_date": bar.trading_date.isoformat(),
                     "open": float(bar.open), "high": float(bar.high), "low": float(bar.low),
                     "close": float(bar.close), "volume": bar.volume, "source": bar.source,
                     "collected_at": bar.collected_at.isoformat(), "quality_status": "VALID",
+                    "price_unit": STOCK_PRICE_UNIT,
+                    "source_version": KBS_SOURCE_VERSION,
                 } for bar in fetched]
                 counts["prices"] += client.upsert("daily_prices", price_rows, "symbol_id,trading_date")
                 history = _rows_as_of(client.price_history(symbol_row["id"], MULTI_TIMEFRAME_HISTORY_LIMIT), trading_date)
                 analysis_rows = [{**row, "date": row["trading_date"]} for row in history]
                 if analysis_rows:
+                    try:
+                        assessment = assess_funnel(symbol_row["id"], analysis_rows,
+                                                   confirmed_week_end=confirmed_week_end,
+                                                   confirmed_month_end=confirmed_month_end)
+                        client.upsert("signal_funnel_assessments", [assessment],
+                                      "symbol_id,as_of_date,version")
+                    except Exception as shadow_error:
+                        warnings.append(f"{symbol_row['symbol']}: shadow funnel {type(shadow_error).__name__}")
                     timeframe_rows = {"D": analysis_rows}
                     fibonacci_context = build_fibonacci_context(analysis_rows, confirmed_week_end, confirmed_month_end)
                     benchmark_rows = {"D": benchmark_daily}
@@ -480,25 +488,6 @@ def _fetch_history_with_retry(provider: VnstockProvider, symbol: str, start: dat
                 raise
             sleep(65 * (attempt + 1))
     raise RuntimeError("unreachable")
-
-
-def _fetch_history_with_fallback(
-    primary_provider: VnstockProvider,
-    fallback_provider: VnstockProvider,
-    symbol: str,
-    start: date,
-    end: date,
-) -> tuple[list, bool]:
-    """Try the alternate free source for one symbol without aborting the EOD run."""
-    try:
-        return _fetch_history_with_retry(primary_provider, symbol, start, end), False
-    except Exception as primary_error:
-        try:
-            return _fetch_history_with_retry(fallback_provider, symbol, start, end), True
-        except Exception as fallback_error:
-            raise RuntimeError(
-                f"both sources failed ({type(primary_error).__name__}, {type(fallback_error).__name__})"
-            ) from fallback_error
 
 
 def _stored_universe_breadth(client: SupabaseRestClient, trading_date: date) -> tuple[dict, list[dict]]:

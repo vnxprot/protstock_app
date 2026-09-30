@@ -6,7 +6,7 @@ from typing import Any, Iterable
 
 from .config import Settings
 from .history_coverage import assess_symbol_coverage
-from .provider_vnstock import VnstockProvider
+from .provider_vnstock import VnstockProvider, INDEX_PRICE_UNIT, KBS_SOURCE_VERSION, STOCK_PRICE_UNIT
 from .supabase_rest import SupabaseRestClient
 
 
@@ -38,7 +38,7 @@ def repair_missing_history(
                 counts["symbols"] += 1
                 try:
                     existing = set(client.symbol_price_dates(symbol["id"], start_date, end_date))
-                    bars = _fetch_with_fallback(symbol["symbol"], start_date, end_date, source)
+                    bars = _fetch_from_source(symbol["symbol"], start_date, end_date, source)
                     if not bars:
                         no_source_data.append(symbol["symbol"])
                         continue
@@ -56,7 +56,7 @@ def repair_missing_history(
             return {"status": "SUCCEEDED" if not counts["failed"] and not no_source_data else "PARTIAL", "start_date": start_date.isoformat(), "end_date": end_date.isoformat(), **counts, "no_source_data": no_source_data, "failed_symbols": sorted(unresolved)}
         index = client.market_index("VNINDEX")
         existing_index_dates = set(client.index_price_dates(index["id"], start_date, end_date))
-        index_bars = _fetch_with_fallback("VNINDEX", start_date, end_date, source)
+        index_bars = _fetch_from_source("VNINDEX", start_date, end_date, source)
         source_calendar = {bar.trading_date.isoformat() for bar in index_bars}
         missing_index_dates = source_calendar - existing_index_dates
         index_rows = _index_price_rows(index["id"], index_bars, missing_index_dates)
@@ -84,7 +84,7 @@ def repair_missing_history(
                     counts["already_complete"] += 1
                     continue
                 counts["missing_sessions"] += len(missing)
-                bars = _fetch_with_fallback(
+                bars = _fetch_from_source(
                     symbol["symbol"], min(map(date.fromisoformat, missing)), max(map(date.fromisoformat, missing)), source
                 )
                 rows = _price_rows(symbol["id"], bars, missing)
@@ -103,13 +103,8 @@ def repair_missing_history(
         client.close()
 
 
-def _fetch_with_fallback(symbol: str, start_date: date, end_date: date, source: str):
-    primary = source.upper()
-    secondary = "VCI" if primary == "KBS" else "KBS"
-    try:
-        return VnstockProvider(primary).history(symbol, start_date, end_date)
-    except Exception:
-        return VnstockProvider(secondary).history(symbol, start_date, end_date)
+def _fetch_from_source(symbol: str, start_date: date, end_date: date, source: str):
+    return VnstockProvider(source).history(symbol, start_date, end_date)
 
 
 def _index_price_rows(index_id: int, bars: Iterable, missing: set[str]) -> list[dict[str, Any]]:
@@ -122,6 +117,8 @@ def _index_price_rows(index_id: int, bars: Iterable, missing: set[str]) -> list[
             "index_id": index_id, "trading_date": trading_date,
             "open": float(bar.open), "high": float(bar.high), "low": float(bar.low), "close": float(bar.close),
             "volume": bar.volume, "source": bar.source, "collected_at": bar.collected_at.isoformat(),
+            "price_unit": INDEX_PRICE_UNIT,
+            "source_version": KBS_SOURCE_VERSION,
         })
     return rows
 
@@ -135,5 +132,7 @@ def _price_rows(symbol_id: int, bars: Iterable, missing: set[str]) -> list[dict[
             "symbol_id": symbol_id, "trading_date": trading_date,
             "open": float(bar.open), "high": float(bar.high), "low": float(bar.low), "close": float(bar.close),
             "volume": bar.volume, "source": bar.source, "collected_at": bar.collected_at.isoformat(), "quality_status": "VALID",
+            "price_unit": STOCK_PRICE_UNIT,
+            "source_version": KBS_SOURCE_VERSION,
         })
     return rows

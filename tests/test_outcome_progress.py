@@ -37,10 +37,10 @@ def test_worker_skips_existing_horizons_and_caches_symbol_history(monkeypatch):
             return [{"id":name,"symbol_id":1,"as_of_date":"2026-01-01","signal_outcomes":[{"horizon_days":5},{"horizon_days":10}]} for name in ('a','b')]
         def price_history(self,*args): calls.append(args); return history()
         def upsert(self, table, rows, conflict):
-            assert [row['horizon_days'] for row in rows] == [20]
+            assert [row['horizon_days'] for row in rows] == [5,10,20]
             return len(rows)
         def close(self): pass
     monkeypatch.setattr('protstock.outcome_worker.Settings.from_env',lambda: None)
     monkeypatch.setattr('protstock.outcome_worker.SupabaseRestClient',lambda _: Client())
-    assert evaluate_pending_outcomes(date(2026,1,25))['outcomes'] == 2
+    assert evaluate_pending_outcomes(date(2026,1,25))['outcomes'] == 6
     assert len(calls)==1

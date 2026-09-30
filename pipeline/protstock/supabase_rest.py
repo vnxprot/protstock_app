@@ -63,6 +63,15 @@ class SupabaseRestClient:
         response.raise_for_status()
         return response.json()
 
+    def all_symbols_for_replay(self) -> list[dict[str, Any]]:
+        """Keep inactive and delisted symbols in historical research cohorts."""
+        response = self._client.get(
+            "/symbols",
+            params={"select": "id,symbol,exchange,sector,listed_from,active", "order": "symbol.asc"},
+        )
+        response.raise_for_status()
+        return response.json()
+
     def market_index(self, code: str) -> dict[str, Any]:
         response = self._client.get("/market_indices", params={"select": "id,code", "code": f"eq.{code}", "limit": "1"})
         response.raise_for_status()
@@ -114,7 +123,7 @@ class SupabaseRestClient:
         for offset in range(0, limit, page_size):
             response = self._client.get(
                 "/daily_prices",
-                params={"select": "trading_date,open,high,low,close,volume", "symbol_id": f"eq.{symbol_id}", "order": "trading_date.desc"},
+                params={"select": "trading_date,open,high,low,close,volume,source,source_version,price_unit,quality_status", "symbol_id": f"eq.{symbol_id}", "order": "trading_date.desc"},
                 headers={"Range": f"{offset}-{min(offset + page_size, limit) - 1}"},
             )
             response.raise_for_status()
@@ -284,12 +293,12 @@ class SupabaseRestClient:
         rows = []
         for offset in range(0, 1_000_000, 1000):
             response = self._client.get("/signals", params={
-                "select": "id,symbol_id,as_of_date,action,evidence,signal_outcomes(horizon_days)",
+                "select": "id,symbol_id,as_of_date,action,evidence,signal_outcomes(horizon_days,status,calculation_version,price_fingerprint)",
                 "as_of_date": f"lte.{cutoff_date.isoformat()}", "order": "as_of_date.asc,id.asc",
             }, headers={"Range": f"{offset}-{offset + 999}"})
             response.raise_for_status()
             page = response.json()
-            rows.extend(row for row in page if {5, 10, 20} - {item["horizon_days"] for item in (row.get("signal_outcomes") or [])})
+            rows.extend(page)
             if len(page) < 1000: break
         return rows
 

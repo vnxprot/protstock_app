@@ -7,7 +7,7 @@ from pathlib import Path
 import httpx
 
 from .config import Settings
-from .provider_vnstock import VnstockProvider
+from .provider_vnstock import VnstockProvider, INDEX_PRICE_UNIT, KBS_SOURCE_VERSION
 from .supabase_rest import SupabaseRestClient
 from .universe import load_universe
 
@@ -67,32 +67,15 @@ def seed_vnindex_history(
     end_date: date | None = None,
     source: str = "KBS",
 ) -> dict[str, int | str]:
-    """Idempotently backfill VNINDEX OHLCV, with one alternate free source."""
+    """Idempotently backfill VNINDEX OHLCV from the implemented KBS adapter."""
     end_date = end_date or date.today()
     primary_source = source.upper()
-    fallback_source = "VCI" if primary_source == "KBS" else "KBS"
     client = SupabaseRestClient(Settings.from_env())
     try:
         index = client.market_index("VNINDEX")
         provider = VnstockProvider(primary_source)
         source_used = primary_source
-        try:
-            bars = provider.history("VNINDEX", start_date, end_date)
-        except Exception as primary_error:
-            logger.warning(
-                "VNINDEX fetch failed from %s (%s); retrying %s",
-                primary_source,
-                type(primary_error).__name__,
-                fallback_source,
-            )
-            try:
-                bars = VnstockProvider(fallback_source).history("VNINDEX", start_date, end_date)
-                source_used = fallback_source
-            except Exception as fallback_error:
-                raise RuntimeError(
-                    f"VNINDEX fetch failed from {primary_source} and {fallback_source} "
-                    f"({type(primary_error).__name__}, {type(fallback_error).__name__})"
-                ) from fallback_error
+        bars = provider.history("VNINDEX", start_date, end_date)
 
         rows = [{
             "index_id": index["id"],
@@ -104,6 +87,8 @@ def seed_vnindex_history(
             "volume": bar.volume,
             "source": bar.source,
             "collected_at": bar.collected_at.isoformat(),
+            "price_unit": INDEX_PRICE_UNIT,
+            "source_version": KBS_SOURCE_VERSION,
         } for bar in bars]
         client.upsert("market_index_prices", rows, "index_id,trading_date")
         logger.info("Seeded %s VNINDEX bars from %s", len(rows), source_used)

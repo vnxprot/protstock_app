@@ -45,31 +45,13 @@ def test_seed_vnindex_fetches_and_upserts(monkeypatch) -> None:
         "index_id": 9, "trading_date": "2018-01-02", "open": 1000.0,
         "high": 1010.0, "low": 995.0, "close": 1005.0, "volume": 123456,
         "source": "VNSTOCK_KBS", "collected_at": "2026-09-11T00:00:00+00:00",
+        "price_unit": "INDEX_POINTS", "source_version": "KBS_PUBLIC_V2_20260930",
     }], "index_id,trading_date")]
 
 
-def test_seed_vnindex_falls_back_from_kbs_to_vci(monkeypatch) -> None:
-    sources = []
+def test_vci_label_is_rejected_until_real_adapter_exists() -> None:
+    import pytest
+    from protstock.provider_vnstock import VnstockProvider
 
-    class Client:
-        def market_index(self, _code): return {"id": 9}
-        def upsert(self, *_args): return 1
-        def close(self): pass
-
-    class PrimaryProvider:
-        def history(self, *_args): raise TimeoutError("Read timed out")
-
-    class FallbackProvider:
-        def history(self, *_args): return [_bar()]
-
-    def provider(source):
-        sources.append(source)
-        return PrimaryProvider() if source == "KBS" else FallbackProvider()
-
-    monkeypatch.setattr("protstock.seed.Settings.from_env", lambda: object())
-    monkeypatch.setattr("protstock.seed.SupabaseRestClient", lambda _settings: Client())
-    monkeypatch.setattr("protstock.seed.VnstockProvider", provider)
-    result = seed_vnindex_history(date(2018, 1, 1), date(2018, 1, 3), "KBS")
-
-    assert sources == ["KBS", "VCI"]
-    assert result["source_used"] == "VCI"
+    with pytest.raises(ValueError, match="Only the KBS"):
+        VnstockProvider("VCI")

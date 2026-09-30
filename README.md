@@ -34,4 +34,6 @@ See:
 
 ## Data source
 
-- EOD OHLCV uses KBS's public endpoint with no API key or paid market-data subscription. This is for personal use and remains subject to the source's availability and terms.
+- EOD OHLCV uses KBS's public endpoint. The CLI rejects VCI until a separate adapter exists. New bars record their source, fetch time, price unit, and adapter version; older bars without verified provenance remain labeled as such.
+- The provisional vnstock/VCI fundamentals collector is disabled, and its old rows are hidden from stock analysis. Historical records remain in the database for audit.
+- Monthly context, weekly setup, and daily trigger research runs in a shadow funnel. It does not change live signals while historical outcomes and corporate-action coverage are being validated.

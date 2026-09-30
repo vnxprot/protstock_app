@@ -2,7 +2,7 @@
 
 ## Delivered
 
-- Community `vnstock` connector using KBS by default and VCI as a fallback option.
+- KBS public EOD adapter. VCI is not an active fallback until a distinct adapter is implemented.
 - Canonical EOD ingestion into `daily_prices`, with per-symbol job isolation.
 - SMA 20/50/200, EMA 20/50, RSI 14, MACD, Bollinger Bands, ATR 14, volume average and ratio.
 - Deterministic detectors for accumulation bases, double bottoms/tops, triangles, and flags.

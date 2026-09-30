@@ -21,13 +21,12 @@ on:
         default: "10"
         type: string
       source:
-        description: Free VNStock source (KBS default; VCI for a targeted fallback)
+        description: KBS public end-of-day price source
         required: false
         default: "KBS"
         type: choice
         options:
           - KBS
-          - VCI
 
 permissions:
   contents: read

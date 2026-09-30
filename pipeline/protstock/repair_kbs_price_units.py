@@ -8,6 +8,7 @@ from datetime import date
 
 from .config import Settings
 from .supabase_rest import SupabaseRestClient
+from .provider_vnstock import KBS_SOURCE_VERSION, STOCK_PRICE_UNIT
 
 
 def normalize_rows(rows: list[dict]) -> list[dict]:
@@ -17,7 +18,9 @@ def normalize_rows(rows: list[dict]) -> list[dict]:
         values = [float(row[key]) for key in ("open", "high", "low", "close")]
         if row["source"] != "KBS_PUBLIC" or min(values) < 100:
             continue
-        result.append({**row, "source": "KBS_PUBLIC_REPAIRED", **{key: float(row[key]) / 1000 for key in ("open", "high", "low", "close")}})
+        result.append({**row, "source": "KBS_PUBLIC_REPAIRED", "price_unit": STOCK_PRICE_UNIT,
+                       "source_version": KBS_SOURCE_VERSION,
+                       **{key: float(row[key]) / 1000 for key in ("open", "high", "low", "close")}})
     return result
 
 
