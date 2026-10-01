@@ -15,11 +15,12 @@ symbol's research cohort; it is never silently filled or scaled.
 KBS does not expose a usable complete corporate-action ledger through the
 endpoint tested on 01/10/2026. The vendor-rebased series improves historical
 price consistency, but it is **not proof** that every cash dividend, stock
-dividend, split, and rights issue is correctly adjusted. The verified VSDC TRC
-1:3 bonus issue (ex-date 15/09/2026) is stored with its source URL. The full
+dividend, split, and rights issue is correctly adjusted. VSDC confirms TRC's
+1:3 bonus issue and 16/09/2026 record date; the 15/09/2026 ex-rights session
+is corroborated separately. The event is stored with its source URL. The full
 universe still needs an authoritative, licensed event/factor feed and a
 reconciliation audit before corporate-action coverage can be called complete.
-TRC is repaired separately after the full KBS sync: 1,337 source bars passed
+TRC was repaired after its own matched KBS sync: 1,337 source bars passed
 date matching and jump checks. Its original stored rows are archived before
 the verified 1:3 bonus price basis and reciprocal pre-ex-rights share volume
 are applied. The volume adjustment is calculated from the official bonus
