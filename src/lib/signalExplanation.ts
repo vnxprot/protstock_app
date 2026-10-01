@@ -25,6 +25,15 @@ const exactReasons: Record<string, ReasonDescription> = {
   MACD_BULLISH_DIVERGENCE_1_SEGMENTS: { group: 'Thiết lập', text: 'Phân kỳ dương MACD một đoạn: hai đáy giá thấp dần, MACD tại hai đáy cao dần.' },
   MACD_BULLISH_DIVERGENCE_2_SEGMENTS: { group: 'Thiết lập', text: 'Phân kỳ dương MACD hai đoạn: ba đáy giá thấp dần, MACD tại ba đáy cao dần.' },
   MACD_BULLISH_DIVERGENCE_3_SEGMENTS: { group: 'Thiết lập', text: 'Phân kỳ dương MACD ba đoạn: bốn đáy giá thấp dần, MACD tại bốn đáy cao dần.' },
+  MACD_ZONE_DIVERGENCE_1_SEGMENTS: { group: 'Thiết lập', text: 'Phân kỳ dương một đoạn: hai vùng đáy giá thấp dần, đáy riêng đường MACD cao dần.' },
+  MACD_ZONE_DIVERGENCE_2_SEGMENTS: { group: 'Thiết lập', text: 'Phân kỳ dương hai đoạn: ba vùng đáy giá thấp dần, đáy riêng đường MACD cao dần.' },
+  MACD_ZONE_DIVERGENCE_3_SEGMENTS: { group: 'Thiết lập', text: 'Phân kỳ dương ba đoạn: bốn vùng đáy giá thấp dần, đáy riêng đường MACD cao dần.' },
+  MACD_LINE_HIGHER_ZONE_LOWS: { group: 'Thiết lập', text: 'Đáy đường MACD được tìm riêng trong từng vùng giá và tăng dần.' },
+  ZONE_DIVERGENCE_THIN: { group: 'Bộ lọc & rủi ro', text: 'Một nhịp giảm giá hoặc tăng MACD có biên mỏng; cần đọc kỹ mức giá và khối lượng xác nhận.' },
+  ZONE_LOW_BEING_REVISED: { group: 'Thiết lập', text: 'Vùng đáy có mức thấp mới; hệ thống tiếp tục theo dõi đến khi đủ hai phiên xác nhận.' },
+  RECENT_PRICE_BREAKOUT: { group: 'Xác nhận', text: 'Giá đã vượt ngưỡng ở phiên gần đây; đây là sự kiện đã qua, không tạo lệnh mua muộn.' },
+  BREAKOUT_VOLUME_UNCONFIRMED: { group: 'Bộ lọc & rủi ro', text: 'Giá đã vượt ngưỡng nhưng khối lượng chưa đạt 1,3 lần bình quân 20 phiên trước; tiếp tục theo dõi.' },
+  BREAKOUT_VOLUME_CONFIRMED: { group: 'Xác nhận', text: 'Khối lượng phiên vượt ngưỡng đạt ít nhất 1,3 lần bình quân 20 phiên trước.' },
   PRICE_BREAKOUT_CONFIRMED: { group: 'Xác nhận', text: 'Giá đóng cửa vượt đỉnh hồi giữa hai đáy cuối trong phiên hiện tại.' },
   WAIT_PRICE_BREAKOUT: { group: 'Xác nhận', text: 'Đã xác nhận đáy phân kỳ; chờ giá đóng cửa vượt đỉnh hồi.' },
   FIB_CONFLUENCE: { group: 'Xác nhận', text: 'Vùng giá trùng mức Fibonacci quan trọng; đây là yếu tố cộng hưởng, không tự tạo lệnh mua.' },
@@ -91,7 +100,7 @@ export function describeSignalReason(code: string): ReasonDescription {
 
 export function signalReasonSummary(reasons: string[]) {
   const important = ['OPPOSING_BEARISH_CONFIRMED', 'ENTRY_BLOCKED', 'OPPOSING_BEARISH_READY', 'FLOW_BAR_SELLING_PRESSURE', 'DAILY_TRIGGER_REQUIRED']
-  const setup = reasons.find(code => code.startsWith('MACD_BULLISH_DIVERGENCE_') || code.startsWith('PATTERN_') || code.startsWith('V0_NEAR_') || code.startsWith('V0_') && code.endsWith('_CONFIRMED'))
+  const setup = reasons.find(code => code.startsWith('MACD_ZONE_DIVERGENCE_') || code.startsWith('MACD_BULLISH_DIVERGENCE_') || code.startsWith('PATTERN_') || code.startsWith('V0_NEAR_') || code.startsWith('V0_') && code.endsWith('_CONFIRMED'))
   const chosen = [setup, ...important.filter(code => reasons.includes(code))].filter((code):code is string => Boolean(code)).slice(0, 2)
   return (chosen.length ? chosen : reasons.slice(0, 2)).map(code => describeSignalReason(code).text).join(' ') || 'Tín hiệu EOD tổng hợp từ các bộ máy đang bật.'
 }

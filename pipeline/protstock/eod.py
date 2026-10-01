@@ -22,7 +22,7 @@ from .timeframes import aggregate_bars
 from .signal_policy import STOCK_PRICE_TO_VND, apply_signal_policy
 from .period_signals import monthly_trend, evaluate_period_signal
 from .signal_funnel import assess_funnel
-from .macd_divergence import assess_macd_divergence
+from .macd_divergence_zones import assess_macd_zone_divergence
 from .wyckoff import classify_wyckoff_timeframe
 
 # VNINDEX's first session was 28/07/2000. This keeps its benchmark history full
@@ -141,7 +141,7 @@ def run_eod(
                         client.upsert("signal_funnel_assessments", [assessment],
                                       "symbol_id,as_of_date,version")
                         if assessment["stage"] != "DATA_QUARANTINED":
-                            macd_rows = assess_macd_divergence(symbol_row["id"], analysis_rows)
+                            macd_rows = assess_macd_zone_divergence(symbol_row["id"], analysis_rows, symbol_row.get("exchange"))
                             client.upsert("macd_divergence_assessments", macd_rows,
                                           "symbol_id,as_of_date,version,oscillator,swings")
                     except Exception as shadow_error:
@@ -174,6 +174,7 @@ def run_eod(
                         "weekly_snapshot": results.get("W", {}).get("indicators", {}),
                         "monthly_snapshot": results.get("M", {}).get("indicators", {}),
                         "candidate_sector": symbol_row["sector"],
+                        "candidate_exchange": symbol_row.get("exchange"),
                     }
                     for timeframe, scoped_rows in decision_rows.items():
                         if timeframe in results:
@@ -317,7 +318,7 @@ def rebuild_signals(trading_date: date, *, symbol_offset: int = 0, symbol_limit:
                                                confirmed_month_end=confirmed_month_end)
                     if assessment["stage"] != "DATA_QUARANTINED":
                         client.upsert("macd_divergence_assessments",
-                                      assess_macd_divergence(symbol_row["id"], analysis_rows),
+                                      assess_macd_zone_divergence(symbol_row["id"], analysis_rows, symbol_row.get("exchange")),
                                       "symbol_id,as_of_date,version,oscillator,swings")
                 except Exception as shadow_error:
                     warnings.append(f"{symbol_row['symbol']}: MACD shadow {type(shadow_error).__name__}")
@@ -341,7 +342,7 @@ def rebuild_signals(trading_date: date, *, symbol_offset: int = 0, symbol_limit:
                 decision_benchmark = {"D": benchmark_daily, **{tf: [bar for bar in benchmark_rows[tf] if bar["is_complete"]] for tf in ("W", "M")}}
                 preliminary = {timeframe: analyze_bars(rows, fibonacci_context=fibonacci_context, timeframe=timeframe, include_classical=False) for timeframe, rows in decision_rows.items() if rows}
                 results = {timeframe: analyze_bars(rows, weekly_patterns=preliminary.get("W", {}).get("patterns", []), monthly_snapshot=preliminary.get("M", {}).get("indicators", {}), benchmark_rows=decision_benchmark[timeframe], fibonacci_context=fibonacci_context, timeframe=timeframe) for timeframe, rows in decision_rows.items() if rows}
-                context = {"weekly_patterns": results.get("W", {}).get("patterns", []), "weekly_classical_patterns": results.get("W", {}).get("classical_patterns", []), "weekly_snapshot": results.get("W", {}).get("indicators", {}), "monthly_snapshot": results.get("M", {}).get("indicators", {}), "candidate_sector": symbol_row["sector"]}
+                context = {"weekly_patterns": results.get("W", {}).get("patterns", []), "weekly_classical_patterns": results.get("W", {}).get("classical_patterns", []), "weekly_snapshot": results.get("W", {}).get("indicators", {}), "monthly_snapshot": results.get("M", {}).get("indicators", {}), "candidate_sector": symbol_row["sector"], "candidate_exchange": symbol_row.get("exchange")}
                 for timeframe, rows in decision_rows.items():
                     if timeframe in results:
                         if "period_events" not in context:
@@ -643,6 +644,7 @@ def _write_analysis(
             },
             "portfolio_positions": owner.get("valued_positions", context.get("portfolio_positions")),
             "candidate_sector": context.get("candidate_sector"),
+            "candidate_exchange": context.get("candidate_exchange"),
             "capital": owner.get("capital", context.get("capital")),
             "risk_pct": owner.get("risk_pct", 1),
             "portfolio_error": owner.get("error"),

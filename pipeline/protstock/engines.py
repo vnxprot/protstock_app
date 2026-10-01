@@ -9,6 +9,9 @@ from .rules import evaluate_rule, multi_timeframe_gate
 from .divergence import evaluate_rsi_macd_confirmation
 from .pattern_events import double_bottom_first_confirmation
 from .macd_divergence import assess_macd_divergence
+from .macd_divergence_zones import (
+    MIN_THIN_BREAKOUT_VOLUME, RECENT_BREAKOUT_SESSIONS, assess_macd_zone_divergence,
+)
 
 
 CORE_PACK_METADATA = {
@@ -31,6 +34,11 @@ CORE_PACK_METADATA = {
         "name": "MACD Bullish Divergence Pack",
         "target_engine": "all",
         "description": "Phân kỳ dương MACD 1–3 đoạn; theo dõi đáy mới và xác nhận bằng giá",
+    },
+    "macd_bullish_divergence_v4": {
+        "name": "MACD Price-Zone Divergence Pack",
+        "target_engine": "all",
+        "description": "Phân kỳ đường MACD theo 2–4 vùng đáy; theo dõi liên tục và xác nhận bằng giá, khối lượng",
     },
     "relative_strength_leader_v1": {
         "name": "Relative Strength Leader Pack",
@@ -91,6 +99,8 @@ def evaluate_named_engine(engine: str | None, overrides: dict[str, Any] | None, 
         return evaluate_rsi_macd_divergence_v1(context)
     if engine == "macd_bullish_divergence_v3":
         return evaluate_macd_bullish_divergence_v3(context)
+    if engine == "macd_bullish_divergence_v4":
+        return evaluate_macd_bullish_divergence_v4(context)
     if engine == "rsi_macd_confirmation_v1_1":
         return evaluate_rsi_macd_confirmation(context)
     if engine == "relative_strength_leader_v1":
@@ -272,6 +282,47 @@ def evaluate_macd_bullish_divergence_v3(context: dict[str, Any]) -> tuple[bool, 
     if actionable:
         return True, "PROBE_BUY", [*reasons, "PRICE_BREAKOUT_CONFIRMED"]
     return True, "WATCH", [*reasons, "WAIT_PRICE_BREAKOUT"]
+
+
+def evaluate_macd_bullish_divergence_v4(context: dict[str, Any]) -> tuple[bool, str, list[str]]:
+    """MACD-line-only zone setup; breakout is proposed only on its own day."""
+    if context.get("timeframe") != "D":
+        return False, "WATCH", []
+    rows = assess_macd_zone_divergence(context.get("symbol_id", 0), context.get("bars") or [],
+                                       context.get("candidate_exchange"))
+    today = context.get("data_date")
+    active = [row for row in rows if row["stage"] == "WATCH_PRICE_CONFIRMATION"
+              or row["stage"] == "CONFIRMED" and (row["evidence"].get("trigger_age_sessions") or 0) <= RECENT_BREAKOUT_SESSIONS]
+    if not active:
+        return False, "WATCH", []
+    # A breakout today must be surfaced even when an older longer chain is
+    # still on WATCH; within the same urgency, prefer the stronger structure.
+    top = max(active, key=lambda row: (
+        row["stage"] == "CONFIRMED" and row["trigger_date"] == today,
+        row["swings"], row["confirmed_on"],
+    ))
+    evidence = top["evidence"]
+    context["engine_evidence"] = {
+        "pattern_type": "MACD_BULLISH_DIVERGENCE", "evidence_cluster": "MACD_BULLISH_DIVERGENCE",
+        "engine_version": "v4", "setup_id": top["setup_id"], "oscillator": "MACD_LINE",
+        "segments": top["swings"] - 1, "zones": evidence["zones"], "strength": evidence["strength"],
+        "trigger_price": top["trigger_price"], "invalidation_price": top["invalidation_price"],
+        "confirmed_on": top["confirmed_on"], "trigger_date": top["trigger_date"],
+        "breakout_volume_ratio20": evidence.get("breakout_volume_ratio20"),
+    }
+    reasons = [f"MACD_ZONE_DIVERGENCE_{top['swings'] - 1}_SEGMENTS", "MACD_LINE_HIGHER_ZONE_LOWS"]
+    if evidence["strength"] == "THIN":
+        reasons.append("ZONE_DIVERGENCE_THIN")
+    if evidence.get("pending_lower_low_on"):
+        return True, "WATCH", [*reasons, "ZONE_LOW_BEING_REVISED"]
+    if top["stage"] == "WATCH_PRICE_CONFIRMATION":
+        return True, "WATCH", [*reasons, "WAIT_PRICE_BREAKOUT"]
+    if top["trigger_date"] != today:
+        return True, "WATCH", [*reasons, "RECENT_PRICE_BREAKOUT"]
+    ratio = evidence.get("breakout_volume_ratio20")
+    if ratio is None or ratio < MIN_THIN_BREAKOUT_VOLUME:
+        return True, "WATCH", [*reasons, "PRICE_BREAKOUT_CONFIRMED", "BREAKOUT_VOLUME_UNCONFIRMED"]
+    return True, "PROBE_BUY", [*reasons, "PRICE_BREAKOUT_CONFIRMED", "BREAKOUT_VOLUME_CONFIRMED"]
 
 
 def relative_strength_context_reasons(context: dict[str, Any]) -> list[str]:
