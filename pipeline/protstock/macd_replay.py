@@ -111,7 +111,7 @@ def run_macd_replay(start_date: date, end_date: date, *, symbol_offset: int = 0,
             if apply:
                 for offset in range(0, len(assessments), 100):
                     client.upsert("macd_divergence_assessments", assessments[offset:offset + 100],
-                                  "symbol_id,as_of_date,version,oscillator")
+                                  "symbol_id,as_of_date,version,oscillator,swings")
                 for offset in range(0, len(outcomes), 100):
                     client.upsert("macd_divergence_outcomes", outcomes[offset:offset + 100],
                                   "symbol_id,setup_id,oscillator,horizon_days")

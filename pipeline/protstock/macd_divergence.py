@@ -1,6 +1,6 @@
-"""Point-in-time research detector for price/MACD bullish divergence.
+"""Point-in-time detector for price/MACD bullish divergence.
 
-This module reports evidence, never a trading action.  The price pivot is
+The price pivot is
 confirmed only after two later closed sessions.  MACD is sampled on that
 price-pivot date so an unrelated oscillator low cannot be cherry-picked.
 """
@@ -14,7 +14,7 @@ from .divergence import PIVOT_RADIUS
 from .indicators import _ema_series
 
 
-VERSION = "MACD_BULLISH_DIVERGENCE_SHADOW_V2"
+VERSION = "MACD_BULLISH_DIVERGENCE_V3"
 MAX_SETUP_AGE = 60
 MIN_SEPARATION = 5
 MAX_SEPARATION = 45
@@ -42,9 +42,9 @@ def _pivots(bars: Sequence[dict]) -> list[int]:
 
 
 def assess_macd_divergence(symbol_id: int, bars: Sequence[dict]) -> list[dict]:
-    """Return the latest non-duplicated line/histogram setup for each length.
+    """Return the latest line/histogram setup for each of 1–3 segments.
 
-    A three-swing sequence may skip higher price lows, but may not skip an
+    A sequence may skip higher price lows, but may not skip an
     intervening lower low or a lower oscillator trough.  This is a research
     definition whose thresholds must be frozen before prospective evaluation.
     """
@@ -84,32 +84,37 @@ def assess_macd_divergence(symbol_id: int, bars: Sequence[dict]) -> list[dict]:
                 pairs.append((left, right))
         if not pairs:
             continue
-        # Prefer the most recent confirmed endpoint; then three connected
-        # material swings over an isolated two-point comparison.
-        pair = max(pairs, key=lambda item: (item[1], item[0]))
-        chain = [pair[0], pair[1]]
-        for earlier in sorted((item for item in pairs if item[1] == chain[0]), reverse=True):
-            chain.insert(0, earlier[0])
-            break
-        chain = chain[-3:]
-        last = chain[-1]
-        trigger = max(float(item["high"]) for item in ordered[chain[-2] + 1:last])
-        stop = float(ordered[last]["low"])
-        confirmed_on = last + PIVOT_RADIUS
-        invalidated = False
-        trigger_index = None
-        for index in range(confirmed_on + 1, len(ordered)):
-            if float(ordered[index]["low"]) < stop:
-                invalidated = True
-                break
-            if (trigger_index is None and float(ordered[index]["close"]) > trigger
-                    and float(ordered[index - 1]["close"]) <= trigger):
-                trigger_index = index
-        age = len(ordered) - 1 - confirmed_on
-        stage = ("INVALIDATED" if invalidated else "CONFIRMED" if trigger_index is not None
-                 else "EXPIRED" if age > MAX_SETUP_AGE else "WATCH_PRICE_CONFIRMATION")
-        setup_id = sha256(f"{symbol_id}:{oscillator_name}:{','.join(str(ordered[i]['date']) for i in chain)}".encode()).hexdigest()[:24]
-        result.append({
+        # Build the longest valid chain ending at each pivot, then expose the
+        # latest 2-, 3- and 4-pivot windows independently.
+        best: dict[int, list[int]] = {}
+        for left, right in sorted(pairs, key=lambda pair: (pair[1], pair[0])):
+            chain = [*(best.get(left) or [left]), right]
+            if len(chain) > len(best.get(right, [])):
+                best[right] = chain[-4:]
+        for swings in (2, 3, 4):
+            candidates = (candidate for candidate in best.values() if len(candidate) >= swings)
+            longest = max(candidates, key=lambda candidate: (candidate[-1], len(candidate)), default=None)
+            if longest is None:
+                continue
+            chain = longest[-swings:]
+            last = chain[-1]
+            trigger = max(float(item["high"]) for item in ordered[chain[-2] + 1:last])
+            stop = float(ordered[last]["low"])
+            confirmed_on = last + PIVOT_RADIUS
+            invalidated = False
+            trigger_index = None
+            for index in range(confirmed_on + 1, len(ordered)):
+                if float(ordered[index]["low"]) < stop:
+                    invalidated = True
+                    break
+                if (trigger_index is None and float(ordered[index]["close"]) > trigger
+                        and float(ordered[index - 1]["close"]) <= trigger):
+                    trigger_index = index
+            age = len(ordered) - 1 - confirmed_on
+            stage = ("INVALIDATED" if invalidated else "CONFIRMED" if trigger_index is not None
+                     else "EXPIRED" if age > MAX_SETUP_AGE else "WATCH_PRICE_CONFIRMATION")
+            setup_id = sha256(f"{symbol_id}:{oscillator_name}:{','.join(str(ordered[i]['date']) for i in chain)}".encode()).hexdigest()[:24]
+            result.append({
             "symbol_id": symbol_id, "as_of_date": ordered[-1]["date"], "version": VERSION,
             "oscillator": oscillator_name, "swings": len(chain), "setup_id": setup_id,
             "stage": stage, "confirmed_on": ordered[confirmed_on]["date"],
@@ -121,5 +126,5 @@ def assess_macd_divergence(symbol_id: int, bars: Sequence[dict]) -> list[dict]:
                          "price_basis": "INTRADAY_LOW", "oscillator_basis": "MACD_PCT_OF_CLOSE",
                          "pivot_confirmation_bars": PIVOT_RADIUS,
                          "source_bar_date": ordered[-1]["date"]},
-        })
+            })
     return result

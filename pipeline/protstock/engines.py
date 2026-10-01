@@ -8,6 +8,7 @@ from .fibonacci import enrich_pattern_fibonacci, matching_fibonacci
 from .rules import evaluate_rule, multi_timeframe_gate
 from .divergence import evaluate_rsi_macd_confirmation
 from .pattern_events import double_bottom_first_confirmation
+from .macd_divergence import assess_macd_divergence
 
 
 CORE_PACK_METADATA = {
@@ -25,6 +26,11 @@ CORE_PACK_METADATA = {
         "name": "RSI / MACD Divergence Pack",
         "target_engine": "core_ladder_v2",
         "description": "Bắt điểm xoay chiều phân kỳ dương đảo chiều tại S/R Zone",
+    },
+    "macd_bullish_divergence_v3": {
+        "name": "MACD Bullish Divergence Pack",
+        "target_engine": "all",
+        "description": "Phân kỳ dương MACD 1–3 đoạn; theo dõi đáy mới và xác nhận bằng giá",
     },
     "relative_strength_leader_v1": {
         "name": "Relative Strength Leader Pack",
@@ -83,6 +89,8 @@ def evaluate_named_engine(engine: str | None, overrides: dict[str, Any] | None, 
         return evaluate_vcp_breakout_v1(context)
     if engine == "rsi_macd_divergence_v1":
         return evaluate_rsi_macd_divergence_v1(context)
+    if engine == "macd_bullish_divergence_v3":
+        return evaluate_macd_bullish_divergence_v3(context)
     if engine == "rsi_macd_confirmation_v1_1":
         return evaluate_rsi_macd_confirmation(context)
     if engine == "relative_strength_leader_v1":
@@ -236,6 +244,34 @@ def evaluate_rsi_macd_divergence_v1(context: dict[str, Any]) -> tuple[bool, str,
     # Both Core Pack versions must compare RSI on the same confirmed price
     # pivots; current-bar RSI is not evidence for a prior pivot divergence.
     return evaluate_rsi_macd_confirmation(context)
+
+
+def evaluate_macd_bullish_divergence_v3(context: dict[str, Any]) -> tuple[bool, str, list[str]]:
+    """One daily vote per stock; a new price breakout is the buy trigger."""
+    if context.get("timeframe") != "D":
+        return False, "WATCH", []
+    rows = assess_macd_divergence(context.get("symbol_id", 0), context.get("bars") or [])
+    today = context.get("data_date")
+    actionable = [row for row in rows if row["stage"] == "CONFIRMED" and row["trigger_date"] == today]
+    watching = [row for row in rows if row["stage"] == "WATCH_PRICE_CONFIRMATION"]
+    candidates = actionable or watching
+    if not candidates:
+        return False, "WATCH", []
+    # Four troughs and the MACD line carry the strongest structural evidence.
+    top = max(candidates, key=lambda row: (row["swings"], row["oscillator"] == "MACD_LINE"))
+    segments = top["swings"] - 1
+    context["engine_evidence"] = {
+        "pattern_type": "MACD_BULLISH_DIVERGENCE", "evidence_cluster": "MACD_BULLISH_DIVERGENCE",
+        "setup_id": top["setup_id"], "oscillator": top["oscillator"],
+        "segments": segments, "pivots": top["evidence"]["pivots"],
+        "trigger_price": top["trigger_price"], "invalidation_price": top["invalidation_price"],
+        "confirmed_on": top["confirmed_on"], "trigger_date": top["trigger_date"],
+    }
+    reasons = [f"MACD_BULLISH_DIVERGENCE_{segments}_SEGMENTS", f"MACD_{top['oscillator']}",
+               "FOUR_TROUGHS" if segments == 3 else "THREE_TROUGHS" if segments == 2 else "TWO_TROUGHS"]
+    if actionable:
+        return True, "PROBE_BUY", [*reasons, "PRICE_BREAKOUT_CONFIRMED"]
+    return True, "WATCH", [*reasons, "WAIT_PRICE_BREAKOUT"]
 
 
 def relative_strength_context_reasons(context: dict[str, Any]) -> list[str]:

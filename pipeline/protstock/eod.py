@@ -143,7 +143,7 @@ def run_eod(
                         if assessment["stage"] != "DATA_QUARANTINED":
                             macd_rows = assess_macd_divergence(symbol_row["id"], analysis_rows)
                             client.upsert("macd_divergence_assessments", macd_rows,
-                                          "symbol_id,as_of_date,version,oscillator")
+                                          "symbol_id,as_of_date,version,oscillator,swings")
                     except Exception as shadow_error:
                         warnings.append(f"{symbol_row['symbol']}: shadow research {type(shadow_error).__name__}")
                     timeframe_rows = {"D": analysis_rows}
@@ -318,7 +318,7 @@ def rebuild_signals(trading_date: date, *, symbol_offset: int = 0, symbol_limit:
                     if assessment["stage"] != "DATA_QUARANTINED":
                         client.upsert("macd_divergence_assessments",
                                       assess_macd_divergence(symbol_row["id"], analysis_rows),
-                                      "symbol_id,as_of_date,version,oscillator")
+                                      "symbol_id,as_of_date,version,oscillator,swings")
                 except Exception as shadow_error:
                     warnings.append(f"{symbol_row['symbol']}: MACD shadow {type(shadow_error).__name__}")
                 timeframe_rows = {"D": analysis_rows, "W": aggregate_bars(analysis_rows, "W", confirmed_week_end), "M": aggregate_bars(analysis_rows, "M", confirmed_month_end=confirmed_month_end)}
@@ -625,6 +625,7 @@ def _write_analysis(
             stats["evaluated_count"] += 1
         engine_context = {
             "dsl": dsl,
+            "symbol_id": symbol_id,
             "timeframe": timeframe,
             "bars": rows,
             "patterns": result["patterns"],

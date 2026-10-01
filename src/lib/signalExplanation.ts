@@ -22,6 +22,11 @@ const exactReasons: Record<string, ReasonDescription> = {
   FLOW_BAR_SELLING_PRESSURE: { group: 'Bộ lọc & rủi ro', text: 'Nến ngày có áp lực bán mạnh theo giá–khối lượng; đây là cảnh báo, không tự phủ quyết một breakout hợp lệ.' },
   RSI_OK: { group: 'Xác nhận', text: 'RSI nằm trong vùng phù hợp với thiết lập.' },
   MACD_CONFIRMATION: { group: 'Xác nhận', text: 'MACD xác nhận động lượng theo hướng của setup.' },
+  MACD_BULLISH_DIVERGENCE_1_SEGMENTS: { group: 'Thiết lập', text: 'Phân kỳ dương MACD một đoạn: hai đáy giá thấp dần, MACD tại hai đáy cao dần.' },
+  MACD_BULLISH_DIVERGENCE_2_SEGMENTS: { group: 'Thiết lập', text: 'Phân kỳ dương MACD hai đoạn: ba đáy giá thấp dần, MACD tại ba đáy cao dần.' },
+  MACD_BULLISH_DIVERGENCE_3_SEGMENTS: { group: 'Thiết lập', text: 'Phân kỳ dương MACD ba đoạn: bốn đáy giá thấp dần, MACD tại bốn đáy cao dần.' },
+  PRICE_BREAKOUT_CONFIRMED: { group: 'Xác nhận', text: 'Giá đóng cửa vượt đỉnh hồi giữa hai đáy cuối trong phiên hiện tại.' },
+  WAIT_PRICE_BREAKOUT: { group: 'Xác nhận', text: 'Đã xác nhận đáy phân kỳ; chờ giá đóng cửa vượt đỉnh hồi.' },
   FIB_CONFLUENCE: { group: 'Xác nhận', text: 'Vùng giá trùng mức Fibonacci quan trọng; đây là yếu tố cộng hưởng, không tự tạo lệnh mua.' },
   LIQUIDITY_OK: { group: 'Bộ lọc & rủi ro', text: 'Thanh khoản đạt ngưỡng tối thiểu để giao dịch.' },
   BREADTH_DATA_DEGRADED: { group: 'Bộ lọc & rủi ro', text: 'Dữ liệu thị trường thiếu một phần nhưng vẫn đạt ngưỡng độ phủ để đánh giá.' },
@@ -76,7 +81,7 @@ export function describeSignalReason(code: string): ReasonDescription {
   if (reason.includes('BREAKOUT') && pattern) return { group: 'Xác nhận', text: `${pattern[1]} có xác nhận vượt vùng kích hoạt.` }
   if (reason.includes('NECKLINE')) return { group: 'Thiết lập', text: 'Giá đang gần đường cổ; cần nến đóng cửa xác nhận trước khi kết luận breakout hoặc breakdown.' }
   if (reason.includes('RSI')) return { group: 'Xác nhận', text: 'RSI được dùng để kiểm tra động lượng và cấu trúc giá.' }
-  if (reason.includes('MACD')) return { group: 'Xác nhận', text: 'MACD được dùng để xác nhận động lượng, không tự tạo tín hiệu riêng lẻ.' }
+  if (reason.includes('MACD')) return { group: 'Xác nhận', text: 'MACD tại các đáy giá được dùng làm bằng chứng phân kỳ.' }
   if (reason.includes('VOLUME')) return { group: 'Xác nhận', text: 'Khối lượng là lớp xác nhận mức độ tham gia của dòng tiền.' }
   if (reason.includes('BREADTH') || reason.includes('DATA_')) return { group: 'Bộ lọc & rủi ro', text: 'Chất lượng dữ liệu hoặc bối cảnh breadth cần được xem xét thận trọng.' }
   if (reason.includes('STOP') || reason.includes('RISK') || reason.includes('BLOCK')) return { group: 'Bộ lọc & rủi ro', text: 'Bộ lọc rủi ro đã tác động đến khả năng mở hoặc duy trì vị thế.' }
@@ -86,7 +91,7 @@ export function describeSignalReason(code: string): ReasonDescription {
 
 export function signalReasonSummary(reasons: string[]) {
   const important = ['OPPOSING_BEARISH_CONFIRMED', 'ENTRY_BLOCKED', 'OPPOSING_BEARISH_READY', 'FLOW_BAR_SELLING_PRESSURE', 'DAILY_TRIGGER_REQUIRED']
-  const setup = reasons.find(code => code.startsWith('PATTERN_') || code.startsWith('V0_NEAR_') || code.startsWith('V0_') && code.endsWith('_CONFIRMED'))
+  const setup = reasons.find(code => code.startsWith('MACD_BULLISH_DIVERGENCE_') || code.startsWith('PATTERN_') || code.startsWith('V0_NEAR_') || code.startsWith('V0_') && code.endsWith('_CONFIRMED'))
   const chosen = [setup, ...important.filter(code => reasons.includes(code))].filter((code):code is string => Boolean(code)).slice(0, 2)
   return (chosen.length ? chosen : reasons.slice(0, 2)).map(code => describeSignalReason(code).text).join(' ') || 'Tín hiệu EOD tổng hợp từ các bộ máy đang bật.'
 }

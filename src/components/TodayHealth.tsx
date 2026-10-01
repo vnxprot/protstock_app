@@ -5,6 +5,8 @@ import { formatDate, formatDateTime } from '../lib/date'
 import { supabase } from '../lib/supabase'
 import { latestSignalPublication } from '../lib/signalPublication'
 
+type EodItem = { item_key: string; status: string; error_code: string | null; error_message: string | null; warning_codes: string[] | null }
+
 function Timestamp({ value }: { value: string | null | undefined }) {
   const [calendarDate, clock] = formatDateTime(value).split(' ')
   return <span className="health-timestamp"><time>{calendarDate ?? '—'}</time><b>{clock ?? '—'}</b></span>
@@ -37,15 +39,35 @@ export function TodayHealth() {
       const rebuildJob = (rebuildJobs ?? []).find(candidate => candidate.trading_date === newestDate)
       const signalUpdatedAt = publication?.finishedAt ?? null
       const attentionJob = (jobs ?? []).find(candidate => candidate.status === 'PARTIAL' || candidate.status === 'FAILED')
-      const { data: failedItems, error: failedError } = attentionJob
-        ? await supabase.from('job_run_items').select('item_key,error_code').eq('job_run_id', attentionJob.id).eq('status', 'FAILED').order('item_key')
-        : { data: [], error: null }
-      if (failedError) throw failedError
+      const eodDate = jobs?.[0]?.trading_date ?? newestDate
+      const sameDayJobs = (jobs ?? []).filter(candidate => candidate.trading_date === eodDate)
+      const [{ data: universe, error: symbolsError }, { data: prices, error: dailyError }, { data: snapshots, error: snapshotsError }, { data: runItems, error: itemsError }] = await Promise.all([
+        supabase.from('symbols').select('id,symbol').eq('active', true).order('symbol').limit(1000),
+        eodDate ? supabase.from('daily_prices').select('symbol_id').eq('trading_date', eodDate).limit(1000) : Promise.resolve({ data: [], error: null }),
+        eodDate ? supabase.from('technical_snapshots').select('symbol_id').eq('timeframe', 'D').eq('as_of_date', eodDate).limit(1000) : Promise.resolve({ data: [], error: null }),
+        sameDayJobs.length ? supabase.from('job_run_items').select('item_key,status,error_code,error_message,warning_codes,job_run_id').in('job_run_id', sameDayJobs.map(item => item.id)).order('created_at', { ascending: false }).limit(1000) : Promise.resolve({ data: [], error: null }),
+      ])
+      if (symbolsError || dailyError || snapshotsError || itemsError) throw symbolsError || dailyError || snapshotsError || itemsError
+      const priceIds = new Set((prices ?? []).map(item => Number(item.symbol_id)))
+      const snapshotIds = new Set((snapshots ?? []).map(item => Number(item.symbol_id)))
+      const itemBySymbol = new Map<string, EodItem>()
+      for (const item of runItems ?? []) if (!itemBySymbol.has(item.item_key)) itemBySymbol.set(item.item_key, item)
+      const missingEod = (universe ?? []).flatMap(item => {
+        const hasPrice = priceIds.has(Number(item.id))
+        const hasSnapshot = snapshotIds.has(Number(item.id))
+        if (hasPrice && hasSnapshot) return []
+        const runItem = itemBySymbol.get(item.symbol)
+        const reason = runItem?.status === 'FAILED'
+          ? [runItem.error_code, runItem.error_message].filter(Boolean).join(' · ')
+          : runItem?.status === 'SKIPPED' ? (runItem.warning_codes ?? []).join(', ') || 'Job bỏ qua mã'
+          : !runItem ? 'Chưa có kết quả EOD trong hai job' : !hasPrice ? 'Job hoàn tất nhưng thiếu giá đúng phiên' : 'Có giá nhưng chưa có snapshot D'
+        return [{ symbol: item.symbol, reason }]
+      })
       return {
         priceRows: priceRows ?? 0, coveredSymbols: coveredSymbols ?? 0, activeSymbols: activeSymbols ?? 0, newestDate,
         coreActions: actionCount.count ?? 0,
         coreWatch: watchCount.count ?? 0,
-        latestSignalAt: signalUpdatedAt, job, rebuildJob, attentionJob, failedItems: failedItems ?? [],
+        latestSignalAt: signalUpdatedAt, job, rebuildJob, attentionJob, eodDate, missingEod,
       }
     },
   })
@@ -60,7 +82,7 @@ export function TodayHealth() {
         {data?.rebuildJob&&<div><dt>Chạy lại signal · {data.rebuildJob.status}</dt><dd><span>Phiên {formatDate(data.rebuildJob.trading_date)}</span><Timestamp value={data.rebuildJob.finished_at ?? data.rebuildJob.started_at}/></dd></div>}
         <div className="health-run-window"><dt>Thời gian xử lý EOD</dt><dd><span><small>Bắt đầu</small><Timestamp value={data?.job?.started_at}/></span><span><small>Hoàn tất</small><Timestamp value={data?.job?.finished_at}/></span></dd></div>
       </dl>
-      {data?.failedItems.length ? <div className="health-errors"><ShieldAlert size={15}/><span>{data.failedItems.length} mã cần retry ({formatDate(data.attentionJob?.trading_date)}): {data.failedItems.map(item => item.item_key).join(', ')}</span></div> : (data?.activeSymbols ?? 0) > (data?.coveredSymbols ?? 0) ? <div className="health-errors"><ShieldAlert size={15}/><span>{(data?.activeSymbols ?? 0) - (data?.coveredSymbols ?? 0)} mã chưa có snapshot phiên {formatDate(data?.newestDate)}. Market Health và signal dùng các mã có dữ liệu đúng phiên.</span></div> : <div className="health-ok">Dữ liệu EOD đã bao phủ toàn bộ mã đang hoạt động.</div>}
+      {data?.missingEod.length ? <div className="health-errors"><ShieldAlert size={15}/><div><strong>{data.missingEod.length} mã chưa đủ EOD phiên {formatDate(data.eodDate)}</strong><ul className="health-missing-list">{data.missingEod.map(item => <li key={item.symbol}><b>{item.symbol}</b><span>{item.reason}</span></li>)}</ul></div></div> : <div className="health-ok">Dữ liệu EOD đã bao phủ toàn bộ mã đang hoạt động.</div>}
     </>}
   </article>
 }

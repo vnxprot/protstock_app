@@ -18,6 +18,8 @@ def evaluate_pending_outcomes(today: date | None = None) -> dict:
         scales = {}
         pending_rows: list[dict] = []
         for signal in client.signals_missing_outcomes(cutoff - timedelta(days=5)):
+            if (signal.get("evidence") or {}).get("pattern_type") == "MACD_BULLISH_DIVERGENCE":
+                continue
             existing = {row["horizon_days"]: row for row in signal.get("signal_outcomes", [])}
             counts["signals"] += 1
             if signal["symbol_id"] not in histories:

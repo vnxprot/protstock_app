@@ -2,6 +2,7 @@ export const engineOrder = [
   'Prot Core Engine v0.0', 'Prot Core Engine v1.0', 'Prot Core Engine v2.0',
   'Prot Core Pack · Pullback Continuation', 'Prot Core Pack · VCP Breakout',
   'Prot Core Pack · RSI MACD Divergence',
+  'Prot Core Pack · Phân kỳ Dương MACD',
   'Prot Core Pack · Relative Strength Leader',
   'Prot Core Pack · Wyckoff Context', 'Prot Core Pack · T+ Pullback',
 ]
@@ -21,6 +22,7 @@ export const engineGuides = [
   {name: 'Prot Core Pack · Pullback Continuation', detail: 'Tháng và tuần tăng; nến ngày xanh chạm EMA20 hoặc SMA50; volume dưới trung bình 20 phiên. Đây là setup hồi trong xu hướng, không phải breakout đòi volume bùng nổ. Fib trùng vùng chỉ bổ sung bằng chứng, không tự phát mua.'},
   {name: 'Prot Core Pack · VCP Breakout', detail: 'Ba đoạn 10 phiên có biên độ giá thu hẹp dần; volume ba phiên trước dưới 70% mức nền; đóng cửa vượt đỉnh 10 phiên và volume >1,5 lần. Đây là mô hình co hẹp định lượng đơn giản, không phải nhận diện VCP tùy ý.'},
   {name: 'Prot Core Pack · RSI MACD Divergence', detail: 'Hai đáy đã xác nhận (hai nến phía sau): giá tạo đáy thấp hơn, RSI cao hơn, gần hỗ trợ mạnh. MACD cắt lên Signal sau khi setup được xác nhận; tiếp theo giá vượt đỉnh hồi cố định giữa hai đáy. Trong tối đa 20 phiên: chờ MACD/giá → WATCH; đủ → đề xuất mua; thủng đáy → hủy. Không cần MACD vượt 0. Bản cũ v1.0 được giữ trong lịch sử.'},
+  {name: 'Prot Core Pack · Phân kỳ Dương MACD', detail: '1 đoạn gồm 2 đáy, 2 đoạn gồm 3 đáy, 3 đoạn gồm 4 đáy. Mỗi đáy giá thấp hơn nhưng MACD tại đúng ngày đáy cao hơn; đáy được xác nhận sau 2 phiên. Rule phát WATCH khi còn chờ giá, đề xuất PROBE_BUY chỉ trong phiên đóng cửa vượt đỉnh hồi giữa hai đáy cuối. Bộ lọc rủi ro chung vẫn áp dụng. Không chạy replay hay outcome cho pack này.'},
   {name: 'Prot Core Pack · Relative Strength Leader', detail: 'Xu hướng cổ phiếu tăng, hiệu suất vượt VN-Index hơn 5 điểm phần trăm trong tối đa 63 phiên; chỉ số đang đi ngang/giảm. Tìm mã khỏe tương đối, không đảm bảo điểm mua. Bộ lọc chung vẫn có thể chặn mua khi thị trường xấu.'},
   {name: 'Prot Core Pack · Wyckoff Context', detail: 'Đọc sự kiện cung–cầu rõ nhất: Spring/SOS là tích lũy, UTAD/SOW là phân phối. Pack chỉ ghi bối cảnh, không tự tạo BUY. Khi phân phối, bộ lọc chung chặn đề xuất mua mới; khi tích lũy, lý do được thêm để giải thích tín hiệu của Core khác.'},
   {name: 'Prot Core Pack · T+ Pullback', detail: 'Setup T+ chỉ khi Tuần tăng hoặc đi ngang khỏe (đóng ≥ EMA20 Tuần). Giá hồi 3–7 phiên về EMA10/EMA20/SMA50; volume hồi ≤90% 7 phiên trước; RSI14 giữ 45–72. Trigger là nến ngày xanh, đóng cao hơn phiên trước và volume ≥1,1× TB20. Policy chung bắt buộc VN-Index không risk-off, thanh khoản ≥300 triệu VND/ngày, stop dưới đáy pullback có đệm ATR, không ADD nếu Core lớn bearish. Entry hết hạn sau 3 phiên; time-stop 5–8 phiên; chốt từng phần tại 1R hoặc kháng cự gần nhất.'},

@@ -28,6 +28,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       action: ${{ steps.status.outputs.action }}
+      active_count: ${{ steps.status.outputs.active_count }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -45,20 +46,12 @@ jobs:
   ingest:
     needs: preflight
     if: needs.preflight.outputs.action == 'RUN'
-    name: Fast ingest ${{ matrix.source }} · ${{ matrix.label }}
+    name: Fast ingest KBS · shard ${{ matrix.shard }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - label: A–K
-            source: KBS
-            offset: 0
-            limit: 104
-          - label: L–Z
-            source: KBS
-            offset: 104
-            limit: 1000
+        shard: [0, 1]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -74,8 +67,12 @@ jobs:
           SUPABASE_URL: https://upmqxwktvvguegqeqibn.supabase.co
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           TRADING_DATE: ${{ inputs.trading_date }}
+          ACTIVE_COUNT: ${{ needs.preflight.outputs.active_count }}
+          SHARD: ${{ matrix.shard }}
         run: |
-          args=(--fast-lane --skip-breadth-snapshot --source "${{ matrix.source }}" --symbol-offset "${{ matrix.offset }}" --symbol-limit "${{ matrix.limit }}" --pause-seconds 13)
+          half=$(( (ACTIVE_COUNT + 1) / 2 ))
+          if [ "$SHARD" = 0 ]; then offset=0; limit=$half; else offset=$half; limit=$(( ACTIVE_COUNT - half )); fi
+          args=(--fast-lane --skip-breadth-snapshot --source KBS --symbol-offset "$offset" --symbol-limit "$limit" --pause-seconds 13)
           if [ -n "$TRADING_DATE" ]; then args+=(--date "$TRADING_DATE"); fi
           protstock eod "${args[@]}"
       - name: Report partial shard

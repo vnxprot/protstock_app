@@ -41,10 +41,16 @@ def main() -> None:
             "select": "trading_date", "trading_date": f"eq.{day}", "limit": "1",
         })
         breadth_response.raise_for_status()
+        universe_response = client.get("/symbols", params={
+            "select": "id", "active": "eq.true", "limit": "1",
+        }, headers={"Prefer": "count=exact"})
+        universe_response.raise_for_status()
+        active_count = int(universe_response.headers["Content-Range"].split("/")[-1])
     action = decide(mode, jobs_response.json(), bool(breadth_response.json()), force_rerun=os.environ.get("FORCE_RERUN") == "true")
     print(f"EOD {day}: {action}")
     with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
         output.write(f"action={action}\n")
+        output.write(f"active_count={active_count}\n")
 
 
 if __name__ == "__main__":

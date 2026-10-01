@@ -2,6 +2,7 @@ from datetime import date, timedelta
 from types import SimpleNamespace
 
 from protstock.macd_divergence import assess_macd_divergence
+from protstock.engines import evaluate_named_engine
 from protstock.macd_replay import _outcome
 from protstock.provider_vnstock import KBS_SOURCE_VERSION
 from protstock.research_prices import research_price_rows
@@ -51,6 +52,30 @@ def test_divergence_is_invariant_to_share_price_unit():
     assert [pivot["oscillator"] for pivot in original[0]["evidence"]["pivots"]] == [
         pivot["oscillator"] for pivot in rebased[0]["evidence"]["pivots"]]
     assert rebased[0]["trigger_price"] == original[0]["trigger_price"] * 10
+
+
+def test_four_troughs_produce_three_segments_and_rule_signal(monkeypatch):
+    from protstock import macd_divergence
+
+    bars = [{"date": (date(2026, 1, 1) + timedelta(days=i)).isoformat(),
+             "open": 20, "high": 20.5, "low": 19, "close": 20, "volume": 100_000}
+            for i in range(60)]
+    troughs = (32, 40, 48, 56)
+    for index, low in zip(troughs, (10, 9, 8, 7)):
+        bars[index]["low"] = low
+    line = [0.0] * len(bars)
+    for index, value in zip(troughs, (-.4, -.3, -.2, -.1)):
+        line[index] = value
+    monkeypatch.setattr(macd_divergence, "_macd_series", lambda closes: (line, [None] * len(closes)))
+    setups = assess_macd_divergence(7, bars)
+    assert [row["swings"] for row in setups] == [2, 3, 4]
+    assert [len(row["evidence"]["pivots"]) for row in setups] == [2, 3, 4]
+    context = {"timeframe": "D", "symbol_id": 7, "bars": bars, "data_date": bars[-1]["date"]}
+    assert evaluate_named_engine("macd_bullish_divergence_v3", {}, context)[:2] == (True, "WATCH")
+    assert context["engine_evidence"]["segments"] == 3
+    bars[-1] = {**bars[-1], "close": 21, "high": 21.2}
+    context = {**context, "bars": bars}
+    assert evaluate_named_engine("macd_bullish_divergence_v3", {}, context)[:2] == (True, "PROBE_BUY")
 
 
 def test_research_series_quarantines_scale_jump_and_preserves_source():
