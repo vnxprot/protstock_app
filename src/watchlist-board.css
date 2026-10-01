@@ -9,13 +9,12 @@
 .watch-board-count strong { font-size:22px; }
 .watch-board-count span { color:var(--muted); font-size:12px; }
 .watch-board-scroll { overflow:auto; border:1px solid var(--line); border-radius:16px; background:var(--surface); }
-.watch-board-table { width:100%; min-width:1260px; table-layout:fixed; border-collapse:separate; border-spacing:0; color:var(--text); font-size:15px; }
+.watch-board-table { width:100%; min-width:1400px; table-layout:fixed; border-collapse:separate; border-spacing:0; color:var(--text); font-size:15px; }
 .watch-board-col-index { width:54px; }
 .watch-board-col-tier { width:78px; }
 .watch-board-col-symbol { width:122px; }
 .watch-board-col-reason { width:auto; }
-.watch-board-col-horizon { width:150px; }
-.watch-board-col-price { width:80px; }
+.watch-board-col-price { width:150px; }
 .watch-board-col-status { width:112px; }
 .watch-board-table th,.watch-board-table td { min-width:0; padding:11px 10px; border-right:1px solid var(--line); border-bottom:1px solid var(--line); text-align:left; vertical-align:top; }
 .watch-board-table th:last-child,.watch-board-table td:last-child { border-right:0; }

@@ -3,13 +3,12 @@ import { ArrowLeft, ArrowUpRight } from 'lucide-react'
 import { isWatchActive, updateWatchlistItem, useWatchlist, type WatchItem, type WatchPatch, type WatchStatus, type WatchTier } from '../lib/watchlist'
 import '../watchlist-board.css'
 
-type TextField = 'reason' | 'investmentHorizon' | 'buyZone' | 'targetPrice' | 'stopLoss'
+type TextField = 'reason' | 'buyZone' | 'targetPrice' | 'stopLoss'
 const columns: { key: TextField; label: string }[] = [
-  { key: 'reason', label: 'Lý do' },
-  { key: 'investmentHorizon', label: 'Thời gian đầu tư' },
-  { key: 'buyZone', label: 'Vùng điểm mua' },
-  { key: 'targetPrice', label: 'Giá mục tiêu' },
-  { key: 'stopLoss', label: 'Giá cắt lỗ' },
+  { key: 'reason', label: 'Lý do đầu tư' },
+  { key: 'buyZone', label: 'Điểm mua' },
+  { key: 'targetPrice', label: 'Mục tiêu' },
+  { key: 'stopLoss', label: 'Cắt lỗ' },
 ]
 const tierRank: Record<WatchTier, number> = { S: 0, A: 1, B: 2 }
 
@@ -40,7 +39,7 @@ function openAnalysis(symbol: string) {
 
 export function WatchlistBoardPage({ syncStatus }: { syncStatus: 'loading' | 'ready' | 'error' }) {
   const items = useWatchlist()
-  const [filters, setFilters] = useState({ stt: '', tier: 'ALL', symbol: '', reason: '', investmentHorizon: '', buyZone: '', targetPrice: '', stopLoss: '', status: 'ALL' })
+  const [filters, setFilters] = useState({ stt: '', tier: 'ALL', symbol: '', reason: '', buyZone: '', targetPrice: '', stopLoss: '', status: 'ALL' })
   const ordered = useMemo(() => [...items].sort((a, b) => tierRank[a.tier] - tierRank[b.tier]
     || Number(isWatchActive(b)) - Number(isWatchActive(a)) || a.symbol.localeCompare(b.symbol)), [items])
   const visible = useMemo(() => ordered.map((item, index) => ({ item, number: index + 1 })).filter(({ item, number }) =>
@@ -58,7 +57,7 @@ export function WatchlistBoardPage({ syncStatus }: { syncStatus: 'loading' | 're
     {syncStatus === 'error' && <p className="watchlist-sync-warning" role="status">Chưa đồng bộ được bảng với tài khoản. Dữ liệu trên thiết bị này vẫn được giữ; hãy kiểm tra kết nối.</p>}
     <div className="watch-board-scroll"><table className="watch-board-table"><colgroup>
       <col className="watch-board-col-index"/><col className="watch-board-col-tier"/><col className="watch-board-col-symbol"/>
-      <col className="watch-board-col-reason"/><col className="watch-board-col-horizon"/>
+      <col className="watch-board-col-reason"/>
       <col className="watch-board-col-price"/><col className="watch-board-col-price"/><col className="watch-board-col-price"/>
       <col className="watch-board-col-status"/>
     </colgroup><thead><tr>

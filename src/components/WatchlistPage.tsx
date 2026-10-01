@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { ArrowUpRight, Plus, RotateCcw, Search, Sparkles, Star, X } from 'lucide-react'
 import { useSymbols } from '../hooks/useStockAnalysis'
@@ -6,6 +6,7 @@ import { formatDate } from '../lib/date'
 import { latestSignalPublication } from '../lib/signalPublication'
 import { supabase } from '../lib/supabase'
 import { isWatchActive, randomWatchlistIndex, setWatchlistTier, toggleWatchlistSymbol, useWatchlist, type WatchItem, type WatchTier } from '../lib/watchlist'
+import { InvestmentReasonSheet } from './InvestmentReasonSheet'
 import '../watchlist-page.css'
 
 const tiers: { tier: WatchTier; name: string; description: string; light: string }[] = [
@@ -32,6 +33,8 @@ export function WatchlistPage({ authenticated, syncStatus }: { authenticated: bo
   const [rotation, setRotation] = useState(0)
   const [preview, setPreview] = useState('')
   const [winner, setWinner] = useState<WatchItem | null>(null)
+  const [reasonSymbol, setReasonSymbol] = useState<string | null>(null)
+  const closeReason = useCallback(() => setReasonSymbol(null), [])
   const timers = useRef<number[]>([])
   useEffect(() => () => { timers.current.forEach(timer => { clearInterval(timer); clearTimeout(timer) }) }, [])
   const publication = useQuery({ queryKey: ['watchlist-publication'], enabled: authenticated && Boolean(supabase), staleTime: 60_000, refetchInterval: 60_000, queryFn: latestSignalPublication })
@@ -70,6 +73,7 @@ export function WatchlistPage({ authenticated, syncStatus }: { authenticated: bo
   const tierCounts = Object.fromEntries(tiers.map(item => [item.tier, items.filter(stock => stock.tier === item.tier).length])) as Record<WatchTier, number>
   const winnerInfo = winner ? symbolByCode.get(winner.symbol) : null
   const winnerSignals = winnerInfo ? signalsById.get(winnerInfo.id) ?? [] : []
+  const reasonItem = items.find(item => item.symbol === reasonSymbol)
 
   function toggleTier(tier: WatchTier) {
     if (spinning) return
@@ -113,11 +117,12 @@ export function WatchlistPage({ authenticated, syncStatus }: { authenticated: bo
       const fresh = symbol && eod.data?.has(symbol.id)
       const status = symbol?.trading_status !== 'NORMAL' ? 'Không giao dịch bình thường' : fresh ? `EOD ${formatDate(date)}` : eod.isLoading ? 'Đang kiểm tra EOD' : eod.isError ? 'Không kiểm tra được EOD' : 'Thiếu EOD đúng phiên'
       const decisions = symbol ? signalsById.get(symbol.id) ?? [] : []
-      return <article key={item.symbol} className="watch-stock"><div className="watch-stock-top"><button type="button" className="watch-stock-symbol" onClick={() => openAnalysis(item.symbol)} aria-label={`Phân tích mã ${item.symbol}`}>{item.symbol}<ArrowUpRight size={14}/></button><button type="button" className="watch-stock-remove" onClick={() => toggleWatchlistSymbol(item.symbol)} aria-label={`Chuyển ${item.symbol} sang Off`} title="Chuyển Off; giữ dòng trong bảng"><X size={15}/></button></div><span className="watch-stock-name">{symbol?.company_name ?? 'Mã ngoài universe hoạt động'}</span><small>{symbol?.sector ?? 'Chưa phân ngành'} · {status}</small><div className="watch-stock-signals">{decisions.length ? decisions.sort((a, b) => 'DWM'.indexOf(a.timeframe) - 'DWM'.indexOf(b.timeframe)).map(signal => <span key={signal.timeframe}>{signal.timeframe} · {signal.composite_action}</span>) : <span>Không có signal mới</span>}</div><div className="watch-stock-tiers" role="group" aria-label={`Chọn Tier cho ${item.symbol}`}>{tiers.map(option => <button key={option.tier} type="button" className={option.tier === tier ? 'active' : ''} aria-pressed={option.tier === tier} onClick={() => setWatchlistTier(item.symbol, option.tier)}>{option.tier}</button>)}</div></article>
+      return <article key={item.symbol} className="watch-stock"><div className="watch-stock-top"><button type="button" className="watch-stock-symbol" onClick={() => setReasonSymbol(item.symbol)} aria-label={`Xem lý do đầu tư mã ${item.symbol}`}>{item.symbol}<ArrowUpRight size={14}/></button><button type="button" className="watch-stock-remove" onClick={() => toggleWatchlistSymbol(item.symbol)} aria-label={`Chuyển ${item.symbol} sang Off`} title="Chuyển Off; giữ dòng trong bảng"><X size={15}/></button></div><span className="watch-stock-name">{symbol?.company_name ?? 'Mã ngoài universe hoạt động'}</span><small>{symbol?.sector ?? 'Chưa phân ngành'} · {status}</small><div className="watch-stock-signals">{decisions.length ? decisions.sort((a, b) => 'DWM'.indexOf(a.timeframe) - 'DWM'.indexOf(b.timeframe)).map(signal => <span key={signal.timeframe}>{signal.timeframe} · {signal.composite_action}</span>) : <span>Không có signal mới</span>}</div><div className="watch-stock-tiers" role="group" aria-label={`Chọn Tier cho ${item.symbol}`}>{tiers.map(option => <button key={option.tier} type="button" className={option.tier === tier ? 'active' : ''} aria-pressed={option.tier === tier} onClick={() => setWatchlistTier(item.symbol, option.tier)}>{option.tier}</button>)}</div></article>
     })}{!tierCounts[tier] && <p className="watch-tier-empty">Chưa có mã. Một lựa chọn mới có thể bắt đầu từ đây.</p>}</div></section>)}</div>
     <section className="watch-roulette panel" aria-label="Roulette chọn mã để nghiên cứu"><div className="watch-roulette-intro"><span className="eyebrow">RANDOM DISCOVERY</span><h2>Roulette · chọn mã để nghiên cứu</h2><p>Chọn Tier tham gia. Mỗi mã đủ điều kiện có xác suất bằng nhau; kết quả không phải khuyến nghị mua.</p></div><div className="watch-roulette-layout"><div className="watch-wheel-stage"><div className="watch-wheel-pointer" aria-hidden="true"/><div className="watch-wheel" style={{ background: wheelGradient, transform: `rotate(${rotation}deg)` }} aria-hidden="true"/><div className="watch-wheel-center" aria-live="polite"><span>{spinning ? 'ĐANG QUAY' : winner ? 'MÃ ĐƯỢC CHỌN' : 'SẴN SÀNG'}</span><strong>{preview || 'PROT'}</strong></div></div><div className="watch-roulette-controls"><div className="watch-roulette-tier-select" role="group" aria-label="Tier tham gia Roulette">{tiers.map(item => <button key={item.tier} type="button" disabled={spinning} aria-pressed={selectedTiers.includes(item.tier)} className={`roulette-tier roulette-tier-${item.tier.toLowerCase()}${selectedTiers.includes(item.tier) ? ' active' : ''}`} onClick={() => toggleTier(item.tier)}>Tier {item.tier}<small>{tierCounts[item.tier]} mã</small></button>)}</div><div className="watch-roulette-odds"><strong>{eligible.length ? `1/${eligible.length}` : '—'}</strong><span>xác suất mỗi mã đủ điều kiện · EOD {formatDate(date)}</span></div><p className="watch-roulette-note">{items.length - eligible.length} mã đang ngoài vòng quay do Tier chưa chọn, trạng thái giao dịch hoặc thiếu dữ liệu EOD hợp lệ.</p><button className="watch-spin-button" type="button" disabled={spinning || !eligible.length || eod.isLoading || eod.isError} onClick={spin}>{spinning ? 'Đang quay…' : winner ? <><RotateCcw size={18}/> Quay lại</> : <><Sparkles size={18}/> Bắt đầu quay</>}</button>{!eligible.length && <small className="watch-roulette-disabled">{publication.isLoading || eod.isLoading ? 'Đang kiểm tra danh sách và EOD…' : 'Chọn Tier có mã giao dịch bình thường và có giá đúng phiên để quay.'}</small>}</div></div>
       {winner && <div className={`watch-roulette-result watch-tier-${winner.tier.toLowerCase()}`} role="status"><div><span>Kết quả ngẫu nhiên · Tier {winner.tier}</span><strong>{winner.symbol}</strong><small>{winnerInfo?.company_name ?? winnerInfo?.sector ?? 'Xem phân tích mã'} · EOD {formatDate(date)}</small><div>{winnerSignals.length ? winnerSignals.map(signal => <span key={signal.timeframe}>{signal.timeframe} · {signal.composite_action}</span>) : <span>Không có signal mới</span>}</div></div><button type="button" onClick={() => openAnalysis(winner.symbol)}>Xem phân tích <ArrowUpRight size={16}/></button></div>}
       <p className="watch-roulette-disclaimer">Roulette chỉ quyết định mã nào được xem xét trước. Kiểm tra signal, Market Gate, giá và rủi ro danh mục trước mọi quyết định giải ngân. Watchlist được đồng bộ theo tài khoản; lượt quay không lưu lịch sử, không gửi Telegram hay tạo giao dịch.</p>
     </section>
+    {reasonItem && <InvestmentReasonSheet item={reasonItem} companyName={symbolByCode.get(reasonItem.symbol)?.company_name ?? null} onClose={closeReason}/>}
   </section>
 }
