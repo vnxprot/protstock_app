@@ -10,6 +10,13 @@ from .provider_vnstock import KBS_SOURCE_VERSION, STOCK_PRICE_UNIT, VnstockProvi
 from .supabase_rest import SupabaseRestClient
 
 
+# VSDC notice 199296: one existing TRC share received three bonus shares;
+# the ex-rights session was 2026-09-15.  KBS rebases earlier prices but
+# reports earlier share volume without the reciprocal 4x share adjustment.
+TRC_BONUS_EX_DATE = date(2026, 9, 15)
+TRC_BONUS_SOURCE_URL = "https://vsdc.vn/vi/ad/199296"
+
+
 def research_price_rows(symbol_id: int, symbol: str, bars: list) -> list[dict]:
     """Keep all vendor bars but quarantine unexplained scale discontinuities."""
     ordered = sorted(bars, key=lambda item: item.trading_date)
@@ -21,10 +28,14 @@ def research_price_rows(symbol_id: int, symbol: str, bars: list) -> list[dict]:
         if index + 1 < len(ordered):
             following = float(ordered[index + 1].close)
             invalid = invalid or following / right <= 0.5 or following / right >= 2
+        rebase_volume = symbol == "TRC" and bar.trading_date < TRC_BONUS_EX_DATE
         result.append({
             "symbol_id": symbol_id, "trading_date": bar.trading_date.isoformat(),
             "open": float(bar.open), "high": float(bar.high), "low": float(bar.low),
-            "close": right, "volume": bar.volume, "price_unit": STOCK_PRICE_UNIT,
+            "close": right, "volume": bar.volume * (4 if rebase_volume else 1),
+            "volume_basis": "VSDC_BONUS_REBASED" if rebase_volume else "VENDOR_REPORTED",
+            "volume_adjustment_factor": 4 if rebase_volume else 1,
+            "price_unit": STOCK_PRICE_UNIT,
             "basis": "KBS_VENDOR_REBASED", "source": "KBS_PUBLIC",
             "source_version": KBS_SOURCE_VERSION,
             "source_url": f"{VnstockProvider.API_BASE}/stocks/{symbol}/data_day",

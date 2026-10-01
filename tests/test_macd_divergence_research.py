@@ -48,7 +48,11 @@ def test_research_series_quarantines_scale_jump_and_preserves_source():
     assert rows[0]["quality_status"] == "QUARANTINED"
     assert rows[1]["quality_status"] == "QUARANTINED"
     assert rows[2]["quality_status"] == "VALID"
+    assert all(row["volume"] == 400 for row in rows)
+    assert all(row["volume_adjustment_factor"] == 4 for row in rows)
     assert all(row["source_version"] == KBS_SOURCE_VERSION for row in rows)
+    after = SimpleNamespace(**{**bars[-1].__dict__, "trading_date": date(2026, 9, 15)})
+    assert research_price_rows(1, "TRC", [after])[0]["volume_adjustment_factor"] == 1
 
 
 def test_outcome_uses_next_open_and_includes_fees_and_tax():

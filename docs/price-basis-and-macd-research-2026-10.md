@@ -2,8 +2,9 @@
 
 ## Price evidence
 
-`daily_prices` remains the original, mixed-source observation archive used by
-the published engine. `research_price_bars` is a separate KBS historical
+`daily_prices` remains the mixed-source observation series used by the
+published engine; the targeted TRC repair archives its overwritten originals.
+`research_price_bars` is a separate KBS historical
 series fetched in one consistent thousand-VND/share basis. Every observation
 has source URL, collection time, source version, and a quality flag. A sync
 status row records date coverage against stored prices and quarantined jumps.
@@ -18,6 +19,11 @@ dividend, split, and rights issue is correctly adjusted. The verified VSDC TRC
 1:3 bonus issue (ex-date 15/09/2026) is stored with its source URL. The full
 universe still needs an authoritative, licensed event/factor feed and a
 reconciliation audit before corporate-action coverage can be called complete.
+TRC is repaired separately after the full KBS sync: 1,337 source bars passed
+date matching and jump checks. Its original stored rows are archived before
+the verified 1:3 bonus price basis and reciprocal pre-ex-rights share volume
+are applied. The volume adjustment is calculated from the official bonus
+ratio, not supplied as an adjusted-volume field by KBS.
 
 The original 2025–2026 funnel results remain under version
 `MTF_FUNNEL_SHADOW_V1`. Replays on the separate KBS series use a distinct
@@ -25,6 +31,8 @@ The original 2025–2026 funnel results remain under version
 cohort. They include next-session open entry and fixed fees, tax, and slippage
 for a comparable fixed-horizon net return. Existing engine outcomes are stale
 until recomputed on matched KBS histories.
+The full vendor series is refreshed weekly outside market hours so later
+vendor revisions cannot remain permanently invisible.
 
 ## MACD divergence lane
 

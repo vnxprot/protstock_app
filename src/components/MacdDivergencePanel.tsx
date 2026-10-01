@@ -36,7 +36,7 @@ export function MacdDivergencePanel({ date, authenticated }: { date: string; aut
   })
   const rows = query.data ?? []
   const filtered = useMemo(() => rows.filter(row =>
-    (stage === 'ALL' || stage === 'ACTIVE' && ['WATCH_PRICE_CONFIRMATION', 'CONFIRMED'].includes(row.stage) || row.stage === stage)
+    (stage === 'ALL' || stage === 'ACTIVE' && (Boolean(symbol.trim()) || ['WATCH_PRICE_CONFIRMATION', 'CONFIRMED'].includes(row.stage)) || row.stage === stage)
     && row.symbol.includes(symbol.trim().toUpperCase())), [rows, stage, symbol])
   const pages = Math.max(1, Math.ceil(filtered.length / 10))
   const current = Math.min(page, pages)
