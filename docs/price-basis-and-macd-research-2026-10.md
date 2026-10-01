@@ -86,5 +86,7 @@ parameters, and then a prospective period using next-session fills and costs.
 The corporate-action ledger currently contains only the independently
 verified TRC bonus event. KBS rebasing is useful for coherent replay but does
 not prove complete cash-dividend, stock-dividend, split, or rights coverage.
-The current engine has no equivalent 2025–2026 point-in-time replay. Neither
+The stored core rule versions were created only between 11/09 and 15/09/2026,
+so there is no actual 2025 rule-state history to replay as if it had existed
+then. The current engine has no equivalent 2025–2026 point-in-time replay. Neither
 the funnel nor MACD V2 is promoted to the published signal lane.
