@@ -1,4 +1,4 @@
-name: Replay shadow M-W-D funnel
+name: Replay MACD divergence research
 
 on:
   workflow_dispatch:
@@ -14,7 +14,7 @@ on:
         default: '2026-09-30'
         type: string
       symbol_offset:
-        description: Alphabetic starting offset, including inactive symbols
+        description: Alphabetic offset including inactive symbols
         required: true
         default: '0'
         type: string
@@ -23,19 +23,16 @@ on:
         required: true
         default: '10'
         type: string
+      symbols:
+        description: Optional comma-separated override
+        required: false
+        default: ''
+        type: string
       apply:
-        description: Persist shadow assessments and outcomes
+        description: Persist assessments and outcomes
         required: true
         default: false
         type: boolean
-      price_basis:
-        description: stored legacy or separately synchronized KBS research series
-        required: true
-        default: stored
-        type: choice
-        options:
-          - stored
-          - research
 
 permissions:
   contents: read
@@ -49,7 +46,7 @@ jobs:
       - uses: actions/setup-python@v5
         with: { python-version: '3.12', cache: pip }
       - run: python -m pip install -e .
-      - name: Replay completed sessions without publishing live signals
+      - name: Replay divergence using closed bars and next-session fills
         env:
           SUPABASE_URL: https://upmqxwktvvguegqeqibn.supabase.co
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
@@ -57,9 +54,10 @@ jobs:
           END_DATE: ${{ inputs.end_date }}
           SYMBOL_OFFSET: ${{ inputs.symbol_offset }}
           SYMBOL_LIMIT: ${{ inputs.symbol_limit }}
+          SYMBOLS: ${{ inputs.symbols }}
           APPLY: ${{ inputs.apply }}
-          PRICE_BASIS: ${{ inputs.price_basis }}
         run: |
-          args=(--start-date "$START_DATE" --end-date "$END_DATE" --symbol-offset "$SYMBOL_OFFSET" --symbol-limit "$SYMBOL_LIMIT" --price-basis "$PRICE_BASIS")
+          args=(--start-date "$START_DATE" --end-date "$END_DATE" --symbol-offset "$SYMBOL_OFFSET" --symbol-limit "$SYMBOL_LIMIT")
+          if [ -n "$SYMBOLS" ]; then args+=(--symbols "$SYMBOLS"); fi
           if [ "$APPLY" = 'true' ]; then args+=(--apply); fi
-          protstock replay-funnel "${args[@]}"
+          protstock replay-macd-divergence "${args[@]}"

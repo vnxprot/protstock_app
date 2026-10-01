@@ -12,6 +12,8 @@ from .alerts import send_eod_telegram_alerts
 from .calibrate import calibrate_patterns
 from .outcome_worker import evaluate_pending_outcomes
 from .funnel_replay import run_funnel_replay
+from .research_prices import sync_research_prices
+from .macd_replay import run_macd_replay
 from .pattern_archive import archive_pattern_evidence
 from .universe import load_universe
 from .seed import seed_universe, seed_vnindex_history
@@ -96,6 +98,22 @@ def main() -> None:
     funnel.add_argument("--symbol-offset", type=int, default=0)
     funnel.add_argument("--symbol-limit", type=int)
     funnel.add_argument("--apply", action="store_true")
+    funnel.add_argument("--price-basis", choices=("stored", "research"), default="stored")
+    research = subparsers.add_parser("sync-research-prices")
+    research.add_argument("--start-date", type=date.fromisoformat, default=date(2021, 1, 1))
+    research.add_argument("--end-date", type=date.fromisoformat, default=date.today())
+    research.add_argument("--symbol-offset", type=int, default=0)
+    research.add_argument("--symbol-limit", type=int)
+    research.add_argument("--symbols", help="Comma-separated symbols")
+    research.add_argument("--pause-seconds", type=float, default=3.0)
+    research.add_argument("--apply", action="store_true")
+    macd = subparsers.add_parser("replay-macd-divergence")
+    macd.add_argument("--start-date", type=date.fromisoformat, required=True)
+    macd.add_argument("--end-date", type=date.fromisoformat, required=True)
+    macd.add_argument("--symbol-offset", type=int, default=0)
+    macd.add_argument("--symbol-limit", type=int)
+    macd.add_argument("--symbols", help="Comma-separated symbols")
+    macd.add_argument("--apply", action="store_true")
     calibrate = subparsers.add_parser("calibrate")
     calibrate.add_argument("bars_path", type=Path)
     calibrate.add_argument("--pattern-types", default="ACCUMULATION_BASE,DOUBLE_BOTTOM,ASCENDING_TRIANGLE,BULL_FLAG")
@@ -163,7 +181,24 @@ def main() -> None:
         print(json.dumps(run_funnel_replay(args.start_date, args.end_date,
                                            symbol_offset=args.symbol_offset,
                                            symbol_limit=args.symbol_limit,
-                                           apply=args.apply), ensure_ascii=False))
+                                           apply=args.apply,
+                                           price_basis=args.price_basis), ensure_ascii=False))
+        raise SystemExit(0)
+    if args.command == "sync-research-prices":
+        result = sync_research_prices(args.start_date, args.end_date,
+                                      symbol_offset=args.symbol_offset,
+                                      symbol_limit=args.symbol_limit,
+                                      symbols={item.strip().upper() for item in args.symbols.split(",") if item.strip()} if args.symbols else None,
+                                      pause_seconds=args.pause_seconds, apply=args.apply)
+        print(json.dumps(result, ensure_ascii=False))
+        raise SystemExit(0 if not result["failed"] else 1)
+    if args.command == "replay-macd-divergence":
+        result = run_macd_replay(args.start_date, args.end_date,
+                                 symbol_offset=args.symbol_offset,
+                                 symbol_limit=args.symbol_limit,
+                                 symbols={item.strip().upper() for item in args.symbols.split(",") if item.strip()} if args.symbols else None,
+                                 apply=args.apply)
+        print(json.dumps(result, ensure_ascii=False))
         raise SystemExit(0)
     if args.command == "calibrate":
         bars = json.loads(args.bars_path.read_text(encoding="utf-8"))

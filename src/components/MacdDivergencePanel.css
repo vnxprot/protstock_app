@@ -1,0 +1,10 @@
+.macd-divergence-panel { margin-top: 1rem; }
+.macd-divergence-tools { display: flex; flex-wrap: wrap; align-items: center; gap: .65rem; margin: .7rem 0; }
+.macd-divergence-tools input, .macd-divergence-tools select { border: 1px solid var(--border, #ccd2d9); border-radius: .5rem; padding: .5rem .65rem; background: var(--surface, #fff); color: inherit; }
+.macd-divergence-tools span { margin-left: auto; }
+.macd-divergence-list details { padding: .7rem .25rem; border-bottom: 1px solid var(--border, #ccd2d9); }
+.macd-divergence-list summary { cursor: pointer; display: grid; grid-template-columns: 4rem minmax(10rem, 1fr) minmax(9rem, 1fr) auto; gap: .6rem; align-items: center; }
+.macd-divergence-list details p { margin: .65rem 0 .35rem; }
+.macd-divergence-pivots { display: flex; flex-wrap: wrap; gap: .5rem; margin-bottom: .45rem; }
+.macd-divergence-pivots span { padding: .25rem .45rem; background: var(--surface-soft, #f3f5f7); border-radius: .4rem; font-size: .85rem; }
+@media (max-width: 700px) { .macd-divergence-list summary { grid-template-columns: 3.5rem 1fr; } }

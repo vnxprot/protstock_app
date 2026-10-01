@@ -22,6 +22,7 @@ from .timeframes import aggregate_bars
 from .signal_policy import STOCK_PRICE_TO_VND, apply_signal_policy
 from .period_signals import monthly_trend, evaluate_period_signal
 from .signal_funnel import assess_funnel
+from .macd_divergence import assess_macd_divergence
 from .wyckoff import classify_wyckoff_timeframe
 
 # VNINDEX's first session was 28/07/2000. This keeps its benchmark history full
@@ -139,8 +140,12 @@ def run_eod(
                                                    confirmed_month_end=confirmed_month_end)
                         client.upsert("signal_funnel_assessments", [assessment],
                                       "symbol_id,as_of_date,version")
+                        if assessment["stage"] != "DATA_QUARANTINED":
+                            macd_rows = assess_macd_divergence(symbol_row["id"], analysis_rows)
+                            client.upsert("macd_divergence_assessments", macd_rows,
+                                          "symbol_id,as_of_date,version,oscillator")
                     except Exception as shadow_error:
-                        warnings.append(f"{symbol_row['symbol']}: shadow funnel {type(shadow_error).__name__}")
+                        warnings.append(f"{symbol_row['symbol']}: shadow research {type(shadow_error).__name__}")
                     timeframe_rows = {"D": analysis_rows}
                     fibonacci_context = build_fibonacci_context(analysis_rows, confirmed_week_end, confirmed_month_end)
                     benchmark_rows = {"D": benchmark_daily}
@@ -306,6 +311,16 @@ def rebuild_signals(trading_date: date, *, symbol_offset: int = 0, symbol_limit:
                     continue
                 if not analysis_rows:
                     raise ValueError("no stored price history")
+                try:
+                    assessment = assess_funnel(symbol_row["id"], analysis_rows,
+                                               confirmed_week_end=confirmed_week_end,
+                                               confirmed_month_end=confirmed_month_end)
+                    if assessment["stage"] != "DATA_QUARANTINED":
+                        client.upsert("macd_divergence_assessments",
+                                      assess_macd_divergence(symbol_row["id"], analysis_rows),
+                                      "symbol_id,as_of_date,version,oscillator")
+                except Exception as shadow_error:
+                    warnings.append(f"{symbol_row['symbol']}: MACD shadow {type(shadow_error).__name__}")
                 timeframe_rows = {"D": analysis_rows, "W": aggregate_bars(analysis_rows, "W", confirmed_week_end), "M": aggregate_bars(analysis_rows, "M", confirmed_month_end=confirmed_month_end)}
                 # A stored-price repair must also refresh the bars used by the
                 # W/M charts, not just snapshots and signals computed in memory.

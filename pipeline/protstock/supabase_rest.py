@@ -133,6 +133,33 @@ class SupabaseRestClient:
                 break
         return list(reversed(rows))
 
+    def research_price_history(self, symbol_id: int, limit: int = 2600) -> list[dict[str, Any]]:
+        """Read one coherent vendor-rebased series for historical research."""
+        rows: list[dict[str, Any]] = []
+        for offset in range(0, limit, 1000):
+            response = self._client.get(
+                "/research_price_bars",
+                params={"select": "trading_date,open,high,low,close,volume,source,source_version,price_unit,quality_status,basis",
+                        "symbol_id": f"eq.{symbol_id}", "order": "trading_date.desc"},
+                headers={"Range": f"{offset}-{min(offset + 1000, limit) - 1}"},
+            )
+            response.raise_for_status()
+            page = response.json()
+            rows.extend(page)
+            if len(page) < 1000:
+                break
+        return list(reversed(rows))
+
+    def research_price_status(self, symbol_id: int) -> dict[str, Any] | None:
+        response = self._client.get(
+            "/research_price_sync_status",
+            params={"select": "coverage_status,source_version,requested_start_date,requested_end_date,first_date,last_date,vendor_bars,unmatched_stored_dates,quarantined_bars",
+                    "symbol_id": f"eq.{symbol_id}", "limit": "1"},
+        )
+        response.raise_for_status()
+        rows = response.json()
+        return rows[0] if rows else None
+
     def stock_prices_by_source_and_date(self, source: str, trading_date: date) -> list[dict[str, Any]]:
         response = self._client.get(
             "/daily_prices",

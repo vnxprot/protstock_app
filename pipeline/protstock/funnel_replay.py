@@ -10,6 +10,26 @@ from .outcomes import evaluate_signal_outcome
 from .signal_funnel import assess_funnel
 from .supabase_rest import SupabaseRestClient
 
+TRADE_ASSUMPTION_VERSION = "NEXT_OPEN_FEE15BP_TAX10BP_SLIP10BP_V1"
+
+
+def _research_trade(rows: list[dict], signal_index: int, horizon: int) -> dict | None:
+    entry_index = signal_index + 1
+    exit_index = entry_index + horizon - 1
+    if exit_index >= len(rows):
+        return None
+    window = rows[signal_index:exit_index + 1]
+    if any(row.get("quality_status") != "VALID" for row in window):
+        return None
+    entry = float(rows[entry_index]["open"]) * 1.001
+    exit_price = float(rows[exit_index]["close"]) * .999
+    if entry <= 0:
+        return None
+    return {"entry_date": rows[entry_index]["date"], "entry_price": round(entry, 4),
+            "exit_date": rows[exit_index]["date"], "exit_price": round(exit_price, 4),
+            "net_return": round(exit_price * (1 - .0015 - .001) / (entry * (1 + .0015)) - 1, 6),
+            "assumption_version": TRADE_ASSUMPTION_VERSION}
+
 
 def _period_closes(session_dates: list[date]) -> tuple[set[date], set[date]]:
     weeks: dict[date, date] = {}
@@ -24,7 +44,8 @@ def _period_closes(session_dates: list[date]) -> tuple[set[date], set[date]]:
 
 
 def replay_symbol(symbol_id: int, rows: list[dict], session_dates: list[date],
-                  start_date: date, end_date: date) -> tuple[list[dict], list[dict]]:
+                  start_date: date, end_date: date, *,
+                  version_suffix: str = "") -> tuple[list[dict], list[dict]]:
     daily = sorted(({**row, "date": row["trading_date"]} for row in rows
                     if row["trading_date"] <= end_date.isoformat()), key=lambda row: row["date"])
     closed_weeks, closed_months = _period_closes(session_dates)
@@ -39,6 +60,7 @@ def replay_symbol(symbol_id: int, rows: list[dict], session_dates: list[date],
             confirmed_week_end=day if day in closed_weeks else None,
             confirmed_month_end=day if day in closed_months else None,
         )
+        assessment["version"] += version_suffix
         assessments.append(assessment)
         if assessment["stage"] != "DAILY_TRIGGER":
             continue
@@ -50,21 +72,29 @@ def replay_symbol(symbol_id: int, rows: list[dict], session_dates: list[date],
             )
             if result is None:
                 continue
+            trade = _research_trade(daily, index, horizon) if version_suffix else {}
+            if version_suffix and trade is None:
+                continue
             outcomes.append({"symbol_id": symbol_id, "as_of_date": bar["date"],
                              "version": assessment["version"], "setup_id": assessment["setup_id"],
                              **{key: result[key] for key in ("horizon_days", "forward_return_pct",
                                                                "max_drawdown_pct", "hit_invalidation",
-                                                               "calculation_version", "price_fingerprint")}})
+                                                               "calculation_version", "price_fingerprint")},
+                             **trade})
     return assessments, outcomes
 
 
 def run_funnel_replay(start_date: date, end_date: date, *, symbol_offset: int = 0,
-                      symbol_limit: int | None = None, apply: bool = False) -> dict:
+                      symbol_limit: int | None = None, apply: bool = False,
+                      price_basis: str = "stored") -> dict:
     if start_date > end_date:
         raise ValueError("start_date must be on or before end_date")
+    if price_basis not in {"stored", "research"}:
+        raise ValueError("price_basis must be stored or research")
     client = SupabaseRestClient(Settings.from_env())
     totals = {"symbols": 0, "assessments": 0, "daily_triggers": 0,
-              "quarantined": 0, "outcomes": 0, "mode": "apply" if apply else "dry-run"}
+              "quarantined": 0, "outcomes": 0, "missing_price_series": 0,
+              "price_basis": price_basis, "mode": "apply" if apply else "dry-run"}
     try:
         symbols = client.all_symbols_for_replay()[symbol_offset:]
         if symbol_limit is not None:
@@ -76,8 +106,21 @@ def run_funnel_replay(start_date: date, end_date: date, *, symbol_offset: int = 
         if not sessions:
             raise ValueError("VNINDEX session calendar is unavailable")
         for symbol in symbols:
-            rows = client.price_history(symbol["id"], 2600)
-            assessments, outcomes = replay_symbol(symbol["id"], rows, sessions, start_date, end_date)
+            if price_basis == "research":
+                status = client.research_price_status(symbol["id"])
+                if (not status or status["coverage_status"] != "MATCHED"
+                        or status["requested_start_date"] > start_date.isoformat()
+                        or status["requested_end_date"] < end_date.isoformat()):
+                    totals["missing_price_series"] += 1
+                    continue
+            rows = (client.research_price_history(symbol["id"], 2600) if price_basis == "research"
+                    else client.price_history(symbol["id"], 2600))
+            if price_basis == "research" and (not rows or any(row.get("quality_status") != "VALID"
+                                                              for row in rows if row["trading_date"] <= end_date.isoformat())):
+                totals["missing_price_series"] += 1
+                continue
+            assessments, outcomes = replay_symbol(symbol["id"], rows, sessions, start_date, end_date,
+                                                  version_suffix="_KBS_REBASED" if price_basis == "research" else "")
             totals["symbols"] += 1
             totals["assessments"] += len(assessments)
             totals["daily_triggers"] += sum(row["stage"] == "DAILY_TRIGGER" for row in assessments)
