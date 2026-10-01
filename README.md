@@ -5,7 +5,7 @@ Personal PWA for end-of-day analysis of a curated Vietnamese stock universe.
 ## Product boundaries
 
 - Single-user, non-commercial application for Prot.
-- Current universe: 208 unique symbols (updated 25/09/2026).
+- Current universe: 265 active symbols (updated 01/10/2026).
 - End-of-day processing only; no real-time market data.
 - Daily, weekly, and monthly analysis.
 - Deterministic, versioned rules and explainable price-pattern detection.

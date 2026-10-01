@@ -1,0 +1,7 @@
+.macd-watch-panel .panel-title small { display:block; margin-top:4px; color:var(--muted); font-size:12px; }
+.macd-watch-tools { display:flex; gap:10px; margin:14px 0; }
+.macd-watch-tools input,.macd-watch-tools select { min-width:0; padding:9px 11px; border:1px solid var(--line); border-radius:9px; color:var(--text); background:var(--surface-2); }
+.macd-watch-list { display:grid; gap:6px; max-height:410px; overflow:auto; }
+.macd-watch-list > div { display:grid; grid-template-columns:55px minmax(80px,1fr) 100px minmax(160px,auto); align-items:center; gap:10px; padding:9px 11px; border:1px solid var(--line); border-radius:9px; }
+.macd-watch-list small { color:var(--muted); text-align:right; }
+@media(max-width:700px) { .macd-watch-list > div { grid-template-columns:50px 1fr; } .macd-watch-list small { grid-column:1 / -1; text-align:left; } }

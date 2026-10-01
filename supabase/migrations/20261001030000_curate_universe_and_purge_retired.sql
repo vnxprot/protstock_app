@@ -2,6 +2,15 @@
 -- their data in one transaction; restore TLG without losing its prior history.
 begin;
 
+-- Research and archived price rows were introduced immediately before this migration.
+delete from public.macd_divergence_outcomes where symbol_id in (select id from public.symbols where symbol in ('DHM','LTG','DMC','POS','MTA','AMC','DHD'));
+delete from public.macd_divergence_assessments where symbol_id in (select id from public.symbols where symbol in ('DHM','LTG','DMC','POS','MTA','AMC','DHD'));
+delete from public.research_price_sync_status where symbol_id in (select id from public.symbols where symbol in ('DHM','LTG','DMC','POS','MTA','AMC','DHD'));
+delete from public.research_price_bars where symbol_id in (select id from public.symbols where symbol in ('DHM','LTG','DMC','POS','MTA','AMC','DHD'));
+delete from public.price_revision_archive where symbol_id in (select id from public.symbols where symbol in ('DHM','LTG','DMC','POS','MTA','AMC','DHD'));
+delete from public.signal_funnel_outcomes where symbol_id in (select id from public.symbols where symbol in ('DHM','LTG','DMC','POS','MTA','AMC','DHD'));
+delete from public.signal_funnel_assessments where symbol_id in (select id from public.symbols where symbol in ('DHM','LTG','DMC','POS','MTA','AMC','DHD'));
+
 delete from public.journal_entries where symbol_id in (select id from public.symbols where symbol in ('DHM','LTG','DMC','POS','MTA','AMC','DHD'));
 delete from public.positions where symbol_id in (select id from public.symbols where symbol in ('DHM','LTG','DMC','POS','MTA','AMC','DHD'));
 delete from public.portfolio_transactions where symbol_id in (select id from public.symbols where symbol in ('DHM','LTG','DMC','POS','MTA','AMC','DHD'));
@@ -28,8 +37,8 @@ delete from public.breadth_universe_memberships where symbol_id in (select id fr
 delete from public.universe_import_rows where symbol in ('DHM','LTG','DMC','POS','MTA','AMC','DHD')
   or raw_row->>'symbol' in ('DHM','LTG','DMC','POS','MTA','AMC','DHD');
 update public.user_watchlists
-set items = coalesce((select jsonb_agg(item) from jsonb_array_elements(items) item
-  where item->>'symbol' not in ('DHM','LTG','DMC','POS','MTA','AMC','DHD')), '[]'::jsonb),
+set items = coalesce((select jsonb_agg(element.value) from jsonb_array_elements(items) as element(value)
+  where element.value->>'symbol' not in ('DHM','LTG','DMC','POS','MTA','AMC','DHD')), '[]'::jsonb),
   updated_at = now()
 where items @> '[{"symbol":"DHM"}]'::jsonb or items @> '[{"symbol":"LTG"}]'::jsonb
    or items @> '[{"symbol":"DMC"}]'::jsonb or items @> '[{"symbol":"POS"}]'::jsonb

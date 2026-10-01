@@ -33,6 +33,10 @@ test('invalid tiers default to B and malformed symbols are ignored', () => {
   assert.deepEqual(normalizeWatchlist([{ symbol: 'CTR', tier: 'X' }, { symbol: '<script>', tier: 'S' }]).map(item => [item.symbol, item.tier]), [['CTR', 'B']])
 })
 
+test('retired universe symbols are removed from local watchlists', () => {
+  assert.deepEqual(normalizeWatchlist(['DHM', 'LTG', 'DMC', 'POS', 'MTA', 'AMC', 'DHD', 'TLG']).map(item => item.symbol), ['TLG'])
+})
+
 test('roulette rejects modulo-bias overflow before selecting an index', () => {
   const values = [0xffffffff, 5]
   assert.equal(uniformIndex(3, () => values.shift()), 2)
