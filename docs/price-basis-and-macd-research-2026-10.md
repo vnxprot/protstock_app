@@ -48,9 +48,12 @@ trades. The Screener displays the setup and the exact pivot evidence.
 V1 observations remain in the audit table; the panel prefers V2 on the
 matched KBS price basis when both versions exist.
 
-NT2 is an important audit case: the KBS series produced a three-swing MACD
-line candidate on 30/07/2026, requiring a close above 23.25. That historical
-setup was later invalidated before such confirmation. The algorithm therefore
+NT2 is an important audit case: on the normalized V2 definition, its KBS
+series produced a three-swing MACD-line candidate from 20/05, 03/06, and
+23/07/2026 price lows, confirmed after two closed sessions on 27/07. It
+required a close above 23.25 and was invalidated below 20.5 before any price
+trigger. A separate two-swing histogram candidate was also invalidated.
+The algorithm therefore
 does not convert the 30/09 rebound into a buy signal from that old setup.
 
 ## Activation gate
