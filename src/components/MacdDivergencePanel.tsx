@@ -6,7 +6,7 @@ import './MacdDivergencePanel.css'
 type Pivot = { date: string; price_low: number; oscillator: number }
 type Row = { symbol: string; oscillator: string; swings: number; stage: string;
   confirmed_on: string; trigger_price: number; invalidation_price: number;
-  trigger_date: string | null; version: string; evidence: { pivots?: Pivot[] } }
+  trigger_date: string | null; version: string; evidence: { pivots?: Pivot[]; oscillator_basis?: string } }
 
 const stages: Record<string, string> = {
   WATCH_PRICE_CONFIRMATION: 'Chờ giá xác nhận', CONFIRMED: 'Đã xác nhận',
@@ -29,7 +29,9 @@ export function MacdDivergencePanel({ date, authenticated }: { date: string; aut
       const byKey = new Map<string, Row>()
       for (const row of rows) {
         const key = `${row.symbol}:${row.oscillator}`
-        if (!byKey.has(key) || row.version.endsWith('_KBS_REBASED')) byKey.set(key, row)
+        const previous = byKey.get(key)
+        const rank = (item: Row) => (item.version.includes('_V2') ? 2 : 0) + (item.version.endsWith('_KBS_REBASED') ? 1 : 0)
+        if (!previous || rank(row) > rank(previous)) byKey.set(key, row)
       }
       return [...byKey.values()]
     },
@@ -54,7 +56,7 @@ export function MacdDivergencePanel({ date, authenticated }: { date: string; aut
         <summary><strong>{row.symbol}</strong><span>{row.oscillator === 'MACD_LINE' ? 'Đường MACD' : 'Histogram'} · {row.swings} đáy</span>
           <span>{stages[row.stage] ?? row.stage}</span><small>Xác nhận đáy {row.confirmed_on}</small></summary>
         <p>Cần đóng cửa vượt {row.trigger_price.toLocaleString('vi-VN')} · Vô hiệu dưới {row.invalidation_price.toLocaleString('vi-VN')}{row.trigger_date ? ` · Giá vượt ngày ${row.trigger_date}` : ''}</p>
-        <div className="macd-divergence-pivots">{(row.evidence?.pivots ?? []).map(pivot => <span key={pivot.date}>{pivot.date}: đáy {pivot.price_low.toLocaleString('vi-VN')} · chỉ báo {pivot.oscillator.toFixed(3)}</span>)}</div>
+        <div className="macd-divergence-pivots">{(row.evidence?.pivots ?? []).map(pivot => <span key={pivot.date}>{pivot.date}: đáy {pivot.price_low.toLocaleString('vi-VN')} · chỉ báo {pivot.oscillator.toFixed(3)}{row.evidence?.oscillator_basis === 'MACD_PCT_OF_CLOSE' ? '%' : ''}</span>)}</div>
         <small>Giá dùng đáy phiên; MACD tính từ giá đóng cửa. Kiểm tra dữ liệu điều chỉnh và bối cảnh trước khi đánh giá.</small>
       </details>)}
       {!filtered.length && <p className="muted">Không có mẫu hình khớp bộ lọc ở phiên này.</p>}

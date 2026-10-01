@@ -37,13 +37,16 @@ vendor revisions cannot remain permanently invisible.
 
 ## MACD divergence lane
 
-`MACD_BULLISH_DIVERGENCE_SHADOW_V1` scans confirmed price lows and compares
-the MACD line and histogram separately. It records two- or three-swing
+`MACD_BULLISH_DIVERGENCE_SHADOW_V2` scans confirmed price lows and compares
+the MACD line and histogram separately as a percentage of each session's close,
+so the recovery threshold is comparable across share price levels. It records two- or three-swing
 evidence, a fixed price trigger, invalidation, expiry, and point-in-time pivot
 confirmation. A setup cannot be revived after invalidation. Research replay
 uses the KBS series and next-session fills with the same cost assumptions.
 The lane does not emit `signals` or `consolidated_signals` and cannot initiate
 trades. The Screener displays the setup and the exact pivot evidence.
+V1 observations remain in the audit table; the panel prefers V2 on the
+matched KBS price basis when both versions exist.
 
 NT2 is an important audit case: the KBS series produced a three-swing MACD
 line candidate on 30/07/2026, requiring a close above 23.25. That historical

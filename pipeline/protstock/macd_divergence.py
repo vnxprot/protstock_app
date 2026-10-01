@@ -14,12 +14,12 @@ from .divergence import PIVOT_RADIUS
 from .indicators import _ema_series
 
 
-VERSION = "MACD_BULLISH_DIVERGENCE_SHADOW_V1"
+VERSION = "MACD_BULLISH_DIVERGENCE_SHADOW_V2"
 MAX_SETUP_AGE = 60
 MIN_SEPARATION = 5
 MAX_SEPARATION = 45
 MIN_PRICE_DECLINE = 0.005
-MIN_MACD_RISE = 0.05
+MIN_MACD_RISE_PCT_POINTS = 0.2
 
 
 def _macd_series(closes: list[float]) -> tuple[list[float | None], list[float | None]]:
@@ -53,6 +53,13 @@ def assess_macd_divergence(symbol_id: int, bars: Sequence[dict]) -> list[dict]:
         return []
     closes = [float(item["close"]) for item in ordered]
     line, histogram = _macd_series(closes)
+    # MACD is proportional to the quoted share price. Compare recoveries as a
+    # percent of that day's close so a low-priced and a high-priced stock face
+    # the same threshold, and historical share rebases preserve the pattern.
+    line = [None if value is None else 100 * value / close
+            for value, close in zip(line, closes)]
+    histogram = [None if value is None else 100 * value / close
+                 for value, close in zip(histogram, closes)]
     pivots = _pivots(ordered)
     result = []
     for oscillator_name, values in (("MACD_LINE", line), ("MACD_HISTOGRAM", histogram)):
@@ -66,12 +73,12 @@ def assess_macd_divergence(symbol_id: int, bars: Sequence[dict]) -> list[dict]:
                 left_low, right_low = float(ordered[left]["low"]), float(ordered[right]["low"])
                 if right_low > left_low * (1 - MIN_PRICE_DECLINE):
                     continue
-                if values[right] - values[left] < MIN_MACD_RISE:
+                if values[right] - values[left] < MIN_MACD_RISE_PCT_POINTS:
                     continue
                 between = [index for index in pivots if left < index < right]
                 if any(float(ordered[index]["low"]) <= right_low for index in between):
                     continue
-                if any(values[index] is not None and values[index] < values[left] - MIN_MACD_RISE
+                if any(values[index] is not None and values[index] < values[left] - MIN_MACD_RISE_PCT_POINTS
                        for index in between):
                     continue
                 pairs.append((left, right))
@@ -111,7 +118,7 @@ def assess_macd_divergence(symbol_id: int, bars: Sequence[dict]) -> list[dict]:
             "evidence": {"pivots": [{"date": ordered[index]["date"],
                                      "price_low": round(float(ordered[index]["low"]), 4),
                                      "oscillator": round(float(values[index]), 6)} for index in chain],
-                         "price_basis": "INTRADAY_LOW", "oscillator_basis": "CLOSE",
+                         "price_basis": "INTRADAY_LOW", "oscillator_basis": "MACD_PCT_OF_CLOSE",
                          "pivot_confirmation_bars": PIVOT_RADIUS,
                          "source_bar_date": ordered[-1]["date"]},
         })

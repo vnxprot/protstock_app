@@ -39,6 +39,20 @@ def test_invalidation_prevents_later_revival():
     assert setup["trigger_date"] is None
 
 
+def test_divergence_is_invariant_to_share_price_unit():
+    bars = _candidate_bars()
+    scaled = [{**bar, **{field: bar[field] * 10 for field in ("open", "high", "low", "close")}}
+              for bar in bars]
+    original = assess_macd_divergence(1, bars)
+    rebased = assess_macd_divergence(1, scaled)
+    assert [(row["oscillator"], row["swings"], row["stage"]) for row in original] == [
+        (row["oscillator"], row["swings"], row["stage"]) for row in rebased]
+    assert original[0]["evidence"]["oscillator_basis"] == "MACD_PCT_OF_CLOSE"
+    assert [pivot["oscillator"] for pivot in original[0]["evidence"]["pivots"]] == [
+        pivot["oscillator"] for pivot in rebased[0]["evidence"]["pivots"]]
+    assert rebased[0]["trigger_price"] == original[0]["trigger_price"] * 10
+
+
 def test_research_series_quarantines_scale_jump_and_preserves_source():
     bars = [SimpleNamespace(trading_date=date(2026, 9, day), open=value,
                             high=value + 1, low=value - 1, close=value,
