@@ -62,7 +62,8 @@ begin
     if field.key = 'status' and field.value #>> '{}' not in ('On', 'Off') then
       raise exception 'Invalid status';
     end if;
-    if length(field.value #>> '{}') > case when field.key = 'reason' then 500 else 120 end then
+    if (field.key = 'reason' and length(field.value #>> '{}') > 500)
+       or (field.key <> 'reason' and length(field.value #>> '{}') > 120) then
       raise exception 'Watchlist field too long';
     end if;
   end loop;
