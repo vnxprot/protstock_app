@@ -34,8 +34,8 @@ function openAnalysis(symbol: string) {
 export function WatchlistBoardPage({ syncStatus }: { syncStatus: 'loading' | 'ready' | 'error' }) {
   const items = useWatchlist()
   const [filters, setFilters] = useState({ stt: '', tier: 'ALL', symbol: '', reason: '', investmentHorizon: '', buyZone: '', targetPrice: '', stopLoss: '', status: 'ALL' })
-  const ordered = useMemo(() => [...items].sort((a, b) => Number(isWatchActive(b)) - Number(isWatchActive(a))
-    || tierRank[a.tier] - tierRank[b.tier] || a.symbol.localeCompare(b.symbol)), [items])
+  const ordered = useMemo(() => [...items].sort((a, b) => tierRank[a.tier] - tierRank[b.tier]
+    || Number(isWatchActive(b)) - Number(isWatchActive(a)) || a.symbol.localeCompare(b.symbol)), [items])
   const visible = useMemo(() => ordered.map((item, index) => ({ item, number: index + 1 })).filter(({ item, number }) =>
     (!filters.stt || String(number).includes(filters.stt.trim()))
     && (filters.tier === 'ALL' || item.tier === filters.tier)
@@ -46,7 +46,7 @@ export function WatchlistBoardPage({ syncStatus }: { syncStatus: 'loading' | 're
   const updateFilter = (key: keyof typeof filters, value: string) => setFilters(current => ({ ...current, [key]: value }))
   return <section className="workspace-page watch-board-page">
     <div className="watch-board-heading"><div><a href="#watchlist" className="watch-board-back"><ArrowLeft size={16}/> Watchlist</a>
-      <h1>Bảng Những mã để mắt tới</h1><p>Điền trực tiếp vào từng ô. Nội dung được lưu khi rời ô; Tier S và các mã On được ưu tiên ở đầu bảng.</p></div>
+      <h1>Bảng Những mã để mắt tới</h1><p>Điền trực tiếp vào từng ô. Nội dung được lưu khi rời ô; bảng xếp Tier S → A → B, trong mỗi Tier mã On đứng trước.</p></div>
       <div className="watch-board-count"><strong>{items.filter(isWatchActive).length}</strong><span>On</span><strong>{items.filter(item => !isWatchActive(item)).length}</strong><span>Off</span></div></div>
     {syncStatus === 'error' && <p className="watchlist-sync-warning" role="status">Chưa đồng bộ được bảng với tài khoản. Dữ liệu trên thiết bị này vẫn được giữ; hãy kiểm tra kết nối.</p>}
     <div className="watch-board-scroll"><table className="watch-board-table"><thead><tr>
