@@ -44,7 +44,6 @@ DHG,CTCP Dược Hậu Giang,DUOC,HOSE,NORMAL,true
 DHT,CTCP Dược phẩm Hà Tây,DUOC,HNX,NORMAL,true
 DIG,Tổng Công ty cổ phần Đầu tư Phát triển Xây dựng,BDS,HOSE,NORMAL,true
 DNP,CTCP DNP Holding,BE TONG_NHUA DUONG,HNX,NORMAL,true
-DPC,CTCP Nhựa Đà Nẵng,BE TONG_NHUA DUONG,UPCOM,NORMAL,true
 DPG,CTCP Tập đoàn Đạt Phương,BDS,HOSE,NORMAL,true
 DPM,Tổng công ty Phân bón và Hóa chất Dầu khí - CTCP,HOA CHAT_PHAN BON,HOSE,NORMAL,true
 DPR,CTCP Cao su Đồng Phú,CAO SU,HOSE,NORMAL,true
@@ -145,7 +144,6 @@ PVD,Tổng Công ty cổ phần Khoan và Dịch vụ khoan Dầu khí,DAU KHI,H
 PVP,CTCP Vận tải Dầu khí Thái Bình Dương,CANG BIEN,HOSE,NORMAL,true
 PVS,Tổng Công ty cổ phần Dịch vụ Kỹ thuật Dầu khí Việt Nam,DAU KHI,HNX,NORMAL,true
 PVT,Tổng Công ty cổ phần Vận tải Dầu khí,CANG BIEN,HOSE,NORMAL,true
-PXS,CTCP Kết cấu Kim loại và Lắp máy Dầu khí,DAU KHI,UPCOM,RESTRICTED,true
 QNS,CTCP Đường Quảng Ngãi,DUONG,UPCOM,NORMAL,true
 QTP,CTCP Nhiệt điện Quảng Ninh,DIEN_NUOC,UPCOM,NORMAL,true
 REE,CTCP Cơ Điện Lạnh,DIEN_NUOC,HOSE,NORMAL,true
@@ -155,14 +153,11 @@ SHB,Ngân hàng TMCP Sài Gòn - Hà Nội,NGAN HANG,HOSE,NORMAL,true
 SHS,CTCP Chứng khoán Sài Gòn - Hà Nội,CHUNG KHOAN,HNX,NORMAL,true
 SLS,CTCP Mía Đường Sơn La,DUONG,HNX,NORMAL,true
 SMC,CTCP Đầu tư Thương mại SMC,THEP,HOSE,NORMAL,true
-SP2,CTCP Thủy điện Sử Pán 2,DIEN_NUOC,UPCOM,NORMAL,true
 SSI,CTCP Chứng khoán SSI,CHUNG KHOAN,HOSE,NORMAL,true
 STB,Ngân hàng TMCP Sài Gòn Tài Lộc,NGAN HANG,HOSE,NORMAL,true
 STK,CTCP Sợi Thế Kỷ,XUAT KHAU,HOSE,NORMAL,true
 SZC,CTCP Sonadezi Châu Đức,BDS_KCN,HOSE,NORMAL,true
-TAR,CTCP Nông nghiệp Công nghệ cao Trung An,GAO,UPCOM,RESTRICTED,true
 TCB,Ngân hàng TMCP Kỹ thương Việt Nam,NGAN HANG,HOSE,NORMAL,true
-TCD,CTCP Tập đoàn Xây dựng TRACODI,XAY DUNG,UPCOM,RESTRICTED,true
 TCH,CTCP Đầu tư Dịch vụ Tài chính Hoàng Huy,BDS,HOSE,NORMAL,true
 TCM,CTCP Dệt may - Đầu tư - Thương mại Thành Công,XUAT KHAU,HOSE,NORMAL,true
 TDC,CTCP Kinh doanh và Phát triển Bình Dương,BDS_KCN,HOSE,NORMAL,true

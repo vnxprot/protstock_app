@@ -6,17 +6,17 @@ from protstock.universe import PROT_SECTORS, load_universe
 def test_locked_universe() -> None:
     result = load_universe(Path("data/universe.csv"))
     assert result.is_valid
-    assert len(result.rows) == 265
-    assert len({row.symbol for row in result.rows}) == 265
+    assert len(result.rows) == 260
+    assert len({row.symbol for row in result.rows}) == 260
     assert all(row.active for row in result.rows)
-    assert {row.symbol for row in result.rows}.isdisjoint({"DHM", "LTG", "DMC", "POS", "MTA", "AMC", "DHD"})
+    assert {row.symbol for row in result.rows}.isdisjoint({"DHM", "LTG", "DMC", "POS", "MTA", "AMC", "DHD", "DPC", "PXS", "SP2", "TAR", "TCD"})
     assert [(row.symbol, row.sector, row.exchange) for row in result.rows if row.symbol == "TLG"] == [("TLG", "BAN LE", "HOSE")]
     assert {row.symbol for row in result.rows} >= {"APH", "HII", "MZG", "TDP", "VNB", "VTZ"}
     assert [(row.symbol, row.sector) for row in result.rows if row.symbol == "TDC"] == [
         ("TDC", "BDS_KCN")
     ]
-    assert sum(row.trading_status == "NORMAL" for row in result.rows) == 261
-    assert {row.symbol for row in result.rows if row.trading_status == "RESTRICTED"} == {"DGC", "PXS", "TAR", "TCD"}
+    assert sum(row.trading_status == "NORMAL" for row in result.rows) == 259
+    assert {row.symbol for row in result.rows if row.trading_status == "RESTRICTED"} == {"DGC"}
     assert next(row for row in result.rows if row.symbol == "VPI").trading_status == "NORMAL"
     assert {row.sector for row in result.rows} == PROT_SECTORS
 

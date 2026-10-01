@@ -41,7 +41,7 @@ test('invalid tiers default to B and malformed symbols are ignored', () => {
 })
 
 test('retired universe symbols are removed from local watchlists', () => {
-  assert.deepEqual(normalizeWatchlist(['DHM', 'LTG', 'DMC', 'POS', 'MTA', 'AMC', 'DHD', 'TLG']).map(item => item.symbol), ['TLG'])
+  assert.deepEqual(normalizeWatchlist(['DHM', 'LTG', 'DMC', 'POS', 'MTA', 'AMC', 'DHD', 'DPC', 'PXS', 'SP2', 'TAR', 'TCD', 'TLG']).map(item => item.symbol), ['TLG'])
 })
 
 test('roulette rejects modulo-bias overflow before selecting an index', () => {
