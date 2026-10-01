@@ -60,6 +60,58 @@ jobs:
             args+=(--symbol-offset "$offset" --symbol-limit 1)
           fi
           python -m protstock.cli rebuild-signals --date "$TRADING_DATE" "${args[@]}"
+      - name: Verify MACD zone assessments
+        env:
+          SUPABASE_URL: https://upmqxwktvvguegqeqibn.supabase.co
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          TARGET_SYMBOL: ${{ inputs.symbol }}
+          TRADING_DATE: ${{ inputs.trading_date }}
+        run: |
+          python - <<'PY'
+          import os
+          import httpx
+
+          headers = {
+              'apikey': os.environ['SUPABASE_SERVICE_ROLE_KEY'],
+              'Authorization': 'Bearer ' + os.environ['SUPABASE_SERVICE_ROLE_KEY'],
+              'Prefer': 'count=exact',
+          }
+          base = os.environ['SUPABASE_URL'] + '/rest/v1'
+          day = os.environ['TRADING_DATE']
+          with httpx.Client(base_url=base, headers=headers, timeout=30) as client:
+              response = client.get('/macd_divergence_assessments', params={
+                  'select': 'symbol_id', 'as_of_date': 'eq.' + day,
+                  'version': 'eq.MACD_BULLISH_DIVERGENCE_ZONE_V4',
+                  'oscillator': 'eq.MACD_LINE', 'limit': '1',
+              })
+              response.raise_for_status()
+              count = int(response.headers['content-range'].split('/')[-1])
+              if count == 0:
+                  raise RuntimeError('No MACD V4 assessments stored for ' + day)
+              print(f'MACD V4 stored assessments on {day}: {count}')
+              symbol = os.environ.get('TARGET_SYMBOL', '').upper()
+              if symbol:
+                  response = client.get('/symbols', params={'select': 'id', 'symbol': 'eq.' + symbol})
+                  response.raise_for_status()
+                  symbols = response.json()
+                  if not symbols:
+                      raise RuntimeError('Unknown symbol ' + symbol)
+                  response = client.get('/macd_divergence_assessments', params={
+                      'select': 'swings,stage,trigger_date,evidence',
+                      'symbol_id': 'eq.' + str(symbols[0]['id']), 'as_of_date': 'eq.' + day,
+                      'version': 'eq.MACD_BULLISH_DIVERGENCE_ZONE_V4',
+                      'oscillator': 'eq.MACD_LINE', 'order': 'swings.asc',
+                  })
+                  response.raise_for_status()
+                  rows = response.json()
+                  if not rows:
+                      raise RuntimeError(f'No MACD V4 assessment for {symbol} on {day}')
+                  for row in rows:
+                      zones = row['evidence']['zones']
+                      print(symbol, row['swings'], row['stage'], row['trigger_date'],
+                            [(item['price_date'], item['price_low'], item['macd_date'], item['macd_low'])
+                             for item in zones])
+          PY
       - name: Send Telegram only when explicitly requested
         if: inputs.send_telegram
         env:
