@@ -51,6 +51,7 @@ jobs:
           SYMBOLS: ${{ inputs.symbols }}
           FULL_RANGE: ${{ inputs.full_range }}
         run: |
-          args=(--start-date "$START_DATE" --end-date "$END_DATE" --symbols "$SYMBOLS")
+          args=(--start-date "$START_DATE" --end-date "$END_DATE")
+          if [ -n "$SYMBOLS" ]; then args+=(--symbols "$SYMBOLS"); fi
           if [ "$FULL_RANGE" = "true" ]; then args+=(--full-range); fi
           protstock repair-history "${args[@]}"
