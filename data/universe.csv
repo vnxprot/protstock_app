@@ -1,9 +1,9 @@
 symbol,company_name,sector,exchange,trading_status,active
+TLG,CTCP Tập đoàn Thiên Long,BAN LE,HOSE,NORMAL,true
 AAA,CTCP Nhựa An Phát Xanh,BE TONG_NHUA DUONG,HOSE,NORMAL,true
 AAS,CTCP Chứng khoán SmartInvest,CHUNG KHOAN,UPCOM,NORMAL,true
 ACB,Ngân hàng TMCP Á Châu,NGAN HANG,HOSE,NORMAL,true
 AGG,CTCP Đầu tư và Phát triển Bất động sản An Gia,BDS,HOSE,NORMAL,true
-AMC,CTCP Khoáng sản Á Châu,KHOANG SAN,HNX,NORMAL,true
 ANV,CTCP Nam Việt,THUY SAN,HOSE,NORMAL,true
 APH,CTCP Tập đoàn An Phát Holdings,BE TONG_NHUA DUONG,HOSE,NORMAL,true
 ASM,CTCP Tập đoàn Sao Mai,XUAT KHAU,HOSE,NORMAL,true
@@ -40,12 +40,9 @@ DDV,CTCP DAP - VINACHEM,HOA CHAT_PHAN BON,UPCOM,NORMAL,true
 DGC,CTCP Tập đoàn Hóa chất Đức Giang,HOA CHAT_PHAN BON,HOSE,RESTRICTED,true
 DGW,CTCP Thế Giới Số,BAN LE,HOSE,NORMAL,true
 DHC,CTCP Đông Hải Bến Tre,GIAY_BAO BI,HOSE,NORMAL,true
-DHD,CTCP Dược Vật tư Y tế Hải Dương,DUOC,UPCOM,NORMAL,true
 DHG,CTCP Dược Hậu Giang,DUOC,HOSE,NORMAL,true
-DHM,CTCP Đầu tư và Thương mại DHM,KHOANG SAN,HOSE,NORMAL,true
 DHT,CTCP Dược phẩm Hà Tây,DUOC,HNX,NORMAL,true
 DIG,Tổng Công ty cổ phần Đầu tư Phát triển Xây dựng,BDS,HOSE,NORMAL,true
-DMC,CTCP Xuất nhập khẩu Y Tế DOMESCO,DUOC,HOSE,NORMAL,true
 DNP,CTCP DNP Holding,BE TONG_NHUA DUONG,HNX,NORMAL,true
 DPC,CTCP Nhựa Đà Nẵng,BE TONG_NHUA DUONG,UPCOM,NORMAL,true
 DPG,CTCP Tập đoàn Đạt Phương,BDS,HOSE,NORMAL,true
@@ -116,7 +113,6 @@ MSB,Ngân hàng TMCP Hàng hải Việt Nam,NGAN HANG,HOSE,NORMAL,true
 MSN,CTCP Tập đoàn Masan,THUC PHAM,HOSE,NORMAL,true
 MSR,CTCP Masan High-Tech Materials,KHOANG SAN,UPCOM,NORMAL,true
 MST,CTCP Đầu tư MST,XAY DUNG,HNX,NORMAL,true
-MTA,Tổng Công ty Khoáng sản và Thương mại Hà Tĩnh - CTCP,KHOANG SAN,UPCOM,NORMAL,true
 MVB,Tổng Công ty Công nghiệp mỏ Việt Bắc TKV - CTCP,THAN,HNX,NORMAL,true
 MWG,CTCP Đầu tư Thế giới Di động,BAN LE,HOSE,NORMAL,true
 MZG,CTCP MiZa,GIAY_BAO BI,HOSE,NORMAL,true
@@ -140,7 +136,6 @@ PET,Tổng Công ty cổ phần Dịch vụ Tổng hợp Dầu khí,BAN LE,HOSE,
 PHP,CTCP Cảng Hải Phòng,CANG BIEN,UPCOM,NORMAL,true
 PHR,CTCP Cao su Phước Hòa,BDS_KCN,HOSE,NORMAL,true
 PNJ,CTCP Vàng bạc Đá quý Phú Nhuận,BAN LE,HOSE,NORMAL,true
-POS,CTCP Vận hành và Xây lắp PTSC,KHOANG SAN,UPCOM,NORMAL,true
 POW,Tổng Công ty Điện lực Dầu khí Việt Nam - CTCP,DIEN_NUOC,HOSE,NORMAL,true
 PPC,CTCP Nhiệt điện Phả Lại,DIEN_NUOC,HOSE,NORMAL,true
 PSI,CTCP Chứng khoán Dầu khí,DAU KHI,HNX,NORMAL,true

@@ -6,6 +6,7 @@ export type WatchItem = { symbol: string; tier: WatchTier; addedAt: string }
 const WATCHLIST_KEY = 'protstock-watchlist-v1'
 const LEGACY_KEY = 'protstock-favorites'
 const LEGACY_OWNER_KEY = 'protstock-watchlist-legacy-owner'
+const RETIRED_SYMBOLS = new Set(['DHM', 'LTG', 'DMC', 'POS', 'MTA', 'AMC', 'DHD'])
 let activeUserId: string | null = null
 let cloudClient: WatchlistClient | null = null
 let activeEpoch = 0
@@ -26,7 +27,7 @@ export function normalizeWatchlist(value: unknown): WatchItem[] {
   const seen = new Set<string>()
   return value.flatMap(item => {
     const symbol = typeof item === 'string' ? item : item?.symbol
-    if (!validSymbol(symbol) || seen.has(symbol)) return []
+    if (!validSymbol(symbol) || RETIRED_SYMBOLS.has(symbol) || seen.has(symbol)) return []
     seen.add(symbol)
     return [{ symbol, tier: validTier(item?.tier) ? item.tier : 'B', addedAt: typeof item?.addedAt === 'string' ? item.addedAt : '' }]
   })
