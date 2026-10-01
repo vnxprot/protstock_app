@@ -21,11 +21,17 @@ export function MacdDivergencePanel({ date, authenticated }: { date: string; aut
   const query = useQuery({
     queryKey: ['macd-divergence-shadow', date], enabled: authenticated && Boolean(supabase),
     queryFn: async (): Promise<Row[]> => {
-      const { data, error } = await supabase!.from('macd_divergence_assessments')
-        .select('oscillator,swings,stage,confirmed_on,trigger_price,invalidation_price,trigger_date,version,evidence,symbols!inner(symbol)')
-        .eq('as_of_date', date).eq('symbols.active', true).order('symbol_id').limit(1000)
-      if (error) throw error
-      const rows = (data ?? []).map((item: any): Row => ({ ...item,
+      const data: any[] = []
+      for (let from = 0; ; from += 1000) {
+        const { data: page, error } = await supabase!.from('macd_divergence_assessments')
+          .select('oscillator,swings,stage,confirmed_on,trigger_price,invalidation_price,trigger_date,version,evidence,symbols!inner(symbol)')
+          .eq('as_of_date', date).eq('symbols.active', true)
+          .order('symbol_id').order('version').order('oscillator').order('swings').range(from, from + 999)
+        if (error) throw error
+        data.push(...(page ?? []))
+        if ((page ?? []).length < 1000) break
+      }
+      const rows = data.map((item: any): Row => ({ ...item,
         symbol: (Array.isArray(item.symbols) ? item.symbols[0] : item.symbols)?.symbol ?? '—' }))
       const byKey = new Map<string, Row>()
       for (const row of rows) {
