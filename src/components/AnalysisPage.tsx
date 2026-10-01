@@ -5,7 +5,7 @@ import { openCommandPalette } from './CommandPalette'
 import { StockChart } from './StockChart'
 import { ZoneEvidence } from './ZoneEvidence'
 import { formatMarketPrice } from '../lib/marketUnits'
-import { loadWatchlist, toggleWatchlistSymbol } from '../lib/watchlist'
+import { isWatchActive, loadWatchlist, toggleWatchlistSymbol } from '../lib/watchlist'
 import { MacdPanel } from './MacdPanel'
 
 const patternNames:Record<string,string>={ACCUMULATION_BASE:'Nền tích lũy',FLAT_BASE_BREAKOUT:'Nền phẳng',DOUBLE_BOTTOM:'Hai đáy',DOUBLE_TOP:'Hai đỉnh',ASCENDING_TRIANGLE:'Tam giác tăng',DESCENDING_TRIANGLE:'Tam giác giảm',SYMMETRICAL_TRIANGLE:'Tam giác cân',BULL_FLAG:'Cờ tăng',BULL_PENNANT:'Cờ đuôi nheo tăng',BEAR_FLAG:'Cờ giảm',CUP_HANDLE:'Cốc tay cầm',PULLBACK_CONTINUATION:'Nhịp hồi tiếp diễn'}
@@ -61,7 +61,7 @@ function ZoneMap({zones,close,trend,timeframe}:{zones:PriceZone[];close:number|n
 }
 
 export function AnalysisPage({authenticated}:{authenticated:boolean}) {
-  const symbols=useSymbols(authenticated); const [selected,setSelected]=useState<string|null>(()=>localStorage.getItem('protstock-symbol')); const [favorites,setFavorites]=useState<string[]>(()=>loadWatchlist().map(item=>item.symbol)); const [timeframe,setTimeframe]=useState<'D'|'W'|'M'>('D'); const [range,setRange]=useState('ALL'); const [multiPane,setMultiPane]=useState(()=>localStorage.getItem('protstock-chart-mode')==='triple'); const [indicators,setIndicators]=useState({ma20:true,ma50:true,ma200:false,bollinger:false,rsi:true,macd:true})
+  const symbols=useSymbols(authenticated); const [selected,setSelected]=useState<string|null>(()=>localStorage.getItem('protstock-symbol')); const [favorites,setFavorites]=useState<string[]>(()=>loadWatchlist().filter(isWatchActive).map(item=>item.symbol)); const [timeframe,setTimeframe]=useState<'D'|'W'|'M'>('D'); const [range,setRange]=useState('ALL'); const [multiPane,setMultiPane]=useState(()=>localStorage.getItem('protstock-chart-mode')==='triple'); const [indicators,setIndicators]=useState({ma20:true,ma50:true,ma200:false,bollinger:false,rsi:true,macd:true})
   useEffect(()=>{ if(!selected&&symbols.data?.length)setSelected(symbols.data.find(x=>x.symbol==='FPT')?.symbol??symbols.data[0].symbol) },[selected,symbols.data])
   useEffect(()=>{ const listener=(e:Event)=>setSelected((e as CustomEvent).detail); const favoriteListener=(e:Event)=>setFavorites((e as CustomEvent).detail); addEventListener('protstock:symbol',listener); addEventListener('protstock:favorites',favoriteListener); return()=>{removeEventListener('protstock:symbol',listener);removeEventListener('protstock:favorites',favoriteListener)} },[])
   const dailyAnalysis=useStockAnalysis(selected,'D',authenticated); const weeklyAnalysis=useStockAnalysis(selected,'W',authenticated); const monthlyAnalysis=useStockAnalysis(selected,'M',authenticated); const analysis={D:dailyAnalysis,W:weeklyAnalysis,M:monthlyAnalysis}[timeframe]; const snapshot=analysis.data?.technical[0]; const bars=useMemo(()=>analysis.data?.prices.slice(-rangeSize[range])??[],[analysis.data?.prices,range])

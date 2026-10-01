@@ -291,7 +291,7 @@ export function RuleBuilderPage({ authenticated }: { authenticated: boolean }) {
     client.invalidateQueries({ queryKey: ["rules"] });
   }
   const corePacks = (rules.data ?? []).filter(
-    (rule) => rule.kind === "CORE_PACK" && !(rule.status === "ARCHIVED" && !rule.rule_versions?.length),
+    (rule) => rule.kind === "CORE_PACK" && rule.name !== 'Prot Core Pack · Phân kỳ Dương MACD' && !(rule.status === "ARCHIVED" && !rule.rule_versions?.length),
   );
   const sortedCorePacks = [...corePacks].sort(compareEngines);
   const userRules = (rules.data ?? []).filter(

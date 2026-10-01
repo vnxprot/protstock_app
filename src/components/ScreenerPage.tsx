@@ -4,7 +4,7 @@ import { latestSignalPublication } from '../lib/signalPublication'
 import { ArrowDownAZ, ChevronDown, Download, FileSpreadsheet, FileText, Filter, LayoutGrid, List, Search, SlidersHorizontal, X } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { formatDate } from '../lib/date'
-import { loadWatchlist, toggleWatchlistSymbol } from '../lib/watchlist'
+import { isWatchActive, loadWatchlist, toggleWatchlistSymbol } from '../lib/watchlist'
 
 import { SoftSelect } from './SoftSelect'
 import { DateField } from './DateField'
@@ -41,11 +41,11 @@ async function fetchConsolidatedSignals(showHistory:boolean):Promise<SignalResul
     rows.push(...(data??[]))
     if((data??[]).length<pageSize)break
   }
-  return {latestDate,rows:rows.map((item:any)=>{const symbol=Array.isArray(item.symbols)?item.symbols[0]:item.symbols;const count=Number(item.confluence_count);return{signal_id:item.id,symbol_id:Number(item.symbol_id),symbol:symbol?.symbol??'—',sector:symbol?.sector??null,as_of_date:item.as_of_date,timeframe:item.timeframe,action:item.composite_action,state:item.signal_state,score:Number(item.confluence_score),confluence_count:count,confluence_badge:count>=3?'STRONG_ALIGNED':count===2?'HIGH_CONFLUENCE':'STANDARD',consensus_engines:item.consensus_engines??[],reasons:item.reasons??[],source_revision:item.source_revision??'legacy'}})}
+  return {latestDate,rows:rows.filter(item=>!(item.consensus_engines??[]).includes('Prot Core Pack · Phân kỳ Dương MACD')).map((item:any)=>{const symbol=Array.isArray(item.symbols)?item.symbols[0]:item.symbols;const count=Number(item.confluence_count);return{signal_id:item.id,symbol_id:Number(item.symbol_id),symbol:symbol?.symbol??'—',sector:symbol?.sector??null,as_of_date:item.as_of_date,timeframe:item.timeframe,action:item.composite_action,state:item.signal_state,score:Number(item.confluence_score),confluence_count:count,confluence_badge:count>=3?'STRONG_ALIGNED':count===2?'HIGH_CONFLUENCE':'STANDARD',consensus_engines:item.consensus_engines??[],reasons:item.reasons??[],source_revision:item.source_revision??'legacy'}})}
 }
 
 export function ScreenerPage({ authenticated }: { authenticated: boolean }) {
-  const [query,setQuery]=useState(''); const [action,setAction]=useState('ALL'); const [showHistory,setShowHistory]=useState(false); const [showRaw,setShowRaw]=useState(false); const [minScoreText,setMinScoreText]=useState(''); const [descending,setDescending]=useState(true); const [page,setPage]=useState(1); const [pageSize,setPageSize]=useState(25); const [view,setView]=useState<'table'|'cards'>(()=>localStorage.getItem('protstock-screener-view')==='cards'?'cards':'table'); const [favorites,setFavorites]=useState<string[]>(()=>loadWatchlist().map(item=>item.symbol)); const [exportNotice,setExportNotice]=useState(''); const [exportOpen,setExportOpen]=useState(false); const [advancedOpen,setAdvancedOpen]=useState(false)
+  const [query,setQuery]=useState(''); const [action,setAction]=useState('ALL'); const [showHistory,setShowHistory]=useState(false); const [showRaw,setShowRaw]=useState(false); const [minScoreText,setMinScoreText]=useState(''); const [descending,setDescending]=useState(true); const [page,setPage]=useState(1); const [pageSize,setPageSize]=useState(25); const [view,setView]=useState<'table'|'cards'>(()=>localStorage.getItem('protstock-screener-view')==='cards'?'cards':'table'); const [favorites,setFavorites]=useState<string[]>(()=>loadWatchlist().filter(isWatchActive).map(item=>item.symbol)); const [exportNotice,setExportNotice]=useState(''); const [exportOpen,setExportOpen]=useState(false); const [advancedOpen,setAdvancedOpen]=useState(false)
   const [explainingSignal,setExplainingSignal]=useState<SignalRow|null>(null)
   const wyckoffEvidence=useQuery({queryKey:['wyckoff-evidence',explainingSignal?.signal_id],enabled:authenticated&&Boolean(supabase)&&Boolean(explainingSignal?.reasons.some(reason=>reason.startsWith('WYCKOFF_'))),queryFn:async():Promise<WyckoffEvidence|null>=>{const signal=explainingSignal!;const {data,error}=await supabase!.from('signals').select('evidence').eq('symbol_id',signal.symbol_id).eq('timeframe',signal.timeframe).eq('as_of_date',signal.as_of_date);if(error)throw error;return(data??[]).map(row=>row.evidence?.wyckoff as WyckoffEvidence|undefined).find(item=>item?.event_date&&item.timeframe===signal.timeframe)??null}})
   const signals=useQuery({queryKey:['consolidated-signals',showHistory],enabled:authenticated&&Boolean(supabase),refetchInterval:60_000,queryFn:()=>fetchConsolidatedSignals(showHistory)})

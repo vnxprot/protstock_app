@@ -2,7 +2,9 @@ import { useEffect, useState } from 'react'
 type WatchlistClient = NonNullable<typeof import('./supabase').supabase>
 
 export type WatchTier = 'B' | 'A' | 'S'
-export type WatchItem = { symbol: string; tier: WatchTier; addedAt: string }
+export type WatchStatus = 'On' | 'Off'
+export type WatchItem = { symbol: string; tier: WatchTier; addedAt: string; status: WatchStatus; reason: string; investmentHorizon: string; buyZone: string; targetPrice: string; stopLoss: string }
+export type WatchPatch = Partial<Pick<WatchItem, 'tier' | 'status' | 'reason' | 'investmentHorizon' | 'buyZone' | 'targetPrice' | 'stopLoss'>>
 const WATCHLIST_KEY = 'protstock-watchlist-v1'
 const LEGACY_KEY = 'protstock-favorites'
 const LEGACY_OWNER_KEY = 'protstock-watchlist-legacy-owner'
@@ -11,7 +13,7 @@ let activeUserId: string | null = null
 let cloudClient: WatchlistClient | null = null
 let activeEpoch = 0
 let bootPromise: Promise<void> | null = null
-let pendingChanges: { userId: string; symbol: string; tier: WatchTier; remove: boolean }[] = []
+let pendingChanges: { userId: string; symbol: string; patch: WatchPatch }[] = []
 let processingChanges = false
 let syncStatus: 'loading' | 'ready' | 'error' = 'loading'
 const accountKey = () => activeUserId ? `${WATCHLIST_KEY}:${activeUserId}` : WATCHLIST_KEY
@@ -21,6 +23,8 @@ function setSyncStatus(status: typeof syncStatus) {
 }
 const validTier = (value: unknown): value is WatchTier => value === 'B' || value === 'A' || value === 'S'
 const validSymbol = (value: unknown): value is string => typeof value === 'string' && /^[A-Z0-9]{2,8}$/.test(value)
+const textField = (value: unknown, max: number) => typeof value === 'string' ? value.slice(0, max) : ''
+export const isWatchActive = (item: WatchItem) => item.status !== 'Off'
 
 export function normalizeWatchlist(value: unknown): WatchItem[] {
   if (!Array.isArray(value)) return []
@@ -29,7 +33,9 @@ export function normalizeWatchlist(value: unknown): WatchItem[] {
     const symbol = typeof item === 'string' ? item : item?.symbol
     if (!validSymbol(symbol) || RETIRED_SYMBOLS.has(symbol) || seen.has(symbol)) return []
     seen.add(symbol)
-    return [{ symbol, tier: validTier(item?.tier) ? item.tier : 'B', addedAt: typeof item?.addedAt === 'string' ? item.addedAt : '' }]
+    return [{ symbol, tier: validTier(item?.tier) ? item.tier : 'B', addedAt: typeof item?.addedAt === 'string' ? item.addedAt : '',
+      status: item?.status === 'Off' ? 'Off' : 'On', reason: textField(item?.reason, 500), investmentHorizon: textField(item?.investmentHorizon, 120),
+      buyZone: textField(item?.buyZone, 120), targetPrice: textField(item?.targetPrice, 120), stopLoss: textField(item?.stopLoss, 120) }]
   })
 }
 
@@ -51,7 +57,7 @@ export function loadWatchlist(): WatchItem[] {
 export function saveWatchlist(value: WatchItem[]): WatchItem[] {
   const items = normalizeWatchlist(value)
   localStorage.setItem(accountKey(), JSON.stringify(items))
-  const symbols = items.map(item => item.symbol)
+  const symbols = items.filter(isWatchActive).map(item => item.symbol)
   localStorage.setItem(LEGACY_KEY, JSON.stringify(symbols))
   dispatchEvent(new CustomEvent('protstock:watchlist', { detail: items }))
   dispatchEvent(new CustomEvent('protstock:favorites', { detail: symbols }))
@@ -60,19 +66,28 @@ export function saveWatchlist(value: WatchItem[]): WatchItem[] {
 
 export function toggleWatchlistSymbol(symbol: string): WatchItem[] {
   const items = loadWatchlist()
-  const remove = items.some(item => item.symbol === symbol)
-  const next = saveWatchlist(remove
-    ? items.filter(item => item.symbol !== symbol)
-    : [{ symbol, tier: 'B', addedAt: new Date().toISOString() }, ...items])
-  queueChange(symbol, 'B', remove)
+  const existing = items.find(item => item.symbol === symbol)
+  const status: WatchStatus = existing && isWatchActive(existing) ? 'Off' : 'On'
+  const next = saveWatchlist(existing
+    ? items.map(item => item.symbol === symbol ? { ...item, status } : item)
+    : [{ symbol, tier: 'B', addedAt: new Date().toISOString(), status, reason: '', investmentHorizon: '', buyZone: '', targetPrice: '', stopLoss: '' }, ...items])
+  queueChange(symbol, { status, tier: existing?.tier ?? 'B' })
   return next
 }
 
 export function setWatchlistTier(symbol: string, tier: WatchTier): WatchItem[] {
   const items = loadWatchlist()
   if (!items.some(item => item.symbol === symbol)) return items
-  const next = saveWatchlist(items.map(item => item.symbol === symbol ? { ...item, tier } : item))
-  queueChange(symbol, tier, false)
+  const next = saveWatchlist(items.map(item => item.symbol === symbol ? { ...item, tier, status: 'On' } : item))
+  queueChange(symbol, { tier, status: 'On' })
+  return next
+}
+
+export function updateWatchlistItem(symbol: string, patch: WatchPatch): WatchItem[] {
+  const items = loadWatchlist()
+  if (!items.some(item => item.symbol === symbol)) return items
+  const next = saveWatchlist(items.map(item => item.symbol === symbol ? { ...item, ...patch } : item))
+  queueChange(symbol, patch)
   return next
 }
 
@@ -106,10 +121,10 @@ async function initializeCloud(userId: string): Promise<void> {
   return bootPromise
 }
 
-function queueChange(symbol: string, tier: WatchTier, remove: boolean) {
+function queueChange(symbol: string, patch: WatchPatch) {
   const userId = activeUserId
   if (!userId || !cloudClient) return
-  pendingChanges.push({ userId, symbol, tier, remove })
+  pendingChanges.push({ userId, symbol, patch })
   void flushChanges(userId)
 }
 
@@ -121,12 +136,23 @@ async function flushChanges(userId: string) {
     while (pendingChanges.length && activeUserId === userId) {
       const change = pendingChanges[0]
       if (change.userId !== userId) { pendingChanges.shift(); continue }
-      const { data, error } = await cloudClient!.rpc('apply_watchlist_change', {
-        p_symbol: change.symbol, p_tier: change.tier, p_remove: change.remove,
+      const { data, error } = await cloudClient!.rpc('apply_watchlist_entry', {
+        p_symbol: change.symbol, p_patch: change.patch,
       })
       if (error) throw error
       pendingChanges.shift()
-      if (activeUserId === userId) { saveWatchlist(data); setSyncStatus('ready') }
+      if (activeUserId === userId) {
+        const remaining = pendingChanges.filter(item => item.userId === userId)
+        const optimistic = loadWatchlist()
+        const merged = remaining.reduce((items: WatchItem[], item) => {
+          const current = items.find(entry => entry.symbol === item.symbol)
+          if (current) return items.map(entry => entry.symbol === item.symbol ? { ...entry, ...item.patch } : entry)
+          const local = optimistic.find(entry => entry.symbol === item.symbol)
+          return local ? [local, ...items] : items
+        }, normalizeWatchlist(data))
+        saveWatchlist(merged)
+        setSyncStatus('ready')
+      }
     }
   } catch { if (activeUserId === userId) setSyncStatus('error') }
   finally { processingChanges = false }

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { BarChart3, BookOpen, BriefcaseBusiness, Clock3, FlaskConical, LayoutDashboard, Search, Settings, ShieldCheck, Star, TrendingUp, Workflow, X } from 'lucide-react'
-import { loadWatchlist, toggleWatchlistSymbol } from '../lib/watchlist'
+import { isWatchActive, loadWatchlist, toggleWatchlistSymbol } from '../lib/watchlist'
 
 export interface SymbolOption { symbol: string; sector?: string | null; exchange?: string | null }
 const destinations = [
@@ -10,7 +10,7 @@ function storedList(key: string) { try { return JSON.parse(localStorage.getItem(
 export function openCommandPalette(mode: 'all' | 'symbols' | 'ai' = 'all') { window.dispatchEvent(new CustomEvent('protstock:command', { detail: { mode } })) }
 
 export function CommandPalette({ symbols = [], onSymbol }: { symbols?: SymbolOption[]; onSymbol?: (symbol: string) => void }) {
-  const [open, setOpen] = useState(false); const [mode, setMode] = useState<'all' | 'symbols' | 'ai'>('all'); const [query, setQuery] = useState(''); const [selectedPrompt,setSelectedPrompt]=useState(''); const [favorites, setFavorites] = useState<string[]>(() => loadWatchlist().map(item => item.symbol)); const [recent, setRecent] = useState<string[]>(() => storedList('protstock-recent')); const inputRef = useRef<HTMLInputElement>(null)
+  const [open, setOpen] = useState(false); const [mode, setMode] = useState<'all' | 'symbols' | 'ai'>('all'); const [query, setQuery] = useState(''); const [selectedPrompt,setSelectedPrompt]=useState(''); const [favorites, setFavorites] = useState<string[]>(() => loadWatchlist().filter(isWatchActive).map(item => item.symbol)); const [recent, setRecent] = useState<string[]>(() => storedList('protstock-recent')); const inputRef = useRef<HTMLInputElement>(null)
   useEffect(() => { const keyboard = (event: KeyboardEvent) => { const target = event.target as HTMLElement | null; const typing = target?.tagName === 'INPUT' || target?.tagName === 'TEXTAREA' || target?.isContentEditable; if (((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') || (event.key === '/' && !typing)) { event.preventDefault(); setMode('all'); setOpen(value => !value) } if (event.key === 'Escape') setOpen(false) }; const custom = (event: Event) => { const detail = (event as CustomEvent).detail; setMode(detail?.mode ?? 'all'); setOpen(true) }; addEventListener('keydown', keyboard); addEventListener('protstock:command', custom); return () => { removeEventListener('keydown', keyboard); removeEventListener('protstock:command', custom) } }, [])
   useEffect(() => { if (open) { setQuery(''); setTimeout(() => inputRef.current?.focus(), 30) } }, [open])
   useEffect(() => { const sync = (event: Event) => setFavorites((event as CustomEvent<string[]>).detail); addEventListener('protstock:favorites', sync); return () => removeEventListener('protstock:favorites', sync) }, [])

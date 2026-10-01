@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { loadWatchlist, normalizeWatchlist, setWatchlistTier, toggleWatchlistSymbol, uniformIndex } from '../src/lib/watchlist.ts'
+import { isWatchActive, loadWatchlist, normalizeWatchlist, setWatchlistTier, toggleWatchlistSymbol, uniformIndex, updateWatchlistItem } from '../src/lib/watchlist.ts'
 
 const contents = new Map()
 globalThis.localStorage = {
@@ -19,14 +19,21 @@ test('migrates legacy favorites to Tier B without losing order or duplicate prot
   assert.ok(contents.has('protstock-watchlist-v1'))
 })
 
-test('Tier changes and star toggles stay synchronized with legacy favorites', () => {
+test('Tier changes and On/Off stay synchronized with active favorites', () => {
   setWatchlistTier('MSB', 'S')
   assert.equal(loadWatchlist()[0].tier, 'S')
   toggleWatchlistSymbol('HDB')
   toggleWatchlistSymbol('PET')
-  assert.deepEqual(loadWatchlist().map(item => item.symbol), ['PET', 'MSB'])
+  assert.deepEqual(loadWatchlist().map(item => item.symbol), ['PET', 'MSB', 'HDB'])
+  assert.equal(loadWatchlist().find(item => item.symbol === 'HDB').status, 'Off')
   assert.deepEqual(JSON.parse(contents.get('protstock-favorites')), ['PET', 'MSB'])
   assert.equal(loadWatchlist()[1].tier, 'S')
+  updateWatchlistItem('HDB', { reason: 'Giữ luận điểm đầu tư', buyZone: '24–25' })
+  assert.equal(loadWatchlist().find(item => item.symbol === 'HDB').reason, 'Giữ luận điểm đầu tư')
+  assert.deepEqual(loadWatchlist().filter(isWatchActive).map(item => item.symbol), ['PET', 'MSB'])
+  setWatchlistTier('HDB', 'A')
+  assert.equal(loadWatchlist().find(item => item.symbol === 'HDB').status, 'On')
+  assert.equal(loadWatchlist().find(item => item.symbol === 'HDB').buyZone, '24–25')
 })
 
 test('invalid tiers default to B and malformed symbols are ignored', () => {

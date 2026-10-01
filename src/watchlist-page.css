@@ -1,6 +1,9 @@
 .watchlist-page { display:grid; gap:20px; min-width:0; }
 .watchlist-page>* { min-width:0; }
-.watchlist-hero { display:flex; align-items:end; justify-content:space-between; gap:24px; padding:28px 30px; border:1px solid #4b5f4a; border-radius:23px; background:radial-gradient(circle at 82% 15%,#c5e55b45 0,transparent 28%),radial-gradient(circle at 58% 90%,#2cb79d35 0,transparent 36%),linear-gradient(125deg,#10231b,#203224 60%,#4c4f29); overflow:hidden; }
+.watchlist-hero { display:flex; align-items:end; justify-content:space-between; gap:24px; padding:28px 30px; border:1px solid #4b5f4a; border-radius:23px; background:radial-gradient(circle at 82% 15%,#c5e55b45 0,transparent 28%),radial-gradient(circle at 58% 90%,#2cb79d35 0,transparent 36%),linear-gradient(125deg,#10231b,#203224 60%,#4c4f29); overflow:hidden; text-decoration:none; cursor:pointer; }
+.watchlist-hero:hover { border-color:#dfff9c; }
+.watchlist-hero:focus-visible { outline:3px solid var(--lime); outline-offset:3px; }
+.watchlist-hero-link { display:inline-flex; align-items:center; gap:5px; margin-top:14px; color:#f5ffc6; font-size:12px; font-weight:800; }
 .watchlist-hero .eyebrow { color:#dfff9c; }
 .watchlist-hero h1 { margin:8px 0 10px; max-width:680px; color:#fffcef; font-size:clamp(30px,4vw,48px); line-height:1.08; letter-spacing:-.05em; }
 .watchlist-hero p { max-width:625px; margin:0; color:#e2edd7; line-height:1.6; font-size:14px; }
@@ -87,6 +90,9 @@
 .watch-roulette-result>button { display:flex; align-items:center; gap:5px; flex:none; min-height:37px; padding:0 11px; border:1px solid var(--tier-accent); border-radius:8px; color:#17241b; background:var(--tier-accent); cursor:pointer; font-weight:700; }
 .watch-roulette-disclaimer { margin:0; padding-top:12px; border-top:1px solid var(--line); color:var(--muted); font-size:11px; line-height:1.55; }
 html[data-theme="light"] .watchlist-page .panel { background:var(--surface); }
+html[data-theme="light"] .watchlist-hero h1 { color:#fffcef!important; }
+html[data-theme="light"] .watchlist-hero .eyebrow { color:#dfff9c!important; }
+html[data-theme="light"] .watchlist-hero p { color:#e2edd7!important; }
 html[data-theme="light"] .watchlist-add label,html[data-theme="light"] .watchlist-suggestions>button { background:var(--surface-2); }
 @media(max-width:1050px) { .watchlist-tier-grid { grid-template-columns:1fr 1fr; } .watch-tier-s { grid-column:1/-1; } }
 @media(max-width:760px) { .watchlist-hero { align-items:start; padding:21px; } .watchlist-hero-count { min-width:95px; padding:10px; } .watchlist-hero-count strong { font-size:26px; } .watchlist-add { grid-template-columns:1fr; } .watchlist-suggestions { grid-column:1; } .watchlist-tier-grid { grid-template-columns:1fr; } .watch-tier-s { grid-column:auto; } .watch-roulette-layout { grid-template-columns:1fr; } .watch-wheel-stage { width:min(100%,260px); } }
