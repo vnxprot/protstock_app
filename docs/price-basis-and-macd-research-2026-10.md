@@ -15,7 +15,7 @@ symbol's research cohort; it is never silently filled or scaled.
 KBS does not expose a usable complete corporate-action ledger through the
 endpoint tested on 01/10/2026. The vendor-rebased series improves historical
 price consistency, but it is **not proof** that every cash dividend, stock
-dividend, split, and rights issue is correctly adjusted. VSDC confirms TRC's
+dividend, split, and rights issue is correctly adjusted. [VSDC confirms TRC's](https://vsdc.vn/vi/ad/199296)
 1:3 bonus issue and 16/09/2026 record date; the 15/09/2026 ex-rights session
 is corroborated separately. The event is stored with its source URL. The full
 universe still needs an authoritative, licensed event/factor feed and a
@@ -63,3 +63,28 @@ already inspected while designing the rules cannot be relabeled as untouched
 out-of-sample evidence. Activation needs a reconciled corporate-action ledger,
 matched replay of the existing engine on the same universe and dates, frozen
 parameters, and then a prospective period using next-session fills and costs.
+
+## Production audit, 01/10/2026
+
+- KBS synchronization loaded 363,981 dated bars across all 272 configured
+  symbols. Every row has source, URL, collection time, price unit and adapter
+  version. 265 symbols matched every stored date; CTR, DHM, DHT, DMC, HPX,
+  PSI, and STK remain excluded because 138 stored dates are absent from the
+  coherent KBS series. No KBS bar crossed the configured twofold jump gate.
+- The guarded TRC repair archived all 1,336 previous stored bars. All 1,325
+  pre-ex-rights research bars now have a fourfold volume factor, and the
+  repaired stored close and adjusted close match KBS on every stored date.
+- The outcome worker recalculated 4,200 valid 5/10-session results on the
+  matched KBS series. None has an absolute forward return above 100%; 161
+  legacy outcomes for the seven excluded symbols remain marked `STALE`.
+- On the 265 eligible symbols, the funnel replay recorded 376 daily triggers.
+  Its 2026 cohort has 135 complete 20-session outcomes averaging -3.97% net
+  of the fixed costs. MACD V2's 2026 cohort has 397 complete 20-session
+  outcomes averaging -2.36% net. These overlapping, design-inspected
+  historical samples are not an untouched out-of-sample comparison.
+
+The corporate-action ledger currently contains only the independently
+verified TRC bonus event. KBS rebasing is useful for coherent replay but does
+not prove complete cash-dividend, stock-dividend, split, or rights coverage.
+The current engine has no equivalent 2025–2026 point-in-time replay. Neither
+the funnel nor MACD V2 is promoted to the published signal lane.
