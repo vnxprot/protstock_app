@@ -73,12 +73,13 @@ jobs:
         run: |
           supabase migration list --db-url "$SUPABASE_DB_URL"
           supabase db dump --db-url "$SUPABASE_DB_URL" --schema public --file remote_schema.sql
-          grep -E '^CREATE TABLE public\.(technical_snapshots|support_resistance_zones|pattern_instances|pattern_points|fundamental_periods|fundamental_metrics|rules|rule_versions|signals|backtest_runs|backtest_trades|portfolios|positions|journal_entries)' remote_schema.sql || true
+          # Supabase quotes identifiers and emits IF NOT EXISTS / OR REPLACE.
+          sed 's/"//g' remote_schema.sql > remote_schema_unquoted.sql
           for table in investment_theses investment_thesis_versions; do
-            grep -Eq "^CREATE TABLE public\.${table}[[:space:]]" remote_schema.sql || { echo "Missing v4 table: $table"; exit 1; }
+            grep -Eq "^CREATE TABLE( IF NOT EXISTS)? public\.${table}[[:space:](]" remote_schema_unquoted.sql || { echo "Missing v4 table: $table"; exit 1; }
           done
           for function in record_portfolio_capital_movement record_portfolio_transaction portfolio_report_data search_consolidated_signals stock_analysis_data claim_backtest_jobs replace_backtest_trades save_investment_thesis apply_watchlist_entry; do
-            grep -Eq "^CREATE FUNCTION public\.${function}\(" remote_schema.sql || { echo "Missing v4 RPC: $function"; exit 1; }
+            grep -Eq "^CREATE( OR REPLACE)? FUNCTION public\.${function}\(" remote_schema_unquoted.sql || { echo "Missing v4 RPC: $function"; exit 1; }
           done
-          grep -Eq '^CREATE FUNCTION public\.apply_watchlist_entry\(p_symbol text, p_patch jsonb, p_expected_user_id uuid\)' remote_schema.sql || { echo 'Missing owner-pinned v4 watchlist RPC overload'; exit 1; }
+          grep -Eq '^CREATE( OR REPLACE)? FUNCTION public\.apply_watchlist_entry\(p_symbol text, p_patch jsonb, p_expected_user_id uuid\)' remote_schema_unquoted.sql || { echo 'Missing owner-pinned v4 watchlist RPC overload'; exit 1; }
           echo "Verified v4 thesis tables and all financial/query/worker RPC definitions."
