@@ -68,9 +68,23 @@ def evaluate_named_engine(engine: str | None, overrides: dict[str, Any] | None, 
     if not engine or engine == "custom":
         passed, reasons = evaluate_rule(
             context["dsl"], context["snapshot"], context["bars"],
-            context.get("patterns", ()), context.get("rule_context"),
+            context.get("patterns", ()), {**(context.get("rule_context") or {}), "position": context.get("position")},
         )
-        return passed, context["dsl"].get("action", "WATCH"), reasons
+        action = context["dsl"].get("action", "WATCH")
+        pattern_types = {item.get("type") for item in context["dsl"].get("all", []) if item.get("metric") == "pattern"}
+        matched = [item for item in context.get("patterns", []) if item.get("pattern_type") in pattern_types
+                   and item.get("state") in {"READY", "CONFIRMED"}]
+        if passed and matched:
+            top = max(matched, key=lambda item: float(item.get("quality_score") or 0))
+            context["engine_evidence"] = {key: top.get(key) for key in ("pattern_type", "quality_score", "trigger_price", "invalidation_price")}
+            context["engine_evidence"]["evidence_cluster"] = top["pattern_type"]
+        stop_pct = (context["dsl"].get("risk") or {}).get("stop_loss_pct")
+        if passed and action in {"PROBE_BUY", "ADD"} and stop_pct is not None:
+            if not 0 < float(stop_pct) < 1:
+                return False, "WATCH", ["INVALID_RULE_STOP"]
+            context["engine_evidence"] = {"invalidation_price": float(context["snapshot"]["close"]) * (1 - float(stop_pct)),
+                                          "stop_basis": "RULE_PERCENT", "stop_loss_pct": float(stop_pct)}
+        return passed, action, reasons
     if engine == "core_ladder_v2":
         action, reasons = resolve_signal(
             context.get("patterns", []), context["snapshot"], context.get("position"),

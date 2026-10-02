@@ -10,15 +10,19 @@ function cleanTitle(value) {
   return value.replace(/&lt;[^&]*&gt;/g, '').replace(/<[^>]*>/g, '').trim()
 }
 
-function parseFeed(xml, source, symbolMap) {
+export function parseFeed(xml, source, symbolMap) {
   const blocks = xml.match(/<item>[\s\S]*?<\/item>/gi) ?? []
   return blocks.map(block => {
     const title = cleanTitle(xmlValue(block, 'title')), source_reference = xmlValue(block, 'guid'), source_url = xmlValue(block, 'link')
     const dateValue = source === 'HOSE' ? xmlValue(block, 'a10:updated') : xmlValue(block, 'pubDate')
     const published = new Date(dateValue)
+    if (Number.isNaN(published.valueOf())) return null
+    const dateParts = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(published)
+    const part = type => dateParts.find(item => item.type === type)?.value
+    const available_from = `${part('year')}-${part('month')}-${part('day')}`
     const ticker = (title.match(/\b[A-Z]{3,10}\b/g) ?? []).find(code => symbolMap.has(code))
-    return { source, source_reference, symbol_id: ticker ? symbolMap.get(ticker) : null, category: `${source}_ISSUER_RSS`, title, published_at: published.toISOString(), available_from: published.toISOString().slice(0, 10), source_url }
-  }).filter(row => row.source_reference && row.title && row.source_url && !Number.isNaN(new Date(row.published_at).valueOf()))
+    return { source, source_reference, symbol_id: ticker ? symbolMap.get(ticker) : null, category: `${source}_ISSUER_RSS`, title, published_at: published.toISOString(), available_from, source_url }
+  }).filter(row => row && row.source_reference && row.title && row.source_url)
 }
 
 export default async function handler(request, response) {

@@ -16,15 +16,34 @@ def _pct(items: Sequence[dict], predicate) -> float | None:
     return sum(1 for item in items if predicate(item)) / len(items) * 100 if items else None
 
 
+HEALTH_METHOD_VERSION = "health-v4.0.0"
+
+
+def _health_components(snapshots: Sequence[dict], advances: int = 0, declines: int = 0) -> dict:
+    components = {}
+    for metric in ("sma20", "sma50", "sma200"):
+        valid = [item for item in snapshots if item.get(metric) is not None]
+        components[f"above_{metric}"] = {
+            "value": _pct(valid, lambda item: float(item["close"]) > float(item[metric])),
+            "valid_count": len(valid),
+            "coverage_pct": round(len(valid) / len(snapshots) * 100, 1) if snapshots else 0,
+        }
+    stacked = [item for item in snapshots if all(item.get(metric) is not None for metric in ("sma20", "sma50", "sma200"))]
+    components["ma_stack"] = {
+        "value": _pct(stacked, lambda item: bool(item.get("ma_stack"))),
+        "valid_count": len(stacked),
+        "coverage_pct": round(len(stacked) / len(snapshots) * 100, 1) if snapshots else 0,
+    }
+    components["advances"] = {"value": advances / (advances + declines) * 100 if advances + declines else None,
+                              "valid_count": advances + declines,
+                              "coverage_pct": round((advances + declines) / len(snapshots) * 100, 1) if snapshots else 0}
+    return components
+
+
 def _health_score(snapshots: Sequence[dict], advances: int = 0, declines: int = 0) -> float | None:
-    values = [
-        _pct(snapshots, lambda item: item.get("sma20") is not None and float(item["close"]) > float(item["sma20"])),
-        _pct(snapshots, lambda item: float(item["close"]) > float(item["sma50"])),
-        _pct(snapshots, lambda item: item.get("sma200") is not None and float(item["close"]) > float(item["sma200"])),
-        _pct(snapshots, lambda item: bool(item.get("ma_stack"))),
-        advances / (advances + declines) * 100 if advances + declines else None,
-    ]
-    usable = [value for value in values if value is not None]
+    # Missing history is unknown, never a vote against the market.
+    usable = [component["value"] for component in _health_components(snapshots, advances, declines).values()
+              if component["value"] is not None]
     return round(sum(usable) / len(usable), 1) if usable else None
 
 
@@ -32,14 +51,14 @@ def _health_state(score: float | None) -> str:
     return "RISK_ON" if score is not None and score >= 65 else "RISK_OFF" if score is not None and score < 35 else "NEUTRAL"
 
 
-def _sector_flow(members: Sequence[dict]) -> dict:
+def _sector_flow(members: Sequence[dict], universe_count: int | None = None) -> dict:
     """Sector-level OHLCV pressure proxy; never an investor-identity or buy signal."""
     observed = [item for item in members if item.get("flow_score") is not None]
     states = [str(item.get("flow_state") or "UNKNOWN") for item in observed]
     scores = [float(item["flow_score"]) for item in observed]
     return {
         "flow_observed_count": len(observed),
-        "flow_coverage_ratio": round(len(observed) / len(members), 4) if members else None,
+        "flow_coverage_ratio": round(len(observed) / (universe_count or len(members)), 4) if members else None,
         "flow_positive_count": sum(score > 0 for score in scores),
         "flow_negative_count": sum(score < 0 for score in scores),
         "flow_median_score": round(median(scores), 1) if scores else None,
@@ -104,15 +123,20 @@ def compute_breadth(snapshots: Sequence[dict], prior_by_symbol: dict | None = No
             "pct_above_sma50": _pct(members, lambda item: float(item["close"]) > float(item["sma50"])),
             "advance_count": sector_advances, "decline_count": sector_declines,
             "market_health_score": sector_score, "market_health_state": _health_state(sector_score),
+            "health_method_version": HEALTH_METHOD_VERSION,
+            "health_components": _health_components(members, sector_advances, sector_declines),
+            "sample_warning": "SMALL_SAMPLE" if len(members) < 5 else None,
             "turnover_share_pct": round(turnover_by_sector[sector] / universe_turnover * 100, 2) if universe_turnover else None,
-            **_sector_flow(members),
+            **_sector_flow(members, sector_totals.get(sector)),
         })
     return {
         "pct_above_sma50": _pct(eligible, lambda item: float(item["close"]) > float(item["sma50"])),
-        "pct_above_sma20": _pct(eligible, lambda item: item.get("sma20") is not None and float(item["close"]) > float(item["sma20"])),
-        "pct_above_sma200": _pct(eligible, lambda item: item.get("sma200") is not None and float(item["close"]) > float(item["sma200"])),
-        "pct_ma_stack": _pct(eligible, lambda item: bool(item.get("ma_stack"))),
+        "pct_above_sma20": _health_components(eligible)["above_sma20"]["value"],
+        "pct_above_sma200": _health_components(eligible)["above_sma200"]["value"],
+        "pct_ma_stack": _health_components(eligible)["ma_stack"]["value"],
         "market_health_score": score, "market_health_state": _health_state(score), "sample_size": len(eligible),
+        "health_method_version": HEALTH_METHOD_VERSION,
+        "health_components": _health_components(eligible, advances, declines),
         "advance_count": advances, "decline_count": declines, "unchanged_count": unchanged,
         "advance_decline_ratio": round(advances / declines, 3) if declines else None,
         "new_high20_count": new_high20, "new_low20_count": new_low20,

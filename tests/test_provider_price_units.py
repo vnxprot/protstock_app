@@ -4,6 +4,12 @@ from decimal import Decimal
 from protstock.provider_vnstock import VnstockProvider
 
 
+def test_unconfigured_provider_cannot_be_reported_as_an_independent_source():
+    import pytest
+    with pytest.raises(ValueError, match="KBS"):
+        VnstockProvider("VCI")
+
+
 class Response:
     def __init__(self, close):
         self.close = close

@@ -1,6 +1,7 @@
 export type SectorView = 'health' | 'flow'
 
 export type SectorRow = {
+  sample_warning?: string | null; health_method_version?: string; health_components?: Record<string,{ value: number | null; valid_count: number; coverage_pct: number }>
   sector: string; sample_size: number; universe_count?: number; coverage_ratio?: number | null
   market_health_score?: number | null; market_health_state?: string
   pct_above_sma50?: number | null; advance_count?: number; decline_count?: number
@@ -9,6 +10,7 @@ export type SectorRow = {
   flow_strong_in_count?: number; flow_strong_out_count?: number; turnover_share_pct?: number | null
 }
 export type BreadthRow = {
+  health_method_version?: string; health_components?: Record<string,{ value: number | null; valid_count: number; coverage_pct: number }>
   trading_date: string; universe_size: number; observed_count: number; eligible_count: number
   coverage_ratio: number | null; coverage_status: string; market_health_score: number | null
   market_health_state: string; sector_breadth: SectorRow[]

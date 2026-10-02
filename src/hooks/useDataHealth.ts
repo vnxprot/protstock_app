@@ -10,6 +10,8 @@ export interface DataHealth {
   latest_disclosure_collection: string | null
   latest_successful_job: string | null
   failed_jobs_7d: number
+  latest_complete_date?: string | null
+  stale_jobs?: number
 }
 
 export function useDataHealth(enabled: boolean) {

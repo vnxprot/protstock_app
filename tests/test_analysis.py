@@ -36,7 +36,7 @@ def test_indicator_snapshot_has_full_long_term_context() -> None:
 
 def test_analysis_is_explainable() -> None:
     result = analyze_bars(make_bars())
-    assert result["algorithm_version"] == "core-rules-v3.0.0"
+    assert result["algorithm_version"] == "core-rules-v4.0.0"
     assert result["reasons"][0] == "TREND_UP"
     assert result["signal_preview"] in {"WATCH", "PROBE_BUY", "ADD", "REDUCE", "EXIT"}
 

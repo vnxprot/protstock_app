@@ -17,6 +17,8 @@ __pycache__/
 coverage/
 .pytest_cache/
 .mypy_cache/
+.v4-sql-check/
+.v4-release-*/
 
 # OS and editors
 .DS_Store

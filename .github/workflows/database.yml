@@ -12,7 +12,7 @@ on:
       bootstrap_existing:
         description: Mark the already-installed Phase 1 migrations as applied
         required: true
-        default: true
+        default: false
         type: boolean
       reconcile_phase2_to_5:
         description: Reapply Phase 2-5 when their migration history was marked applied after a rolled-back SQL attempt
@@ -53,6 +53,7 @@ jobs:
           )
           with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as env_file:
               env_file.write(f"SUPABASE_DB_URL={url}\n")
+          print(f"::add-mask::{url}")
           print("Prepared Session Pooler connection for upmqxwktvvguegqeqibn.")
           PY
       - name: Bootstrap migration history
@@ -73,3 +74,11 @@ jobs:
           supabase migration list --db-url "$SUPABASE_DB_URL"
           supabase db dump --db-url "$SUPABASE_DB_URL" --schema public --file remote_schema.sql
           grep -E '^CREATE TABLE public\.(technical_snapshots|support_resistance_zones|pattern_instances|pattern_points|fundamental_periods|fundamental_metrics|rules|rule_versions|signals|backtest_runs|backtest_trades|portfolios|positions|journal_entries)' remote_schema.sql || true
+          for table in investment_theses investment_thesis_versions; do
+            grep -Eq "^CREATE TABLE public\.${table}[[:space:]]" remote_schema.sql || { echo "Missing v4 table: $table"; exit 1; }
+          done
+          for function in record_portfolio_capital_movement record_portfolio_transaction portfolio_report_data search_consolidated_signals stock_analysis_data claim_backtest_jobs replace_backtest_trades save_investment_thesis apply_watchlist_entry; do
+            grep -Eq "^CREATE FUNCTION public\.${function}\(" remote_schema.sql || { echo "Missing v4 RPC: $function"; exit 1; }
+          done
+          grep -Eq '^CREATE FUNCTION public\.apply_watchlist_entry\(p_symbol text, p_patch jsonb, p_expected_user_id uuid\)' remote_schema.sql || { echo 'Missing owner-pinned v4 watchlist RPC overload'; exit 1; }
+          echo "Verified v4 thesis tables and all financial/query/worker RPC definitions."

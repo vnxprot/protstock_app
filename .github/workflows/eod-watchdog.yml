@@ -1,6 +1,9 @@
 name: EOD Watchdog
 
 on:
+  schedule:
+    # 16:15 and 16:45 Vietnam: retry incomplete sessions after the initial lease.
+    - cron: "15,45 9 * * 1-5"
   workflow_dispatch:
     inputs:
       trading_date:
@@ -17,6 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       action: ${{ steps.status.outputs.action }}
+      trading_date: ${{ steps.status.outputs.trading_date }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -38,7 +42,7 @@ jobs:
       - name: Dispatch Fast Lane once if today's EOD is absent or failed
         env:
           GH_TOKEN: ${{ github.token }}
-          TRADING_DATE: ${{ inputs.trading_date }}
+          TRADING_DATE: ${{ needs.inspect.outputs.trading_date }}
           REPOSITORY: ${{ github.repository }}
         run: |
           args=(--ref main)

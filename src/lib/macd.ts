@@ -15,7 +15,7 @@ function ema(values: number[], length: number): (number | null)[] {
 }
 
 export function calculateMacd(bars: PriceBar[]): MacdPoint[] {
-  const closed = bars.filter(bar => bar.is_complete !== false && bar.trading_date >= '2021-01-01')
+  const closed = bars.filter(bar => bar.is_complete !== false).slice().sort((a, b) => a.trading_date.localeCompare(b.trading_date))
   const closes = closed.map(bar => Number(bar.close))
   const fast = ema(closes, 12), slow = ema(closes, 26)
   const macd = closes.flatMap((_, i) => fast[i] == null || slow[i] == null ? [] : [fast[i]! - slow[i]!])

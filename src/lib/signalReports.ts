@@ -2,7 +2,7 @@ import { formatDate } from './date'
 
 export type SignalExportRow = {
   symbol: string; sector: string | null; action: string; timeframe: string; score: number
-  confluenceCount: number; date: string; engines: string; reasons: string
+  confluenceCount: number; date: string; engines: string; reasons: string; sourceRevision?: string | null
 }
 
 const download = (blob: Blob, filename: string) => {
@@ -12,8 +12,8 @@ const download = (blob: Blob, filename: string) => {
   window.setTimeout(() => URL.revokeObjectURL(url), 1_000)
 }
 const stamp = () => new Date().toISOString().slice(0, 10)
-const rowsFor = (rows: SignalExportRow[]) => rows.map(row => [row.symbol, row.sector ?? '', row.action, row.timeframe, row.score, row.confluenceCount, formatDate(row.date), row.engines, row.reasons])
-const headers = ['Mã', 'Ngành', 'Hành động', 'Khung', 'Điểm', 'Số bộ máy', 'Ngày', 'Bộ máy tín hiệu', 'Lý do']
+const rowsFor = (rows: SignalExportRow[]) => rows.map(row => [row.symbol, row.sector ?? '', row.action, row.timeframe, row.score, row.confluenceCount, formatDate(row.date), row.engines, row.reasons, row.sourceRevision ?? 'Legacy'])
+const headers = ['Mã', 'Ngành', 'Hành động', 'Khung', 'Điểm', 'Số bộ máy', 'Ngày', 'Bộ máy tín hiệu', 'Lý do', 'Phiên bản']
 
 export function downloadSignalCsv(rows: SignalExportRow[]) {
   const cell = (value: unknown) => { const text = value == null ? '' : String(value); return /[",\r\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text }
@@ -24,7 +24,7 @@ export function downloadSignalCsv(rows: SignalExportRow[]) {
 export async function downloadSignalExcel(rows: SignalExportRow[]) {
   const XLSX = await import('xlsx')
   const sheet = XLSX.utils.aoa_to_sheet([headers, ...rowsFor(rows)])
-  sheet['!cols'] = [{ wch: 10 }, { wch: 20 }, { wch: 16 }, { wch: 10 }, { wch: 10 }, { wch: 14 }, { wch: 14 }, { wch: 42 }, { wch: 68 }]
+  sheet['!cols'] = [{ wch: 10 }, { wch: 20 }, { wch: 16 }, { wch: 10 }, { wch: 10 }, { wch: 14 }, { wch: 14 }, { wch: 42 }, { wch: 68 }, { wch: 24 }]
   const book = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(book, sheet, 'Tin hieu')
   XLSX.writeFile(book, `prot-stock-tin-hieu-${stamp()}.xlsx`, { compression: true })
 }

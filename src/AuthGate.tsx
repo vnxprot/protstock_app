@@ -1,5 +1,5 @@
 import { Eye, EyeOff } from 'lucide-react'
-import { FormEvent, ReactNode, useEffect, useState } from 'react'
+import { FormEvent, ReactNode, useEffect, useRef, useState } from 'react'
 import type { Session } from '@supabase/supabase-js'
 
 import { isSupabaseConfigured, supabase } from './lib/supabase'
@@ -19,26 +19,36 @@ export function AuthGate({ children }: AuthGateProps) {
   const [showPassword, setShowPassword] = useState(false)
   const [message, setMessage] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const [reload, setReload] = useState(0)
+  const currentUser = useRef<string | null>(null)
 
   useEffect(() => {
     if (!supabase) return
     const authClient = supabase
+    let generation = 0; let disposed = false
     const load = async (nextSession: Session | null, event?: string) => {
+      const request = ++generation
+      if (disposed) return
       setSession(nextSession)
-      if (!nextSession) { setProfile(null); setLoading(false); return }
-      const { data } = await authClient.from('user_profiles').select('user_id,username,full_name,role,status,last_seen_at').eq('user_id', nextSession.user.id).maybeSingle()
+      if (!nextSession) { currentUser.current = null; setProfile(null); setLoading(false); return }
+      if (currentUser.current !== nextSession.user.id) { setProfile(null); setLoading(true); currentUser.current = nextSession.user.id }
+      const { data, error } = await authClient.from('user_profiles').select('user_id,username,full_name,role,status,last_seen_at').eq('user_id', nextSession.user.id).maybeSingle()
+      if (disposed || generation !== request) return
+      if (error) { setMessage('Chưa kiểm tra được quyền tài khoản. Hãy thử lại khi kết nối ổn định.'); setProfile(null); setLoading(false); return }
       if (!data || data.status !== 'ACTIVE') { await authClient.auth.signOut(); setMessage('Tài khoản chưa được kích hoạt hoặc đã bị khóa.'); setProfile(null); setLoading(false); return }
-      const current = data as UserProfile; setProfile(current)
-      const sessionId = String((nextSession as any).access_token?.split('.')[1] ?? nextSession.user.id).slice(0, 180)
+      const current = data as UserProfile; setProfile(current); setMessage('')
+      let sessionId = nextSession.user.id
+      try { const payload = JSON.parse(atob(nextSession.access_token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))); sessionId = payload.session_id ?? sessionId } catch { /* Older sessions may omit session_id. */ }
       void authClient.rpc('record_session_presence', { p_session_id: sessionId, p_event: event === 'SIGNED_IN' ? 'LOGIN' : 'SEEN', p_user_agent: navigator.userAgent })
       setLoading(false)
     }
     authClient.auth.getSession().then(({ data }) => void load(data.session))
     const { data } = authClient.auth.onAuthStateChange((event, nextSession) => {
-      void load(nextSession, event)
+      // Start database work outside the auth callback lock.
+      setTimeout(() => void load(nextSession, event), 0)
     })
-    return () => data.subscription.unsubscribe()
-  }, [])
+    return () => { disposed = true; generation++; data.subscription.unsubscribe() }
+  }, [reload])
 
   async function signIn(event: FormEvent) {
     event.preventDefault()
@@ -61,6 +71,7 @@ export function AuthGate({ children }: AuthGateProps) {
   if (!isSupabaseConfigured) return <>{children(false, null)}</>
   if (loading) return <div className="auth-screen"><div className="auth-card">Đang kiểm tra phiên đăng nhập…</div></div>
   if (session && profile) return <>{children(true, profile)}</>
+  if (session && message) return <main className="auth-screen"><section className="auth-card"><h1>Kiểm tra kết nối</h1><p role="alert">{message}</p><button className="primary-button" onClick={() => { setLoading(true); setReload(value => value + 1) }}>Thử lại</button><button className="text-button" onClick={() => void supabase?.auth.signOut()}>Đăng xuất</button></section></main>
 
   return (
     <main className="auth-screen">

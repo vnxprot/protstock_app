@@ -21,7 +21,7 @@ on:
         default: "10"
         type: string
       source:
-        description: KBS public end-of-day price source
+        description: Supported public EOD source
         required: false
         default: "KBS"
         type: choice

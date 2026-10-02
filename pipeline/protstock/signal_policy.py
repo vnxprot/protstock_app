@@ -80,7 +80,8 @@ def apply_signal_policy(action: str, reasons: list[str], context: dict) -> tuple
         sizing = position_size(capital, float(context.get("risk_pct") or 1), close * STOCK_PRICE_TO_VND, float(entry_stop) * STOCK_PRICE_TO_VND)
         exposure = portfolio_exposure(positions, capital)
         available = max(0.0, capital - exposure["total_value"])
-        quantity = min(sizing["quantity"], int(available / (close * STOCK_PRICE_TO_VND)))
+        lot_size = max(1, int(context.get("lot_size") or 100))
+        quantity = min(sizing["quantity"], int(available / (close * STOCK_PRICE_TO_VND))) // lot_size * lot_size
         value = quantity * close * STOCK_PRICE_TO_VND
         sector = context.get("candidate_sector")
         existing = exposure["total_value"] * exposure["sector_weights"].get(sector, 0) / 100

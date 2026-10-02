@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
+import { latestSignalPublication } from '../lib/signalPublication'
 
 export interface PriceBar {
   trading_date: string
@@ -94,50 +95,27 @@ export function useSymbols(enabled: boolean) {
   })
 }
 
-export function useStockAnalysis(symbol: string | null, timeframe: 'D' | 'W' | 'M', enabled: boolean) {
+export function useStockAnalysis(symbol: string | null, timeframe: 'D' | 'W' | 'M', enabled: boolean, historyLimit = 500) {
+  const publication = useQuery({ queryKey: ['signal-publication'], enabled: enabled && Boolean(supabase), staleTime: 60_000, queryFn: latestSignalPublication })
   return useQuery({
-    queryKey: ['stock-analysis', symbol, timeframe], enabled: enabled && Boolean(supabase) && Boolean(symbol), staleTime: 60_000,
+    queryKey: ['stock-analysis', symbol, timeframe, historyLimit, publication.data?.date, publication.data?.sourceRevision], enabled: enabled && Boolean(supabase) && Boolean(symbol) && !publication.isPending, staleTime: 300_000,
     queryFn: async () => {
       if (!supabase || !symbol) throw new Error('Symbol is required')
-      const { data: symbolRow, error: symbolError } = await supabase.from('symbols').select('id,symbol,sector,exchange,company_name').eq('symbol', symbol).single()
-      if (symbolError) throw symbolError
-      // Supabase giới hạn mỗi REST response ở 1.000 dòng. Ghép ba trang để chart D
-      // chứa tới 2.600 phiên (~10 năm), đủ hiển thị toàn bộ lịch sử từ 01/01/2021.
-      const dailyPriceQuery = async () => {
-        const base = () => supabase!.from('daily_prices').select('trading_date,open,high,low,close,volume').eq('symbol_id', symbolRow.id).order('trading_date', { ascending: false })
-        const pages = await Promise.all([base().range(0, 999), base().range(1000, 1999), base().range(2000, 2599)])
-        const failed = pages.find(page => page.error)
-        return { data: pages.flatMap(page => page.data ?? []), error: failed?.error ?? null }
-      }
-      const priceQuery = timeframe === 'D'
-        ? dailyPriceQuery()
-        : supabase.from('derived_bars').select('trading_date:source_last_date,open,high,low,close,volume,is_complete').eq('symbol_id', symbolRow.id).eq('timeframe', timeframe).order('period_start', { ascending: false }).limit(timeframe === 'W' ? 520 : 120)
-      const [prices, technical, patterns, zones, disclosures, fundamentals] = await Promise.all([
-        priceQuery,
-        supabase.from('technical_snapshots').select('*').eq('symbol_id', symbolRow.id).eq('timeframe', timeframe).order('as_of_date', { ascending: false }).limit(1),
-        supabase.from('pattern_instances').select('*').eq('symbol_id', symbolRow.id).eq('timeframe', timeframe).order('as_of_date', { ascending: false }).order('quality_score', { ascending: false }).limit(8),
-        supabase.from('support_resistance_zones').select('id,zone_type,lower_price,upper_price,touches,strength,as_of_date,evidence').eq('symbol_id', symbolRow.id).eq('timeframe', timeframe).eq('active', true).order('as_of_date', { ascending: false }).order('strength', { ascending: false }).limit(24),
-        supabase.from('disclosures').select('id,title,category,published_at,available_from,source,source_url').eq('symbol_id', symbolRow.id).order('published_at', { ascending: false }).limit(6),
-        supabase.from('fundamental_periods').select('id,period_end,published_at,available_from,source,fundamental_metrics(revenue,eps,roe,debt_to_equity,operating_cash_flow)').eq('symbol_id', symbolRow.id).neq('source', 'VNSTOCK_VCI_PROVISIONAL').lte('available_from', new Date().toISOString().slice(0, 10)).order('period_end', { ascending: false }).limit(4),
-      ])
-      const failure = prices.error || technical.error || patterns.error || zones.error || disclosures.error || fundamentals.error
-      if (failure) throw failure
-      const asOfDate = technical.data?.[0]?.as_of_date
-      const decisionQuery = asOfDate
-        ? await supabase.from('consolidated_signals').select('as_of_date,timeframe,composite_action,reasons,source_revision').eq('symbol_id', symbolRow.id).eq('timeframe', timeframe).eq('as_of_date', asOfDate).limit(1)
-        : null
-      if (decisionQuery?.error) throw decisionQuery.error
+      if (publication.error) throw publication.error
+      const { data, error } = await supabase.rpc('stock_analysis_data', { p_symbol: symbol, p_timeframe: timeframe, p_as_of_date: publication.data?.date ?? null, p_revision: publication.data?.sourceRevision ?? null, p_history_limit: historyLimit })
+      if (error) throw error
+      const technical = (data.technical ?? []) as TechnicalSnapshot[]
+      const decision = data.decision as StockDecision | null
       return {
-        symbol: symbolRow,
-        prices: ((prices.data ?? []) as PriceBar[]).reverse(),
-        technical: (technical.data ?? []) as TechnicalSnapshot[],
-        decision: ((decisionQuery?.data?.[0]?.source_revision === technical.data?.[0]?.algorithm_version
-          || !technical.data?.[0]?.algorithm_version?.startsWith('core-rules-v3'))
-          ? decisionQuery?.data?.[0] ?? null : null) as StockDecision | null,
-        patterns: ((patterns.data ?? []) as PatternInstance[]).filter(row => row.as_of_date === technical.data?.[0]?.as_of_date),
-        zones: latestUniqueZones((zones.data ?? []) as PriceZone[], technical.data?.[0]?.as_of_date),
-        disclosures: disclosures.data ?? [],
-        fundamentals: (fundamentals.data ?? []) as FundamentalPeriod[],
+        symbol: data.symbol as { id: number; symbol: string; sector: string; exchange: string; company_name: string | null },
+        prices: (data.prices ?? []) as PriceBar[], technical,
+        decision: decision?.source_revision === technical[0]?.algorithm_version ? decision : null,
+        patterns: (data.patterns ?? []) as PatternInstance[],
+        zones: latestUniqueZones((data.zones ?? []) as PriceZone[], technical[0]?.as_of_date),
+        disclosures: (data.disclosures ?? []) as Array<{ id: string; title: string; category: string; published_at: string; available_from: string; source: string; source_url: string | null }>,
+        fundamentals: (data.fundamentals ?? []) as FundamentalPeriod[],
+        historyLimit, historyTruncated: timeframe === 'D' && (data.prices?.length ?? 0) >= historyLimit && historyLimit < 2600,
+        publication: publication.data ?? null,
       }
     },
   })

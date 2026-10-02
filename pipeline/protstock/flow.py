@@ -12,8 +12,9 @@ def _signed_money_volume(bar: dict) -> float:
 
 
 def calculate_flow(bars: Sequence[dict]) -> dict[str, float | str | None]:
-    """Return a 20-session flow score and an explainable current-session colour bar."""
-    if len(bars) < 2:
+    """Return a 20-closed-bar score and an explainable last-bar colour."""
+    bars = [bar for bar in bars if bar.get("is_complete") is not False]
+    if len(bars) < 20:
         return {"flow_score": None, "flow_state": "UNKNOWN", "cmf20": None, "obv_slope20": None, "flow_volume_ratio20": None, "flow_clv": None}
     window = list(bars[-20:])
     total_volume = sum(float(bar.get("volume") or 0) for bar in window)

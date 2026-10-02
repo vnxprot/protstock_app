@@ -16,7 +16,7 @@ from .period_signals import monthly_trend
 from .classical_patterns import detect_classical_patterns
 
 
-ALGORITHM_VERSION = "core-rules-v3.0.0"
+ALGORITHM_VERSION = "core-rules-v4.0.0"
 
 
 def analyze_bars(bars: Sequence[dict], position: dict | None = None, weekly_patterns: list[dict] | None = None, monthly_snapshot: dict | None = None, benchmark_rows: Sequence[dict] | None = None, market_context: dict | None = None, portfolio_positions: list[dict] | None = None, candidate_sector: str | None = None, capital: float | None = None, fibonacci_context: dict | None = None, timeframe: str = "D", include_classical: bool = True) -> dict:

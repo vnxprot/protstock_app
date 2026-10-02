@@ -15,6 +15,11 @@ on:
         required: false
         default: false
         type: boolean
+      force_rerun:
+        description: Recompute existing data instead of retrying missing symbols
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -28,7 +33,8 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       action: ${{ steps.status.outputs.action }}
-      active_count: ${{ steps.status.outputs.active_count }}
+      matrix: ${{ steps.status.outputs.matrix }}
+      trading_date: ${{ steps.status.outputs.trading_date }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -40,18 +46,20 @@ jobs:
           SUPABASE_URL: https://upmqxwktvvguegqeqibn.supabase.co
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           TRADING_DATE: ${{ inputs.trading_date }}
-          FORCE_RERUN: ${{ github.event_name == 'workflow_dispatch' && inputs.trading_date != '' }}
+          FORCE_RERUN: ${{ inputs.force_rerun == true }}
         run: python .github/scripts/eod_status.py fast-lane
 
   ingest:
     needs: preflight
     if: needs.preflight.outputs.action == 'RUN'
-    name: Fast ingest KBS · shard ${{ matrix.shard }}
+    name: Fast ingest ${{ matrix.source }} · ${{ matrix.label }}
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     strategy:
       fail-fast: false
-      matrix:
-        shard: [0, 1]
+      # Only one real upstream adapter exists. Avoid multiplying its rate limit.
+      max-parallel: 1
+      matrix: ${{ fromJSON(needs.preflight.outputs.matrix) }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -66,21 +74,28 @@ jobs:
         env:
           SUPABASE_URL: https://upmqxwktvvguegqeqibn.supabase.co
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          TRADING_DATE: ${{ inputs.trading_date }}
-          ACTIVE_COUNT: ${{ needs.preflight.outputs.active_count }}
-          SHARD: ${{ matrix.shard }}
+          TRADING_DATE: ${{ needs.preflight.outputs.trading_date }}
+          SYMBOL_MANIFEST: ${{ matrix.symbols }}
+          FORCE_RERUN: ${{ inputs.force_rerun == true }}
         run: |
-          half=$(( (ACTIVE_COUNT + 1) / 2 ))
-          if [ "$SHARD" = 0 ]; then offset=0; limit=$half; else offset=$half; limit=$(( ACTIVE_COUNT - half )); fi
-          args=(--fast-lane --skip-breadth-snapshot --source KBS --symbol-offset "$offset" --symbol-limit "$limit" --pause-seconds 13)
+          args=(--fast-lane --skip-breadth-snapshot --source KBS --symbols "$SYMBOL_MANIFEST" --prepared-dir "$RUNNER_TEMP/analysis")
+          if [ "$FORCE_RERUN" != 'true' ]; then args+=(--missing-only); fi
           if [ -n "$TRADING_DATE" ]; then args+=(--date "$TRADING_DATE"); fi
           protstock eod "${args[@]}"
+      - name: Hand off same-run computations
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: v4-analysis-${{ matrix.shard }}
+          path: ${{ runner.temp }}/analysis/*.json.gz
+          retention-days: 1
+          if-no-files-found: ignore
       - name: Report partial shard
         if: steps.ingest.outcome == 'failure'
         run: echo "::warning::This shard was partial or failed; the final alert step remains enabled for stored signals."
 
   finalize:
-    needs: ingest
+    needs: [preflight, ingest]
     if: needs.ingest.result == 'success'
     runs-on: ubuntu-latest
     steps:
@@ -90,17 +105,30 @@ jobs:
           python-version: "3.12"
           cache: pip
       - run: python -m pip install -e ".[data]"
+      - uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          pattern: v4-analysis-*
+          path: ${{ runner.temp }}/analysis
+          merge-multiple: true
       - name: Publish market breadth and signals from available same-day snapshots
         id: finalize
         continue-on-error: true
         env:
           SUPABASE_URL: https://upmqxwktvvguegqeqibn.supabase.co
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          TRADING_DATE: ${{ inputs.trading_date }}
+          TRADING_DATE: ${{ needs.preflight.outputs.trading_date }}
         run: |
           args=()
           if [ -n "$TRADING_DATE" ]; then args+=(--date "$TRADING_DATE"); fi
-          protstock finalize-fast-eod --allow-partial "${args[@]}"
+          protstock finalize-fast-eod --allow-partial --prepared-dir "$RUNNER_TEMP/analysis" "${args[@]}"
+      - name: Process queued personal backtests
+        if: always()
+        continue-on-error: true
+        env:
+          SUPABASE_URL: https://upmqxwktvvguegqeqibn.supabase.co
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: protstock backtest-worker --limit 3
       - name: Report publish failure
         if: steps.finalize.outcome == 'failure'
         run: echo "::error::Same-day Market Health or signals could not be published; Telegram alerts are withheld."
@@ -111,7 +139,7 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          TRADING_DATE: ${{ inputs.trading_date }}
+          TRADING_DATE: ${{ needs.preflight.outputs.trading_date }}
         run: |
           args=()
           if [ -n "$TRADING_DATE" ]; then args+=(--date "$TRADING_DATE"); fi

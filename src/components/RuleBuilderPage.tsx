@@ -9,43 +9,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
-type Condition = Record<string, string | number>;
-function compileText(input: string) {
-  const text = input.toLowerCase().replace(",", ".");
-  const all: Condition[] = [];
-  const breakout = text.match(/(?:vượt đỉnh|breakout)\s+(\d+)/);
-  const volume = text.match(
-    /(?:volume|khối lượng)\s+(?:lớn hơn|>)\s+(\d+(?:\.\d+)?)\s*lần/,
-  );
-  const rsi = text.match(
-    /rsi(?:\s*14)?\s*(?:từ|trong khoảng)\s*(\d+(?:\.\d+)?)\s*(?:đến|-)\s*(\d+(?:\.\d+)?)/,
-  );
-  if (breakout)
-    all.push({ metric: "close", op: "breakout_high", lookback: +breakout[1] });
-  if (volume)
-    all.push({ metric: "volume_ratio20", op: ">", value: +volume[1] });
-  if (/ma\s*20\s*>\s*ma\s*50\s*>\s*ma\s*200/.test(text))
-    all.push({ metric: "ma_stack", op: "bullish" });
-  if (rsi)
-    all.push({ metric: "rsi14", op: "between", min: +rsi[1], max: +rsi[2] });
-  const stop = text.match(/(?:stop-loss|cắt lỗ)\s*(\d+(?:\.\d+)?)\s*%/);
-  if (stop)
-    all.push({ metric: "return_from_entry", op: "<=", value: -+stop[1] / 100 });
-  if (!all.length)
-    throw new Error(
-      "Chưa nhận ra điều kiện. Dùng breakout, volume, MA, RSI hoặc stop-loss.",
-    );
-  return {
-    version: 1,
-    action: /stop-loss|cắt lỗ/.test(text)
-      ? "EXIT"
-      : /bán|thoát/.test(text)
-        ? "REDUCE"
-        : "PROBE_BUY",
-    timeframe: text.includes("tuần") ? "W" : text.includes("tháng") ? "M" : "D",
-    all,
-  };
-}
+import { compileRuleText, explainRule } from "../lib/ruleDsl";
 async function sha256(value: string) {
   const data = await crypto.subtle.digest(
     "SHA-256",
@@ -165,8 +129,8 @@ function statusCopy(status: string, kind: string) {
       tone: "archived",
     };
   return {
-    label: "ĐÃ TẮT",
-    detail: "Tạm dừng, giữ nguyên cấu hình",
+    label: status === "DRAFT" ? "BẢN NHÁP" : "ĐÃ TẮT",
+    detail: status === "DRAFT" ? "Kiểm tra trước khi bật" : "Tạm dừng, giữ nguyên cấu hình",
     tone: "off",
   };
 }
@@ -180,11 +144,13 @@ export function RuleBuilderPage({ authenticated }: { authenticated: boolean }) {
   const [mode, setMode] = useState<"language" | "visual">("language");
   const [visualConditions, setVisualConditions] = useState<string[]>(() => visual.map((item) => item.id));
   const [message, setMessage] = useState("");
+  const [formError, setFormError] = useState("");
+  const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState("");
   const [expandedPack, setExpandedPack] = useState<string | null>(null);
   const preview = useMemo(() => {
     try {
-      return { dsl: compileText(input), error: "" };
+      return { dsl: compileRuleText(input), error: "" };
     } catch (error) {
       return { dsl: null, error: (error as Error).message };
     }
@@ -218,32 +184,29 @@ export function RuleBuilderPage({ authenticated }: { authenticated: boolean }) {
   });
   async function save(event: FormEvent) {
     event.preventDefault();
-    setMessage("");
-    if (!supabase || !preview.dsl) {
-      setToast("Kết nối Supabase để lưu rule");
-      setTimeout(() => setToast(""), 2500);
-      return;
-    }
-    const { data: rule, error } = await supabase
-      .from("rules")
-      .insert({ name, input_text: input, status: "ACTIVE", kind: "USER_RULE" })
-      .select("id")
-      .single();
-    if (error) return setMessage(error.message);
-    const canonical = JSON.stringify(preview.dsl);
-    const { error: versionError } = await supabase
-      .from("rule_versions")
-      .insert({
-        rule_id: rule.id,
-        version: 1,
-        dsl: preview.dsl,
-        compiled_hash: await sha256(canonical),
+    if (saving) return;
+    setMessage(""); setFormError("");
+    if (!supabase || !preview.dsl) return setFormError("Kết nối dữ liệu và kiểm tra điều kiện trước khi lưu.");
+    if (!name.trim()) return setFormError("Nhập tên cho quy tắc.");
+    setSaving(true);
+    try {
+      const { data: rule, error } = await supabase.from("rules")
+        .insert({ name: name.trim(), input_text: input, status: "DRAFT", kind: "USER_RULE" }).select("id").single();
+      if (error) return setFormError(error.message);
+      const { error: versionError } = await supabase.from("rule_versions").insert({
+        rule_id: rule.id, version: 1, dsl: preview.dsl, compiled_hash: await sha256(JSON.stringify(preview.dsl)),
       });
-    if (versionError) return setMessage(versionError.message);
-    setMessage("Đã lưu rule version 1.");
-    setToast("Rule đã được lưu và kích hoạt");
-    setTimeout(() => setToast(""), 3000);
-    client.invalidateQueries({ queryKey: ["rules"] });
+      if (versionError) {
+        await client.invalidateQueries({ queryKey: ["rules"] });
+        return setFormError("Bản nháp chưa có phiên bản hoàn chỉnh và chưa được bật. " + versionError.message);
+      }
+      setMessage("Đã lưu bản nháp phiên bản 1. Kiểm tra lời giải thích trước khi bật.");
+      setToast("Đã lưu bản nháp; chưa chạy trong EOD");
+      setTimeout(() => setToast(""), 3000);
+      await client.invalidateQueries({ queryKey: ["rules"] });
+    } catch {
+      setFormError("Chưa lưu được bản nháp. Kiểm tra kết nối rồi thử lại.");
+    } finally { setSaving(false); }
   }
   function addChip(chip: string) {
     setInput(
@@ -266,8 +229,11 @@ export function RuleBuilderPage({ authenticated }: { authenticated: boolean }) {
     id: string;
     status: string;
     name: string;
+    rule_versions?: unknown[];
   }) {
     if (!supabase) return;
+    if (rule.status === "ARCHIVED" || rule.name === "Prot Core Pack · Phân kỳ Dương MACD") return setToast("Quy tắc đã lưu trữ hoặc chỉ dùng nghiên cứu; không thể bật lại từ giao diện.");
+    if (rule.status !== "ACTIVE" && !rule.rule_versions?.length) return setToast("Bản nháp thiếu phiên bản hoàn chỉnh; chưa thể bật.");
     const status = rule.status === "ACTIVE" ? "PAUSED" : "ACTIVE";
     const { error } = await supabase
       .from("rules")
@@ -280,18 +246,21 @@ export function RuleBuilderPage({ authenticated }: { authenticated: boolean }) {
   }
   async function toggleClassicalModel(pack: any, model: string) {
     const version = [...(pack.rule_versions ?? [])].sort((a,b)=>b.version-a.version)[0];
+    if (pack.status === "ARCHIVED" || pack.name === "Prot Core Pack · Phân kỳ Dương MACD") return setToast("Core Pack chỉ dùng nghiên cứu hoặc đã lưu trữ; không thay đổi ở đây.");
     if (!supabase || !version) return setToast("Chưa tìm thấy cấu hình v0.0");
     const models = version.dsl?.overrides?.models ?? {};
     const dsl = { ...version.dsl, overrides: { ...(version.dsl?.overrides ?? {}), models: { ...models, [model]: models[model] === false } } };
-    const { error } = await supabase.from("rule_versions").update({ dsl }).eq("id", version.id);
-    if (error) return setToast(error.message);
+    const { error } = await supabase.from("rule_versions").insert({
+      rule_id: pack.id, version: version.version + 1, dsl, compiled_hash: await sha256(JSON.stringify(dsl)),
+    });
+    if (error) { client.invalidateQueries({ queryKey: ["rules"] }); return setToast("Chưa lưu được phiên bản mới: " + error.message); }
     const label = classicalModels.find((item) => item.id === model)?.label ?? model;
     setToast(`${label}: ${dsl.overrides.models[model] ? "đã bật" : "đã tắt"}`);
     setTimeout(() => setToast(""), 3000);
     client.invalidateQueries({ queryKey: ["rules"] });
   }
   const corePacks = (rules.data ?? []).filter(
-    (rule) => rule.kind === "CORE_PACK" && rule.name !== 'Prot Core Pack · Phân kỳ Dương MACD' && !(rule.status === "ARCHIVED" && !rule.rule_versions?.length),
+    (rule) => rule.kind === "CORE_PACK" && rule.name !== 'Prot Core Pack · Phân kỳ Dương MACD' && rule.status !== "ARCHIVED",
   );
   const sortedCorePacks = [...corePacks].sort(compareEngines);
   const userRules = (rules.data ?? []).filter(
@@ -321,7 +290,7 @@ export function RuleBuilderPage({ authenticated }: { authenticated: boolean }) {
           </p>
         </div>
         <span className="trend-badge up">
-          <CheckCircle2 size={14} /> DSL hợp lệ
+          <CheckCircle2 size={14} /> {preview.dsl ? "Đã hiểu các điều kiện" : "Cần chỉnh điều kiện"}
         </span>
       </div>
       <div className="rule-mode-tabs">
@@ -340,9 +309,10 @@ export function RuleBuilderPage({ authenticated }: { authenticated: boolean }) {
       </div>
       <p className="rule-mode-help">
         {mode === "language"
-          ? "Viết điều kiện bằng lời; hệ thống chỉ lưu DSL khi nhận diện được các điều kiện hợp lệ."
+          ? "Viết bằng các điều kiện hỗ trợ. Phần chưa hiểu sẽ được báo rõ; quy tắc mới luôn được lưu thành bản nháp."
           : "Chọn các khối điều kiện có sẵn. DSL xem trước và nút lưu sẽ cập nhật ngay theo các khối đang dùng."}
       </p>
+      {rules.isError && <p className="form-error" role="alert">Chưa tải được quy tắc. Kiểm tra kết nối và thử tải lại.</p>}
       <section className="core-engine-section" aria-label="Bộ máy tín hiệu">
         <div className="core-engine-heading">
           <div>
@@ -397,7 +367,7 @@ export function RuleBuilderPage({ authenticated }: { authenticated: boolean }) {
                       </span>
                     ) : (
                       <span className="engine-run-summary muted">
-                        Chưa có lượt chạy theo cơ chế toggle mới
+                        Chưa có lượt chạy được ghi nhận
                       </span>
                     )}
                   </div>
@@ -441,7 +411,7 @@ export function RuleBuilderPage({ authenticated }: { authenticated: boolean }) {
         </div>
         {!rules.isLoading && !corePacks.length && (
           <p className="muted">
-            Core Pack sẽ xuất hiện sau khi migration Tier 4 được áp dụng.
+            Chưa có Core Pack khả dụng. Kiểm tra kết nối hoặc tải lại.
           </p>
         )}
       </section>
@@ -500,12 +470,12 @@ export function RuleBuilderPage({ authenticated }: { authenticated: boolean }) {
               </button>}
             </div>
           )}
-          <button disabled={!preview.dsl}>
-            <Sparkles size={15} /> Lưu và kích hoạt
+          <button disabled={saving || !preview.dsl || !name.trim()}>
+            <Sparkles size={15} /> {saving ? "Đang lưu…" : "Lưu bản nháp"}
           </button>
-          {(message || preview.error) && (
-            <p className={preview.error ? "form-error" : "form-ok"}>
-              {preview.error || message}
+          {(message || formError || preview.error) && (
+            <p className={preview.error || formError ? "form-error" : "form-ok"} role={preview.error || formError ? "alert" : "status"}>
+              {preview.error || formError || message}
             </p>
           )}
         </form>
@@ -515,12 +485,13 @@ export function RuleBuilderPage({ authenticated }: { authenticated: boolean }) {
               <Code2 size={16} /> Bản dịch có kiểm soát
             </h3>
           </div>
-          <pre
+          {preview.dsl && <><p>Hành động: {preview.dsl.action === "WATCH" ? "Theo dõi" : preview.dsl.action === "PROBE_BUY" ? "Mua thăm dò" : preview.dsl.action === "EXIT" ? "Thoát vị thế" : "Giảm tỷ trọng"} · Khung {preview.dsl.timeframe}</p><ul className="reason-list">{explainRule(preview.dsl).map((line, index) => <li key={index}>{line}</li>)}</ul></>}
+          <details><summary>Chi tiết quy tắc</summary><pre
             className="dsl-preview"
             dangerouslySetInnerHTML={{ __html: highlighted }}
-          />
+          /></details>
           <p className="muted">
-            Engine chỉ chạy DSL đã kiểm tra, không thực thi code do AI tạo.
+            Tất cả điều kiện cần đồng thời thỏa mãn. Quy tắc đang bật vẫn đi qua kiểm tra dữ liệu và rủi ro chung.
           </p>
         </article>
       </div>

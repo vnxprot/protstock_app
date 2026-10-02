@@ -2,6 +2,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import os
+from datetime import datetime, timedelta, timezone
+
+
+def vietnam_today():
+    return datetime.now(timezone(timedelta(hours=7))).date()
 
 
 @dataclass(frozen=True)

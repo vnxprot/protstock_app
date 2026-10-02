@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { ArrowLeft, ArrowUpRight } from 'lucide-react'
 import { isWatchActive, updateWatchlistItem, useWatchlist, type WatchItem, type WatchPatch, type WatchStatus, type WatchTier } from '../lib/watchlist'
+import { useAccountId } from '../hooks/useAccountId'
 import '../watchlist-board.css'
 
 type TextField = 'reason' | 'buyZone' | 'targetPrice' | 'stopLoss'
@@ -12,23 +13,38 @@ const columns: { key: TextField; label: string }[] = [
 ]
 const tierRank: Record<WatchTier, number> = { S: 0, A: 1, B: 2 }
 
-function EditableCell({ item, field }: { item: WatchItem; field: TextField }) {
-  const [draft, setDraft] = useState(item[field])
-  const inputRef = useRef<HTMLTextAreaElement>(null)
-  useEffect(() => setDraft(item[field]), [item[field], item.symbol])
+function EditableCell({ item, field, userId }: { item: WatchItem; field: TextField; userId: string | null }) {
+  const [draft, setDraft] = useState(item[field]), [saveError, setSaveError] = useState(false)
+  const inputRef = useRef<HTMLTextAreaElement>(null), dirty = useRef(false)
+  const draftStorageKey = userId ? 'protstock-watchlist-field-draft:' + userId + ':' + item.symbol + ':' + field : null
+  useEffect(() => {
+    dirty.current = false; setSaveError(false)
+    let stored: string | null = null
+    try { if (draftStorageKey) stored = localStorage.getItem(draftStorageKey) } catch { /* The current value remains available. */ }
+    dirty.current = stored !== null
+    setDraft(stored ?? item[field])
+  }, [draftStorageKey, item.symbol])
+  useEffect(() => { if (!dirty.current) setDraft(item[field]) }, [item[field]])
   useLayoutEffect(() => {
     const input = inputRef.current
     if (!input) return
     input.style.height = 'auto'
-    input.style.height = `${input.scrollHeight}px`
+    input.style.height = String(input.scrollHeight) + 'px'
   }, [draft])
   const commit = () => {
     const value = draft.trim()
-    if (value !== item[field]) updateWatchlistItem(item.symbol, { [field]: value } as WatchPatch)
+    try {
+      if (value !== item[field]) updateWatchlistItem(item.symbol, { [field]: value } as WatchPatch)
+      dirty.current = false; setSaveError(false)
+      if (draftStorageKey) localStorage.removeItem(draftStorageKey)
+    } catch { setSaveError(true) }
   }
-  return <textarea ref={inputRef} aria-label={`${field} ${item.symbol}`} value={draft} rows={1}
-    maxLength={field === 'reason' ? 500 : 120} onChange={event => setDraft(event.target.value)}
-    onBlur={commit} onKeyDown={event => { if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) event.currentTarget.blur() }}/>
+  return <><textarea ref={inputRef} aria-label={(columns.find(column=>column.key===field)?.label ?? field) + ' ' + item.symbol} value={draft} rows={1}
+    maxLength={field === 'reason' ? 500 : 120} onChange={event => {
+      dirty.current = true; setDraft(event.target.value)
+      try { if (draftStorageKey) localStorage.setItem(draftStorageKey, event.target.value) } catch { setSaveError(true) }
+    }} onBlur={commit} onKeyDown={event => { if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) event.currentTarget.blur() }}/>
+    {saveError && <small role="alert">Chưa lưu được thay đổi; nội dung đang giữ trong ô.</small>}</>
 }
 
 function openAnalysis(symbol: string) {
@@ -37,7 +53,8 @@ function openAnalysis(symbol: string) {
   location.hash = 'analysis'
 }
 
-export function WatchlistBoardPage({ syncStatus }: { syncStatus: 'loading' | 'ready' | 'error' }) {
+export function WatchlistBoardPage({ syncStatus, authenticated = false }: { syncStatus: 'loading' | 'ready' | 'error'; authenticated?: boolean }) {
+  const userId = useAccountId(authenticated)
   const items = useWatchlist()
   const [filters, setFilters] = useState({ stt: '', tier: 'ALL', symbol: '', reason: '', buyZone: '', targetPrice: '', stopLoss: '', status: 'ALL' })
   const ordered = useMemo(() => [...items].sort((a, b) => tierRank[a.tier] - tierRank[b.tier]
@@ -73,7 +90,7 @@ export function WatchlistBoardPage({ syncStatus }: { syncStatus: 'loading' | 're
       <td className="watch-board-index">{number}</td>
       <td><select aria-label={`Tier ${item.symbol}`} value={item.tier} onChange={event => updateWatchlistItem(item.symbol, { tier: event.target.value as WatchTier, status: 'On' })}><option value="S">S</option><option value="A">A</option><option value="B">B</option></select></td>
       <td><button type="button" className="watch-board-symbol" onClick={() => openAnalysis(item.symbol)}>{item.symbol}<ArrowUpRight size={14}/></button></td>
-      {columns.map(column => <td key={column.key}><EditableCell item={item} field={column.key}/></td>)}
+      {columns.map(column => <td key={column.key}><EditableCell item={item} field={column.key} userId={userId}/></td>)}
       <td><select aria-label={`Tình trạng ${item.symbol}`} className={item.status === 'On' ? 'watch-board-status-on' : 'watch-board-status-off'} value={item.status as WatchStatus} onChange={event => updateWatchlistItem(item.symbol, { status: event.target.value as WatchStatus })}><option value="On">On</option><option value="Off">Off</option></select></td>
     </tr>)}</tbody></table>
       {!visible.length && <p className="watch-board-empty">{items.length ? 'Không có mã khớp bộ lọc.' : 'Chưa có mã. Thêm mã vào Tier B, A hoặc S ở trang Watchlist.'}</p>}

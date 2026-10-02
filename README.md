@@ -1,19 +1,27 @@
-# Prot Stock App
+# Prot Stock App · v4.0.0
 
 Personal PWA for end-of-day analysis of a curated Vietnamese stock universe.
 
 ## Product boundaries
 
 - Single-user, non-commercial application for Prot.
-- Current universe: 265 active symbols (updated 01/10/2026).
+- The active trading universe is defined in `data/universe.csv`.
 - End-of-day processing only; no real-time market data.
 - Daily, weekly, and monthly analysis.
 - Deterministic, versioned rules and explainable price-pattern detection.
 - Supabase for Postgres/Auth, GitHub Actions for batch jobs, and Vercel for deployment.
 
-## Current phase
+## Version 4
 
-Phases 2–5 are implemented in code: multi-timeframe EOD analysis, versioned natural-language rules, screener signals, no-look-ahead backtest engine, portfolio risk sizing, and decision journal. Production database migrations and the initial full-universe backfill are the remaining activation steps.
+Windows provides the full research workspace. iPhone navigation prioritizes Overview, Watchlist and Journal, with remaining tools in the account menu according to account permissions.
+
+Investment theses have immutable versions and conflict detection. Journal decisions retain their original system evidence and thesis version. Watchlist and new journal entries retain pending changes on the device for retry after connection failures.
+
+Backtests use the live engine dispatcher and policy, VND cash accounting, indicator warm-up and next-session open execution. Portfolio NAV replays transactions and capital movements chronologically. Database RPCs provide atomic, idempotent capital/trade writes and complete report histories beyond REST row limits.
+
+Daily processing uses balanced shards, bounded retries, heartbeat checks and explicit COMPLETE/PARTIAL publication status. Analysis and screening queries are bounded and share a publication date/revision.
+
+See [v4 release notes and validation](docs/release-v4.0.0.md).
 
 See:
 
@@ -31,6 +39,14 @@ See:
 3. Screener and rules — implemented in code
 4. Backtesting — engine and result workspace implemented
 5. Portfolio and journal — implemented in code
+
+## Scope limits
+
+- No backup infrastructure is included, as requested.
+- Corporate-action collection is incomplete; unadjusted historical prices can affect backtests.
+- Historical sector statistics use the stored/current sector classification.
+- Market Health and pattern scores are heuristics, not win probabilities. Prot Flow is a price/volume pressure measure, not identified or net investor flows.
+- No new paid service or native app is required. Provider and free hosting limits still apply.
 
 ## Data source
 

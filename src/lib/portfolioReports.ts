@@ -1,3 +1,4 @@
+import { todayInVietnam } from './date'
 
 export type PortfolioReportPosition = {
   symbol: string
@@ -12,6 +13,8 @@ export type PortfolioReportPosition = {
 }
 
 export type PortfolioReportData = {
+  methodology?: string
+  missingPriceCount?: number
   asOfDate: string | null
   capital: number
   cash: number
@@ -25,7 +28,7 @@ export type PortfolioReportData = {
   positions: PortfolioReportPosition[]
 }
 
-const reportDate = (value: string | null) => (value ?? new Date().toISOString().slice(0, 10)).split('-').reverse().join('.')
+const reportDate = (value: string | null) => (value ?? todayInVietnam()).split('-').reverse().join('.')
 const ascii = (value: string) => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D')
 const money = (value: number) => `${Math.round(value).toLocaleString('vi-VN')} VND`
 const percent = (value: number | null) => value == null ? '—' : `${value >= 0 ? '+' : ''}${value.toFixed(2)}%`
@@ -47,6 +50,8 @@ export async function downloadPortfolioExcel(data: PortfolioReportData) {
   const summary = [
     ['PROT STOCK · BAO CAO DANH MUC'],
     ['Ngay du lieu', reportDate(data.asOfDate)],
+    ['Phuong phap', data.methodology ?? 'Gia von binh quan gia quyen; chua gom phi/thue'],
+    ['Ma thieu gia (dinh gia theo gia von)', data.missingPriceCount ?? 0],
     [],
     ['Chi tieu', 'Gia tri (VND)', 'Ty le'],
     ['Tong von', data.capital, 1],
@@ -55,7 +60,7 @@ export async function downloadPortfolioExcel(data: PortfolioReportData) {
     ['Tai san rong', data.netAssetValue, data.capital ? data.netAssetValue / data.capital : null],
     ['Loi nhuan / lo', data.profitLoss, data.returnPct == null ? null : data.returnPct / 100],
     ['Lai / lo hom nay', data.todayProfitLoss, data.todayReturnPct == null ? null : data.todayReturnPct / 100],
-    ['Tai san rong binh quan (uoc tinh)', data.averageNetAssets, null],
+    ['Tai san rong binh quan theo ngay', data.averageNetAssets, null],
   ]
   const positionRows = data.positions.map(item => ({
     'Mã': item.symbol,
@@ -97,7 +102,7 @@ export async function downloadPortfolioPdf(data: PortfolioReportData) {
       ['Net asset value', money(data.netAssetValue)],
       ['Profit / Loss', `${money(data.profitLoss)} · ${percent(data.returnPct)}`],
       ['Today P/L', `${data.todayProfitLoss == null ? '—' : money(data.todayProfitLoss)} · ${percent(data.todayReturnPct)}`],
-      ['Average net assets (estimate)', data.averageNetAssets == null ? '—' : money(data.averageNetAssets)],
+      ['Average daily NAV', data.averageNetAssets == null ? '—' : money(data.averageNetAssets)],
     ],
     styles: { font: 'helvetica', fontSize: 8, cellPadding: 2 },
     headStyles: { fillColor: [20, 55, 41] },
@@ -118,5 +123,10 @@ export async function downloadPortfolioPdf(data: PortfolioReportData) {
     styles: { font: 'helvetica', fontSize: 7, cellPadding: 1.6 },
     headStyles: { fillColor: [20, 55, 41] },
   })
+  doc.setFontSize(8)
+  const methodology = doc.splitTextToSize(ascii(data.methodology ?? 'Weighted average cost; excludes fees/taxes.') + (data.missingPriceCount ? ' Missing market prices: ' + data.missingPriceCount + ' (valued at cost).' : ''), 180)
+  let notesY = (doc as any).lastAutoTable.finalY + 8
+  if (notesY + methodology.length * 4 > doc.internal.pageSize.getHeight() - 14) { doc.addPage(); notesY = 16 }
+  doc.text(methodology, 14, notesY)
   doc.save(`prot-stock-danh-muc-${reportDate(data.asOfDate)}.pdf`)
 }

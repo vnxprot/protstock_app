@@ -40,7 +40,7 @@ def test_eligible_universe_excludes_retired_and_duplicate_rows():
     })
     breadth, membership = _stored_universe_breadth(client, date(2026, 9, 11))
     assert breadth["pct_above_sma50"] == 50
-    assert breadth["market_health_state"] == "RISK_OFF"
+    assert breadth["market_health_state"] == "NEUTRAL"  # Missing long-history metrics are unknown, not bearish.
     assert breadth["sample_size"] == 2
     assert breadth["universe_size"] == 2
     assert breadth["eligible_count"] == 2

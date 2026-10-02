@@ -1,592 +1,161 @@
-import { FormEvent, PointerEvent, useMemo, useRef, useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, Pencil, Plus, Trash2 } from "lucide-react";
-import { supabase } from "../lib/supabase";
-import { SoftSelect } from "./SoftSelect";
-import { SymbolAutocomplete } from "./SymbolAutocomplete";
-import { useSymbols } from "../hooks/useStockAnalysis";
-import { latestSignalPublication } from "../lib/signalPublication";
+import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { BookOpen, CheckCircle2, Pencil, Plus, Trash2, X } from 'lucide-react'
+import { supabase } from '../lib/supabase'
+import { useAccountId } from '../hooks/useAccountId'
+import { useDialogFocus } from '../hooks/useDialogFocus'
+import { useSymbols } from '../hooks/useStockAnalysis'
+import { useStockThesis } from '../hooks/useStockThesis'
+import { latestSignalPublication } from '../lib/signalPublication'
+import { formatDate, todayInVietnam } from '../lib/date'
+import { realizedSlices, type LedgerReport } from '../lib/portfolioLedger'
+import { journalContext, withEmotionTag } from '../lib/journalEvidence'
+import { readJournalOutbox, queueJournalNote, syncJournalOutbox, clearSavedJournalDrafts } from '../lib/journalOutbox'
+import { formatVnd } from '../lib/marketUnits'
+import { SymbolAutocomplete } from './SymbolAutocomplete'
+import { SoftSelect } from './SoftSelect'
+import '../personal-workspace.css'
 
-const emotions = [
-  ["DISCIPLINED", "🟢 Kỷ luật"],
-  ["FOMO", "🟡 FOMO"],
-  ["FEAR", "🔴 Sợ hãi"],
-  ["RUSHED", "🟠 Vội vàng"],
-] as const;
-const emotionLabel = (lesson: string | undefined) =>
-  emotions.find(([code]) => lesson?.includes(`[emotion:${code}]`))?.[1] ??
-  "Chưa gắn nhãn";
-const decisionMatches = (decision: string, action: string) =>
-  ({
-    BUY: ["PROBE_BUY", "ADD"].includes(action),
-    SELL: ["REDUCE", "EXIT"].includes(action),
-    STOP: action === "EXIT",
-    SKIP: action === "WATCH",
-    HOLD: action === "WATCH",
-  })[decision] ?? false;
-const swipeActionWidth = 144;
+const reviews = { OBSERVATION: 'Quan sát', MAINTAIN: 'Giữ luận điểm', REVIEW: 'Cần xem lại', INVALIDATED: 'Luận điểm vô hiệu' } as const
+type Review = keyof typeof reviews
+type Evidence = { as_of_date: string | null; source_revision: string | null; captured_at: string; signals: Array<{timeframe:string;action:string;state:string;score:number;reasons:string[]}> }
+type JournalEntry = { id:string;user_id?:string;symbol_id:number;decision_date:string;decision:string;setup_type:string|null;market_state:string|null;rationale:string;outcome:string;result_pct:number|null;lesson:string|null;review_status:Review|null;thesis_version_id:string|null;evidence_snapshot:Evidence|null;symbols?:{symbol:string;sector?:string|null}|null }
+type QueuedNote = Omit<JournalEntry,'symbols'>
+const readQueue = (owner:string) => readJournalOutbox<QueuedNote>(owner)
+const symbolFromRoute = () => new URLSearchParams(location.hash.split('?')[1] ?? '').get('symbol')?.toUpperCase() ?? ''
+const emotionLabels:Record<string,string> = {DISCIPLINED:'Kỷ luật',FOMO:'FOMO',FEAR:'Sợ hãi',RUSHED:'Vội vàng'}
+const draftKey = (owner:string, code:string) => 'protstock-journal-draft:'+owner+':'+(code||'_new')
+
+function HistoricalThesis({versionId,userId}:{versionId:string;userId:string|null}) {
+  const [open,setOpen]=useState(false)
+  const version=useQuery({queryKey:['journal-thesis-version',userId,versionId],enabled:Boolean(open&&userId&&supabase),staleTime:Infinity,queryFn:async()=>{
+    const {data,error}=await supabase!.from('investment_thesis_versions').select('version,thesis,catalysts,invalidation_conditions,risk_notes').eq('id',versionId).single()
+    if(error)throw error
+    return data
+  }})
+  return <details onToggle={event=>setOpen(event.currentTarget.open)}><summary>Luận điểm cá nhân đã gắn vào nhận xét</summary>{open&&(version.isLoading?<p role="status">Đang tải phiên bản lịch sử…</p>:version.isError?<p role="alert">Chưa tải được phiên bản. <button type="button" onClick={()=>void version.refetch()}>Thử lại</button></p>:version.data&&<><p><strong>v{version.data.version} · Vì sao đầu tư?</strong></p><p>{version.data.thesis}</p>{version.data.invalidation_conditions&&<p>Điều kiện vô hiệu: {version.data.invalidation_conditions}</p>}{version.data.risk_notes&&<p>Rủi ro: {version.data.risk_notes}</p>}</>)}</details>
+}
 
 export function JournalPage({ authenticated }: { authenticated: boolean }) {
-  const client = useQueryClient();
-  const symbols = useSymbols(authenticated);
-  const [symbol, setSymbol] = useState(
-    () => localStorage.getItem("protstock-journal-symbol") ?? "",
-  );
-  const [decision, setDecision] = useState("SKIP");
-  const [setup, setSetup] = useState("");
-  const [marketState, setMarketState] = useState("");
-  const [rationale, setRationale] = useState("");
-  const [emotion, setEmotion] =
-    useState<(typeof emotions)[number][0]>("DISCIPLINED");
-  const [formOpen, setFormOpen] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [toast, setToast] = useState("");
-  const [selectedPoint, setSelectedPoint] = useState<number | null>(null);
-  const [swipedEntryId, setSwipedEntryId] = useState<string | null>(null);
-  const swipeStart = useRef<Record<string, { x: number; y: number; base: number; horizontal: boolean }>>({});
-  const swipeDidMove = useRef(false);
-  const startSwipe = (id: string, event: PointerEvent<HTMLDivElement>) => {
-    if (event.pointerType === "mouse") return;
-    swipeDidMove.current = false;
-    swipeStart.current[id] = { x: event.clientX, y: event.clientY, base: swipedEntryId === id ? -swipeActionWidth : 0, horizontal: false };
-  };
-  const moveSwipe = (id: string, event: PointerEvent<HTMLDivElement>) => {
-    const start = swipeStart.current[id];
-    if (!start || event.pointerType === "mouse") return;
-    const deltaX = event.clientX - start.x;
-    const deltaY = event.clientY - start.y;
-    if (!start.horizontal) {
-      if (Math.abs(deltaY) > Math.abs(deltaX)) { delete swipeStart.current[id]; return; }
-      if (Math.abs(deltaX) < 14) return;
-      start.horizontal = true;
-      event.currentTarget.setPointerCapture(event.pointerId);
-    }
-    if (Math.abs(deltaX) > 14) swipeDidMove.current = true;
-    const offset = Math.min(0, Math.max(-swipeActionWidth, start.base + deltaX));
-    event.currentTarget.classList.add("is-dragging");
-    event.currentTarget.style.setProperty("--swipe-offset", `${offset}px`);
-  };
-  const finishSwipe = (id: string, event: PointerEvent<HTMLDivElement>) => {
-    const start = swipeStart.current[id];
-    if (!start || event.pointerType === "mouse") return;
-    if (!start.horizontal) { delete swipeStart.current[id]; return; }
-    const offset = Math.min(0, Math.max(-swipeActionWidth, start.base + event.clientX - start.x));
-    event.currentTarget.classList.remove("is-dragging");
-    event.currentTarget.style.removeProperty("--swipe-offset");
-    setSwipedEntryId(offset < -(swipeActionWidth * .44) ? id : null);
-    delete swipeStart.current[id];
-    window.setTimeout(() => { swipeDidMove.current = false; }, 0);
-  };
-  const entries = useQuery({
-    queryKey: ["journal"],
-    enabled: authenticated && Boolean(supabase),
-    queryFn: async () => {
-      const { data, error } = await supabase!
-        .from("journal_entries")
-        .select(
-          "id,decision_date,decision,setup_type,market_state,rationale,result_pct,outcome,lesson,symbol_id,symbols(symbol,sector)",
-        )
-        .order("decision_date", { ascending: false })
-        .limit(100);
-      if (error) throw error;
-      return data ?? [];
-    },
-  });
-  const portfolioTransactions = useQuery({
-    queryKey: ["journal-portfolio-transactions"],
-    enabled: authenticated && Boolean(supabase),
-    queryFn: async () => {
-      const { data, error } = await supabase!
-        .from("portfolio_transactions")
-        .select("id,symbol_id,trading_date,action,quantity,price,symbols(symbol,sector)")
-        .order("trading_date", { ascending: true })
-        .order("created_at", { ascending: true })
-        .limit(1000);
-      if (error) throw error;
-      return data ?? [];
-    },
-  });
-  const activeSignals = useQuery({
-    queryKey: ["journal-active-signals"],
-    enabled: authenticated && Boolean(supabase),
-    refetchInterval: 60_000,
-    queryFn: async () => {
-      const publication = await latestSignalPublication();
-      if (!publication) return [];
-      const { data, error } = await supabase!
-        .from("consolidated_signals")
-        .select("composite_action,as_of_date,symbols!inner(symbol)")
-        .eq("as_of_date", publication.date)
-        .eq("source_revision", publication.sourceRevision)
-        .limit(1000);
-      if (error) throw error;
-      return (data ?? []).map((item: any) => ({
-        symbol: item.symbols?.symbol,
-        action: item.composite_action,
-      }));
-    },
-  });
-  const rows = (entries.data ?? []) as any[];
-  const realizedTrades = useMemo(() => {
-    const lots: Record<string, { quantity: number; cost: number }[]> = {};
-    const realized: any[] = [];
-    for (const raw of portfolioTransactions.data ?? []) {
-      const item: any = raw;
-      const key = String(item.symbol_id);
-      const quantity = Number(item.quantity ?? 0);
-      const price = Number(item.price ?? 0);
-      if (!lots[key]) lots[key] = [];
-      if (["BUY_NEW", "BUY_ADD"].includes(item.action) && quantity > 0 && price > 0) {
-        lots[key].push({ quantity, cost: price });
-        continue;
-      }
-      if (!["SELL_REDUCE", "SELL_CLOSE"].includes(item.action) || quantity <= 0 || price <= 0) continue;
-      let remaining = quantity;
-      let costBasis = 0;
-      while (remaining > 0 && lots[key].length) {
-        const lot = lots[key][0];
-        const used = Math.min(remaining, lot.quantity);
-        costBasis += used * lot.cost;
-        lot.quantity -= used;
-        remaining -= used;
-        if (lot.quantity <= 0) lots[key].shift();
-      }
-      const matched = quantity - remaining;
-      if (matched <= 0 || costBasis <= 0) continue;
-      const pnl = matched * price - costBasis;
-      realized.push({ id: `trade-${item.id}`, decision_date: item.trading_date, decision: "SELL", setup_type: "Giao dịch danh mục", market_state: null, rationale: "Kết quả tự tính từ sổ giao dịch.", result_pct: pnl / costBasis * 100, outcome: pnl > 0 ? "WIN" : pnl < 0 ? "LOSS" : "BREAKEVEN", lesson: "", symbols: item.symbols });
-    }
-    return realized;
-  }, [portfolioTransactions.data]);
-  const signalBySymbol = useMemo(
-    () =>
-      Object.fromEntries(
-        (activeSignals.data ?? []).map((item: any) => [
-          item.symbol,
-          item.action,
-        ]),
-      ),
-    [activeSignals.data],
-  );
-  const alignedRows = rows.filter(
-    (item) => signalBySymbol[item.symbols?.symbol],
-  );
-  const alignment = alignedRows.length
-    ? (alignedRows.filter((item) =>
-        decisionMatches(item.decision, signalBySymbol[item.symbols?.symbol]),
-      ).length /
-        alignedRows.length) *
-      100
-    : 0;
-  const closed = [...rows.filter((x) => x.outcome !== "OPEN"), ...realizedTrades];
-  const wins = closed.filter((x) => x.outcome === "WIN");
-  const winRate = closed.length ? (wins.length / closed.length) * 100 : 0;
-  const review = useMemo(
-    () =>
-      ["setup_type", "symbols.sector", "market_state"].map((field) =>
-        Object.entries(
-          closed.reduce((all: any, x: any) => {
-            const key =
-              field === "symbols.sector" ? x.symbols?.sector : x[field];
-            if (!key) return all;
-            all[key] ??= { total: 0, loss: 0 };
-            all[key].total++;
-            all[key].loss += x.outcome === "LOSS" ? 1 : 0;
-            return all;
-          }, {}),
-        )
-          .sort((a: any, b: any) => b[1].loss - a[1].loss)
-          .slice(0, 4),
-      ),
-    [closed],
-  );
-  const curveData = useMemo(() => {
-    const values = [100];
-    [...closed]
-      .reverse()
-      .forEach((item) =>
-        values.push(values.at(-1)! * (1 + Number(item.result_pct ?? 0) / 100)),
-      );
-    const min = Math.min(...values),
-      max = Math.max(...values),
-      span = max - min || 1;
-    return {
-      values,
-      min,
-      max,
-      points: values.map((value, index) => ({
-        x: (index / Math.max(values.length - 1, 1)) * 100,
-        y: 100 - ((value - min) / span) * 82 - 9,
-        value,
-        index,
-      })),
-    };
-  }, [closed]);
-  const curve = curveData.points
-    .map((point) => `${point.x},${point.y}`)
-    .join(" ");
-  const heatmap = closed.slice(0, 12);
-  const emotionReview = useMemo(
-    () =>
-      Object.entries(
-        closed.reduce(
-          (all: Record<string, { total: number; loss: number }>, item: any) => {
-            const key = emotionLabel(item.lesson);
-            all[key] ??= { total: 0, loss: 0 };
-            all[key].total++;
-            all[key].loss += item.outcome === "LOSS" ? 1 : 0;
-            return all;
-          },
-          {},
-        ),
-      ).sort((a, b) => b[1].loss - a[1].loss),
-    [closed],
-  );
-  const gaugeStyle = {
-    "--win": `${Math.max(0, Math.min(winRate, 100)) * 3.6}deg`,
-  } as React.CSSProperties;
-  const journalDragStart = useRef<number | null>(null);
-  const beginJournalDrag = (event: PointerEvent<HTMLDivElement>) => {
-    journalDragStart.current = event.clientY;
-    event.currentTarget.setPointerCapture(event.pointerId);
-  };
-  const endJournalDrag = (event: PointerEvent<HTMLDivElement>) => {
-    if (
-      journalDragStart.current != null &&
-      event.clientY - journalDragStart.current > 72
-    )
-      setFormOpen(false);
-    journalDragStart.current = null;
-  };
-  const openNew = () => {
-    setEditingId(null); setSymbol(""); setDecision("SKIP"); setSetup(""); setMarketState(""); setRationale(""); setEmotion("DISCIPLINED"); setFormOpen(true);
-  };
-  const openEdit = (item: any) => {
-    setEditingId(item.id); setSymbol(item.symbols?.symbol ?? ""); setDecision(item.decision); setSetup(item.setup_type ?? ""); setMarketState(item.market_state ?? ""); setRationale(item.rationale ?? "");
-    setEmotion(emotions.find(([code]) => item.lesson?.includes(`[emotion:${code}]`))?.[0] ?? "DISCIPLINED"); setFormOpen(true);
-  };
-  async function save(event: FormEvent) {
-    event.preventDefault();
-    const symbolId = symbols.data?.find((x) => x.symbol === symbol)?.id;
-    if (!supabase || !symbolId) {
-      setToast("Hãy chọn mã từ gợi ý");
-      return;
-    }
-    const payload = { symbol_id: symbolId, decision, setup_type: setup || null, market_state: marketState || null, rationale: rationale || "", lesson: `[emotion:${emotion}]` };
-    const { error } = editingId
-      ? await supabase.from("journal_entries").update(payload).eq("id", editingId)
-      : await supabase.from("journal_entries").insert({ ...payload, decision_date: new Date().toISOString().slice(0, 10), outcome: "OPEN" });
-    if (error) { setToast(`Không thể lưu: ${error.message}`); return; }
-    client.invalidateQueries({ queryKey: ["journal"] });
-    setToast(editingId ? "Đã cập nhật nhận xét" : "Đã lưu nhận xét");
-    setFormOpen(false);
-    setTimeout(() => setToast(""), 3000);
+  const [desktop,setDesktop] = useState(()=>matchMedia('(min-width:761px)').matches)
+  useEffect(()=>{const media=matchMedia('(min-width:761px)');const update=()=>setDesktop(media.matches);media.addEventListener('change',update);return()=>media.removeEventListener('change',update)},[])
+  const client = useQueryClient(), userId = useAccountId(authenticated), symbols = useSymbols(authenticated)
+  const [symbol,setSymbol] = useState(''), [rationale,setRationale] = useState(''), [review,setReview] = useState<Review>('OBSERVATION')
+  const [setup,setSetup] = useState(''), [marketState,setMarketState] = useState(''), [emotion,setEmotion] = useState('DISCIPLINED')
+  const [editing,setEditing] = useState<JournalEntry|null>(null), [formOpen,setFormOpen] = useState(false), [submitting,setSubmitting] = useState(false)
+  const [toast,setToast] = useState(''), [page,setPage] = useState(1), [filter,setFilter] = useState('')
+  const [queued,setQueued] = useState<QueuedNote[]>([]), [syncing,setSyncing] = useState(false)
+  const formRef = useRef<HTMLFormElement>(null), lock = useRef(false), noteId = useRef(crypto.randomUUID()), syncLock = useRef(false)
+  const closeForm = useCallback(() => { if (!lock.current) setFormOpen(false) },[])
+  useDialogFocus(formOpen,formRef,closeForm)
+  const thesis = useStockThesis(symbol,authenticated&&!editing)
+  const publication = useQuery({queryKey:['journal-publication'],enabled:Boolean(userId&&supabase),staleTime:60_000,queryFn:latestSignalPublication})
+  const selectedSymbol = symbols.data?.find(item=>item.symbol===symbol)
+  const evidence = useQuery({queryKey:['journal-evidence',publication.data?.date,publication.data?.sourceRevision,selectedSymbol?.id],enabled:Boolean(userId&&supabase&&selectedSymbol&&publication.data&&!editing),staleTime:60_000,queryFn:async()=>{
+    const {data,error}=await supabase!.from('consolidated_signals').select('timeframe,composite_action,signal_state,confluence_score,reasons').eq('symbol_id',selectedSymbol!.id).eq('as_of_date',publication.data!.date).eq('source_revision',publication.data!.sourceRevision).order('timeframe')
+    if(error)throw error
+    return(data??[]).map(item=>({timeframe:item.timeframe,action:item.composite_action,state:item.signal_state,score:Number(item.confluence_score),reasons:item.reasons??[]}))
+  }})
+  const entries = useQuery({queryKey:['journal',userId,page,filter],enabled:Boolean(userId&&supabase),queryFn:async()=>{
+    let query=supabase!.from('journal_entries').select('id,user_id,symbol_id,decision_date,decision,setup_type,market_state,rationale,outcome,result_pct,lesson,review_status,thesis_version_id,evidence_snapshot,symbols!inner(symbol,sector)',{count:'exact'}).eq('user_id',userId!).order('decision_date',{ascending:false}).order('created_at',{ascending:false})
+    if(filter.trim())query=query.ilike('symbols.symbol','%'+filter.trim().toUpperCase()+'%')
+    const {data,error,count}=await query.range((page-1)*25,page*25-1)
+    if(error)throw error
+    return {rows:(data??[]).map((item:any)=>({...item,symbols:Array.isArray(item.symbols)?item.symbols[0]:item.symbols})) as JournalEntry[],count:count??0}
+  }})
+  const ledger = useQuery({queryKey:['journal-portfolio-transactions',userId],enabled:Boolean(desktop&&userId&&supabase),queryFn:async()=>{
+    const {data:portfolio,error:portfolioError}=await supabase!.from('portfolios').select('id').eq('user_id',userId!).order('created_at').limit(1).maybeSingle()
+    if(portfolioError)throw portfolioError
+    if(!portfolio)return null
+    const {data,error}=await supabase!.rpc('portfolio_report_data',{p_portfolio_id:portfolio.id,p_as_of_date:todayInVietnam()})
+    if(error)throw error
+    return data as LedgerReport
+  }})
+  const realized = useMemo(()=>Object.entries(realizedSlices(ledger.data?.transactions??[])),[ledger.data])
+  const realizedPnl = realized.reduce((sum,[,slice])=>sum+slice.pnl,0)
+  const wins = realized.filter(([,slice])=>slice.pnl>0).length
+  const rows=entries.data?.rows??[], pageCount=Math.max(1,Math.ceil((entries.data?.count??0)/25))
+  useEffect(()=>setPage(1),[filter])
+  useEffect(()=>{if(!toast)return;const timer=setTimeout(()=>setToast(''),5000);return()=>clearTimeout(timer)},[toast])
+
+  const openNew = useCallback((code='')=>{
+    let draft:any=null
+    if(userId)try{const remembered=code||localStorage.getItem('protstock-journal-lastdraft:'+userId)||'';draft=JSON.parse(localStorage.getItem(draftKey(userId,remembered))??'null')}catch{draft=null}
+    setEditing(null);setSymbol(code||draft?.symbol||'');setRationale(draft?.rationale??'');setReview(draft?.review??'OBSERVATION');setSetup(draft?.setup??'');setMarketState(draft?.marketState??'');setEmotion(draft?.emotion??'DISCIPLINED');noteId.current=draft?.id??crypto.randomUUID();setFormOpen(true)
+  },[userId])
+  useEffect(()=>{
+    if(!userId)return
+    const code=symbolFromRoute()
+    if(code)openNew(code)
+    const onOpen=(event:Event)=>openNew((event as CustomEvent<{symbol:string}>).detail?.symbol??'')
+    const onHash=()=>{const routeCode=symbolFromRoute();if(routeCode)openNew(routeCode)}
+    addEventListener('protstock:journal',onOpen);addEventListener('hashchange',onHash)
+    return()=>{removeEventListener('protstock:journal',onOpen);removeEventListener('hashchange',onHash)}
+  },[userId,openNew])
+  useEffect(()=>{
+    if(!userId||!formOpen)return
+    const key=editing?'protstock-journal-edit-draft:'+userId+':'+editing.id:draftKey(userId,symbol)
+    try{localStorage.setItem(key,JSON.stringify({id:noteId.current,symbol,rationale,review,setup,marketState,emotion}));if(!editing)localStorage.setItem('protstock-journal-lastdraft:'+userId,symbol)}catch{setToast('Thiết bị không lưu được bản nháp. Hãy lưu ghi chú trước khi đóng.')}
+  },[userId,formOpen,editing,symbol,rationale,review,setup,marketState,emotion])
+
+  const retryQueue=useCallback(async()=>{
+    if(!userId||!supabase||syncLock.current)return
+    syncLock.current=true;setSyncing(true)
+    try{
+      await syncJournalOutbox<QueuedNote>(userId,item=>supabase!.from('journal_entries').insert(item))
+      setQueued(readQueue(userId));await client.invalidateQueries({queryKey:['journal']})
+    }catch{setQueued(readQueue(userId))}
+    finally{syncLock.current=false;setSyncing(false)}
+  },[userId,client])
+  useEffect(()=>{
+    if(!userId)return
+    setQueued(readQueue(userId));void retryQueue()
+    const onOnline=()=>void retryQueue();const onStorage=(event:StorageEvent)=>{if(event.key?.startsWith('protstock-journal-outbox:'+userId)){setQueued(readQueue(userId));void retryQueue()}}
+    addEventListener('online',onOnline);addEventListener('storage',onStorage)
+    return()=>{removeEventListener('online',onOnline);removeEventListener('storage',onStorage)}
+  },[userId,retryQueue])
+
+  const openEdit=(item:JournalEntry)=>{
+    let draft:any=null
+    if(userId)try{draft=JSON.parse(localStorage.getItem('protstock-journal-edit-draft:'+userId+':'+item.id)??'null')}catch{draft=null}
+    setEditing(item);setSymbol(item.symbols?.symbol??'');setRationale(draft?.rationale??item.rationale);setReview(draft?.review??item.review_status??'OBSERVATION');setSetup(draft?.setup??item.setup_type??'');setMarketState(draft?.marketState??item.market_state??'');setEmotion(draft?.emotion??item.lesson?.match(/\[emotion:(\w+)\]/)?.[1]??'DISCIPLINED');setFormOpen(true)
   }
-  async function deleteEntry(item: any) {
-    if (!supabase || !confirm(`Xoá nhận xét ${item.symbols?.symbol ?? ""}?`)) return;
-    const { error } = await supabase.from("journal_entries").delete().eq("id", item.id);
-    if (error) { setToast(`Không thể xoá: ${error.message}`); return; }
-    client.invalidateQueries({ queryKey: ["journal"] }); setToast("Đã xoá nhận xét"); setTimeout(() => setToast(""), 3000);
+  async function save(event:FormEvent){
+    event.preventDefault()
+    if(!supabase||!userId||lock.current)return
+    if((!selectedSymbol&&!editing)||!rationale.trim()){setToast('Chọn mã và ghi ít nhất một câu nhận xét.');return}
+    lock.current=true;setSubmitting(true)
+    const snapshot:Evidence={as_of_date:publication.data?.date??null,source_revision:publication.data?.sourceRevision??null,captured_at:new Date().toISOString(),signals:evidence.data??[]}
+    const context=journalContext(editing,snapshot,thesis.data?.current_version_id??null)
+    const payload:QueuedNote={id:editing?.id??noteId.current,user_id:userId,symbol_id:editing?.symbol_id??selectedSymbol!.id,decision_date:editing?.decision_date??todayInVietnam(),decision:review==='MAINTAIN'?'HOLD':'SKIP',setup_type:setup||null,market_state:marketState||null,rationale:rationale.trim(),outcome:editing?.outcome??'OPEN',result_pct:editing?.result_pct??null,lesson:withEmotionTag(editing?.lesson,emotion),review_status:review,...context}
+    try{
+      const {error}=editing?await supabase.from('journal_entries').update(payload).eq('id',editing.id).eq('user_id',userId):await supabase.from('journal_entries').insert(payload)
+      if(error&&(editing||error.code!=='23505')){
+        if(editing||error.code?.startsWith('23')||error.code==='42501')throw error
+        queueJournalNote(userId,payload);setQueued(readQueue(userId));setToast('Đã lưu trên thiết bị, đang chờ đồng bộ. Có thể thử lại khi có mạng.')
+      }else{setToast('Đã lưu nhật ký cùng luận điểm và bằng chứng tại thời điểm ghi.');await client.invalidateQueries({queryKey:['journal']})}
+      if(editing)localStorage.removeItem('protstock-journal-edit-draft:'+userId+':'+editing.id)
+      if(!editing){clearSavedJournalDrafts(userId,payload.id);localStorage.removeItem('protstock-journal-lastdraft:'+userId)}
+      setFormOpen(false);if(symbolFromRoute())history.replaceState(null,'','#journal')
+    }catch{setToast('Chưa lưu được ghi chú. Nội dung vẫn được giữ để bạn thử lại.')}
+    finally{lock.current=false;setSubmitting(false)}
   }
-  return (
-    <section className="workspace-page">
-      <div className="page-title-row">
-        <div>
-          <h1>Nhật ký quyết định</h1>
-          <p className="muted">
-            Đo chất lượng quyết định, không chỉ kết quả giao dịch.
-          </p>
-        </div>
-        <button className="primary-button" onClick={openNew}>
-          <Plus size={16} /> Ghi nhận xét
-        </button>
-      </div>
-      <div className="metric-grid metric-grid-compact">
-        <article className="metric-card">
-          <span>Tổng quyết định</span>
-          <strong>{rows.length}</strong>
-        </article>
-        <article className="metric-card">
-          <span>Tỷ lệ thắng</span>
-          <strong>{winRate.toFixed(0)}%</strong>
-        </article>
-        <article className="metric-card">
-          <span>Kỷ luật quy tắc</span>
-          <strong>{alignment.toFixed(0)}%</strong>
-          <small>
-            {alignedRows.length
-              ? `${alignedRows.length} quyết định có tín hiệu EOD để đối chiếu`
-              : "Chờ quyết định có signal EOD"}
-          </small>
-        </article>
-      </div>
-      <div className="analytics-grid journal-analytics">
-        <article className="analytic-card equity-card">
-          <div className="panel-title">
-            <h3>Đường hiệu suất</h3>
-            <span>{closed.length} lệnh đóng</span>
-          </div>
-          {closed.length ? (
-            <>
-              <svg
-                className="equity-mini interactive-equity"
-                viewBox="0 0 100 100"
-                preserveAspectRatio="none"
-                aria-label="Đường hiệu suất tích lũy"
-              >
-                <polyline points={curve} />
-                {curveData.points.map((point) => (
-                  <circle
-                    key={point.index}
-                    cx={point.x}
-                    cy={point.y}
-                    r="2.4"
-                    onMouseEnter={() => setSelectedPoint(point.index)}
-                    onFocus={() => setSelectedPoint(point.index)}
-                    tabIndex={0}
-                  />
-                ))}
-              </svg>
-              <div className="equity-axis">
-                <span>
-                  Thấp nhất {curveData.min / 100 - 1 >= 0 ? "+" : ""}
-                  {((curveData.min / 100 - 1) * 100).toFixed(1)}%
-                </span>
-                <span>
-                  {selectedPoint != null
-                    ? `Mốc ${selectedPoint + 1}: ${curveData.points[selectedPoint].value / 100 - 1 >= 0 ? "+" : ""}${((curveData.points[selectedPoint].value / 100 - 1) * 100).toFixed(1)}%`
-                    : "Di chuột vào mốc"}
-                </span>
-                <span>
-                  Cao nhất {curveData.max / 100 - 1 >= 0 ? "+" : ""}
-                  {((curveData.max / 100 - 1) * 100).toFixed(1)}%
-                </span>
-              </div>
-            </>
-          ) : (
-            <p className="muted">
-              Đường hiệu suất sẽ xuất hiện khi có lệnh đã đóng.
-            </p>
-          )}
-        </article>
-        <article className="analytic-card">
-          <h3>Tỷ lệ thắng</h3>
-          <div className="win-gauge" style={gaugeStyle}>
-            <div>
-              <strong>{winRate.toFixed(0)}%</strong>
-              <span>
-                {wins.length} thắng / {closed.length || 0}
-              </span>
-            </div>
-          </div>
-        </article>
-        <article className="analytic-card">
-          <h3>Thua lỗ theo cảm xúc</h3>
-          {emotionReview.length ? (
-            <div className="emotion-review">
-              {emotionReview.map(([name, value]) => (
-                <div key={name}>
-                  <span>{name}</span>
-                  <b>
-                    {value.loss}/{value.total} LOSS
-                  </b>
-                  <i
-                    style={{
-                      width: `${value.total ? (value.loss / value.total) * 100 : 0}%`,
-                    }}
-                  />
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="muted">
-              Gắn nhãn tâm lý khi tạo nhật ký để xem tương quan thắng/thua.
-            </p>
-          )}
-        </article>
-        <article className="analytic-card">
-          <h3>Bản đồ thua lỗ</h3>
-          {heatmap.length ? (
-            <>
-              <div className="heatmap">
-                {heatmap.map((item) => (
-                  <i
-                    className={
-                      item.outcome === "WIN"
-                        ? "win"
-                        : item.outcome === "LOSS"
-                          ? "loss"
-                          : "flat"
-                    }
-                    key={item.id}
-                    title={`${item.symbols?.symbol} · ${item.outcome} · ${emotionLabel(item.lesson)}`}
-                  />
-                ))}
-              </div>
-              <p className="muted">12 quyết định đã đóng gần nhất.</p>
-            </>
-          ) : (
-            <p className="muted">
-              Mẫu lỗi sẽ xuất hiện khi có lệnh đã đóng để đối chiếu.
-            </p>
-          )}
-        </article>
-      </div>
-      <article className="panel">
-        <div className="panel-title">
-          <h3>Dòng thời gian quyết định</h3>
-        </div>
-        {rows.map((item) => (
-          <div className={`journal-timeline ${swipedEntryId === item.id ? "swiped" : ""}`} key={item.id} onPointerDown={(event) => startSwipe(item.id, event)} onPointerMove={(event) => moveSwipe(item.id, event)} onPointerUp={(event) => finishSwipe(item.id, event)} onPointerCancel={(event) => finishSwipe(item.id, event)}>
-            <div className="journal-entry-content">
-              <span className={`timeline-dot ${item.outcome?.toLowerCase()}`} />
-              <div>
-                <strong>
-                  {item.symbols?.symbol} · {item.decision}
-                </strong>
-                <div className="journal-entry-meta"><span>{item.decision_date}</span><span>{item.setup_type ?? "Chưa setup"}</span><span>{item.market_state ?? "Chưa phân loại"}</span></div>
-                <p>{item.rationale}</p>
-                <em>{emotionLabel(item.lesson)}</em>
-              </div>
-              <b
-                className={Number(item.result_pct) < 0 ? "negative" : "positive"}
-              >
-                {Number(item.result_pct ?? 0) > 0 ? "+" : ""}
-                {Number(item.result_pct ?? 0).toFixed(2)}%
-              </b>
-            </div>
-            <span className="journal-entry-actions"><button type="button" onClick={(event) => { event.stopPropagation(); if (swipeDidMove.current) return; setSwipedEntryId(null); openEdit(item); }} aria-label="Sửa nhận xét"><Pencil size={14}/><span>Sửa</span></button><button type="button" onClick={(event) => { event.stopPropagation(); if (swipeDidMove.current) return; setSwipedEntryId(null); void deleteEntry(item); }} aria-label="Xoá nhận xét"><Trash2 size={14}/><span>Xoá</span></button></span>
-          </div>
-        ))}
-      </article>
-      <article className="panel">
-        <div className="panel-title">
-          <h3>Review theo nhóm</h3>
-          <span>CHỈ LỆNH ĐÃ ĐÓNG</span>
-        </div>
-        <div className="review-grid">
-          {["Theo setup", "Theo ngành", "Theo thị trường"].map(
-            (title, index) => (
-              <div key={title}>
-                <strong>{title}</strong>
-                {review[index].map(([name, value]: any) => (
-                  <div className="rule-row" key={name}>
-                    <div>
-                      <strong>{name}</strong>
-                      <small>{value.total} quyết định</small>
-                    </div>
-                    <span>{value.loss} LOSS</span>
-                  </div>
-                ))}
-              </div>
-            ),
-          )}
-        </div>
-      </article>
-      {formOpen && (
-        <div
-          className="sheet-backdrop"
-          onPointerDown={() => setFormOpen(false)}
-        >
-          <form
-            className="bottom-sheet position-sheet rule-form journal-sheet"
-            onSubmit={save}
-            onPointerDown={(e) => e.stopPropagation()}
-          >
-            <div
-              className="sheet-handle"
-              onPointerDown={beginJournalDrag}
-              onPointerUp={endJournalDrag}
-            />
-            <div className="sheet-title">
-              <div>
-                <h2>{editingId ? "Chỉnh sửa nhận xét" : "Ghi nhận xét"}</h2>
-              </div>
-            </div>
-            <SymbolAutocomplete
-              symbols={symbols.data ?? []}
-              value={symbol}
-              onChange={setSymbol}
-            />
-            <label>
-              Quyết định
-              <SoftSelect
-                value={decision}
-                onChange={(e) => setDecision(e.target.value)}
-              >
-                {["SKIP", "HOLD"].map((x) => (
-                  <option key={x}>{x}</option>
-                ))}
-              </SoftSelect>
-            </label>
-            <label>
-              Setup
-              <SoftSelect
-                value={setup}
-                onChange={(e) => setSetup(e.target.value)}
-              >
-                <option value="">Không phân loại</option>
-                <option value="ACCUMULATION_BASE">Nền tích luỹ</option>
-                <option value="FLAT_BASE_BREAKOUT">Breakout nền phẳng</option>
-                <option value="BULL_FLAG_PENNANT">Cờ tăng / Pennant</option>
-                <option value="DOUBLE_BOTTOM">Hai đáy</option>
-                <option value="PULLBACK_CONTINUATION">
-                  Pullback continuation
-                </option>
-                <option value="VCP_BREAKOUT">VCP breakout</option>
-                <option value="RSI_MACD_DIVERGENCE">RSI MACD divergence</option>
-                <option value="RELATIVE_STRENGTH_LEADER">
-                  Relative Strength Leader
-                </option>
-              </SoftSelect>
-            </label>
-            <label>
-              Bối cảnh thị trường (tuỳ chọn)
-              <SoftSelect
-                value={marketState}
-                onChange={(e) => setMarketState(e.target.value)}
-              >
-                <option value="">Không ghi nhận</option>
-                <option value="VNINDEX_UP">VN-Index tăng</option>
-                <option value="VNINDEX_SIDEWAYS">VN-Index đi ngang</option>
-                <option value="VNINDEX_DOWN">VN-Index giảm</option>
-                <option value="BREADTH_WEAK">Độ rộng thị trường yếu</option>
-              </SoftSelect>
-            </label>
-            <fieldset className="emotion-picker">
-              <legend>Tâm lý khi quyết định</legend>
-              {emotions.map(([code, label]) => (
-                <button
-                  type="button"
-                  key={code}
-                  className={emotion === code ? "active" : ""}
-                  onClick={() => setEmotion(code)}
-                >
-                  {label}
-                </button>
-              ))}
-            </fieldset>
-            <label>
-              Lý do (tuỳ chọn)
-              <textarea
-                rows={3}
-                value={rationale}
-                onChange={(e) => setRationale(e.target.value)}
-                placeholder="Thêm lý do nếu cần"
-              />
-            </label>
-            <div className="form-sticky-actions">
-              <button>{editingId ? "Lưu thay đổi" : "Lưu nhận xét"}</button>
-            </div>
-          </form>
-        </div>
-      )}
-      {toast && (
-        <div className="toast">
-          <CheckCircle2 size={18} />
-          {toast}
-        </div>
-      )}
-    </section>
-  );
+  async function remove(item:JournalEntry){
+    if(!supabase||!userId||lock.current||!confirm('Xóa nhận xét '+(item.symbols?.symbol??'')+'?'))return
+    lock.current=true
+    try{const {error}=await supabase.from('journal_entries').delete().eq('id',item.id).eq('user_id',userId);if(error)throw error;await client.invalidateQueries({queryKey:['journal']});setToast('Đã xóa nhận xét.')}catch{setToast('Không xóa được nhận xét. Kiểm tra kết nối và thử lại.')}finally{lock.current=false}
+  }
+  return <section className="workspace-page journal-page">
+    <div className="page-title-row"><div><h1>Nhật ký quyết định</h1><p className="muted">Ghi nhận điều bạn nghĩ và bằng chứng bạn thấy tại đúng thời điểm.</p></div><button type="button" className="primary-button" disabled={!userId} onClick={()=>openNew()}><Plus size={16}/> Ghi nhanh</button></div>
+    {queued.length>0&&<article className="panel" role="status"><h2>{queued.length} ghi chú đang chờ đồng bộ</h2><p>Nội dung đã lưu theo tài khoản trên thiết bị này.</p><button type="button" className="secondary-button" disabled={syncing} onClick={()=>void retryQueue()}>{syncing?'Đang đồng bộ…':'Thử đồng bộ'}</button>{queued.map(item=><p key={item.id}><strong>{symbols.data?.find(stock=>stock.id===item.symbol_id)?.symbol??'Mã'} · {reviews[item.review_status??'OBSERVATION']}</strong> — {item.rationale}</p>)}</article>}
+    <section className="metric-grid personal-desktop-panel"><article className="metric-card"><span>Nhận xét đã lưu</span><strong>{entries.isLoading?'—':entries.data?.count??'—'}</strong></article><article className="metric-card"><span>Giao dịch bán có kết quả</span><strong>{ledger.isSuccess?realized.length:'—'}</strong></article><article className="metric-card"><span>Tỷ lệ bán có lãi</span><strong>{realized.length?(wins/realized.length*100).toFixed(0)+'%':'—'}</strong></article><article className="metric-card"><span>Lãi/lỗ đã thực hiện</span><strong className={realizedPnl<0?'negative':'positive'}>{ledger.isSuccess?formatVnd(realizedPnl):'—'}</strong></article></section>
+    <p className="muted personal-desktop-panel">Thống kê chỉ dùng giao dịch bán thực từ sổ danh mục, giá vốn bình quân gia quyền; chưa gồm phí/thuế. Nhận xét không được tính thành lệnh thắng/thua. Bằng chứng cũ được giữ nguyên để tránh đánh giá bằng dữ liệu hôm nay.</p>
+    {ledger.isError&&<p className="form-error personal-desktop-panel">Chưa tải được kết quả sổ giao dịch. <button type="button" onClick={()=>void ledger.refetch()}>Thử lại</button></p>}
+    <article className="panel"><div className="panel-title"><h2>Nhận xét và review</h2><label className="journal-search"><span>Tìm mã</span><input value={filter} onChange={event=>setFilter(event.target.value)} placeholder="VD: FPT"/></label></div>
+      {entries.isLoading?<p role="status">Đang tải nhật ký…</p>:entries.isError?<p className="form-error" role="alert">Không tải được nhật ký. <button type="button" onClick={()=>void entries.refetch()}>Thử lại</button></p>:!rows.length?<div className="empty-state"><BookOpen size={24}/><p>{filter?'Không có nhận xét khớp mã.':'Chưa có nhận xét. Ghi lại lý do theo dõi và điều có thể làm luận điểm thay đổi.'}</p></div>:rows.map(item=><article className="personal-journal-entry" key={item.id}><header><div><strong>{item.symbols?.symbol??'—'}</strong><span>{reviews[item.review_status??'OBSERVATION']}</span><time>{formatDate(item.decision_date)}</time></div><div><button type="button" aria-label={'Sửa nhận xét '+item.symbols?.symbol} onClick={()=>openEdit(item)}><Pencil size={16}/> Sửa</button><button type="button" aria-label={'Xóa nhận xét '+item.symbols?.symbol} onClick={()=>void remove(item)}><Trash2 size={16}/> Xóa</button></div></header><p>{item.rationale}</p><small>{item.thesis_version_id?'Đã gắn phiên bản luận điểm cá nhân':'Chưa gắn luận điểm'} · {emotionLabels[item.lesson?.match(/\[emotion:(\w+)\]/)?.[1]??'']??'Chưa gắn tâm lý'}</small><details><summary>Bằng chứng tại thời điểm ghi · {formatDate(item.evidence_snapshot?.as_of_date)}</summary>{item.evidence_snapshot?.signals?.length?<><p>Phiên {formatDate(item.evidence_snapshot.as_of_date)} · {item.evidence_snapshot.source_revision}</p>{item.evidence_snapshot.signals.map(signal=><p key={signal.timeframe}>{signal.timeframe} · {signal.action} · {signal.score.toFixed(0)} điểm</p>)}</>:<p>Nhận xét này chưa có snapshot engine. Dữ liệu hiện tại không được dùng thay thế dữ liệu lịch sử.</p>}</details>{item.thesis_version_id&&<HistoricalThesis versionId={item.thesis_version_id} userId={userId}/>}</article>)}
+      {pageCount>1&&<nav className="screener-pagination" aria-label="Phân trang nhật ký"><span>Trang {page}/{pageCount}</span><div><button disabled={page===1} onClick={()=>setPage(value=>value-1)}>Trước</button><button disabled={page>=pageCount} onClick={()=>setPage(value=>value+1)}>Sau</button></div></nav>}
+    </article>
+    {formOpen&&<div className="sheet-backdrop" onMouseDown={closeForm}><form ref={formRef} role="dialog" aria-modal="true" aria-labelledby="journal-title" tabIndex={-1} className="bottom-sheet position-sheet rule-form journal-sheet" onSubmit={save} onMouseDown={event=>event.stopPropagation()}><div className="sheet-handle"/><div className="sheet-title"><h2 id="journal-title">{editing?'Sửa nhận xét':'Ghi nhật ký nhanh'}</h2><button type="button" className="icon-button" disabled={submitting} aria-label="Đóng nhật ký, giữ bản nháp" onClick={closeForm}><X size={20}/></button></div><SymbolAutocomplete symbols={symbols.data??[]} value={symbol} onChange={setSymbol} disabled={Boolean(editing)}/><fieldset className="journal-review-picker"><legend>Trạng thái review</legend>{Object.entries(reviews).map(([code,label])=><button key={code} type="button" aria-pressed={review===code} className={review===code?'active':''} onClick={()=>setReview(code as Review)}>{label}</button>)}</fieldset><label>Điều tôi nghĩ <textarea rows={4} required value={rationale} onChange={event=>setRationale(event.target.value)} placeholder="Vì sao theo dõi, điều mới quan sát hoặc điều khiến luận điểm thay đổi…"/></label><div className="journal-snapshot-note"><strong>{editing?editing.thesis_version_id?'Giữ phiên bản luận điểm đã gắn':'Nhận xét cũ chưa gắn luận điểm':thesis.data?'Gắn với luận điểm v'+thesis.data.current_version.version:'Chưa có luận điểm cá nhân cho mã này'}</strong><small>{editing?editing.evidence_snapshot?'Giữ nguyên bằng chứng đã ghi':'Không có snapshot lịch sử; giữ nguyên trạng thái chưa có bằng chứng.':evidence.data?.length?'Kèm bằng chứng EOD '+formatDate(publication.data?.date):'Chưa có bằng chứng engine; lưu nhận xét cá nhân và ghi rõ thiếu dữ liệu.'}</small></div><details><summary>Phân loại thêm</summary><label>Setup<input value={setup} onChange={event=>setSetup(event.target.value)} placeholder="Ví dụ: nhịp hồi về hỗ trợ"/></label><label>Bối cảnh thị trường<input value={marketState} onChange={event=>setMarketState(event.target.value)}/></label><label>Tâm lý<SoftSelect value={emotion} onChange={event=>setEmotion(event.target.value)} aria-label="Tâm lý khi nhận xét">{Object.entries(emotionLabels).map(([code,label])=><option value={code} key={code}>{label}</option>)}</SoftSelect></label></details><p className="muted">Bản nháp được giữ trên thiết bị theo tài khoản. Ghi chú không tạo giao dịch.</p><div className="form-sticky-actions"><button disabled={submitting}>{submitting?'Đang lưu…':'Lưu nhận xét'}</button></div></form></div>}
+    {toast&&<div className="toast" role="status"><CheckCircle2 size={18}/>{toast}</div>}
+  </section>
 }

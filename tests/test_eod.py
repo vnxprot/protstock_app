@@ -22,6 +22,56 @@ def test_rate_limit_is_retried(monkeypatch) -> None:
     assert provider.calls == 2
 
 
+def test_timeout_retries_same_honest_provider(monkeypatch) -> None:
+    monkeypatch.setattr("protstock.eod.sleep", lambda _: None)
+    class Provider:
+        calls = 0
+        def history(self, *_args):
+            self.calls += 1
+            if self.calls < 3:
+                raise TimeoutError("temporary upstream timeout")
+            return ["ok"]
+    provider = Provider()
+    assert _fetch_history_with_retry(provider, "FPT", date(2026, 1, 1), date(2026, 1, 2)) == ["ok"]
+    assert provider.calls == 3
+
+
+def test_prepared_analysis_rejects_other_session_or_revision(tmp_path) -> None:
+    import gzip
+    import json
+    import pytest
+    from protstock.eod import load_prepared_analyses
+    from protstock.analysis import ALGORITHM_VERSION
+    day = date(2026, 10, 2)
+    def save(payload):
+        with gzip.open(tmp_path / "handoff.json.gz", "wt", encoding="utf-8") as f:
+            json.dump(payload, f)
+    item = [1, "D", [{"date": day.isoformat()}], {}, {"as_of_date": day.isoformat()}, {"data_date": day.isoformat()}]
+    save({"trading_date": day.isoformat(), "source_revision": ALGORITHM_VERSION, "analyses": [item]})
+    assert load_prepared_analyses(tmp_path, day) == {1: [item]}
+    save({"trading_date": "2026-10-01", "source_revision": ALGORITHM_VERSION, "analyses": [item]})
+    with pytest.raises(ValueError, match="session or algorithm"):
+        load_prepared_analyses(tmp_path, day)
+    save({"trading_date": day.isoformat(), "source_revision": "old-engine", "analyses": [item]})
+    with pytest.raises(ValueError, match="session or algorithm"):
+        load_prepared_analyses(tmp_path, day)
+
+
+def test_prepared_analysis_rejects_duplicate_symbol_timeframe(tmp_path) -> None:
+    import gzip
+    import json
+    import pytest
+    from protstock.eod import load_prepared_analyses
+    from protstock.analysis import ALGORITHM_VERSION
+    day = date(2026, 10, 2)
+    item = [1, "D", [{"date": day.isoformat()}], {}, {"as_of_date": day.isoformat()}, {"data_date": day.isoformat()}]
+    with gzip.open(tmp_path / "handoff.json.gz", "wt", encoding="utf-8") as f:
+        json.dump({"trading_date": day.isoformat(), "source_revision": ALGORITHM_VERSION, "analyses": [item, item]}, f)
+    with pytest.raises(ValueError, match="Duplicate"):
+        load_prepared_analyses(tmp_path, day)
+
+
+
 def test_rows_as_of_excludes_future_bars() -> None:
     rows = [
         {"trading_date": "2026-09-08", "close": 10},

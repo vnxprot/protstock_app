@@ -18,9 +18,9 @@ class VnstockProvider:
     API_BASE = "https://kbbuddywts.kbsec.com.vn/iis-server/investment"
 
     def __init__(self, source: str = "KBS") -> None:
-        if source.upper() != "KBS":
-            raise ValueError("Only the KBS price adapter is implemented")
-        self.source = "KBS"
+        self.source = source.upper()
+        if self.source != "KBS":
+            raise ValueError("Only the KBS price adapter is implemented; VCI is not a configured fallback")
 
     def history(self, symbol: str, start: date, end: date) -> list[DailyBar]:
         endpoint = "index" if symbol.upper().endswith("INDEX") else "stocks"

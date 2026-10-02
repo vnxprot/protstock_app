@@ -99,3 +99,64 @@ def test_pattern_snapshot_removes_only_superseded_same_day_geometry() -> None:
         assert deletes[0].url.params["id"] == "in.(old)"
     finally:
         client.close()
+
+
+def test_read_retries_timeout_and_transient_503(monkeypatch) -> None:
+    monkeypatch.setattr("protstock.supabase_rest.sleep", lambda _: None)
+    calls = []
+    def handler(request):
+        calls.append(request)
+        if len(calls) == 1:
+            raise httpx.ReadTimeout("temporary", request=request)
+        return httpx.Response(503 if len(calls) == 2 else 200, json=[])
+    client = SupabaseRestClient(Settings("https://example.supabase.co", "service"), transport=httpx.MockTransport(handler))
+    try:
+        assert client.active_symbols() == []
+        assert len(calls) == 3
+    finally:
+        client.close()
+
+
+def test_queue_claim_is_never_retried_after_timeout():
+    calls = []
+    def handler(request):
+        calls.append(request)
+        assert request.url.path == "/rest/v1/rpc/claim_backtest_jobs"
+        raise httpx.ReadTimeout("unknown claim outcome", request=request)
+    client = SupabaseRestClient(Settings("https://example.supabase.co", "service"), transport=httpx.MockTransport(handler))
+    try:
+        import pytest
+        with pytest.raises(httpx.ReadTimeout):
+            client.queued_backtests()
+        assert len(calls) == 1
+    finally:
+        client.close()
+
+
+def test_breadth_history_pages_keep_point_in_time_bounds():
+    from datetime import date
+    calls = []
+    def handler(request):
+        calls.append(request)
+        assert request.url.params["trading_date"] == "gte.2021-01-01"
+        assert request.url.params["and"] == "(trading_date.lte.2026-10-02)"
+        assert request.url.params["order"] == "trading_date.asc"
+        return httpx.Response(200, json=[{"trading_date": "2021-01-01"}] * (1000 if len(calls) == 1 else 2))
+    client = SupabaseRestClient(Settings("https://example.supabase.co", "service"), transport=httpx.MockTransport(handler))
+    try:
+        assert len(client.breadth_history(date(2021, 1, 1), date(2026, 10, 2))) == 1002
+        assert [r.headers["range"] for r in calls] == ["0-999", "1000-1999"]
+    finally:
+        client.close()
+
+def test_backtest_symbol_context_can_read_inactive_historical_instrument():
+    def handler(request):
+        assert request.url.path == "/rest/v1/symbols"
+        assert request.url.params["id"] == "eq.7" and "active" not in request.url.params
+        assert "exchange" in request.url.params["select"]
+        return httpx.Response(200, json=[{"id": 7, "symbol": "OLD", "exchange": "HNX", "active": False}])
+    client = SupabaseRestClient(Settings("https://example.supabase.co", "service"), transport=httpx.MockTransport(handler))
+    try:
+        assert client.symbol_by_id(7)["exchange"] == "HNX"
+    finally:
+        client.close()

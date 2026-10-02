@@ -20,6 +20,7 @@ from .seed import seed_universe, seed_vnindex_history
 from .repair_history import repair_missing_history
 from .history_coverage import audit_history_coverage
 from .exchanges import sync_exchanges
+from .config import vietnam_today
 
 
 def validate_universe(path: Path) -> int:
@@ -47,11 +48,11 @@ def main() -> None:
     seed.add_argument("path", type=Path)
     seed_vnindex = subparsers.add_parser("seed-vnindex")
     seed_vnindex.add_argument("--start-date", type=date.fromisoformat, default=date(2018, 1, 1))
-    seed_vnindex.add_argument("--end-date", type=date.fromisoformat, default=date.today())
+    seed_vnindex.add_argument("--end-date", type=date.fromisoformat, default=vietnam_today())
     seed_vnindex.add_argument("--source", default="KBS", choices=("KBS",))
     repair = subparsers.add_parser("repair-history")
     repair.add_argument("--start-date", type=date.fromisoformat, default=date(2021, 1, 1))
-    repair.add_argument("--end-date", type=date.fromisoformat, default=date.today())
+    repair.add_argument("--end-date", type=date.fromisoformat, default=vietnam_today())
     repair.add_argument("--source", default="KBS", choices=("KBS",))
     repair.add_argument("--symbol-offset", type=int, default=0)
     repair.add_argument("--symbol-limit", type=int)
@@ -60,12 +61,12 @@ def main() -> None:
     repair.add_argument("--full-range", action="store_true", help="For explicit symbols, backfill every available source bar in the requested range")
     coverage = subparsers.add_parser("history-coverage")
     coverage.add_argument("--start-date", type=date.fromisoformat, default=date(2021, 1, 1))
-    coverage.add_argument("--end-date", type=date.fromisoformat, default=date.today())
+    coverage.add_argument("--end-date", type=date.fromisoformat, default=vietnam_today())
     subparsers.add_parser("sync-exchanges")
     analyze = subparsers.add_parser("analyze-json")
     analyze.add_argument("path", type=Path)
     eod = subparsers.add_parser("eod")
-    eod.add_argument("--date", dest="trading_date", type=date.fromisoformat, default=date.today())
+    eod.add_argument("--date", dest="trading_date", type=date.fromisoformat, default=vietnam_today())
     eod.add_argument("--source", default="KBS", choices=("KBS",))
     eod.add_argument("--lookback-days", type=int, default=10)
     eod.add_argument("--benchmark-lookback-days", type=int, default=None)
@@ -75,23 +76,27 @@ def main() -> None:
     eod.add_argument("--fast-lane", action="store_true")
     eod.add_argument("--skip-breadth-snapshot", action="store_true")
     eod.add_argument("--historical", action="store_true", help="Do not use today's portfolio for a historical EOD date")
+    eod.add_argument("--missing-only", action="store_true", help="Retry only missing same-revision daily snapshots")
+    eod.add_argument("--symbols", help="Comma-separated manifest symbols")
+    eod.add_argument("--prepared-dir", type=Path, help="Temporary computations for same-run finalization")
     finalize_fast = subparsers.add_parser("finalize-fast-eod")
-    finalize_fast.add_argument("--date", dest="trading_date", type=date.fromisoformat, default=date.today())
+    finalize_fast.add_argument("--date", dest="trading_date", type=date.fromisoformat, default=vietnam_today())
     finalize_fast.add_argument("--allow-partial", action="store_true", help="Publish available same-day data without retrying missing symbols")
+    finalize_fast.add_argument("--prepared-dir", type=Path)
     health = subparsers.add_parser("rebuild-market-health")
     health.add_argument("--start-date", type=date.fromisoformat, default=date(2021, 1, 1))
-    health.add_argument("--end-date", type=date.fromisoformat, default=date.today())
+    health.add_argument("--end-date", type=date.fromisoformat, default=vietnam_today())
     rebuild = subparsers.add_parser("rebuild-signals")
-    rebuild.add_argument("--date", dest="trading_date", type=date.fromisoformat, default=date.today())
+    rebuild.add_argument("--date", dest="trading_date", type=date.fromisoformat, default=vietnam_today())
     rebuild.add_argument("--symbol-offset", type=int, default=0)
     rebuild.add_argument("--symbol-limit", type=int)
     rebuild.add_argument("--historical", action="store_true", help="Do not use today's portfolio for a historical rebuild")
     worker = subparsers.add_parser("backtest-worker")
     worker.add_argument("--limit", type=int, default=3)
     alert = subparsers.add_parser("send-eod-alerts")
-    alert.add_argument("--date", dest="trading_date", type=date.fromisoformat, default=date.today())
+    alert.add_argument("--date", dest="trading_date", type=date.fromisoformat, default=vietnam_today())
     outcomes = subparsers.add_parser("evaluate-outcomes")
-    outcomes.add_argument("--date", dest="outcomes_date", type=date.fromisoformat, default=date.today())
+    outcomes.add_argument("--date", dest="outcomes_date", type=date.fromisoformat, default=vietnam_today())
     funnel = subparsers.add_parser("replay-funnel")
     funnel.add_argument("--start-date", type=date.fromisoformat, required=True)
     funnel.add_argument("--end-date", type=date.fromisoformat, required=True)
@@ -101,7 +106,7 @@ def main() -> None:
     funnel.add_argument("--price-basis", choices=("stored", "research"), default="stored")
     research = subparsers.add_parser("sync-research-prices")
     research.add_argument("--start-date", type=date.fromisoformat, default=date(2021, 1, 1))
-    research.add_argument("--end-date", type=date.fromisoformat, default=date.today())
+    research.add_argument("--end-date", type=date.fromisoformat, default=vietnam_today())
     research.add_argument("--symbol-offset", type=int, default=0)
     research.add_argument("--symbol-limit", type=int)
     research.add_argument("--symbols", help="Comma-separated symbols")
@@ -119,7 +124,7 @@ def main() -> None:
     calibrate.add_argument("--pattern-types", default="ACCUMULATION_BASE,DOUBLE_BOTTOM,ASCENDING_TRIANGLE,BULL_FLAG")
     archive = subparsers.add_parser("archive-pattern-evidence")
     archive.add_argument("--retention-days", type=int, default=180)
-    archive.add_argument("--date", dest="archive_date", type=date.fromisoformat, default=date.today())
+    archive.add_argument("--date", dest="archive_date", type=date.fromisoformat, default=vietnam_today())
     args = parser.parse_args()
     if args.command == "validate-universe":
         raise SystemExit(validate_universe(args.path))
@@ -154,11 +159,14 @@ def main() -> None:
             fast_lane=args.fast_lane,
             write_breadth_snapshot=not args.skip_breadth_snapshot,
             historical=args.historical,
+            missing_only=args.missing_only,
+            symbol_names={item.strip().upper() for item in args.symbols.split(",") if item.strip()} if args.symbols else None,
+            prepared_dir=args.prepared_dir,
         )
         print(json.dumps(result, indent=2))
         raise SystemExit(0 if result["status"] in {"SUCCEEDED", "PARTIAL"} else 1)
     if args.command == "finalize-fast-eod":
-        print(json.dumps(finalize_fast_lane(args.trading_date, allow_partial=args.allow_partial), ensure_ascii=False))
+        print(json.dumps(finalize_fast_lane(args.trading_date, allow_partial=args.allow_partial, prepared_dir=args.prepared_dir), ensure_ascii=False))
         raise SystemExit(0)
     if args.command == "rebuild-market-health":
         print(json.dumps(rebuild_market_health(args.start_date, args.end_date), ensure_ascii=False))

@@ -25,7 +25,7 @@ def test_breadth_and_regime_report_both_weak_reasons() -> None:
     breadth = compute_breadth([{"close": 90, "sma50": 100}, {"close": 110, "sma50": 100}, {"close": 10, "sma50": None}])
     assert breadth["pct_above_sma50"] == 50.0
     assert breadth["sample_size"] == 2
-    assert breadth["market_health_state"] == "RISK_OFF"
+    assert breadth["market_health_state"] == "NEUTRAL"  # Missing long-history metrics are unknown, not bearish.
     assert regime_ok({"pct_above_sma50": 25}, {"trend_state": "DOWN"}) == (False, ["MARKET_BREADTH_WEAK", "VNINDEX_DOWNTREND"])
 
 

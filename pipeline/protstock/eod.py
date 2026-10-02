@@ -4,6 +4,9 @@ from calendar import monthrange
 from datetime import date, timedelta
 from time import monotonic, sleep
 from typing import Any
+from pathlib import Path
+import gzip
+import json
 
 import httpx
 
@@ -51,6 +54,9 @@ def run_eod(
     fast_lane: bool = False,
     write_breadth_snapshot: bool = True,
     historical: bool = False,
+    missing_only: bool = False,
+    symbol_names: set[str] | None = None,
+    prepared_dir: Path | None = None,
 ) -> dict[str, Any]:
     client = SupabaseRestClient(Settings.from_env())
     try:
@@ -66,17 +72,17 @@ def run_eod(
     })
     counts = {"symbols": 0, "prices": 0, "derived_bars": 0, "snapshots": 0, "patterns": 0, "zones": 0, "signals": 0, "consolidated_signals": 0, "breadth_snapshots": 0, "failed": 0}
     warnings: list[str] = []
+    pending_signals = []
     try:
         symbols = client.active_symbols()
         active_rules = client.active_rule_versions()
         counts["engine_stats"] = _initialize_engine_stats(active_rules)
-        pending_signals = []
         benchmark_daily: list[dict] = []
         benchmark_history: list[dict] = []
         try:
             index = client.market_index("VNINDEX")
             benchmark_fetch_days = FAST_LANE_BENCHMARK_FETCH_DAYS if fast_lane else benchmark_lookback_days
-            index_bars = provider.history("VNINDEX", trading_date - timedelta(days=benchmark_fetch_days), trading_date)
+            index_bars = _fetch_history_with_retry(provider, "VNINDEX", trading_date - timedelta(days=benchmark_fetch_days), trading_date)
             index_rows = [{
                 "index_id": index["id"], "trading_date": bar.trading_date.isoformat(),
                 "open": float(bar.open), "high": float(bar.high), "low": float(bar.low),
@@ -94,7 +100,7 @@ def run_eod(
             # A fresh database has no cached benchmark window. Self-heal once; all
             # later Fast Lane runs stay incremental.
             if fast_lane and len(benchmark_daily) < 200:
-                index_bars = provider.history("VNINDEX", trading_date - timedelta(days=benchmark_lookback_days), trading_date)
+                index_bars = _fetch_history_with_retry(provider, "VNINDEX", trading_date - timedelta(days=benchmark_lookback_days), trading_date)
                 index_rows = [{
                     "index_id": index["id"], "trading_date": bar.trading_date.isoformat(),
                     "open": float(bar.open), "high": float(bar.high), "low": float(bar.low),
@@ -115,6 +121,12 @@ def run_eod(
         symbols = symbols[symbol_offset:]
         if symbol_limit:
             symbols = symbols[:symbol_limit]
+        if symbol_names is not None:
+            symbols = [item for item in symbols if item["symbol"] in symbol_names]
+        if missing_only:
+            complete_ids = {row["symbol_id"] for row in client.daily_snapshots_for_date(trading_date) if row.get("algorithm_version") == ALGORITHM_VERSION}
+            symbols = [item for item in symbols if item["id"] not in complete_ids]
+        counts["expected_symbols"] = len(symbols)
         for symbol_row in symbols:
             started = monotonic()
             try:
@@ -160,7 +172,7 @@ def run_eod(
                             "close": bar["close"], "volume": bar["volume"],
                             "is_complete": bar["is_complete"],
                             "source_last_date": bar["source_last_date"],
-                        } for bar in aggregated]
+                        } for bar in aggregated if not fast_lane or bar["source_last_date"] >= (trading_date - timedelta(days=lookback_days)).isoformat()]
                         counts["derived_bars"] += client.upsert(
                             "derived_bars", derived_rows, "symbol_id,timeframe,period_start"
                         )
@@ -200,6 +212,7 @@ def run_eod(
                     "error_code": type(exc).__name__, "error_message": str(exc)[:500],
                     "duration_ms": int((monotonic() - started) * 1000),
                 })
+            _heartbeat(client, job["id"])
             sleep(pause_seconds)
         if write_breadth_snapshot and symbols:
             # A retry/batch reads the complete stored universe, never its own subset.
@@ -216,6 +229,10 @@ def run_eod(
                 context["portfolios"] = portfolios
                 _write_analysis(client, symbol_id, timeframe, scoped_rows, index_rows, active_rules, counts, result, context, persist_evidence=False)
         status = "SUCCEEDED" if counts["failed"] == 0 else "PARTIAL"
+        if write_breadth_snapshot and symbols:
+            counts["publication_status"] = "COMPLETE" if status == "SUCCEEDED" and breadth["coverage_status"] == "COMPLETE" else "PARTIAL"
+            counts["covered_symbols"] = breadth["observed_count"]
+            counts["expected_symbols"] = breadth["eligible_count"]
         if status == "SUCCEEDED" and write_breadth_snapshot and symbol_offset == 0 and symbol_limit is None and benchmark_daily and benchmark_daily[-1]["date"] == trading_date.isoformat():
             counts["published_signals"] = client.consolidated_signal_count(trading_date, ALGORITHM_VERSION)
         _persist_engine_stats(client, job["id"], trading_date, counts)
@@ -225,10 +242,14 @@ def run_eod(
         client.finish_job(job["id"], {"status": "FAILED", "finished_at": _now(), "counts": counts, "error_summary": str(exc)[:500]})
         raise
     finally:
+        if prepared_dir is not None:
+            prepared_dir.mkdir(parents=True, exist_ok=True)
+            with gzip.open(prepared_dir / f"analysis-{symbol_offset}-{job['id']}.json.gz", "wt", encoding="utf-8") as handoff:
+                json.dump({"trading_date": trading_date.isoformat(), "source_revision": ALGORITHM_VERSION, "analyses": pending_signals}, handoff, ensure_ascii=False, default=str)
         client.close()
 
 
-def finalize_fast_lane(trading_date: date, *, allow_partial: bool = False) -> dict[str, Any]:
+def finalize_fast_lane(trading_date: date, *, allow_partial: bool = False, prepared_dir: Path | None = None) -> dict[str, Any]:
     """Publish same-day market context from the available Fast Lane coverage."""
     client = SupabaseRestClient(Settings.from_env())
     try:
@@ -236,7 +257,7 @@ def finalize_fast_lane(trading_date: date, *, allow_partial: bool = False) -> di
         active_symbols = client.active_symbols()
         expected = {row["id"] for row in active_symbols}
         snapshots = client.daily_snapshots_for_date(trading_date)
-        covered = {row["symbol_id"] for row in snapshots}
+        covered = {row["symbol_id"] for row in snapshots if row.get("algorithm_version", ALGORITHM_VERSION) == ALGORITHM_VERSION}
         missing = expected - covered
         if missing and not allow_partial:
             raise RuntimeError(f"Fast Lane incomplete: {len(covered)}/{len(expected)} daily snapshots")
@@ -250,7 +271,9 @@ def finalize_fast_lane(trading_date: date, *, allow_partial: bool = False) -> di
         breadth = _persist_universe_breadth(client, trading_date, vnindex_snapshot["trend_state"])
     finally:
         client.close()
-    rebuilt = rebuild_signals(trading_date, prepared_market_context=_same_day_market_context(trading_date, breadth, vnindex_snapshot))
+    prepared = load_prepared_analyses(prepared_dir, trading_date) if prepared_dir is not None else None
+    options = {"prepared_analyses": prepared} if prepared else {}
+    rebuilt = rebuild_signals(trading_date, prepared_market_context=_same_day_market_context(trading_date, breadth, vnindex_snapshot), **options)
     if rebuilt["status"] != "SUCCEEDED":
         raise RuntimeError(f"Fast Lane signal evaluation was {rebuilt['status']}")
     return {
@@ -262,7 +285,7 @@ def finalize_fast_lane(trading_date: date, *, allow_partial: bool = False) -> di
     }
 
 
-def rebuild_signals(trading_date: date, *, symbol_offset: int = 0, symbol_limit: int | None = None, historical: bool = False, prepared_market_context: dict | None = None) -> dict[str, Any]:
+def rebuild_signals(trading_date: date, *, symbol_offset: int = 0, symbol_limit: int | None = None, historical: bool = False, prepared_market_context: dict | None = None, prepared_analyses: dict[int, list] | None = None) -> dict[str, Any]:
     """Re-evaluate stored EOD data only; this never calls an upstream price source."""
     client = SupabaseRestClient(Settings.from_env())
     try:
@@ -301,6 +324,16 @@ def rebuild_signals(trading_date: date, *, symbol_offset: int = 0, symbol_limit:
         for symbol_row in symbols:
             started = monotonic()
             try:
+                cached = (prepared_analyses or {}).get(symbol_row["id"])
+                if cached and any(item[1] == "D" for item in cached) and prepared_market_context:
+                    for _symbol_id, timeframe, scoped_rows, index_rows, result, context in cached:
+                        context = {**context, "market_context": prepared_market_context, "portfolios": portfolios}
+                        _write_analysis(client, symbol_row["id"], timeframe, scoped_rows, index_rows, active_rules, counts, result, context, persist_evidence=False)
+                    counts["symbols"] += 1
+                    counts["analysis_reused"] = counts.get("analysis_reused", 0) + 1
+                    client.create_job_item({"job_run_id": job["id"], "symbol_id": symbol_row["id"], "item_key": symbol_row["symbol"], "status": "SUCCEEDED", "rows_written": 0, "duration_ms": int((monotonic() - started) * 1000)})
+                    _heartbeat(client, job["id"])
+                    continue
                 analysis_rows = [{**row, "date": row["trading_date"]} for row in _rows_as_of(client.price_history(symbol_row["id"], MULTI_TIMEFRAME_HISTORY_LIMIT), trading_date)]
                 if prepared_market_context is not None and (not analysis_rows or analysis_rows[-1]["date"] != trading_date.isoformat()):
                     # Partial publication uses only prices from this EOD.
@@ -309,6 +342,7 @@ def rebuild_signals(trading_date: date, *, symbol_offset: int = 0, symbol_limit:
                     for timeframe in ("D", "W", "M"):
                         client.delete_consolidated_signal(symbol_row["id"], timeframe, trading_date.isoformat())
                     client.create_job_item({"job_run_id": job["id"], "symbol_id": symbol_row["id"], "item_key": symbol_row["symbol"], "status": "SKIPPED", "warning_codes": ["STALE_PRICE_DATA"], "rows_written": 0, "duration_ms": int((monotonic() - started) * 1000)})
+                    _heartbeat(client, job["id"])
                     continue
                 if not analysis_rows:
                     raise ValueError("no stored price history")
@@ -362,6 +396,7 @@ def rebuild_signals(trading_date: date, *, symbol_offset: int = 0, symbol_limit:
             except Exception as exc:
                 counts["failed"] += 1; warnings.append(f"{symbol_row['symbol']}: {type(exc).__name__}")
                 client.create_job_item({"job_run_id": job["id"], "symbol_id": symbol_row["id"], "item_key": symbol_row["symbol"], "status": "FAILED", "error_code": type(exc).__name__, "error_message": str(exc)[:500], "duration_ms": int((monotonic() - started) * 1000)})
+            _heartbeat(client, job["id"])
         if prepared_market_context is None:
             vnindex_snapshot = _benchmark_snapshot(benchmark_daily, trading_date)
             breadth = _persist_universe_breadth(client, trading_date, vnindex_snapshot["trend_state"])
@@ -374,6 +409,10 @@ def rebuild_signals(trading_date: date, *, symbol_offset: int = 0, symbol_limit:
                 context["portfolios"] = portfolios
                 _write_analysis(client, symbol_id, timeframe, rows, index_rows, active_rules, counts, result, context, persist_evidence=False)
         status = "SUCCEEDED" if not counts["failed"] else "PARTIAL"
+        final_breadth = (prepared_market_context or {}).get("breadth", {}) if prepared_market_context else breadth
+        counts["publication_status"] = "PARTIAL" if counts["failed"] or counts.get("skipped_missing_price") or final_breadth.get("coverage_status") != "COMPLETE" else "COMPLETE"
+        counts["expected_symbols"] = len(symbols)
+        counts["covered_symbols"] = counts["symbols"]
         if status == "SUCCEEDED" and symbol_offset == 0 and symbol_limit is None and benchmark_daily and benchmark_daily[-1]["date"] == trading_date.isoformat():
             counts["published_signals"] = client.consolidated_signal_count(trading_date, ALGORITHM_VERSION)
         _persist_engine_stats(client, job["id"], trading_date, counts)
@@ -384,6 +423,33 @@ def rebuild_signals(trading_date: date, *, symbol_offset: int = 0, symbol_limit:
         raise
     finally:
         client.close()
+
+
+def _heartbeat(client, job_id: str) -> None:
+    updater = getattr(client, "heartbeat_job", None)
+    if updater is not None:
+        updater(job_id)
+
+
+def load_prepared_analyses(directory: Path, trading_date: date) -> dict[int, list]:
+    """Consume temporary same-run computations, never another session/revision."""
+    prepared: dict[int, list] = {}
+    for path in directory.glob("*.json.gz"):
+        with gzip.open(path, "rt", encoding="utf-8") as handoff:
+            payload = json.load(handoff)
+        if payload.get("trading_date") != trading_date.isoformat() or payload.get("source_revision") != ALGORITHM_VERSION:
+            raise ValueError("Prepared analysis session or algorithm differs from publication")
+        for item in payload.get("analyses", []):
+            symbol_id, timeframe, rows, _benchmark, result, context = item
+            if timeframe not in {"D", "W", "M"} or not rows or context.get("data_date") != trading_date.isoformat():
+                continue
+            if timeframe == "D" and result.get("as_of_date") != trading_date.isoformat():
+                continue
+            existing = prepared.setdefault(int(symbol_id), [])
+            if any(row[1] == timeframe for row in existing):
+                raise ValueError("Duplicate prepared symbol/timeframe")
+            existing.append(item)
+    return prepared
 
 
 def rebuild_market_health(start_date: date, end_date: date) -> dict[str, Any]:
@@ -500,9 +566,13 @@ def _fetch_history_with_retry(provider: VnstockProvider, symbol: str, start: dat
             return provider.history(symbol, start, end)
         except Exception as exc:
             text = str(exc).lower()
-            if attempt == 2 or not any(token in text for token in ("rate limit", "too many", "429", "giới hạn")):
+            rate_limited = any(token in text for token in ("rate limit", "too many", "429", "giới hạn"))
+            transient = isinstance(exc, (TimeoutError, httpx.TimeoutException, httpx.NetworkError)) or (
+                isinstance(exc, httpx.HTTPStatusError) and exc.response.status_code in {408, 500, 502, 503, 504}
+            )
+            if attempt == 2 or not (rate_limited or transient):
                 raise
-            sleep(65 * (attempt + 1))
+            sleep(65 * (attempt + 1) if rate_limited else 2 ** attempt)
     raise RuntimeError("unreachable")
 
 
@@ -620,7 +690,9 @@ def _write_analysis(
         position = None
         if held:
             stops = [float(p["stop_price"]) / STOCK_PRICE_TO_VND for p in held if p.get("stop_price")]
-            position = {"invalidation_price": max(stops) if stops else None, "entry_date": max(p["opened_at"] for p in held)}
+            held_quantity = sum(float(p["quantity"]) for p in held)
+            average_cost = sum(float(p["average_cost"]) * float(p["quantity"]) for p in held) / held_quantity / STOCK_PRICE_TO_VND if held_quantity else None
+            position = {"invalidation_price": max(stops) if stops else None, "entry_date": max(p["opened_at"] for p in held), "average_cost": average_cost, "entry_price": average_cost}
         stats = counts.get("engine_stats", {}).get(_stats_key(version["id"], timeframe))
         if stats is not None:
             stats["evaluated_count"] += 1
