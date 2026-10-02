@@ -27,13 +27,14 @@ Release scope: personal Windows/iPhone web application. Backup remains outside t
 - Capital and trade RPCs lock the portfolio and accept idempotent request IDs. Ownership, active membership and existing role requirements are enforced.
 - Report and analysis RPCs aggregate complete histories beyond the REST row cap. Screener filtering/pagination moves to SQL; sparklines fetch recent sessions per symbol.
 - EOD uses balanced active-universe shards, missing-symbol retries, a daily retry bound, heartbeats and COMPLETE/PARTIAL coverage/revision checks.
+- Stored/historical rebuilds require prices on the exact requested session; missing prices never count as covered. Prepared analyses must belong to that same session. Long rebuilds report progress to stderr while preserving the CLI JSON response.
 - Fast Lane: 15:30 Vietnam time. Supabase watchdog: existing 15:35; GitHub watchdog: 16:15 and 16:45. Backtest worker: 16:00/16:30 and after EOD finalization. Scheduled services can start later because of provider queues.
 - KBS is labeled as the actual source; the former VCI selection did not invoke an independent provider and is removed.
 - Service worker falls back to HTML only for navigation. Failed API requests never receive the cached app shell, and personal API data is not cached there.
 
 ## Validation
 
-- Production TypeScript/Vite build passed against the latest production base; 256 Python tests and 43 JavaScript tests passed.
+- Production TypeScript/Vite build passed against the latest production base; 260 Python tests and 43 JavaScript tests passed.
 - Python regression suite: dispatcher, parser parity, cash/units/chronology, gap sizing, warm-up, worker leases, health coverage, ingestion recovery and REST behavior.
 - JavaScript tests: sector history, signal triage, Watchlist persistence/restart/replay/account isolation, chronological portfolio ledger, historical journal evidence, Vietnam calendar dates and service-worker API isolation.
 - PostgreSQL-compatible PGlite migration smoke tests: eight groups covering all application migrations, atomic/idempotent capital/trades, RLS, expected-owner checks, future dates, histories above 1000 rows, rule hashes/versions, backtest snapshots/leases and thesis/journal history.

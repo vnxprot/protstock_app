@@ -319,3 +319,85 @@ def test_fast_lane_finalization_passes_same_day_context_to_signal_rebuild(monkey
     monkeypatch.setattr("protstock.eod.rebuild_signals", rebuild)
     assert finalize_fast_lane(day)["signals"] == 3
     assert calls == [("breadth", "SIDEWAYS"), ("signals", day.isoformat())]
+
+def _rebuild_same_session_fixture(monkeypatch, day, prepared, stale_cached=False, fresh_cached=False):
+    from protstock.eod import rebuild_signals
+    previous = day - timedelta(days=1)
+    future = day + timedelta(days=7)
+    def bar(on):
+        return {"trading_date": on.isoformat(), "open": 10, "high": 11, "low": 9, "close": 10, "volume": 100}
+    writes, deleted, items, finished = [], [], [], []
+    class Client:
+        def create_job(self, _payload): return {"id": "rebuild"}
+        def active_symbols(self):
+            return [{"id": 1, "symbol": "FRESH", "sector": "TEST"},
+                    {"id": 2, "symbol": "STALE", "sector": "TEST"},
+                    {"id": 3, "symbol": "EMPTY", "sector": "TEST"}]
+        def active_rule_versions(self):
+            return [{"id": "version", "dsl": {"engine": "core_ladder_v2"},
+                     "rules": {"id": "rule", "user_id": "owner"}}]
+        def market_index(self, _code): return {"id": 1}
+        def index_price_history(self, *_args): return [bar(day), bar(future)]
+        def price_history(self, symbol_id, *_args):
+            return {1: [bar(day), bar(future)], 2: [bar(previous), bar(future)], 3: []}[symbol_id]
+        def delete_consolidated_signal(self, symbol_id, timeframe, requested): deleted.append((symbol_id, timeframe, requested))
+        def create_job_item(self, payload): items.append(payload)
+        def finish_job(self, _id, payload): finished.append(payload)
+        def consolidated_signal_count(self, *_args): return 0
+        def upsert(self, *_args): return 0
+        def close(self): pass
+    def write(_client, symbol_id, timeframe, rows, _index, _rules, _counts, result, context, **_options):
+        writes.append((symbol_id, timeframe, rows[-1]["date"], result["as_of_date"]))
+    monkeypatch.setattr("protstock.eod.SupabaseRestClient", lambda _settings: Client())
+    monkeypatch.setattr("protstock.eod.Settings.from_env", lambda: object())
+    monkeypatch.setattr("protstock.eod.aggregate_bars", lambda *_args, **_kwargs: [])
+    monkeypatch.setattr("protstock.eod.analyze_bars", lambda rows, **_kwargs: {"as_of_date": rows[-1]["date"], "indicators": {}, "patterns": [], "zones": []})
+    monkeypatch.setattr("protstock.eod.build_fibonacci_context", lambda *_args: {})
+    monkeypatch.setattr("protstock.eod.classify_wyckoff_timeframe", lambda *_args, **_kwargs: {})
+    monkeypatch.setattr("protstock.eod._decision_context", lambda *_args: {"period_events": {}, "data_date": day.isoformat(), "evaluation_date": day.isoformat(), "daily_snapshot": {}})
+    monkeypatch.setattr("protstock.eod._benchmark_snapshot", lambda *_args: {"trend_state": "SIDEWAYS"})
+    monkeypatch.setattr("protstock.eod._persist_universe_breadth", lambda *_args: {"coverage_status": "COMPLETE"})
+    monkeypatch.setattr("protstock.eod._load_portfolios", lambda *_args, **_kwargs: {})
+    monkeypatch.setattr("protstock.eod._write_analysis", write)
+    cached_day = previous if stale_cached else day
+    cached = {2: [[2, "D", [{**bar(cached_day), "date": cached_day.isoformat()}], [],
+                    {"as_of_date": cached_day.isoformat()}, {"data_date": cached_day.isoformat()}]]} if stale_cached or fresh_cached else None
+    context = {"trading_date": day.isoformat(), "breadth": {"coverage_status": "COMPLETE"}} if prepared else None
+    result = rebuild_signals(day, historical=day < date(2026, 10, 2), prepared_market_context=context, prepared_analyses=cached)
+    return result, writes, deleted, items, finished
+
+
+def test_full_rebuild_counts_only_prices_on_requested_session(monkeypatch):
+    result, writes, deleted, items, finished = _rebuild_same_session_fixture(monkeypatch, date(2026, 10, 2), False)
+    assert result["covered_symbols"] == result["symbols"] == 1
+    assert result["expected_symbols"] == 3 and result["skipped_missing_price"] == 2
+    assert result["failed"] == 0 and result["status"] == "SUCCEEDED"
+    assert result["publication_status"] == "PARTIAL"
+    assert {item[0] for item in writes} == {1}
+    assert all(item[2] == item[3] == "2026-10-02" for item in writes)
+    assert {(symbol_id, frame) for symbol_id, frame, _day in deleted} == {(symbol_id, frame) for symbol_id in (2, 3) for frame in ("D", "W", "M")}
+    assert [item["status"] for item in items] == ["SUCCEEDED", "SKIPPED", "SKIPPED"]
+    assert finished[-1]["counts"]["covered_symbols"] == 1
+
+
+def test_historical_rebuild_requires_exact_historical_session_not_latest_price(monkeypatch):
+    requested = date(2026, 9, 25)
+    result, writes, deleted, _items, _finished = _rebuild_same_session_fixture(monkeypatch, requested, False)
+    assert result["covered_symbols"] == 1 and result["skipped_missing_price"] == 2
+    assert {item[0] for item in writes} == {1}
+    assert all(item[2] == item[3] == requested.isoformat() for item in writes)
+    assert all(item[2] == requested.isoformat() for item in deleted)
+
+
+def test_prepared_rebuild_does_not_reuse_stale_cached_daily_analysis(monkeypatch):
+    result, writes, _deleted, _items, _finished = _rebuild_same_session_fixture(monkeypatch, date(2026, 10, 2), True, stale_cached=True)
+    assert result["covered_symbols"] == 1 and result["skipped_missing_price"] == 2
+    assert result.get("analysis_reused", 0) == 0
+    assert {item[0] for item in writes} == {1}
+
+def test_prepared_rebuild_keeps_same_session_cached_analysis_reuse(monkeypatch):
+    result, writes, _deleted, _items, _finished = _rebuild_same_session_fixture(monkeypatch, date(2026, 10, 2), True, fresh_cached=True)
+    assert result["analysis_reused"] == 1 and result["covered_symbols"] == 2
+    assert result["skipped_missing_price"] == 1 and result["publication_status"] == "PARTIAL"
+    assert {item[0] for item in writes} == {1, 2}
+    assert all(item[2] == item[3] == "2026-10-02" for item in writes)

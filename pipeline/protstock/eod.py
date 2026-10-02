@@ -7,6 +7,7 @@ from typing import Any
 from pathlib import Path
 import gzip
 import json
+import sys
 
 import httpx
 
@@ -321,11 +322,17 @@ def rebuild_signals(trading_date: date, *, symbol_offset: int = 0, symbol_limit:
         if prepared_market_context:
             past_session = any(row["trading_date"] > trading_date.isoformat() for row in benchmark_history)
             portfolios = _load_portfolios(client, active_rules, trading_date, historical=historical or past_session)
-        for symbol_row in symbols:
+        for symbol_index, symbol_row in enumerate(symbols):
+            if symbol_index % 10 == 0:
+                print(f"Rebuild {trading_date}: analysed {symbol_index}/{len(symbols)}; missing={counts.get('skipped_missing_price', 0)}; failed={counts['failed']}", file=sys.stderr, flush=True)
             started = monotonic()
             try:
                 cached = (prepared_analyses or {}).get(symbol_row["id"])
-                if cached and any(item[1] == "D" for item in cached) and prepared_market_context:
+                cached_daily = next((item for item in cached or [] if item[1] == "D"), None)
+                if (cached_daily and prepared_market_context and cached_daily[2]
+                        and cached_daily[2][-1].get("date") == trading_date.isoformat()
+                        and cached_daily[4].get("as_of_date") == trading_date.isoformat()
+                        and all(item[5].get("data_date") == trading_date.isoformat() for item in cached)):
                     for _symbol_id, timeframe, scoped_rows, index_rows, result, context in cached:
                         context = {**context, "market_context": prepared_market_context, "portfolios": portfolios}
                         _write_analysis(client, symbol_row["id"], timeframe, scoped_rows, index_rows, active_rules, counts, result, context, persist_evidence=False)
@@ -335,8 +342,9 @@ def rebuild_signals(trading_date: date, *, symbol_offset: int = 0, symbol_limit:
                     _heartbeat(client, job["id"])
                     continue
                 analysis_rows = [{**row, "date": row["trading_date"]} for row in _rows_as_of(client.price_history(symbol_row["id"], MULTI_TIMEFRAME_HISTORY_LIMIT), trading_date)]
-                if prepared_market_context is not None and (not analysis_rows or analysis_rows[-1]["date"] != trading_date.isoformat()):
-                    # Partial publication uses only prices from this EOD.
+                if not analysis_rows or analysis_rows[-1]["date"] != trading_date.isoformat():
+                    # Every rebuild, including historical runs, requires prices
+                    # on its requested session; stale bars cannot count as covered.
                     counts["skipped_missing_price"] = counts.get("skipped_missing_price", 0) + 1
                     warnings.append(f"{symbol_row['symbol']}: STALE_PRICE_DATA")
                     for timeframe in ("D", "W", "M"):
@@ -344,8 +352,6 @@ def rebuild_signals(trading_date: date, *, symbol_offset: int = 0, symbol_limit:
                     client.create_job_item({"job_run_id": job["id"], "symbol_id": symbol_row["id"], "item_key": symbol_row["symbol"], "status": "SKIPPED", "warning_codes": ["STALE_PRICE_DATA"], "rows_written": 0, "duration_ms": int((monotonic() - started) * 1000)})
                     _heartbeat(client, job["id"])
                     continue
-                if not analysis_rows:
-                    raise ValueError("no stored price history")
                 try:
                     assessment = assess_funnel(symbol_row["id"], analysis_rows,
                                                confirmed_week_end=confirmed_week_end,
@@ -397,6 +403,7 @@ def rebuild_signals(trading_date: date, *, symbol_offset: int = 0, symbol_limit:
                 counts["failed"] += 1; warnings.append(f"{symbol_row['symbol']}: {type(exc).__name__}")
                 client.create_job_item({"job_run_id": job["id"], "symbol_id": symbol_row["id"], "item_key": symbol_row["symbol"], "status": "FAILED", "error_code": type(exc).__name__, "error_message": str(exc)[:500], "duration_ms": int((monotonic() - started) * 1000)})
             _heartbeat(client, job["id"])
+        print(f"Rebuild {trading_date}: analysis complete; covered={counts['symbols']}/{len(symbols)}; missing={counts.get('skipped_missing_price', 0)}; failed={counts['failed']}; publishing results", file=sys.stderr, flush=True)
         if prepared_market_context is None:
             vnindex_snapshot = _benchmark_snapshot(benchmark_daily, trading_date)
             breadth = _persist_universe_breadth(client, trading_date, vnindex_snapshot["trend_state"])
