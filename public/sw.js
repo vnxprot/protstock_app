@@ -1,4 +1,4 @@
-const CACHE = 'prot-stock-shell-v4-1-3'
+const CACHE = 'prot-stock-shell-v4-1-4'
 const APP_SHELL = ['/', '/manifest.webmanifest', '/prot-quant-p.png']
 
 self.addEventListener('install', (event) => {

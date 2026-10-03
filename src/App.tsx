@@ -61,7 +61,7 @@ function App({ authenticated = false, profile = null }: { authenticated?: boolea
       if (!touch) return
       const dx = touch.clientX - startX, dy = touch.clientY - startY
       if (Math.abs(dy) < 45 || Math.abs(dy) < Math.abs(dx) * 1.2) return
-      setCompactMobileNav(dy > 0)
+      setCompactMobileNav(dy < 0)
     }
     addEventListener('touchstart', start, { passive: true })
     addEventListener('touchend', end, { passive: true })

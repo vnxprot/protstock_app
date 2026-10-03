@@ -1,4 +1,4 @@
-# Prot Stock App · v4.1.3
+# Prot Stock App · v4.1.4
 
 Personal PWA for end-of-day analysis of a curated Vietnamese stock universe.
 
