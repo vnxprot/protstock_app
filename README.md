@@ -1,4 +1,4 @@
-# Prot Stock App · v4.0.0
+# Prot Stock App · v4.1.0
 
 Personal PWA for end-of-day analysis of a curated Vietnamese stock universe.
 
@@ -22,6 +22,10 @@ Backtests use the live engine dispatcher and policy, VND cash accounting, indica
 Daily processing uses balanced shards, bounded retries, heartbeat checks and explicit COMPLETE/PARTIAL publication status. Analysis and screening queries are bounded and share a publication date/revision.
 
 See [v4 release notes and validation](docs/release-v4.0.0.md).
+
+## Version 4.1
+
+The interface uses Plus Jakarta Sans and Inter, restores layered glass surfaces, improves light-theme contrast and control sizing, and adds a concise takeaway to stock analysis. The full UI acceptance criteria are in [the v4.1 specification](docs/ui-ux-v4-1-polish-specification.md).
 
 See:
 

@@ -1331,3 +1331,35 @@ button, input, select, textarea, svg text { font-family: var(--font-family); }
   .stock-chart:has(.chart-touch-lock:not(.locked)){touch-action:none}
   .chart-touch-lock button{pointer-events:auto}
 }
+
+/* v4.1 fixed-size controls: the thumb travels horizontally while staying centered. */
+.core-toggle {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 44px;
+  width: 44px;
+  height: 26px;
+  min-height: 26px;
+  max-height: 26px;
+  padding: 0;
+  border: 1px solid #334e3d;
+  border-radius: 999px;
+  background: #1c2b23;
+  cursor: pointer;
+  transition: background-color .2s ease, border-color .2s ease;
+}
+.core-toggle i {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #8fa699;
+  box-shadow: 0 1px 3px rgba(0,0,0,.35);
+  transform: translateX(0);
+  transition: transform .25s cubic-bezier(.34,1.56,.64,1), background-color .2s ease;
+}
+.core-toggle.is-on { background: #d7ff52; border-color: #b6df42; }
+.core-toggle.is-on i { left: 2px; transform: translateX(18px); background: #0b1710; }

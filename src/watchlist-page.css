@@ -44,8 +44,8 @@
 .watch-stock-top { display:flex; align-items:center; justify-content:space-between; gap:7px; }
 .watch-stock-symbol { display:inline-flex; align-items:center; gap:5px; padding:0; border:0; background:transparent; color:#fff; font-family:inherit; font-size:19px; font-weight:800; cursor:pointer; }
 .watch-stock-symbol:hover { color:var(--tier-accent); }
-.watch-stock-remove { display:grid; place-items:center; width:28px; height:28px; border:1px solid #ffffff33; border-radius:8px; background:#ffffff0e; color:#ecf1e8; cursor:pointer; }
-.watch-stock-remove:hover { color:#fff; background:#ae3d43; }
+.watch-stock-remove { display:grid; place-items:center; flex:0 0 28px; width:28px; height:28px; min-height:28px; max-height:28px; padding:0; border:1px solid rgba(255,255,255,.16); border-radius:8px; background:rgba(255,255,255,.06); color:var(--muted); cursor:pointer; transition:color .16s ease,background-color .16s ease,border-color .16s ease; }
+.watch-stock-remove:hover { color:#fff; background:#a82e38; border-color:#d14954; }
 .watch-stock-name { overflow:hidden; white-space:nowrap; text-overflow:ellipsis; color:#fff; font-size:11px; }
 .watch-stock>small { color:#c7d8d0; font-size:10px; line-height:1.35; }
 .watch-stock-signals { display:flex; flex-wrap:wrap; gap:4px; min-height:19px; }

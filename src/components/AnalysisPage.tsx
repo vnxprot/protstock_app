@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { ChevronDown, Search, Star } from 'lucide-react'
-import { useStockAnalysis, useSymbols, type ClassicalCandidate, type PatternInstance, type PriceZone, type StockDecision } from '../hooks/useStockAnalysis'
+import { useStockAnalysis, useSymbols, type ClassicalCandidate, type PatternInstance, type PriceZone, type StockDecision, type TechnicalSnapshot } from '../hooks/useStockAnalysis'
 import { openCommandPalette } from './CommandPalette'
 import { StockChart } from './StockChart'
 import { ZoneEvidence } from './ZoneEvidence'
@@ -15,6 +15,19 @@ const rangeSize:Record<string,number>={ '1M':22,'3M':66,'6M':132,'1Y':260,'3Y':7
 const exchangeLabel=(exchange:string|null|undefined)=>({HOSE:'HSX',HSX:'HSX',HNX:'HNX',UPCOM:'UPCOM'}[exchange??'']??'Đang đồng bộ sàn')
 const displayDate=(value:string|null|undefined)=>value?value.split('-').reverse().join('/'):'—'
 const actionName:Record<string,string>={WATCH:'Theo dõi · chưa có lệnh',PROBE_BUY:'Mua thăm dò',ADD:'Mua thêm',REDUCE:'Giảm tỷ trọng',EXIT:'Thoát vị thế'}
+
+function generateExecutiveSummary(snapshot: TechnicalSnapshot | undefined): string {
+  if (!snapshot) return 'Đang cập nhật đánh giá tổng hợp sau phiên...'
+  const trend = snapshot.trend_state === 'UP' ? 'Xu hướng tăng duy trì tốt'
+    : snapshot.trend_state === 'DOWN' ? 'Xu hướng điều chỉnh giảm'
+    : snapshot.trend_state === 'SIDEWAYS' ? 'Trạng thái đi ngang tích lũy'
+    : 'Xu hướng chưa rõ ràng'
+  const flow = snapshot.cmf20 == null ? 'chưa đủ dữ liệu đánh giá áp lực giá–khối lượng'
+    : snapshot.cmf20 > 0.05 ? 'áp lực mua đang chiếm ưu thế'
+    : snapshot.cmf20 < -0.05 ? 'áp lực bán ngắn hạn còn cao'
+    : 'áp lực mua bán ở mức cân bằng'
+  return `${trend}; ${flow}. Theo dõi các mốc hỗ trợ và kháng cự trước khi quyết định vị thế.`
+}
 
 function DecisionCard({decision,asOf,timeframe}:{decision:StockDecision|null;asOf:string|undefined;timeframe:'D'|'W'|'M'}) {
   return <article className="panel analysis-decision-card"><div className="panel-title"><div><h3>Kết luận Prot · {timeframe}</h3><small>Dữ liệu đã đóng đến {displayDate(asOf)}</small></div><span className={`action-pill ${(decision?.composite_action??'watch').toLowerCase()}`}>{decision?activityLabel(decision):'Không có signal mới'}</span></div><p>{decision?decision.reasons.slice(0,3).join(' · '):'Chỉ báo và mẫu hình bên dưới là bối cảnh; không có hành động mới cho kỳ dữ liệu này.'}</p><small>{decision ? `Logic ${decision.source_revision?.replace('core-rules-', '') ?? 'lịch sử'} · cùng mốc dữ liệu` : 'Chưa có quyết định được công bố cho mốc dữ liệu này.'}</small></article>
@@ -81,6 +94,7 @@ export function AnalysisPage({authenticated,canJournal=true}:{authenticated:bool
       <div className="chart-toolbar indicator-toolbar"><div className="chart-tools">{([['ma20','MA20'],['ma50','MA50'],['ma200','MA200'],['bollinger','Bollinger'],['rsi','RSI'],['macd','MACD']] as const).map(([key,label])=>{const value=chipValue[key];const display=key==='rsi'?number(value):formatMarketPrice(value);return <button key={key} className={indicators[key]?'active':''} onClick={()=>toggle(key)}>{label}{indicators[key]&&value!=null?<b>{display}</b>:null}</button>})}</div></div>
       {multiPane?<div className="multi-chart-studio">{([['M','Tháng'],['W','Tuần'],['D','Ngày']] as const).map(([pane,paneLabel])=>{const paneAnalysis={D:dailyAnalysis,W:weeklyAnalysis,M:monthlyAnalysis}[pane];const paneBars=paneAnalysis.data?.prices.slice(-(pane==='M'?60:pane==='W'?156:260))??[];return <article className="multi-chart-pane" key={pane}><div className="multi-chart-pane-title"><span>{pane}</span><strong>Khung {paneLabel}</strong><small>{paneBars.length} nến · đồng bộ con trỏ</small></div>{paneBars.length?<StockChart bars={paneBars} zones={paneAnalysis.data?.zones} patterns={paneAnalysis.data?.patterns} indicators={indicators} paneId={pane} paneLabel={`Khung ${paneLabel}`}/>:<div className="empty-state compact">Chưa có dữ liệu {paneLabel.toLowerCase()}.</div>}</article>})}</div>:bars.length?<StockChart bars={bars} zones={analysis.data.zones} patterns={analysis.data.patterns} indicators={indicators} paneId={timeframe} paneLabel={`Khung ${timeframe}`}/>:<div className="empty-state">Chưa có OHLCV. Pipeline EOD sẽ điền dữ liệu sau phiên.</div>}
       {indicators.macd && <MacdPanel bars={dailyAnalysis.data?.prices ?? []}/>}
+      <div className="analysis-executive-takeaway" role="note"><span className="takeaway-tag">💡 Tóm lược nhanh</span><p>{generateExecutiveSummary(snapshot)}</p></div>
       <div className="metric-grid">{[['Đóng cửa',snapshot?.close,false,true],['Thay đổi phiên',changePct,true,false],['ATR 14',snapshot?.atr14,false,true],['Volume / TB20',snapshot?.volume_ratio20,false,false]].map(([label,value,isPct,isPrice])=><article className="metric-card" key={label as string}><span>{label}</span><strong className={isPct&&typeof value==='number'?(value<0?'negative':'positive'):undefined}>{isPct&&typeof value==='number'?`${value>=0?'+':''}${value.toFixed(2)}%`:isPrice?formatMarketPrice(value as number|null):number(value as number|null)}</strong></article>)}</div>
       {formingBar&&<div className="forming-period-note">Nến {timeframe==='W'?'tuần':'tháng'} đến {displayDate(formingBar.trading_date)} đang hình thành trên chart. Chỉ báo, mẫu hình và kết luận bên dưới dùng nến đã đóng đến {displayDate(snapshot?.as_of_date)}.</div>}
       <DecisionCard decision={analysis.data.decision} asOf={snapshot?.as_of_date} timeframe={timeframe}/>
