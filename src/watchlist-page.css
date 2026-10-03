@@ -99,6 +99,12 @@
 .watch-reason-company { margin:8px 0 0; color:var(--muted); font-size:14px; }
 .watch-reason-content { min-height:120px; margin:22px 0; padding:20px; border:1px solid var(--line); border-radius:14px; background:var(--surface-2); color:var(--text); font-size:17px; line-height:1.65; white-space:pre-wrap; overflow-wrap:anywhere; }
 .watch-reason-content span { color:var(--muted); }
+.watch-reason-fields { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; margin:20px 0; }
+.watch-reason-fields section { min-width:0; padding:15px; border:1px solid var(--line); border-radius:12px; background:var(--surface-2); }
+.watch-reason-fields section:first-child { grid-column:1/-1; }
+.watch-reason-fields h3 { margin:0 0 7px; color:var(--mint); font-size:12px; }
+.watch-reason-fields p { margin:0; color:var(--text); font-size:15px; line-height:1.55; white-space:pre-wrap; overflow-wrap:anywhere; }
+.watch-reason-fields p span { color:var(--muted); }
 .watch-reason-edit { display:inline-flex; align-items:center; min-height:42px; padding:0 15px; border:1px solid var(--line-bright); border-radius:9px; color:var(--mint); font-size:13px; font-weight:700; text-decoration:none; }
 .watch-reason-edit:hover { background:var(--surface-2); }
 .watch-reason-sheet :focus-visible { outline:2px solid var(--mint); outline-offset:2px; }
@@ -110,6 +116,7 @@ html[data-theme="light"] .watchlist-add label,html[data-theme="light"] .watchlis
 @media(max-width:1050px) { .watchlist-tier-grid { grid-template-columns:1fr 1fr; } .watch-tier-s { grid-column:1/-1; } }
 @media(max-width:760px) { .watchlist-hero { align-items:start; padding:21px; } .watchlist-hero-count { min-width:95px; padding:10px; } .watchlist-hero-count strong { font-size:26px; } .watchlist-add { grid-template-columns:1fr; } .watchlist-suggestions { grid-column:1; } .watchlist-tier-grid { grid-template-columns:1fr; } .watch-tier-s { grid-column:auto; } .watch-roulette-layout { grid-template-columns:1fr; } .watch-wheel-stage { width:min(100%,260px); } .watch-reason-sheet { max-height:88dvh; padding:10px 18px calc(24px + env(safe-area-inset-bottom)); } }
 @media(max-width:460px) { .watchlist-hero { flex-direction:column; gap:16px; } .watchlist-hero-count { display:flex; gap:8px; align-items:center; width:100%; } .watchlist-hero-count span { margin-left:auto; } .watch-roulette-result { align-items:stretch; flex-direction:column; } .watch-roulette-result>button { justify-content:center; } }
+@media(max-width:600px) { .watch-reason-fields { grid-template-columns:1fr; } }
 @media(prefers-reduced-motion:reduce) { .watch-wheel { transition:none; } }
 
 /* v3 tier palette with v4.1 glass and type. */

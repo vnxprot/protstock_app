@@ -1,8 +1,9 @@
-import { FormEvent, useState } from "react";
+import { FormEvent, useCallback, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Eye, EyeOff, LockKeyhole, Plus, Power, Users } from "lucide-react";
+import { Eye, EyeOff, LockKeyhole, Plus, Power, Users, X } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { DateField } from "./DateField";
+import { useDialogFocus } from "../hooks/useDialogFocus";
 
 type Profile = {
   user_id: string;
@@ -28,6 +29,9 @@ const accessState = (row: Profile) => {
 export function AdminPage() {
   const client = useQueryClient();
   const [open, setOpen] = useState(false);
+  const createRef = useRef<HTMLFormElement>(null);
+  const closeCreate = useCallback(() => setOpen(false), []);
+  useDialogFocus(open, createRef, closeCreate);
   const [name, setName] = useState("");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -216,13 +220,19 @@ export function AdminPage() {
       {open && (
         <div className="sheet-backdrop" onMouseDown={() => setOpen(false)}>
           <form
+            ref={createRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="create-client-title"
+            tabIndex={-1}
             className="bottom-sheet position-sheet rule-form"
             onSubmit={create}
             onMouseDown={(event) => event.stopPropagation()}
           >
             <div className="sheet-handle" />
             <div className="sheet-title">
-              <h2>Tạo tài khoản Client</h2>
+              <h2 id="create-client-title">Tạo tài khoản Client</h2>
+              <button type="button" className="icon-button" aria-label="Đóng tạo tài khoản" onClick={closeCreate}><X size={19}/></button>
             </div>
             <label>
               Họ và tên

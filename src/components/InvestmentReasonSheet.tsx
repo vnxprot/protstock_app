@@ -1,48 +1,34 @@
-import { useEffect, useRef } from 'react'
+import { useCallback, useRef } from 'react'
 import { X } from 'lucide-react'
 import type { WatchItem } from '../lib/watchlist'
+import { useDialogFocus } from '../hooks/useDialogFocus'
+
+const details: { key: 'reason' | 'buyZone' | 'targetPrice' | 'stopLoss'; label: string }[] = [
+  { key: 'reason', label: 'Lý do đầu tư' },
+  { key: 'buyZone', label: 'Điểm mua' },
+  { key: 'targetPrice', label: 'Mục tiêu' },
+  { key: 'stopLoss', label: 'Cắt lỗ' },
+]
 
 export function InvestmentReasonSheet({ item, companyName, onClose }: {
   item: WatchItem
   companyName: string | null
   onClose: () => void
 }) {
-  const closeRef = useRef<HTMLButtonElement>(null)
-  const boardRef = useRef<HTMLAnchorElement>(null)
-
-  useEffect(() => {
-    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null
-    const previousOverflow = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-    closeRef.current?.focus()
-    const onEscape = (event: KeyboardEvent) => { if (event.key === 'Escape') onClose() }
-    document.addEventListener('keydown', onEscape)
-    return () => {
-      document.removeEventListener('keydown', onEscape)
-      document.body.style.overflow = previousOverflow
-      previousFocus?.focus()
-    }
-  }, [onClose])
-
-  const keepFocusInside = (event: React.KeyboardEvent<HTMLElement>) => {
-    if (event.key !== 'Tab') return
-    if (event.shiftKey && document.activeElement === closeRef.current) {
-      event.preventDefault()
-      boardRef.current?.focus()
-    } else if (!event.shiftKey && document.activeElement === boardRef.current) {
-      event.preventDefault()
-      closeRef.current?.focus()
-    }
-  }
+  const sheetRef = useRef<HTMLElement>(null)
+  const close = useCallback(onClose, [onClose])
+  useDialogFocus(true, sheetRef, close)
 
   return <div className="watch-reason-backdrop" onMouseDown={event => { if (event.target === event.currentTarget) onClose() }}>
-    <section className="watch-reason-sheet" role="dialog" aria-modal="true" aria-labelledby="watch-reason-title" onKeyDown={keepFocusInside}>
+    <section ref={sheetRef} tabIndex={-1} className="watch-reason-sheet" role="dialog" aria-modal="true" aria-labelledby="watch-reason-title" onMouseDown={event => event.stopPropagation()}>
       <div className="watch-reason-handle" aria-hidden="true"/>
-      <header className="watch-reason-header"><div><span>Tier {item.tier} · {item.symbol}</span><h2 id="watch-reason-title">Lý do đầu tư</h2></div>
-        <button ref={closeRef} type="button" onClick={onClose} aria-label="Đóng Lý do đầu tư"><X size={20}/></button></header>
+      <header className="watch-reason-header"><div><span>Tier {item.tier} · {item.symbol}</span><h2 id="watch-reason-title">Thông tin theo dõi</h2></div>
+        <button type="button" onClick={onClose} aria-label="Đóng thông tin theo dõi"><X size={20}/></button></header>
       {companyName && <p className="watch-reason-company">{companyName}</p>}
-      <div className="watch-reason-content">{item.reason.trim() || <span>Chưa có lý do đầu tư cho mã này.</span>}</div>
-      <a ref={boardRef} className="watch-reason-edit" href="#watchlist-board" onClick={onClose}>Mở bảng để chỉnh sửa</a>
+      <div className="watch-reason-fields">{details.map(({ key, label }) => <section key={key}>
+        <h3>{label}</h3><p>{item[key].trim() || <span>Chưa ghi {label.toLocaleLowerCase('vi')}.</span>}</p>
+      </section>)}</div>
+      <a className="watch-reason-edit" href="#watchlist-board" onClick={onClose}>Mở bảng để chỉnh sửa</a>
     </section>
   </div>
 }

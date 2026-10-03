@@ -73,3 +73,36 @@ body { font-family: var(--font-ui); font-size: 14px; line-height: 1.5; }
   .command-dialog { max-height: 88dvh; }
 }
 @media(prefers-reduced-motion:reduce) { *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; transition-duration: .01ms !important; } }
+
+/* Modal geometry follows the visible viewport when a mobile keyboard opens. */
+:root :is(.command-backdrop,.sheet-backdrop,.watch-reason-backdrop,.signal-explanation-backdrop) {
+  top:var(--modal-viewport-top,0px);
+  bottom:auto;
+  height:var(--modal-viewport-height,100dvh);
+  box-sizing:border-box;
+  overscroll-behavior:contain;
+}
+.command-dialog,.bottom-sheet,.watch-reason-sheet,.signal-explanation-panel { overscroll-behavior:contain; }
+
+.sidebar-account { display:grid; gap:8px; margin-top:auto; }
+.sidebar-profile { display:flex; align-items:center; gap:10px; width:100%; min-width:0; padding:11px 12px; border:1px solid var(--line); border-radius:12px; background:var(--surface-2); color:var(--text); text-align:left; cursor:pointer; }
+.sidebar-profile > span { display:grid; min-width:0; }
+.sidebar-profile strong { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:13px; }
+.sidebar-profile small { color:var(--muted); font-size:11px; }
+.sidebar-account .signout { justify-content:flex-start; width:100%; min-height:40px; margin:0; color:var(--text); border-color:var(--line); }
+.sidebar-account .signout:hover,.sidebar-profile:hover { border-color:var(--mint); background:var(--surface-3); }
+.sidebar-signout-error { color:var(--red); }
+.sidebar-collapsed .sidebar-profile { justify-content:center; padding-inline:5px; }
+.sidebar-collapsed .sidebar-profile > span { display:none; }
+@media (min-width:761px) {
+  .bottom-sheet.account-sheet { display:block; max-width:640px; padding:24px; background:var(--surface-1); }
+  .bottom-sheet.account-sheet .sheet-handle { display:none; }
+}
+@media (max-width:760px) {
+  .command-backdrop,.sheet-backdrop { touch-action:auto; }
+  .command-dialog { display:flex; flex-direction:column; height:calc(var(--modal-viewport-height,100dvh) - 48px); max-height:720px; min-height:0; overflow:hidden; }
+  .command-input,.command-tabs,.command-footer { flex:none; }
+  .command-input input { font-size:16px; }
+  .command-results { flex:1; min-height:0; max-height:none; overflow-y:auto; overscroll-behavior:contain; touch-action:pan-y; }
+  .bottom-sheet,.watch-reason-sheet,.signal-explanation-panel { max-height:90%; overflow-y:auto; touch-action:pan-y; }
+}
