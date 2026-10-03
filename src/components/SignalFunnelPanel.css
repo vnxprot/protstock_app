@@ -22,3 +22,11 @@
 .signal-funnel-row > * { min-width:0; overflow-wrap:anywhere; }
 .signal-funnel-table { border:1px solid var(--line); border-radius:10px; }
 @media(max-width:760px) { .signal-funnel-counts .screener-field { width:100%; } }
+.signal-funnel-counts { align-items:center; gap:7px; }
+.signal-funnel-counts button { display:inline-flex; align-items:center; gap:6px; min-height:36px; padding:6px 11px; border-radius:999px; border-color:var(--line-bright); background:var(--surface-2); color:var(--text); font-size:12px; font-weight:700; white-space:nowrap; }
+.signal-funnel-counts button.selected { background:var(--lime); border-color:var(--lime); color:#14200d; }
+:root[data-theme="light"] .signal-funnel-counts button.selected { background:#d7ff52; border-color:#94b238; color:#172d23; }
+.signal-funnel-counts .signal-funnel-filter-toggle { margin-left:auto; border-radius:10px; }
+.signal-funnel-column-filters { display:flex; flex-wrap:wrap; gap:8px; margin:-5px 0 14px; }
+.signal-funnel-column-filters .screener-field { width:min(220px,100%); }
+@media(max-width:760px) { .signal-funnel-counts .signal-funnel-filter-toggle { margin-left:0; } .signal-funnel-column-filters .screener-field { width:100%; } }

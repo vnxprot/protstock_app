@@ -17,6 +17,7 @@ const tierRank: Record<WatchTier, number> = { S: 0, A: 1, B: 2 }
 function EditableCell({ item, field, userId }: { item: WatchItem; field: TextField; userId: string | null }) {
   const [saveError, setSaveError] = useState(false)
   const inputRef = useRef<HTMLTextAreaElement>(null), dirty = useRef(false)
+  const storageKeyRef = useRef<string | null>(null)
   const draftStorageKey = userId ? 'protstock-watchlist-field-draft:' + userId + ':' + item.symbol + ':' + field : null
   const resize = () => {
     const input = inputRef.current
@@ -25,11 +26,21 @@ function EditableCell({ item, field, userId }: { item: WatchItem; field: TextFie
     input.style.height = `${input.scrollHeight}px`
   }
   useEffect(() => {
+    const input = inputRef.current
+    if (input && document.activeElement === input && dirty.current) {
+      try {
+        if (draftStorageKey) localStorage.setItem(draftStorageKey, input.value)
+        if (storageKeyRef.current && storageKeyRef.current !== draftStorageKey) localStorage.removeItem(storageKeyRef.current)
+      } catch { setSaveError(true) }
+      storageKeyRef.current = draftStorageKey
+      return
+    }
     dirty.current = false; setSaveError(false)
     let stored: string | null = null
     try { if (draftStorageKey) stored = localStorage.getItem(draftStorageKey) } catch { /* The current value remains available. */ }
     dirty.current = stored !== null
-    if (inputRef.current) inputRef.current.value = stored ?? item[field]
+    storageKeyRef.current = draftStorageKey
+    if (input) input.value = stored ?? item[field]
     resize()
   }, [draftStorageKey, item.symbol])
   useEffect(() => { if (!dirty.current && inputRef.current && document.activeElement !== inputRef.current) { inputRef.current.value = item[field]; resize() } }, [item[field]])
@@ -38,13 +49,13 @@ function EditableCell({ item, field, userId }: { item: WatchItem; field: TextFie
     try {
       if (value !== item[field]) updateWatchlistItem(item.symbol, { [field]: value } as WatchPatch)
       dirty.current = false; setSaveError(false)
-      if (draftStorageKey) localStorage.removeItem(draftStorageKey)
+      if (storageKeyRef.current) localStorage.removeItem(storageKeyRef.current)
     } catch { setSaveError(true) }
   }
   return <><textarea ref={inputRef} aria-label={(columns.find(column=>column.key===field)?.label ?? field) + ' ' + item.symbol} defaultValue={item[field]} rows={1}
     maxLength={field === 'reason' ? 500 : 120} onChange={event => {
       dirty.current = true; resize()
-      try { if (draftStorageKey) localStorage.setItem(draftStorageKey, event.target.value) } catch { setSaveError(true) }
+      try { if (storageKeyRef.current) localStorage.setItem(storageKeyRef.current, event.target.value) } catch { setSaveError(true) }
     }} onBlur={commit} onKeyDown={event => { if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) event.currentTarget.blur() }}/>
     {saveError && <small role="alert">Chưa lưu được thay đổi; nội dung đang giữ trong ô.</small>}</>
 }

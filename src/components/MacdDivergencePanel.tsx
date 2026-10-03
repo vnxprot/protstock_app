@@ -137,8 +137,9 @@ export function MacdDivergencePanel({ date, authenticated }: { date: string; aut
         <option value={1}>1 đoạn · 2 vùng</option><option value={2}>2 đoạn · 3 vùng</option><option value={3}>3 đoạn · 4 vùng</option>
       </SoftSelect></label>
       <label className="screener-field"><Filter size={16}/><SoftSelect aria-label="Trạng thái phân kỳ MACD" value={stage} onChange={event => { setStage(event.target.value); setPage(1) }}>
-        <option value="ACTIVE">Đang theo dõi và breakout gần đây</option><option value="FRESH">Vừa phát hiện</option><option value="ALL">Tất cả trạng thái</option>
+        <option value="ACTIVE">Đang theo dõi và breakout gần đây</option><option value="FRESH">Vừa phát hiện</option>
         {Object.entries(stages).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+        <option value="ALL">Tất cả trạng thái</option>
       </SoftSelect></label><span>{filtered.length} mã/mẫu</span></div>
     {query.isLoading && <p className="muted">Đang tải phân kỳ theo vùng đáy…</p>}
     {query.isError && <p className="muted">Không đọc được dữ liệu phân kỳ.</p>}
