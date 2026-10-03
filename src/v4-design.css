@@ -55,10 +55,11 @@ body { font-family: var(--font-ui); font-size: 14px; line-height: 1.5; }
 }
 @media(max-width:760px) {
   .app-shell main { padding: 0 14px 28px; }
-  .app-shell button:not(.core-toggle):not(.watch-stock-remove):not(.icon-button):not(.collapse-button):not(.symbol-avatar):not(.watch-stock-tiers button),
+  .app-shell button:not(.core-toggle):not(.watch-stock-remove):not(.icon-button):not(.theme-toggle):not(.collapse-button):not(.symbol-avatar):not(.watch-stock-tiers button),
   .app-shell :is(input,select,.primary-button,.secondary-button,.text-button) { min-height: 44px; }
   .app-shell input,.app-shell textarea,.app-shell select { font-size: 16px; }
   .mobile-header { height:65px; min-height:65px; padding-top:env(safe-area-inset-top); background:#07110ee8; backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px); }
+  .mobile-header .theme-toggle { width:38px; height:38px; min-width:38px; min-height:38px; padding:0; }
   .mobile-header .mobile-live { border:0; background:transparent; cursor:pointer; }
   .bottom-nav.six-items { grid-template-columns:repeat(6,minmax(0,1fr)); }
   .app-shell .overview-support-grid { display: flex; flex-direction: column; align-items: stretch; order: 0; }

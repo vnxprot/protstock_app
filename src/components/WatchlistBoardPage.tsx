@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowLeft, ArrowUpRight, Filter } from 'lucide-react'
 import { SoftSelect } from './SoftSelect'
-import { isWatchActive, updateWatchlistItem, useWatchlist, type WatchItem, type WatchPatch, type WatchStatus, type WatchTier } from '../lib/watchlist'
+import { isWatchActive, updateWatchlistItem, useWatchlist, WATCHLIST_DETAIL_LIMIT, WATCHLIST_REASON_LIMIT, type WatchItem, type WatchPatch, type WatchStatus, type WatchTier } from '../lib/watchlist'
 import { useAccountId } from '../hooks/useAccountId'
 import '../watchlist-board.css'
 
@@ -53,7 +53,7 @@ function EditableCell({ item, field, userId }: { item: WatchItem; field: TextFie
     } catch { setSaveError(true) }
   }
   return <><textarea ref={inputRef} aria-label={(columns.find(column=>column.key===field)?.label ?? field) + ' ' + item.symbol} defaultValue={item[field]} rows={1}
-    maxLength={field === 'reason' ? 500 : 120} onChange={event => {
+    maxLength={field === 'reason' ? WATCHLIST_REASON_LIMIT : WATCHLIST_DETAIL_LIMIT} onChange={event => {
       dirty.current = true; resize()
       try { if (storageKeyRef.current) localStorage.setItem(storageKeyRef.current, event.target.value) } catch { setSaveError(true) }
     }} onBlur={commit} onKeyDown={event => { if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) event.currentTarget.blur() }}/>

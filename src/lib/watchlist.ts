@@ -6,6 +6,8 @@ export type WatchStatus = 'On' | 'Off'
 export type WatchItem = { symbol: string; tier: WatchTier; addedAt: string; status: WatchStatus; reason: string; investmentHorizon: string; buyZone: string; targetPrice: string; stopLoss: string }
 export type WatchPatch = Partial<Pick<WatchItem, 'tier' | 'status' | 'reason' | 'investmentHorizon' | 'buyZone' | 'targetPrice' | 'stopLoss'>>
 export type WatchChange = { id: string; symbol: string; patch?: WatchPatch; tier?: WatchTier; remove?: boolean; addedAt: string; queuedAt?: number }
+export const WATCHLIST_REASON_LIMIT = 4000
+export const WATCHLIST_DETAIL_LIMIT = 1000
 const WATCHLIST_KEY = 'protstock-watchlist-v1'
 const OUTBOX_KEY = 'protstock-watchlist-outbox-v1'
 const LEGACY_KEY = 'protstock-favorites'
@@ -26,7 +28,7 @@ function cleanPatch(value: WatchPatch): WatchPatch {
   const patch: WatchPatch = {}
   if (validTier(value.tier)) patch.tier = value.tier
   if (value.status === 'On' || value.status === 'Off') patch.status = value.status
-  for (const key of ['reason', 'investmentHorizon', 'buyZone', 'targetPrice', 'stopLoss'] as const) if (typeof value[key] === 'string') patch[key] = textField(value[key], key === 'reason' ? 500 : 120)
+  for (const key of ['reason', 'investmentHorizon', 'buyZone', 'targetPrice', 'stopLoss'] as const) if (typeof value[key] === 'string') patch[key] = textField(value[key], key === 'reason' ? WATCHLIST_REASON_LIMIT : WATCHLIST_DETAIL_LIMIT)
   return patch
 }
 function changePatch(change: WatchChange): WatchPatch {
@@ -43,7 +45,7 @@ export function normalizeWatchlist(value: unknown): WatchItem[] {
     const symbol = typeof item === 'string' ? item : item?.symbol
     if (!validSymbol(symbol) || RETIRED_SYMBOLS.has(symbol) || seen.has(symbol)) return []
     seen.add(symbol)
-    return [{ symbol, tier: validTier(item?.tier) ? item.tier : 'B', addedAt: typeof item?.addedAt === 'string' ? item.addedAt : '', status: item?.status === 'Off' ? 'Off' : 'On', reason: textField(item?.reason, 500), investmentHorizon: textField(item?.investmentHorizon, 120), buyZone: textField(item?.buyZone, 120), targetPrice: textField(item?.targetPrice, 120), stopLoss: textField(item?.stopLoss, 120) }]
+    return [{ symbol, tier: validTier(item?.tier) ? item.tier : 'B', addedAt: typeof item?.addedAt === 'string' ? item.addedAt : '', status: item?.status === 'Off' ? 'Off' : 'On', reason: textField(item?.reason, WATCHLIST_REASON_LIMIT), investmentHorizon: textField(item?.investmentHorizon, WATCHLIST_DETAIL_LIMIT), buyZone: textField(item?.buyZone, WATCHLIST_DETAIL_LIMIT), targetPrice: textField(item?.targetPrice, WATCHLIST_DETAIL_LIMIT), stopLoss: textField(item?.stopLoss, WATCHLIST_DETAIL_LIMIT) }]
   })
 }
 

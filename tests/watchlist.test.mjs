@@ -44,6 +44,18 @@ test('retired universe symbols are removed from local watchlists', () => {
   assert.deepEqual(normalizeWatchlist(['DHM', 'LTG', 'DMC', 'POS', 'MTA', 'AMC', 'DHD', 'DPC', 'PXS', 'SP2', 'TAR', 'TCD', 'TLG']).map(item => item.symbol), ['TLG'])
 })
 
+test('long notes with file and web links remain editable before existing text', () => {
+  contents.clear()
+  toggleWatchlistSymbol('ANV')
+  const note = 'Luận điểm '.repeat(55) + 'file:///C:/Users/phong/Downloads/Documents/ANV.pdf https://www.google.com/search?q=xem+t%E1%BB%91c+%C4'
+  assert.ok(note.length > 500)
+  updateWatchlistItem('ANV', { reason: note, buyZone: 'https://example.com/' + 'a'.repeat(150) })
+  updateWatchlistItem('ANV', { reason: 'XY' + loadWatchlist().find(item => item.symbol === 'ANV').reason })
+  const saved = loadWatchlist().find(item => item.symbol === 'ANV')
+  assert.equal(saved.reason, 'XY' + note)
+  assert.ok(saved.buyZone.length > 120)
+})
+
 test('roulette rejects modulo-bias overflow before selecting an index', () => {
   const values = [0xffffffff, 5]
   assert.equal(uniformIndex(3, () => values.shift()), 2)
