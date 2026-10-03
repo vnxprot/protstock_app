@@ -102,6 +102,7 @@ def main() -> None:
     funnel.add_argument("--end-date", type=date.fromisoformat, required=True)
     funnel.add_argument("--symbol-offset", type=int, default=0)
     funnel.add_argument("--symbol-limit", type=int)
+    funnel.add_argument("--symbols", help="Comma-separated symbols")
     funnel.add_argument("--apply", action="store_true")
     funnel.add_argument("--price-basis", choices=("stored", "research"), default="stored")
     research = subparsers.add_parser("sync-research-prices")
@@ -189,6 +190,7 @@ def main() -> None:
         print(json.dumps(run_funnel_replay(args.start_date, args.end_date,
                                            symbol_offset=args.symbol_offset,
                                            symbol_limit=args.symbol_limit,
+                                           symbols={item.strip().upper() for item in args.symbols.split(",") if item.strip()} if args.symbols else None,
                                            apply=args.apply,
                                            price_basis=args.price_basis), ensure_ascii=False))
         raise SystemExit(0)

@@ -23,6 +23,11 @@ on:
         required: true
         default: '10'
         type: string
+      symbols:
+        description: Optional comma-separated symbols
+        required: false
+        default: ''
+        type: string
       apply:
         description: Persist shadow assessments and outcomes
         required: true
@@ -57,9 +62,11 @@ jobs:
           END_DATE: ${{ inputs.end_date }}
           SYMBOL_OFFSET: ${{ inputs.symbol_offset }}
           SYMBOL_LIMIT: ${{ inputs.symbol_limit }}
+          SYMBOLS: ${{ inputs.symbols }}
           APPLY: ${{ inputs.apply }}
           PRICE_BASIS: ${{ inputs.price_basis }}
         run: |
           args=(--start-date "$START_DATE" --end-date "$END_DATE" --symbol-offset "$SYMBOL_OFFSET" --symbol-limit "$SYMBOL_LIMIT" --price-basis "$PRICE_BASIS")
+          if [ -n "$SYMBOLS" ]; then args+=(--symbols "$SYMBOLS"); fi
           if [ "$APPLY" = 'true' ]; then args+=(--apply); fi
           protstock replay-funnel "${args[@]}"

@@ -86,7 +86,7 @@ def replay_symbol(symbol_id: int, rows: list[dict], session_dates: list[date],
 
 def run_funnel_replay(start_date: date, end_date: date, *, symbol_offset: int = 0,
                       symbol_limit: int | None = None, apply: bool = False,
-                      price_basis: str = "stored") -> dict:
+                      price_basis: str = "stored", symbols: set[str] | None = None) -> dict:
     if start_date > end_date:
         raise ValueError("start_date must be on or before end_date")
     if price_basis not in {"stored", "research"}:
@@ -96,16 +96,19 @@ def run_funnel_replay(start_date: date, end_date: date, *, symbol_offset: int = 
               "quarantined": 0, "outcomes": 0, "missing_price_series": 0,
               "price_basis": price_basis, "mode": "apply" if apply else "dry-run"}
     try:
-        symbols = client.all_symbols_for_replay()[symbol_offset:]
+        selected_symbols = client.all_symbols_for_replay()
+        if symbols is not None:
+            selected_symbols = [row for row in selected_symbols if row["symbol"] in symbols]
+        selected_symbols = selected_symbols[symbol_offset:]
         if symbol_limit is not None:
-            symbols = symbols[:symbol_limit]
+            selected_symbols = selected_symbols[:symbol_limit]
         index = client.market_index("VNINDEX")
         index_rows = client.index_price_history(index["id"], 2600)
         sessions = [date.fromisoformat(row["trading_date"]) for row in index_rows
                     if row["trading_date"] <= end_date.isoformat()]
         if not sessions:
             raise ValueError("VNINDEX session calendar is unavailable")
-        for symbol in symbols:
+        for symbol in selected_symbols:
             if price_basis == "research":
                 status = client.research_price_status(symbol["id"])
                 if (not status or status["coverage_status"] != "MATCHED"

@@ -43,7 +43,6 @@ DHC,CTCP Đông Hải Bến Tre,GIAY_BAO BI,HOSE,NORMAL,true
 DHG,CTCP Dược Hậu Giang,DUOC,HOSE,NORMAL,true
 DHT,CTCP Dược phẩm Hà Tây,DUOC,HNX,NORMAL,true
 DIG,Tổng Công ty cổ phần Đầu tư Phát triển Xây dựng,BDS,HOSE,NORMAL,true
-DNP,CTCP DNP Holding,BE TONG_NHUA DUONG,HNX,NORMAL,true
 DPG,CTCP Tập đoàn Đạt Phương,BDS,HOSE,NORMAL,true
 DPM,Tổng công ty Phân bón và Hóa chất Dầu khí - CTCP,HOA CHAT_PHAN BON,HOSE,NORMAL,true
 DPR,CTCP Cao su Đồng Phú,CAO SU,HOSE,NORMAL,true
@@ -112,7 +111,6 @@ MSB,Ngân hàng TMCP Hàng hải Việt Nam,NGAN HANG,HOSE,NORMAL,true
 MSN,CTCP Tập đoàn Masan,THUC PHAM,HOSE,NORMAL,true
 MSR,CTCP Masan High-Tech Materials,KHOANG SAN,UPCOM,NORMAL,true
 MST,CTCP Đầu tư MST,XAY DUNG,HNX,NORMAL,true
-MVB,Tổng Công ty Công nghiệp mỏ Việt Bắc TKV - CTCP,THAN,HNX,NORMAL,true
 MWG,CTCP Đầu tư Thế giới Di động,BAN LE,HOSE,NORMAL,true
 MZG,CTCP MiZa,GIAY_BAO BI,HOSE,NORMAL,true
 NAB,Ngân hàng TMCP Nam Á,NGAN HANG,HOSE,NORMAL,true
@@ -121,7 +119,6 @@ NDN,CTCP Đầu tư Phát triển Nhà Đà Nẵng,BDS,HNX,NORMAL,true
 NHH,CTCP Nhựa Hà Nội,BE TONG_NHUA DUONG,HOSE,NORMAL,true
 NKG,CTCP Thép Nam Kim,THEP,HOSE,NORMAL,true
 NLG,CTCP Đầu tư Nam Long,BDS,HOSE,NORMAL,true
-NSH,CTCP Tập Đoàn Nhôm Sông Hồng Shalumi,THEP,HNX,NORMAL,true
 NT2,CTCP Điện lực Dầu khí Nhơn Trạch 2,DIEN_NUOC,HOSE,NORMAL,true
 NTP,CTCP Nhựa Thiếu niên Tiền Phong,BE TONG_NHUA DUONG,HNX,NORMAL,true
 NVL,CTCP Tập đoàn Đầu tư Địa ốc No Va,BDS,HOSE,NORMAL,true
@@ -151,7 +148,6 @@ SBT,CTCP Thành Thành Công - Biên Hòa,DUONG,HOSE,NORMAL,true
 SGP,CTCP Cảng Sài Gòn,CANG BIEN,UPCOM,NORMAL,true
 SHB,Ngân hàng TMCP Sài Gòn - Hà Nội,NGAN HANG,HOSE,NORMAL,true
 SHS,CTCP Chứng khoán Sài Gòn - Hà Nội,CHUNG KHOAN,HNX,NORMAL,true
-SLS,CTCP Mía Đường Sơn La,DUONG,HNX,NORMAL,true
 SMC,CTCP Đầu tư Thương mại SMC,THEP,HOSE,NORMAL,true
 SSI,CTCP Chứng khoán SSI,CHUNG KHOAN,HOSE,NORMAL,true
 STB,Ngân hàng TMCP Sài Gòn Tài Lộc,NGAN HANG,HOSE,NORMAL,true
@@ -163,7 +159,6 @@ TCM,CTCP Dệt may - Đầu tư - Thương mại Thành Công,XUAT KHAU,HOSE,NOR
 TDC,CTCP Kinh doanh và Phát triển Bình Dương,BDS_KCN,HOSE,NORMAL,true
 TDP,CTCP Thuận Đức,BE TONG_NHUA DUONG,HOSE,NORMAL,true
 THG,CTCP Đầu tư và Xây dựng Tiền Giang,XAY DUNG,HOSE,NORMAL,true
-THT,CTCP Than Hà Tu - Vinacomin,THAN,HNX,NORMAL,true
 TIP,CTCP Phát triển Khu Công nghiệp Tín Nghĩa,BDS_KCN,HOSE,NORMAL,true
 TLH,CTCP Tập đoàn Thép Tiến Lên,THEP,HOSE,NORMAL,true
 TNG,CTCP Đầu tư và Thương mại TNG,XUAT KHAU,HNX,NORMAL,true
@@ -186,7 +181,6 @@ VGT,Tập đoàn Dệt May Việt Nam,XUAT KHAU,UPCOM,NORMAL,true
 VHC,CTCP Vĩnh Hoàn,THUY SAN,HOSE,NORMAL,true
 VHM,CTCP Vinhomes,BDS,HOSE,NORMAL,true
 VIB,Ngân hàng TMCP Quốc tế Việt Nam,NGAN HANG,HOSE,NORMAL,true
-VIF,Tổng Công ty Lâm nghiệp Việt Nam - CTCP,GO,HNX,NORMAL,true
 VIX,CTCP Chứng khoán VIX,CHUNG KHOAN,HOSE,NORMAL,true
 VJC,CTCP Hàng không Vietjet,HANG KHONG,HOSE,NORMAL,true
 VNB,CTCP Sách Việt Nam,GIAY_BAO BI,UPCOM,NORMAL,true
@@ -259,3 +253,24 @@ VBB,Ngân hàng TMCP Việt Nam Thương Tín,NGAN HANG,HOSE,NORMAL,true
 TCI,CTCP Chứng Khoán Thành Công,CHUNG KHOAN,HOSE,NORMAL,true
 DVP,CTCP Đầu tư và Phát triển Cảng Đình Vũ,CANG BIEN,HOSE,NORMAL,true
 NNC,CTCP Đá Núi Nhỏ,DAU TU CONG,HOSE,NORMAL,true
+NVB,Ngân hàng TMCP Quốc Dân,NGAN HANG,HNX,UNKNOWN,true
+HUT,CTCP Tasco,XAY DUNG,HNX,UNKNOWN,true
+VC3,CTCP Tập đoàn Nam Mê Kông,BDS,HNX,UNKNOWN,true
+BVS,CTCP Chứng khoán Bảo Việt,CHUNG KHOAN,HNX,UNKNOWN,true
+DXP,CTCP Cảng Đoạn Xá,VAN TAI CONG NGHIEP,HNX,UNKNOWN,true
+HDA,CTCP Hãng sơn Đông Á,XAY DUNG,HNX,UNKNOWN,true
+APS,CTCP Chứng khoán Châu Á - Thái Bình Dương,CHUNG KHOAN,HNX,UNKNOWN,true
+NRC,CTCP Tập đoàn Bất Động Sản Quốc Gia,BDS,HNX,UNKNOWN,true
+EVS,CTCP Chứng khoán EVS,CHUNG KHOAN,HNX,UNKNOWN,true
+CTP,CTCP Tập đoàn CTP Group,THUC PHAM,HNX,UNKNOWN,true
+VFS,CTCP Chứng khoán Nhất Việt,CHUNG KHOAN,HNX,UNKNOWN,true
+API,CTCP Đầu tư Châu Á - Thái Bình Dương,BDS,HNX,UNKNOWN,true
+PSD,CTCP Dịch vụ Phân phối Tổng hợp Dầu khí,BAN LE,HNX,UNKNOWN,true
+VC7,CTCP Tập đoàn BGI,XAY DUNG,HNX,UNKNOWN,true
+SVN,CTCP Tập đoàn VEXILLA Việt Nam,XAY DUNG,HNX,UNKNOWN,true
+DST,CTCP Đầu tư Sao Thăng Long,XAY DUNG,HNX,UNKNOWN,true
+C69,CTCP Xây dựng 1369,XAY DUNG,HNX,UNKNOWN,true
+KSV,Tổng Công ty Khoáng sản TKV - CTCP,KHOANG SAN,HNX,UNKNOWN,true
+DVM,CTCP Dược liệu Việt Nam,DUOC,HNX,UNKNOWN,true
+KSF,CTCP Tập đoàn Sunshine,BDS,HNX,UNKNOWN,true
+BKC,CTCP Khoáng sản Bắc Kạn,KHOANG SAN,HNX,UNKNOWN,true

@@ -15,6 +15,10 @@ on:
         description: Optional zero-based offset for batched backfill
         required: false
         type: string
+      symbols:
+        description: Optional comma-separated symbols for focused backfill
+        required: false
+        type: string
       lookback_days:
         description: Calendar days to fetch (10 daily, 900 initial backfill)
         required: false
@@ -56,6 +60,7 @@ jobs:
           TRADING_DATE: ${{ inputs.trading_date }}
           SYMBOL_LIMIT: ${{ inputs.symbol_limit }}
           SYMBOL_OFFSET: ${{ inputs.symbol_offset }}
+          SYMBOLS: ${{ inputs.symbols }}
           LOOKBACK_DAYS: ${{ inputs.lookback_days || '10' }}
           SOURCE: ${{ inputs.source || 'KBS' }}
         run: |
@@ -63,6 +68,8 @@ jobs:
           if [ -n "$TRADING_DATE" ]; then args+=(--date "$TRADING_DATE"); fi
           if [ -n "$SYMBOL_LIMIT" ]; then args+=(--symbol-limit "$SYMBOL_LIMIT"); fi
           if [ -n "$SYMBOL_OFFSET" ]; then args+=(--symbol-offset "$SYMBOL_OFFSET"); fi
+          if [ -n "$SYMBOLS" ]; then args+=(--symbols "$SYMBOLS"); fi
+          if [ -n "$SYMBOLS" ]; then args+=(--historical); fi
           protstock eod "${args[@]}" --source "$SOURCE" --lookback-days "$LOOKBACK_DAYS"
       - name: Report partial ingestion
         if: steps.ingest.outcome == 'failure'
@@ -74,7 +81,7 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: protstock backtest-worker --limit 3
       - name: Send concise Telegram EOD alerts
-        if: always()
+        if: always() && inputs.symbols == ''
         env:
           SUPABASE_URL: https://upmqxwktvvguegqeqibn.supabase.co
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}

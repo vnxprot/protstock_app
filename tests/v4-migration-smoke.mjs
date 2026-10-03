@@ -39,10 +39,18 @@ try {
     insert into public.research_price_sync_status(symbol_id,requested_start_date,requested_end_date,first_date,last_date,vendor_bars,stored_bars,unmatched_stored_dates,quarantined_bars,coverage_status,source_version)
     select id,'2021-01-01','2026-09-30','2021-01-01','2023-09-28',1001,1001,0,0,'MATCHED','KBS_PUBLIC_V2_20260930' from public.symbols where symbol='TRC';`)
   }
+  if(file==='20261003020000_rotate_hnx_universe.sql') {
+   await db.exec(`insert into public.symbols(symbol,sector,exchange) values('DNP','BE TONG_NHUA DUONG','HNX'),('MVB','THAN','HNX'),('NSH','THEP','HNX'),('SLS','DUONG','HNX'),('THT','THAN','HNX'),('VIF','GO','HNX');
+    insert into public.daily_prices(symbol_id,trading_date,open,high,low,close,volume,source)
+      select id,'2021-01-04',10,10,10,10,100,'KBS' from public.symbols where symbol in ('DNP','MVB','NSH','SLS','THT','VIF');`)
+  }
   try { await db.exec(await readFile('supabase/migrations/'+file,'utf8')) }
   catch(error){ console.error('MIGRATION FAILED',file,error.message); throw error }
  }
  console.log('PASS: all application migrations including v4; cron/Vault integrations excluded')
+ assert.equal(Number(Object.values((await db.query(`select count(*) from public.symbols where symbol in ('DNP','MVB','NSH','SLS','THT','VIF')`)).rows[0])[0]),0)
+ assert.equal(Number(Object.values((await db.query(`select count(*) from public.daily_prices where source='KBS' and trading_date='2021-01-04'`)).rows[0])[0]),0)
+ assert.equal(Number(Object.values((await db.query(`select count(*) from public.symbols where symbol in ('NVB','HUT','VC3','BVS','DXP','HDA','APS','NRC','EVS','CTP','VFS','API','PSD','VC7','SVN','DST','C69','KSV','DVM','KSF','BKC')`)).rows[0])[0]),21)
  assert.equal(Number(Object.values((await db.query(`select count(*) from daily_prices p join symbols s on s.id=p.symbol_id where s.symbol='TRC' and p.close=10 and p.volume=400 and p.source_version='KBS_PUBLIC_V2_20260930_TRC_VSDC_199296'`)).rows[0])[0]),1001)
  // Supabase grants these through its platform default privileges.
  await db.exec(`grant all on all tables in schema public to service_role;grant all on all sequences in schema public to service_role;`)
