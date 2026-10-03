@@ -2,21 +2,18 @@ import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import type { UserProfile } from '../AuthGate'
 import { supabase } from '../lib/supabase'
-import { setTheme, useTheme } from '../lib/theme'
 import { version } from '../../package.json'
 import { TodayHealth } from './TodayHealth'
 import { ReplayPanel } from './ReplayPanel'
 import { EngineGuide } from './EngineGuide'
 export function SettingsPage({ authenticated, isAdmin = true, profile }: { authenticated: boolean; isAdmin?: boolean; profile?: UserProfile | null }) {
-  const [tab, setTab] = useState<'appearance' | 'guide' | 'data' | 'account'>('appearance')
-  const theme = useTheme()
+  const [tab, setTab] = useState<'guide' | 'data' | 'account'>('guide')
   const rules = useQuery({ queryKey: ['guide-rules'], enabled: authenticated && Boolean(supabase) && isAdmin, queryFn: async () => { const { data, error } = await supabase!.from('rules').select('id,name,status,rule_versions(version)').order('name'); if (error) throw error; return data ?? [] } })
   return <section className="workspace-page settings-page">
-    <div className="page-title-row"><div><h1>Cài đặt</h1><p className="muted">Giao diện, dữ liệu, hướng dẫn và tài khoản.</p></div></div>
-    <div className="timeframe-tabs" role="tablist" aria-label="Cài đặt">{([['appearance','Giao diện'],['guide','Hướng dẫn'],['data','Dữ liệu'],['account','Tài khoản']] as const).map(([id,label])=><button key={id} id={`settings-tab-${id}`} role="tab" aria-selected={tab===id} aria-controls="settings-panel" className={tab===id?'active':''} onClick={()=>setTab(id)}>{label}</button>)}</div>
+    <div className="page-title-row"><div><h1>Cài đặt</h1><p className="muted">Dữ liệu, hướng dẫn và tài khoản.</p></div></div>
+    <div className="timeframe-tabs" role="tablist" aria-label="Cài đặt">{([['guide','Hướng dẫn'],['data','Dữ liệu'],['account','Tài khoản']] as const).map(([id,label])=><button key={id} id={`settings-tab-${id}`} role="tab" aria-selected={tab===id} aria-controls="settings-panel" className={tab===id?'active':''} onClick={()=>setTab(id)}>{label}</button>)}</div>
     <div id="settings-panel" role="tabpanel" aria-labelledby={`settings-tab-${tab}`}>
-    {tab==='appearance'?<article className="panel"><h2>Giao diện</h2><p>Windows hiển thị đầy đủ công cụ. Trên iPhone, thanh dưới ưu tiên Tổng quan, Watchlist và Nhật ký theo quyền tài khoản.</p><div className="appearance-options"><button className="secondary-button" aria-pressed={theme==='light'} onClick={()=>setTheme('light')}>Sáng</button><button className="secondary-button" aria-pressed={theme==='dark'} onClick={()=>setTheme('dark')}>Tối</button></div><p className="muted">Giao diện dùng font có sẵn trên thiết bị, hỗ trợ phóng to và giảm chuyển động theo cài đặt hệ thống.</p></article>
-    :tab==='data'?<><TodayHealth/><article className="panel"><h2>Cách đọc dữ liệu</h2><p>Giá hiển thị bằng VND/cổ phiếu; vốn và báo cáo bằng VND. Tín hiệu sử dụng ngày công bố và phiên bản thuật toán cụ thể. D/W/M chỉ tạo quyết định từ nến đã đóng.</p><p>Prot Flow là áp lực giá–khối lượng, điểm mẫu hình là thước đo cấu trúc. Phân ngành lịch sử hiện dùng phân loại ngành đang lưu. Dữ liệu sự kiện doanh nghiệp chưa được thu thập đầy đủ; kiểm thử có thể bị ảnh hưởng bởi chia tách hoặc cổ tức.</p><p>Nguồn hiện tại: KBS. Tốc độ cập nhật phụ thuộc giới hạn nguồn dữ liệu và hàng đợi GitHub Actions.</p></article></>
+    {tab==='data'?<><TodayHealth/><article className="panel"><h2>Cách đọc dữ liệu</h2><p>Giá hiển thị bằng VND/cổ phiếu; vốn và báo cáo bằng VND. Tín hiệu sử dụng ngày công bố và phiên bản thuật toán cụ thể. D/W/M chỉ tạo quyết định từ nến đã đóng.</p><p>Prot Flow là áp lực giá–khối lượng, điểm mẫu hình là thước đo cấu trúc. Phân ngành lịch sử hiện dùng phân loại ngành đang lưu. Dữ liệu sự kiện doanh nghiệp chưa được thu thập đầy đủ; kiểm thử có thể bị ảnh hưởng bởi chia tách hoặc cổ tức.</p><p>Nguồn hiện tại: KBS. Tốc độ cập nhật phụ thuộc giới hạn nguồn dữ liệu và hàng đợi GitHub Actions.</p></article></>
     :tab==='account'?<article className="panel account-panel"><h2>Tài khoản</h2><div className="rule-row"><strong>{profile?.full_name || profile?.username || 'Chưa kết nối'}</strong><span>{profile?.role==='ADMIN'?'Quản trị':'Thành viên'}</span></div><p>Phiên bản v{version}. Luận điểm và bản nháp cá nhân được gắn với tài khoản; lịch sử phiên bản được giữ khi cập nhật.</p><button className="secondary-button" disabled={!authenticated} onClick={()=>void supabase?.auth.signOut()}>Đăng xuất</button>{isAdmin&&<ReplayPanel/>}</article>
     :isAdmin?<>{rules.isError&&<p role="alert">Chưa tải được quy tắc. <button className="text-button" onClick={()=>void rules.refetch()}>Thử lại</button></p>}<Guide authenticated={authenticated} rules={rules.data??[]} loading={rules.isLoading} includeIntro/></>:<Intro/>}
     </div>

@@ -79,3 +79,15 @@ input:focus-visible,textarea:focus-visible,button:focus-visible,[role="combobox"
 .signal-raw-toggle { margin:8px 0 15px; }
 @media(max-width:900px) { .triage-summary-row { grid-template-columns:80px minmax(0,1fr) 80px; } .triage-reason { display:none; } }
 @media(max-width:560px) { .signal-triage-toolbar>label { width:calc(50% - 5px); } .triage-expand-actions { width:100%; margin-left:0; } .triage-summary-row { grid-template-columns:60px minmax(0,1fr) 70px; gap:7px; padding-inline:9px; } .triage-symbol small { display:none; } .triage-labels b { padding:3px 5px; font-size:10px; } .triage-count { font-size:10px; } .triage-detail-row { grid-template-columns:1fr; gap:3px; padding-bottom:8px; border-bottom:1px solid var(--line); } .triage-detail-row button { justify-self:start; } }
+
+/* Dense review rows must show the full labels and reason at every width. */
+.signal-triage-group:nth-of-type(odd) { background: color-mix(in srgb,var(--surface-2) 72%,var(--surface)); }
+.signal-triage-group:nth-of-type(even) { background: var(--surface); }
+.triage-summary-row { grid-template-columns: minmax(110px,.8fr) minmax(0,1.7fr) minmax(0,2fr) auto; gap: 10px; align-items:start; min-height:72px; }
+.triage-symbol { flex-wrap:wrap; white-space:normal; }
+.triage-symbol small { overflow:visible; text-overflow:clip; }
+.triage-labels { flex-wrap:wrap; overflow:visible; white-space:normal; row-gap:6px; }
+.triage-reason { overflow:visible; text-overflow:clip; white-space:normal; overflow-wrap:anywhere; }
+.triage-count { align-self:center; }
+@media(max-width:900px) { .triage-summary-row { grid-template-columns:minmax(80px,.7fr) minmax(0,2fr) auto; } .triage-reason { display:block; grid-column:2 / 4; } }
+@media(max-width:560px) { .triage-summary-row { grid-template-columns:minmax(68px,.7fr) minmax(0,2fr) auto; } .triage-symbol small { display:block; } .triage-reason { grid-column:1 / -1; } .triage-labels b { font-size:11px; padding:4px 7px; } }

@@ -16,47 +16,39 @@
 .journal-search input { max-width:180px; min-height:40px; padding:8px 12px; border:1px solid var(--line); border-radius:9px; background:var(--surface-2); color:var(--text); }
 .watchlist-undo { display:flex; align-items:center; gap:12px; padding:12px; border:1px solid var(--line); border-radius:12px; background:var(--surface-2); }
 .watchlist-undo button,.watchlist-sync-warning button { border:0; background:transparent; color:var(--lime); cursor:pointer; font-weight:600; min-height:40px; }
-.watch-stock-why { margin:8px 0; padding-top:10px; border-top:1px solid var(--line); }
-.watch-stock-why strong { display:block; color:var(--muted); font-size:12px; }
-.watch-stock-why p { margin:6px 0 0; color:var(--text); font-size:14px; line-height:1.5; white-space:pre-wrap; overflow-wrap:anywhere; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }
-.watch-stock-quick,.watch-detail-actions { display:flex; flex-wrap:wrap; gap:8px; }
-.watch-stock-quick button,.watch-stock-quick a { display:inline-flex; justify-content:center; align-items:center; min-height:40px; padding:7px 10px; background:var(--surface-2); color:var(--text); border:1px solid var(--line); border-radius:8px; font-size:13px; cursor:pointer; }
+.watch-detail-actions { display:flex; flex-wrap:wrap; gap:8px; }
 .watch-detail-sheet { width:min(720px,100%); max-height:90dvh; overflow:auto; padding:24px; }
 .watch-detail-sheet > .thesis-panel { margin-top:20px; }
 .watch-detail-actions { margin-top:20px; }
-.watchlist-page .watchlist-hero { padding:20px; border-radius:16px; background:var(--surface); border-color:var(--line); }
-.watchlist-hero h1 { color:var(--text); font-size:28px; letter-spacing:-.02em; }
-.watchlist-hero p,.watchlist-hero .eyebrow { color:var(--muted); }
-.watchlist-hero-count { background:var(--surface-2); border-color:var(--line); box-shadow:none; color:var(--text); min-width:100px; }
-.watchlist-hero-count strong,.watchlist-hero-count span { color:var(--text); }
-.watchlist-page .watch-tier { background:var(--surface); border:1px solid var(--line); box-shadow:none; }
-.watch-tier-glow,.watch-tier-orbit,.watch-tier-kicker { display:none; }
-.watch-tier-head h2,.watch-tier-count { color:var(--text); font-size:20px; }
-.watch-tier-head h2 small,.watch-tier > p,.watch-tier-s > p { color:var(--muted); font-size:13px; }
-.watch-tier-head { padding-bottom:10px; border-bottom:3px solid var(--tier-accent); }
-.watchlist-page .watch-stock { background:var(--surface-2); border-color:var(--line); backdrop-filter:none; color:var(--text); }
-.watch-stock-symbol,.watch-stock-name { color:var(--text); }
-.watch-stock-name { font-size:13px; }
-.watch-stock > small,.watch-stock-signals span { font-size:12px; color:var(--muted); }
-.watch-stock-signals span { background:var(--surface); border-color:var(--line); }
-.watch-stock-remove,.watch-stock-tiers button { color:var(--text); border-color:var(--line); background:var(--surface); }
-.watch-stock-tiers button { min-height:40px; }
-.watch-stock-tiers button.active { background:color-mix(in srgb,var(--lime) 15%,var(--surface)); color:var(--text); border-color:var(--lime); }
 .watch-roulette-disclosure > summary { cursor:pointer; color:var(--muted); padding:12px 0; }
 @media(max-width:760px) {
   .personal-desktop-panel,.personal-desktop-action { display:none!important; }
   .watchlist-tier-grid { grid-template-columns:1fr; }
-  .watchlist-hero { gap:12px; }
-  .watchlist-hero h1 { font-size:24px; }
-  .watchlist-hero-count { min-width:70px; padding:10px; }
-  .watchlist-hero-count strong { font-size:26px; }
-  .watchlist-add p,.watchlist-hero p { font-size:14px; }
+  .watchlist-add p { font-size:14px; }
   .watchlist-add input,.journal-page input,.journal-page textarea,.watch-detail-sheet input,.watch-detail-sheet textarea { font-size:16px; }
-  .watch-stock-remove { width:44px; height:44px; }
-  .watch-stock-quick button,.watch-stock-quick a,.watch-stock-tiers button,.personal-journal-entry button,.journal-review-picker button { min-height:44px; }
+  .watch-stock-tiers button,.personal-journal-entry button,.journal-review-picker button { min-height:44px; }
   .watch-detail-sheet { max-height:90dvh; padding:18px 16px calc(92px + env(safe-area-inset-bottom)); }
   .personal-journal-entry header { display:grid; }
   .journal-search input { max-width:125px; }
   .journal-sheet .form-sticky-actions { padding-bottom:calc(16px + env(safe-area-inset-bottom)); }
 }
 @media(prefers-reduced-motion:reduce) { .watchlist-page * { animation:none!important; transition:none!important; } }
+
+/* Journal v3 timeline and analytics, with current evidence and account data. */
+.journal-v3-metrics { grid-template-columns:repeat(3,minmax(0,1fr)); margin-bottom:16px; }
+.journal-v3-analytics { grid-template-columns:repeat(2,minmax(0,1fr)); margin-bottom:16px; }
+.journal-v3-analytics .equity-card { grid-column:auto; }
+.journal-v3-analytics .equity-card > strong { display:block; margin:24px 0 10px; font-size:clamp(24px,3vw,36px); font-variant-numeric:tabular-nums; }
+.journal-v3-analytics .equity-card > p { margin:0; }
+.journal-v3-timeline { margin-top:18px; }
+.journal-v3-entry { position:relative; margin-left:8px; padding:18px 0 18px 29px; border-left:1px solid var(--line); border-top:0; }
+.journal-v3-entry::before { content:''; position:absolute; top:24px; left:-5px; width:9px; height:9px; border-radius:50%; background:var(--mint); box-shadow:0 0 0 4px color-mix(in srgb,var(--mint) 15%,transparent); }
+.journal-v3-entry + .journal-v3-entry { border-top:1px solid var(--line); }
+.journal-v3-entry header { align-items:center; }
+.journal-v3-entry header > div:first-child { display:flex; align-items:center; flex-wrap:wrap; gap:8px 12px; }
+.journal-v3-entry header strong { font-size:16px; }
+.journal-v3-entry header span { padding:3px 8px; border-radius:999px; background:var(--surface-2); }
+.journal-v3-entry header time { font-variant-numeric:tabular-nums; }
+.journal-v3-entry > p { margin:10px 0 6px; }
+.journal-v3-entry > small { display:block; margin-top:4px; }
+@media(max-width:760px) { .journal-v3-metrics { grid-template-columns:repeat(2,minmax(0,1fr)); } .journal-v3-metrics .metric-card:last-child { grid-column:1/-1; } .journal-v3-analytics { grid-template-columns:1fr; } .journal-v3-entry { padding-left:20px; } }

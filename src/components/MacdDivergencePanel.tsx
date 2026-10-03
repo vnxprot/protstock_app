@@ -1,6 +1,8 @@
 import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { Filter, Search } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import { SoftSelect } from './SoftSelect'
 import './MacdDivergencePanel.css'
 
 const VERSION = 'MACD_BULLISH_DIVERGENCE_ZONE_V4'
@@ -88,6 +90,7 @@ export function MacdDivergencePanel({ date, authenticated }: { date: string; aut
   const [stage, setStage] = useState('ACTIVE')
   const [segments, setSegments] = useState(0)
   const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(25)
   const [symbol, setSymbol] = useState('')
   const query = useQuery({
     queryKey: ['macd-zone-divergence-v4', date], enabled: authenticated && Boolean(supabase), refetchInterval: 60_000,
@@ -109,7 +112,7 @@ export function MacdDivergencePanel({ date, authenticated }: { date: string; aut
   const rows = query.data ?? []
   const filtered = useMemo(() => {
     const matches = rows.filter(row => row.symbol.includes(symbol.trim().toUpperCase())
-      && (stage === 'ALL' || stage === 'ACTIVE' && (row.stage === 'WATCH_PRICE_CONFIRMATION'
+      && (stage === 'ALL' || stage === 'FRESH' && row.stage === 'WATCH_PRICE_CONFIRMATION' && !row.evidence.pending_lower_low_on && row.confirmed_on === date || stage === 'ACTIVE' && (row.stage === 'WATCH_PRICE_CONFIRMATION'
         || row.stage === 'CONFIRMED' && (row.evidence.trigger_age_sessions ?? 999) <= 5)
         || row.stage === stage)
       && (segments <= 0 || row.swings === segments + 1))
@@ -120,7 +123,7 @@ export function MacdDivergencePanel({ date, authenticated }: { date: string; aut
     const seen = new Set<string>()
     return matches.filter(row => { if (seen.has(row.symbol)) return false; seen.add(row.symbol); return true })
   }, [rows, symbol, stage, segments, date])
-  const pages = Math.max(1, Math.ceil(filtered.length / 10))
+  const pages = Math.max(1, Math.ceil(filtered.length / pageSize))
   const current = Math.min(page, pages)
   const fresh = rows.filter(row => row.stage === 'CONFIRMED' && row.trigger_date === date).length
   const watching = new Set(rows.filter(row => row.stage === 'WATCH_PRICE_CONFIRMATION').map(row => row.symbol)).size
@@ -128,23 +131,21 @@ export function MacdDivergencePanel({ date, authenticated }: { date: string; aut
     <div className="panel-title"><div><h3>Phân kỳ Dương · đường MACD</h3>
       <p className="muted">1 đoạn = 2 vùng đáy · 2 đoạn = 3 vùng · 3 đoạn = 4 vùng. Ưu tiên breakout mới và mã gần ngưỡng giá.</p></div><span>{date}</span></div>
     <div className="macd-zone-summary"><span><b>{fresh}</b> mẫu breakout phiên này</span><span><b>{watching}</b> mã đang theo dõi</span><small>Mỗi mã hiển thị mẫu ưu tiên; chọn “Tất cả đoạn” để xem mọi cấu trúc.</small></div>
-    <div className="macd-divergence-tools"><input aria-label="Tìm mã phân kỳ MACD" placeholder="Tìm mã…" value={symbol} onChange={event => { setSymbol(event.target.value); setPage(1) }}/>
-      <select aria-label="Số đoạn phân kỳ MACD" value={segments} onChange={event => { setSegments(Number(event.target.value)); setPage(1) }}>
+    <div className="macd-divergence-tools"><label className="screener-field"><Search size={16}/><input aria-label="Tìm mã phân kỳ MACD" placeholder="Tìm mã…" value={symbol} onChange={event => { setSymbol(event.target.value); setPage(1) }}/></label>
+      <label className="screener-field"><Filter size={16}/><SoftSelect aria-label="Số đoạn phân kỳ MACD" value={segments} onChange={event => { setSegments(Number(event.target.value)); setPage(1) }}>
         <option value={0}>Mẫu ưu tiên mỗi mã</option><option value={-1}>Tất cả đoạn</option>
         <option value={1}>1 đoạn · 2 vùng</option><option value={2}>2 đoạn · 3 vùng</option><option value={3}>3 đoạn · 4 vùng</option>
-      </select>
-      <select aria-label="Trạng thái phân kỳ MACD" value={stage} onChange={event => { setStage(event.target.value); setPage(1) }}>
-        <option value="ACTIVE">Đang theo dõi và breakout gần đây</option><option value="ALL">Tất cả trạng thái</option>
+      </SoftSelect></label>
+      <label className="screener-field"><Filter size={16}/><SoftSelect aria-label="Trạng thái phân kỳ MACD" value={stage} onChange={event => { setStage(event.target.value); setPage(1) }}>
+        <option value="ACTIVE">Đang theo dõi và breakout gần đây</option><option value="FRESH">Vừa phát hiện</option><option value="ALL">Tất cả trạng thái</option>
         {Object.entries(stages).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-      </select><span>{filtered.length} mã/mẫu</span></div>
+      </SoftSelect></label><span>{filtered.length} mã/mẫu</span></div>
     {query.isLoading && <p className="muted">Đang tải phân kỳ theo vùng đáy…</p>}
     {query.isError && <p className="muted">Không đọc được dữ liệu phân kỳ.</p>}
     {!query.isLoading && !query.isError && <div className="macd-divergence-list">
-      {filtered.slice((current - 1) * 10, current * 10).map(row => <ZoneRow key={row.symbol + ':' + row.swings} row={row} date={date}/>)}
+      {filtered.slice((current - 1) * pageSize, current * pageSize).map(row => <ZoneRow key={row.symbol + ':' + row.swings} row={row} date={date}/>)}
       {!filtered.length && <p className="muted">Chưa có mẫu hình khớp bộ lọc ở phiên này.</p>}
     </div>}
-    {filtered.length > 10 && <nav className="signal-funnel-pagination" aria-label="Phân trang phân kỳ MACD"><span>Trang {current}/{pages}</span>
-      <div><button type="button" disabled={current <= 1} onClick={() => setPage(value => value - 1)}>Trước</button>
-        <button type="button" disabled={current >= pages} onClick={() => setPage(value => value + 1)}>Sau</button></div></nav>}
+    <nav className="screener-pagination" aria-label="Phân trang phân kỳ MACD"><span>Hiển thị <SoftSelect aria-label="Số mẫu mỗi trang" value={pageSize} onChange={event=>{setPageSize(Number(event.target.value));setPage(1)}}><option value="25">25</option><option value="50">50</option><option value="100">100</option></SoftSelect> / trang · {filtered.length} mã/mẫu</span><div><button type="button" disabled={current===1} onClick={()=>setPage(1)}>Đầu</button><button type="button" disabled={current===1} onClick={()=>setPage(current-1)}>‹ Trước</button><b>Trang {current}/{pages}</b><button type="button" disabled={current===pages} onClick={()=>setPage(current+1)}>Sau ›</button><button type="button" disabled={current===pages} onClick={()=>setPage(pages)}>Cuối</button></div></nav>
   </article>
 }

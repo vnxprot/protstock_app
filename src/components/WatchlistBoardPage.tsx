@@ -1,5 +1,6 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { ArrowLeft, ArrowUpRight } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { ArrowLeft, ArrowUpRight, Filter } from 'lucide-react'
+import { SoftSelect } from './SoftSelect'
 import { isWatchActive, updateWatchlistItem, useWatchlist, type WatchItem, type WatchPatch, type WatchStatus, type WatchTier } from '../lib/watchlist'
 import { useAccountId } from '../hooks/useAccountId'
 import '../watchlist-board.css'
@@ -14,34 +15,35 @@ const columns: { key: TextField; label: string }[] = [
 const tierRank: Record<WatchTier, number> = { S: 0, A: 1, B: 2 }
 
 function EditableCell({ item, field, userId }: { item: WatchItem; field: TextField; userId: string | null }) {
-  const [draft, setDraft] = useState(item[field]), [saveError, setSaveError] = useState(false)
+  const [saveError, setSaveError] = useState(false)
   const inputRef = useRef<HTMLTextAreaElement>(null), dirty = useRef(false)
   const draftStorageKey = userId ? 'protstock-watchlist-field-draft:' + userId + ':' + item.symbol + ':' + field : null
+  const resize = () => {
+    const input = inputRef.current
+    if (!input) return
+    input.style.height = 'auto'
+    input.style.height = `${input.scrollHeight}px`
+  }
   useEffect(() => {
     dirty.current = false; setSaveError(false)
     let stored: string | null = null
     try { if (draftStorageKey) stored = localStorage.getItem(draftStorageKey) } catch { /* The current value remains available. */ }
     dirty.current = stored !== null
-    setDraft(stored ?? item[field])
+    if (inputRef.current) inputRef.current.value = stored ?? item[field]
+    resize()
   }, [draftStorageKey, item.symbol])
-  useEffect(() => { if (!dirty.current) setDraft(item[field]) }, [item[field]])
-  useLayoutEffect(() => {
-    const input = inputRef.current
-    if (!input) return
-    input.style.height = 'auto'
-    input.style.height = String(input.scrollHeight) + 'px'
-  }, [draft])
+  useEffect(() => { if (!dirty.current && inputRef.current && document.activeElement !== inputRef.current) { inputRef.current.value = item[field]; resize() } }, [item[field]])
   const commit = () => {
-    const value = draft.trim()
+    const value = inputRef.current?.value.trim() ?? ''
     try {
       if (value !== item[field]) updateWatchlistItem(item.symbol, { [field]: value } as WatchPatch)
       dirty.current = false; setSaveError(false)
       if (draftStorageKey) localStorage.removeItem(draftStorageKey)
     } catch { setSaveError(true) }
   }
-  return <><textarea ref={inputRef} aria-label={(columns.find(column=>column.key===field)?.label ?? field) + ' ' + item.symbol} value={draft} rows={1}
+  return <><textarea ref={inputRef} aria-label={(columns.find(column=>column.key===field)?.label ?? field) + ' ' + item.symbol} defaultValue={item[field]} rows={1}
     maxLength={field === 'reason' ? 500 : 120} onChange={event => {
-      dirty.current = true; setDraft(event.target.value)
+      dirty.current = true; resize()
       try { if (draftStorageKey) localStorage.setItem(draftStorageKey, event.target.value) } catch { setSaveError(true) }
     }} onBlur={commit} onKeyDown={event => { if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) event.currentTarget.blur() }}/>
     {saveError && <small role="alert">Chưa lưu được thay đổi; nội dung đang giữ trong ô.</small>}</>
@@ -82,10 +84,10 @@ export function WatchlistBoardPage({ syncStatus, authenticated = false }: { sync
       {columns.map(column => <th scope="col" key={column.key}>{column.label}</th>)}<th scope="col">Tình trạng</th>
     </tr><tr className="watch-board-filters">
       <th><input aria-label="Lọc STT" inputMode="numeric" value={filters.stt} onChange={event => updateFilter('stt', event.target.value)}/></th>
-      <th><select aria-label="Lọc Tier" value={filters.tier} onChange={event => updateFilter('tier', event.target.value)}><option value="ALL">Tất cả</option><option value="S">S</option><option value="A">A</option><option value="B">B</option></select></th>
+      <th><label className="board-filter-field"><Filter size={14}/><SoftSelect aria-label="Lọc Tier" value={filters.tier} onChange={event => updateFilter('tier', event.target.value)}><option value="ALL">Tất cả</option><option value="S">S</option><option value="A">A</option><option value="B">B</option></SoftSelect></label></th>
       <th><input aria-label="Lọc mã cổ phiếu" value={filters.symbol} onChange={event => updateFilter('symbol', event.target.value)}/></th>
       {columns.map(column => <th key={column.key}><input aria-label={`Lọc ${column.label}`} value={filters[column.key]} onChange={event => updateFilter(column.key, event.target.value)}/></th>)}
-      <th><select aria-label="Lọc tình trạng" value={filters.status} onChange={event => updateFilter('status', event.target.value)}><option value="ALL">Tất cả</option><option value="On">On</option><option value="Off">Off</option></select></th>
+      <th><label className="board-filter-field"><Filter size={14}/><SoftSelect aria-label="Lọc tình trạng" value={filters.status} onChange={event => updateFilter('status', event.target.value)}><option value="ALL">Tất cả</option><option value="On">On</option><option value="Off">Off</option></SoftSelect></label></th>
     </tr></thead><tbody>{visible.map(({ item, number }) => <tr key={item.symbol} className={isWatchActive(item) ? '' : 'watch-board-off'}>
       <td className="watch-board-index">{number}</td>
       <td><select aria-label={`Tier ${item.symbol}`} value={item.tier} onChange={event => updateWatchlistItem(item.symbol, { tier: event.target.value as WatchTier, status: 'On' })}><option value="S">S</option><option value="A">A</option><option value="B">B</option></select></td>

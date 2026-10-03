@@ -11,3 +11,14 @@
 .signal-funnel-row small { overflow-wrap: anywhere; }
 .signal-funnel-pagination { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding-top: .7rem; }
 .signal-funnel-pagination button { margin-left: .4rem; }
+
+/* Match the consolidated signal table controls and alternating rows. */
+.signal-funnel-counts { margin: 14px 0; }
+.signal-funnel-counts .screener-field { width:min(320px,100%); }
+.signal-funnel-head { background:var(--surface-2); color:var(--muted); border-radius:10px 10px 0 0; }
+.signal-funnel-row:nth-of-type(even) { background:color-mix(in srgb,var(--surface-2) 72%,var(--surface)); }
+.signal-funnel-row:nth-of-type(odd) { background:var(--surface); }
+.signal-funnel-row { color:var(--text); line-height:1.5; }
+.signal-funnel-row > * { min-width:0; overflow-wrap:anywhere; }
+.signal-funnel-table { border:1px solid var(--line); border-radius:10px; }
+@media(max-width:760px) { .signal-funnel-counts .screener-field { width:100%; } }

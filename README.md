@@ -1,4 +1,4 @@
-# Prot Stock App · v4.1.0
+# Prot Stock App · v4.1.1
 
 Personal PWA for end-of-day analysis of a curated Vietnamese stock universe.
 
@@ -26,6 +26,8 @@ See [v4 release notes and validation](docs/release-v4.0.0.md).
 ## Version 4.1
 
 The interface uses Plus Jakarta Sans and Inter, restores layered glass surfaces, improves light-theme contrast and control sizing, and adds a concise takeaway to stock analysis. The full UI acceptance criteria are in [the v4.1 specification](docs/ui-ux-v4-1-polish-specification.md).
+
+Version 4.1.1 groups signal research into four tabs, unifies table filters and pagination, restores the v3 Watchlist and mobile bars, and refreshes the decision journal timeline.
 
 See:
 

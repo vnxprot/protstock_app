@@ -104,3 +104,16 @@
 .takeaway-tag { flex-shrink: 0; color: var(--mint); font-size: 12px; font-weight: 700; }
 .analysis-executive-takeaway p { margin: 0; }
 @media (max-width: 760px) { .analysis-executive-takeaway { align-items: flex-start; flex-direction: column; gap: 6px; } }
+
+/* Shared table surfaces, alternating rows, and matching dropdown dimensions. */
+.app-shell .data-table { border:1px solid var(--line); border-radius:12px; overflow:hidden; }
+.app-shell .data-table .table-head { background:var(--surface-2); color:var(--muted); }
+.app-shell .data-table .position-row:nth-of-type(odd) { background:color-mix(in srgb,var(--surface-2) 72%,var(--surface)); }
+.app-shell .data-table .position-row:nth-of-type(even) { background:var(--surface); }
+.app-shell .data-table .position-row:hover { background:color-mix(in srgb,var(--mint) 10%,var(--surface)); }
+.app-shell :is(.screener-field,.universe-filters label,.board-filter-field) { min-height:40px; border:1px solid var(--line-bright); border-radius:10px; background:var(--surface-2); color:var(--text); }
+.app-shell :is(.screener-field,.universe-filters label,.board-filter-field) > svg { flex:none; color:var(--mint); }
+.app-shell .screener-tabs { display:flex; gap:8px; overflow-x:auto; margin:4px 0 20px; padding-bottom:4px; scrollbar-width:thin; }
+.app-shell .screener-tabs button { flex:0 0 auto; white-space:nowrap; }
+.app-shell .screener-page .screener-filter-fields { grid-template-columns:minmax(150px,240px) minmax(180px,280px)!important; }
+@media(max-width:760px) { .app-shell .screener-page .screener-filter-fields { grid-template-columns:repeat(2,minmax(0,1fr))!important; } }

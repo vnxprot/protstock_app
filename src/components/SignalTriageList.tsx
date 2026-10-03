@@ -64,7 +64,7 @@ export function SignalTriageList({ rows, allRows, latestDate, onExplain }: Props
   useEffect(() => setPage(1), [focus, holding, rows, latestDate])
   const pageCount = Math.max(1, Math.ceil(groups.length / 10))
   const currentPage = Math.min(page, pageCount)
-  const visibleGroups = expandedAll ? signalGroupPage(groups, currentPage) : groups
+  const visibleGroups = signalGroupPage(groups, currentPage)
   const signalCount = allGroups.reduce((count, group) => count + group.signals.length, 0)
   const repeated = signalCount - allGroups.length
 
@@ -117,7 +117,7 @@ export function SignalTriageList({ rows, allRows, latestDate, onExplain }: Props
       </div>)}</div>}
     </article>})}
     {!groups.length && <p className="muted">Chưa có tín hiệu khớp bộ lọc.</p>}
-    {expandedAll && groups.length > 10 && <nav className="triage-pagination" aria-label="Phân trang bảng gộp">
+    {groups.length > 10 && <nav className="triage-pagination" aria-label="Phân trang bảng gộp">
       <span>Trang {currentPage}/{pageCount} · {Math.min((currentPage - 1) * 10 + 1, groups.length)}–{Math.min(currentPage * 10, groups.length)} / {groups.length} mã</span>
       <div><button type="button" disabled={currentPage === 1} onClick={() => setPage(value => Math.max(1, value - 1))}>‹ Trước</button>
         <button type="button" disabled={currentPage === pageCount} onClick={() => setPage(value => Math.min(pageCount, value + 1))}>Sau ›</button></div>

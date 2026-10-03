@@ -111,3 +111,13 @@ html[data-theme="light"] .watchlist-add label,html[data-theme="light"] .watchlis
 @media(max-width:760px) { .watchlist-hero { align-items:start; padding:21px; } .watchlist-hero-count { min-width:95px; padding:10px; } .watchlist-hero-count strong { font-size:26px; } .watchlist-add { grid-template-columns:1fr; } .watchlist-suggestions { grid-column:1; } .watchlist-tier-grid { grid-template-columns:1fr; } .watch-tier-s { grid-column:auto; } .watch-roulette-layout { grid-template-columns:1fr; } .watch-wheel-stage { width:min(100%,260px); } .watch-reason-sheet { max-height:88dvh; padding:10px 18px calc(24px + env(safe-area-inset-bottom)); } }
 @media(max-width:460px) { .watchlist-hero { flex-direction:column; gap:16px; } .watchlist-hero-count { display:flex; gap:8px; align-items:center; width:100%; } .watchlist-hero-count span { margin-left:auto; } .watch-roulette-result { align-items:stretch; flex-direction:column; } .watch-roulette-result>button { justify-content:center; } }
 @media(prefers-reduced-motion:reduce) { .watch-wheel { transition:none; } }
+
+/* v3 tier palette with v4.1 glass and type. */
+.app-shell .watchlist-page .watch-stock { background:rgba(7,21,17,.75); border-color:rgba(255,255,255,.2); color:#fff; backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px); }
+.app-shell .watchlist-page .watch-tier-s .watch-stock { background:rgba(42,38,22,.78); border-color:rgba(255,242,175,.44); }
+.app-shell .watchlist-page :is(.watch-stock-symbol,.watch-stock-name) { color:#fff; }
+.app-shell .watchlist-page .watch-stock > small { color:#d1e5db; font-size:11px; }
+.app-shell .watchlist-page .watch-stock-signals span { color:#e3f3e8; font-size:10px; }
+.app-shell .watchlist-page .watch-stock-remove { color:#e3f3e8; }
+html[data-theme="light"] .watchlist-page .watch-tier-head h2 { color:var(--tier-strong) !important; }
+html[data-theme="light"] .watchlist-page .watchlist-hero .eyebrow { color:#dfff9c !important; }

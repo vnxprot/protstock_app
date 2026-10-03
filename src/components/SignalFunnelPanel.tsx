@@ -1,6 +1,8 @@
 import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { Filter } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import { SoftSelect } from './SoftSelect'
 import './SignalFunnelPanel.css'
 
 type FunnelRow = {
@@ -24,16 +26,19 @@ const stageNames: Record<string, string> = {
 export function SignalFunnelPanel({ date, authenticated }: { date: string; authenticated: boolean }) {
   const [stage, setStage] = useState('ALL')
   const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(25)
   const funnel = useQuery({
     queryKey: ['shadow-funnel', date],
     enabled: authenticated && Boolean(supabase) && Boolean(date),
     queryFn: async (): Promise<FunnelRow[]> => {
-      const { data, error } = await supabase!.from('signal_funnel_assessments')
-        .select('monthly_state,stage,setup_kind,setup_date,trigger_date,reasons,symbols!inner(symbol)')
-        .eq('as_of_date', date).eq('version', 'MTF_FUNNEL_SHADOW_V1')
-        .order('symbol_id')
-      if (error) throw error
-      return (data ?? []).map((item: any) => ({
+      const result: FunnelRow[] = []
+      for (let from = 0; ; from += 1000) {
+        const { data, error } = await supabase!.from('signal_funnel_assessments')
+          .select('monthly_state,stage,setup_kind,setup_date,trigger_date,reasons,symbols!inner(symbol)')
+          .eq('as_of_date', date).eq('version', 'MTF_FUNNEL_SHADOW_V1')
+          .order('symbol_id').range(from, from + 999)
+        if (error) throw error
+        result.push(...(data ?? []).map((item: any) => ({
         symbol: (Array.isArray(item.symbols) ? item.symbols[0] : item.symbols)?.symbol ?? '—',
         monthly_state: item.monthly_state,
         stage: item.stage,
@@ -41,7 +46,10 @@ export function SignalFunnelPanel({ date, authenticated }: { date: string; authe
         setup_date: item.setup_date,
         trigger_date: item.trigger_date,
         reasons: item.reasons ?? [],
-      }))
+        })))
+        if ((data ?? []).length < 1000) break
+      }
+      return result
     },
   })
   const rows = funnel.data ?? []
@@ -50,18 +58,16 @@ export function SignalFunnelPanel({ date, authenticated }: { date: string; authe
     return acc
   }, {}), [rows])
   const filtered = stage === 'ALL' ? rows : rows.filter(row => row.stage === stage)
-  const pages = Math.max(1, Math.ceil(filtered.length / 10))
-  const visible = filtered.slice((Math.min(page, pages) - 1) * 10, Math.min(page, pages) * 10)
+  const pages = Math.max(1, Math.ceil(filtered.length / pageSize))
+  const current = Math.min(page, pages)
+  const visible = filtered.slice((current - 1) * pageSize, current * pageSize)
 
   return <article className="panel signal-funnel-panel">
     <div className="panel-title"><div><h3>Phễu tháng → tuần → ngày</h3><p className="muted">Bản nghiên cứu song song · chưa quyết định tín hiệu giao dịch</p></div><span>{date}</span></div>
     {funnel.isError && <p className="muted">Không tải được phễu nghiên cứu.</p>}
     {funnel.isLoading && <p className="muted">Đang tải phễu nghiên cứu…</p>}
     {!funnel.isLoading && !funnel.isError && <>
-      <div className="signal-funnel-counts">
-        <button type="button" className={stage === 'ALL' ? 'selected' : ''} onClick={() => { setStage('ALL'); setPage(1) }}>Tất cả <strong>{rows.length}</strong></button>
-        {Object.entries(stageNames).map(([key, label]) => <button type="button" key={key} className={stage === key ? 'selected' : ''} onClick={() => { setStage(key); setPage(1) }}>{label} <strong>{counts[key] ?? 0}</strong></button>)}
-      </div>
+      <div className="signal-funnel-counts"><label className="screener-field"><Filter size={16}/><SoftSelect aria-label="Lọc giai đoạn phễu" value={stage} onChange={event=>{setStage(event.target.value);setPage(1)}}><option value="ALL">Tất cả giai đoạn ({rows.length})</option>{Object.entries(stageNames).map(([key,label])=><option value={key} key={key}>{label} ({counts[key]??0})</option>)}</SoftSelect></label></div>
       <div className="signal-funnel-table">
         <div className="signal-funnel-head"><span>Mã</span><span>Tháng</span><span>Giai đoạn</span><span>Setup tuần</span><span>Ngày kích hoạt</span><span>Lý do</span></div>
         {visible.map(row => <div className="signal-funnel-row" key={row.symbol}>
@@ -70,7 +76,7 @@ export function SignalFunnelPanel({ date, authenticated }: { date: string; authe
           <span>{row.trigger_date ?? '—'}</span><small>{row.reasons.join(' · ')}</small>
         </div>)}
       </div>
-      <div className="signal-funnel-pagination"><span>{filtered.length} mã · Trang {Math.min(page, pages)}/{pages}</span><div><button type="button" disabled={page <= 1} onClick={() => setPage(value => value - 1)}>Trước</button><button type="button" disabled={page >= pages} onClick={() => setPage(value => value + 1)}>Sau</button></div></div>
+      <nav className="screener-pagination" aria-label="Phân trang phễu tháng tuần ngày"><span>Hiển thị <SoftSelect aria-label="Số mã mỗi trang" value={pageSize} onChange={event=>{setPageSize(Number(event.target.value));setPage(1)}}><option value="25">25</option><option value="50">50</option><option value="100">100</option></SoftSelect> / trang · {filtered.length} mã</span><div><button type="button" disabled={current===1} onClick={()=>setPage(1)}>Đầu</button><button type="button" disabled={current===1} onClick={()=>setPage(current-1)}>‹ Trước</button><b>Trang {current}/{pages}</b><button type="button" disabled={current===pages} onClick={()=>setPage(current+1)}>Sau ›</button><button type="button" disabled={current===pages} onClick={()=>setPage(pages)}>Cuối</button></div></nav>
     </>}
   </article>
 }

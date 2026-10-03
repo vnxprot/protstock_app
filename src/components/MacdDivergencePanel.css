@@ -21,3 +21,15 @@
 .macd-divergence-pivots { display: flex; flex-wrap: wrap; gap: .5rem; margin-bottom: .45rem; }
 .macd-divergence-pivots span { padding: .25rem .45rem; background: var(--surface-2); border-radius: .4rem; font-size: .85rem; }
 @media (max-width: 700px) { .macd-divergence-list summary { grid-template-columns: 3.5rem 1fr; } }
+
+/* Filter controls and row rhythm shared with the signal results table. */
+.macd-divergence-tools .screener-field { justify-content:flex-start; flex:1 1 200px; max-width:300px; }
+.macd-divergence-tools .screener-field:first-child { flex-basis:150px; max-width:210px; }
+.macd-divergence-tools .screener-field input { height:36px; min-height:36px; padding:0; border:0; background:transparent; text-align:left; }
+.macd-divergence-list { overflow:hidden; border:1px solid var(--line); border-radius:10px; }
+.macd-divergence-list details { padding:12px 14px; border-bottom:1px solid var(--line); }
+.macd-divergence-list details:nth-of-type(odd) { background:color-mix(in srgb,var(--surface-2) 72%,var(--surface)); }
+.macd-divergence-list details:nth-of-type(even) { background:var(--surface); }
+.macd-divergence-list summary { grid-template-columns: minmax(65px,.5fr) minmax(0,2fr) minmax(0,1.5fr) minmax(0,1.5fr); line-height:1.5; }
+.macd-divergence-list summary > * { min-width:0; overflow-wrap:anywhere; }
+@media(max-width:760px) { .macd-divergence-tools .screener-field { max-width:none; } .macd-divergence-list summary { grid-template-columns:minmax(65px,.5fr) minmax(0,2fr); } }
