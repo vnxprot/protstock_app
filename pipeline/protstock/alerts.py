@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import re
 from datetime import date, timedelta
 
 import httpx
@@ -15,9 +16,14 @@ def build_telegram_message(signal: dict, trading_date: date) -> str:
     rule_data = (signal.get("rule_versions") or {}).get("rules") or {}
     kind = signal.get("kind") or rule_data.get("kind")
     name = signal.get("rule_name") or rule_data.get("name")
-    pack_version = signal.get("pack_version") or rule_data.get("pack_version")
     if kind == "CORE_PACK" and name:
-        rule = name if pack_version and str(name).endswith(str(pack_version)) else f"{name} {pack_version}".strip()
+        engine_names = {
+            "Prot Core Engine v0.0": "Prot Core Engine · Mẫu hình",
+            "Prot Core Engine v1.0": "Prot Core Engine · Nền tảng",
+            "Prot Core Engine v2.0": "Prot Core Engine · Đa khung",
+        }
+        label = engine_names.get(name, re.sub(r"\s+v\d+(?:\.\d+){1,2}$", "", name))
+        rule = f"{label} v1.0"
     elif kind == "USER_RULE" and name:
         rule = f"Rule Studio: {name}"
     elif name:

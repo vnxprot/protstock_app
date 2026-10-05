@@ -5,6 +5,7 @@ import { useSymbols } from '../hooks/useStockAnalysis'
 import { SoftSelect } from './SoftSelect'
 import { DateField } from './DateField'
 import { compareEngines } from '../lib/engineCatalog'
+import { displayStructureName, displaySystemRevision } from '../lib/releaseLabels'
 
 const today = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date())
 const stateLabels: Record<string, string> = { QUEUED: 'Đang chờ', RUNNING: 'Đang tính', SUCCEEDED: 'Hoàn tất', FAILED: 'Chưa hoàn tất' }
@@ -68,7 +69,7 @@ export function BacktestPage({ authenticated }: { authenticated: boolean }) {
       <form className="panel rule-form" onSubmit={queue}>
         <label>Phiên bản quy tắc<SoftSelect value={versionId} onChange={e => setVersionId(e.target.value)}>
           <option value="">Chọn quy tắc để kiểm thử</option>
-          {(versions.data ?? []).map((item: any) => <option value={item.id} key={item.id}>{item.rules?.name} · v{item.version}{item.rules?.status === 'DRAFT' ? ' · bản nháp' : ''}</option>)}
+          {(versions.data ?? []).map((item: any) => <option value={item.id} key={item.id}>{displayStructureName(item.rules?.name ?? '')} · quy tắc {item.version}{item.rules?.status === 'DRAFT' ? ' · bản nháp' : ''}</option>)}
         </SoftSelect></label>
         {versions.isError && <p className="form-error">Chưa tải được quy tắc. Hãy thử lại sau.</p>}
         <label>Mã<SoftSelect value={symbol} onChange={e => setSymbol(e.target.value)}>{(symbols.data ?? []).map(item => <option key={item.id}>{item.symbol}</option>)}</SoftSelect></label>
@@ -89,11 +90,11 @@ export function BacktestPage({ authenticated }: { authenticated: boolean }) {
     <article className="panel"><div className="panel-title"><h3>Kết quả gần đây</h3><span>{runs.data?.length ?? 0}</span></div>
       {runs.isError && <p className="form-error" role="alert">Chưa đọc được kết quả kiểm thử.</p>}
       {(runs.data ?? []).map((run: any) => <div className="rule-row" key={run.id}><div>
-        <strong>{run.name}</strong><small>{run.rule_versions?.rules?.name} · v{run.rule_versions?.version}</small>
+        <strong>{run.name}</strong><small>{displayStructureName(run.rule_versions?.rules?.name ?? '')} · quy tắc {run.rule_versions?.version}</small>
         {run.status === 'SUCCEEDED' ? <><small>{Number(run.metrics?.trade_count ?? 0)} giao dịch · Lợi nhuận {((run.metrics?.total_return ?? 0) * 100).toFixed(1)}% · Sụt giảm tối đa {((run.metrics?.max_drawdown ?? 0) * 100).toFixed(1)}% · Sharpe {(run.metrics?.sharpe ?? 0).toFixed(2)}</small>
           {(run.metrics?.warnings ?? []).includes('MARKET_CONTEXT_MISSING') && <p className="form-error">Một số phiên thiếu bối cảnh thị trường; các entry tương ứng đã bị chặn.</p>}
           {!run.metrics?.trade_count && <small>Không có entry đủ điều kiện trong khoảng đã chọn. Xem số phiên bị chặn trước khi đánh giá quy tắc.</small>}
-          <details><summary>Phạm vi và chất lượng lượt chạy</summary><p>{run.metrics?.evaluation_summary?.evaluated ?? '—'} phiên đánh giá · {run.metrics?.evaluation_summary?.entry_blocked ?? '—'} entry bị chặn · {run.metrics?.evaluation_summary?.market_context_missing ?? '—'} phiên thiếu market context</p><p>Cơ sở giá: {run.metrics?.price_basis === 'KBS_VENDOR_REBASED' ? 'Lịch sử KBS đã đối chiếu' : run.metrics?.price_basis === 'STORED_VERIFIED' ? 'Giá EOD lưu trữ đã qua kiểm tra' : 'Lượt chạy cũ chưa ghi cơ sở giá'}. Dữ liệu chưa xác minh hoặc có bất thường về đơn vị bị chặn.</p><p>Phiên bản tính toán: {run.metrics?.execution_algorithm_version ?? run.algorithm_version ?? 'Lượt chạy cũ'} · Vân tay dữ liệu tính toán: {run.metrics?.execution_data_revision?.slice(0, 12) ?? 'Chưa ghi'}</p><p>Revision dữ liệu lúc tạo lượt: {run.data_revision ?? 'Lượt chạy cũ'}</p></details>
+          <details><summary>Phạm vi và chất lượng lượt chạy</summary><p>{run.metrics?.evaluation_summary?.evaluated ?? '—'} phiên đánh giá · {run.metrics?.evaluation_summary?.entry_blocked ?? '—'} entry bị chặn · {run.metrics?.evaluation_summary?.market_context_missing ?? '—'} phiên thiếu market context</p><p>Cơ sở giá: {run.metrics?.price_basis === 'KBS_VENDOR_REBASED' ? 'Lịch sử KBS đã đối chiếu' : run.metrics?.price_basis === 'STORED_VERIFIED' ? 'Giá EOD lưu trữ đã qua kiểm tra' : 'Lượt chạy cũ chưa ghi cơ sở giá'}. Dữ liệu chưa xác minh hoặc có bất thường về đơn vị bị chặn.</p><p title={run.metrics?.execution_algorithm_version ?? run.algorithm_version ?? undefined}>Phiên bản tính toán: {displaySystemRevision(run.metrics?.execution_algorithm_version ?? run.algorithm_version)} · Vân tay dữ liệu tính toán: {run.metrics?.execution_data_revision?.slice(0, 12) ?? 'Chưa ghi'}</p><p>Revision dữ liệu lúc tạo lượt: {run.data_revision ?? 'Lượt chạy cũ'}</p></details>
         </> : run.status === 'FAILED' ? <p className="form-error" role="alert">{run.error_message ?? 'Chưa tính được kết quả. Tạo lượt mới sau khi kiểm tra dữ liệu.'}</p> : <small>Lượt chạy đang được xử lý theo hàng chờ; kết quả tự cập nhật.</small>}
       </div><span>{stateLabels[run.status] ?? run.status}</span></div>)}
       {runs.isLoading && <p className="muted" role="status">Đang tải kết quả…</p>}

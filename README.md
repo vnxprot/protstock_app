@@ -1,4 +1,4 @@
-# Prot Stock App · v4.1.4
+# Prot Stock · v1.0.0
 
 Personal PWA for end-of-day analysis of a curated Vietnamese stock universe.
 
@@ -11,7 +11,11 @@ Personal PWA for end-of-day analysis of a curated Vietnamese stock universe.
 - Deterministic, versioned rules and explainable price-pattern detection.
 - Supabase for Postgres/Auth, GitHub Actions for batch jobs, and Vercel for deployment.
 
-## Version 4
+## Current release
+
+Prot Stock v1.0.0 is the consolidated product release. Core Engine, Core Pack, Prot Flow, sector and market health, EOD, signals, MACD divergence, the monthly–weekly–daily funnel and watch opportunities retain their existing quantitative implementations. System structures are presented as v1.0. Historical algorithm IDs and database revisions remain unchanged for reproducibility. See [release notes](docs/release-v1.0.0.md).
+
+## Historical development
 
 Windows provides the full research workspace. iPhone navigation prioritizes Overview, Watchlist and Journal, with remaining tools in the account menu according to account permissions.
 

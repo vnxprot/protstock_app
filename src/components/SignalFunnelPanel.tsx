@@ -69,7 +69,7 @@ export function SignalFunnelPanel({ date, authenticated }: { date: string; authe
   const visible = filtered.slice((current - 1) * pageSize, current * pageSize)
 
   return <article className="panel signal-funnel-panel">
-    <div className="panel-title"><div><h3>Phễu tháng → tuần → ngày</h3><p className="muted">Bản nghiên cứu song song · chưa quyết định tín hiệu giao dịch</p></div><span>{date}</span></div>
+    <div className="panel-title"><div><h3>Phễu tháng → tuần → ngày v1.0</h3><p className="muted">Bản nghiên cứu song song · chưa quyết định tín hiệu giao dịch</p></div><span>{date}</span></div>
     {funnel.isError && <p className="muted">Không tải được phễu nghiên cứu.</p>}
     {funnel.isLoading && <p className="muted">Đang tải phễu nghiên cứu…</p>}
     {!funnel.isLoading && !funnel.isError && <>

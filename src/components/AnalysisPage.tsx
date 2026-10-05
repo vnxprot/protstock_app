@@ -7,6 +7,7 @@ import { ZoneEvidence } from './ZoneEvidence'
 import { formatMarketPrice } from '../lib/marketUnits'
 import { isWatchActive, loadWatchlist, toggleWatchlistSymbol } from '../lib/watchlist'
 import { MacdPanel } from './MacdPanel'
+import { displaySystemRevision } from '../lib/releaseLabels'
 
 const patternNames:Record<string,string>={ACCUMULATION_BASE:'Nền tích lũy',FLAT_BASE_BREAKOUT:'Nền phẳng',DOUBLE_BOTTOM:'Hai đáy',DOUBLE_TOP:'Hai đỉnh',ASCENDING_TRIANGLE:'Tam giác tăng',DESCENDING_TRIANGLE:'Tam giác giảm',SYMMETRICAL_TRIANGLE:'Tam giác cân',BULL_FLAG:'Cờ tăng',BULL_PENNANT:'Cờ đuôi nheo tăng',BEAR_FLAG:'Cờ giảm',CUP_HANDLE:'Cốc tay cầm',PULLBACK_CONTINUATION:'Nhịp hồi tiếp diễn'}
 const number=(value:number|null|undefined,digits=2)=>value==null?'—':Number(value).toLocaleString('vi-VN',{maximumFractionDigits:digits})
@@ -29,7 +30,7 @@ function generateExecutiveSummary(snapshot: TechnicalSnapshot | undefined): stri
 }
 
 function DecisionCard({decision,asOf,timeframe}:{decision:StockDecision|null;asOf:string|undefined;timeframe:'D'|'W'|'M'}) {
-  return <article className="panel analysis-decision-card"><div className="panel-title"><div><h3>Kết luận Prot · {timeframe}</h3><small>Dữ liệu đã đóng đến {displayDate(asOf)}</small></div><span className={`action-pill ${(decision?.composite_action??'watch').toLowerCase()}`}>{decision?activityLabel(decision):'Không có signal mới'}</span></div><p>{decision?decision.reasons.slice(0,3).join(' · '):'Chỉ báo và mẫu hình bên dưới là bối cảnh; không có hành động mới cho kỳ dữ liệu này.'}</p><small>{decision ? `Logic ${decision.source_revision?.replace('core-rules-', '') ?? 'lịch sử'} · cùng mốc dữ liệu` : 'Chưa có quyết định được công bố cho mốc dữ liệu này.'}</small></article>
+  return <article className="panel analysis-decision-card"><div className="panel-title"><div><h3>Kết luận Prot v1.0 · {timeframe}</h3><small>Dữ liệu đã đóng đến {displayDate(asOf)}</small></div><span className={`action-pill ${(decision?.composite_action??'watch').toLowerCase()}`}>{decision?activityLabel(decision):'Không có signal mới'}</span></div><p>{decision?decision.reasons.slice(0,3).join(' · '):'Chỉ báo và mẫu hình bên dưới là bối cảnh; không có hành động mới cho kỳ dữ liệu này.'}</p><small title={decision?.source_revision}>{decision ? `Logic ${displaySystemRevision(decision.source_revision)} · cùng mốc dữ liệu` : 'Chưa có quyết định được công bố cho mốc dữ liệu này.'}</small></article>
 }
 
 function activityLabel(decision:StockDecision){return actionName[decision.composite_action]??decision.composite_action}
@@ -63,7 +64,7 @@ function FlowCard({snapshot,timeframe}:{snapshot:{as_of_date?:string;flow_score?
   const date=snapshot?.as_of_date?.split('-').reverse().join('/')??'—'
   const score=snapshot?.flow_score
   const context=score==null?'Chưa đủ dữ liệu':score>0?'Thiên về tích lũy':score<0?'Thiên về phân phối':'Cân bằng'
-  return <article className="panel flow-card"><div className="panel-title"><div><h3>Prot Flow</h3><small>Áp lực giá–khối lượng · khung {timeframe} · {date}</small></div><b className={"flow-state "+state.toLowerCase()}>{state}</b></div><div className="flow-panels"><div className="flow-context"><span>Bối cảnh 20 {unit}</span><div><strong>{score==null?'—':`${score>0?'+':''}${number(score,1)}`}</strong><b>{context}</b></div><small>CMF {number(snapshot?.cmf20,3)} · OBV {number(snapshot?.obv_slope20,3)}</small></div><div className="flow-session"><span>{timeframe==='D'?'Phiên':timeframe==='W'?'Tuần':'Tháng'} kết thúc {date}</span><strong>{title}</strong><small>KL/TB20 {number(snapshot?.flow_volume_ratio20,2)}× · CLV {number(snapshot?.flow_clv,2)}</small></div></div><small className="flow-caveat">Màu chỉ phản ánh áp lực của nến gần nhất; điểm phản ánh 20 nến. Không xác định danh tính dòng tiền và không tự tạo lệnh.</small></article>
+  return <article className="panel flow-card"><div className="panel-title"><div><h3>Prot Flow v1.0</h3><small>Áp lực giá–khối lượng · khung {timeframe} · {date}</small></div><b className={"flow-state "+state.toLowerCase()}>{state}</b></div><div className="flow-panels"><div className="flow-context"><span>Bối cảnh 20 {unit}</span><div><strong>{score==null?'—':`${score>0?'+':''}${number(score,1)}`}</strong><b>{context}</b></div><small>CMF {number(snapshot?.cmf20,3)} · OBV {number(snapshot?.obv_slope20,3)}</small></div><div className="flow-session"><span>{timeframe==='D'?'Phiên':timeframe==='W'?'Tuần':'Tháng'} kết thúc {date}</span><strong>{title}</strong><small>KL/TB20 {number(snapshot?.flow_volume_ratio20,2)}× · CLV {number(snapshot?.flow_clv,2)}</small></div></div><small className="flow-caveat">Màu chỉ phản ánh áp lực của nến gần nhất; điểm phản ánh 20 nến. Không xác định danh tính dòng tiền và không tự tạo lệnh.</small></article>
 }
 
 function ZoneMap({zones,close,trend,timeframe}:{zones:PriceZone[];close:number|null|undefined;trend:string|undefined;timeframe:string}) {

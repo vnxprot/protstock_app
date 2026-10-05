@@ -53,7 +53,7 @@ function ZoneHistory({ row, date, open }: { row: Row; date: string; open: boolea
         <time>{item.as_of_date}</time><span>{stages[item.stage] ?? item.stage}
           {item.evidence?.zones?.at(-1)?.price_low != null ? ' · đáy ' + price(item.evidence.zones.at(-1).price_low) : ''}
           {item.trigger_date === item.as_of_date ? ' · breakout' : ''}</span>
-      </li>)}</ol> : <p>Chưa có phiên V4 trước đó; từ phiên này hệ thống lưu diễn biến hằng ngày.</p>}</div>
+      </li>)}</ol> : <p>Chưa có phiên phân kỳ trước đó; từ phiên này hệ thống lưu diễn biến hằng ngày.</p>}</div>
 }
 
 function ZoneRow({ row, date }: { row: Row; date: string }) {
@@ -128,7 +128,7 @@ export function MacdDivergencePanel({ date, authenticated }: { date: string; aut
   const fresh = rows.filter(row => row.stage === 'CONFIRMED' && row.trigger_date === date).length
   const watching = new Set(rows.filter(row => row.stage === 'WATCH_PRICE_CONFIRMATION').map(row => row.symbol)).size
   return <article className="panel macd-divergence-panel">
-    <div className="panel-title"><div><h3>Phân kỳ Dương · đường MACD</h3>
+    <div className="panel-title"><div><h3>Phân kỳ Dương · đường MACD v1.0</h3>
       <p className="muted">1 đoạn = 2 vùng đáy · 2 đoạn = 3 vùng · 3 đoạn = 4 vùng. Ưu tiên breakout mới và mã gần ngưỡng giá.</p></div><span>{date}</span></div>
     <div className="macd-zone-summary"><span><b>{fresh}</b> mẫu breakout phiên này</span><span><b>{watching}</b> mã đang theo dõi</span><small>Mỗi mã hiển thị mẫu ưu tiên; chọn “Tất cả đoạn” để xem mọi cấu trúc.</small></div>
     <div className="macd-divergence-tools"><label className="screener-field"><Search size={16}/><input aria-label="Tìm mã phân kỳ MACD" placeholder="Tìm mã…" value={symbol} onChange={event => { setSymbol(event.target.value); setPage(1) }}/></label>

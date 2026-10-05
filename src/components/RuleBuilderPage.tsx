@@ -59,12 +59,13 @@ function visualInput(conditionIds: string[]) {
 }
 
 import { compareEngines, engineGuides } from "../lib/engineCatalog";
+import { displayStructureName } from "../lib/releaseLabels";
 import { formatDate } from "../lib/date";
 const corePackContents: Record<string, string[]> = {
   "Prot Core Engine v0.0": [
     "Research-first: chỉ tạo evidence rõ ràng; mặc định không gửi Telegram",
     "Một cấu trúc chỉ có một mẫu hình chủ đạo để tránh trùng tín hiệu",
-    "Confluence chỉ tính bằng chứng độc lập, không cộng điểm khi trùng v2.0",
+    "Confluence chỉ tính bằng chứng độc lập, không cộng điểm khi trùng Core Engine đa khung",
   ],
   "Prot Core Engine v1.0": [
     "Mua nền tích lũy xác nhận · volume > 1,5× · RSI 40–75",
@@ -247,7 +248,7 @@ export function RuleBuilderPage({ authenticated }: { authenticated: boolean }) {
   async function toggleClassicalModel(pack: any, model: string) {
     const version = [...(pack.rule_versions ?? [])].sort((a,b)=>b.version-a.version)[0];
     if (pack.status === "ARCHIVED" || pack.name === "Prot Core Pack · Phân kỳ Dương MACD") return setToast("Core Pack chỉ dùng nghiên cứu hoặc đã lưu trữ; không thay đổi ở đây.");
-    if (!supabase || !version) return setToast("Chưa tìm thấy cấu hình v0.0");
+    if (!supabase || !version) return setToast("Chưa tìm thấy cấu hình Core Engine mẫu hình");
     const models = version.dsl?.overrides?.models ?? {};
     const dsl = { ...version.dsl, overrides: { ...(version.dsl?.overrides ?? {}), models: { ...models, [model]: models[model] === false } } };
     const { error } = await supabase.from("rule_versions").insert({
@@ -317,7 +318,7 @@ export function RuleBuilderPage({ authenticated }: { authenticated: boolean }) {
         <div className="core-engine-heading">
           <div>
 
-            <h2>Bộ máy tín hiệu</h2>
+            <h2>Bộ máy tín hiệu v1.0</h2>
             <p>
               Mỗi bộ máy là một nguồn đánh giá độc lập. Nút bật/tắt quyết định bộ máy
               nào được chạy; bộ tổng hợp chỉ phân xử kết quả của các bộ máy đang bật.
@@ -346,15 +347,14 @@ export function RuleBuilderPage({ authenticated }: { authenticated: boolean }) {
                     className={`core-toggle ${pack.status === "ACTIVE" ? "is-on" : ""}`}
                     role="switch"
                     aria-checked={pack.status === "ACTIVE"}
-                    aria-label={`${pack.status === "ACTIVE" ? "Tắt" : "Bật"} ${pack.name}`}
+                    aria-label={`${pack.status === "ACTIVE" ? "Tắt" : "Bật"} ${displayStructureName(pack.name)}`}
                     onClick={() => toggleRule(pack)}
                   >
                     <i />
                   </button>
                   <div className="core-pack-copy">
                     <div>
-                      <strong>{pack.name}</strong>
-                      <em>{pack.pack_version}</em>
+                      <strong>{displayStructureName(pack.name)}</strong>
                     </div>
                     <small>{state.detail}</small>
                     <span className="core-role">

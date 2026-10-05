@@ -80,7 +80,7 @@ def test_core_pack_alert_uses_versioned_label() -> None:
         {"action": "PROBE_BUY", "symbol": "VNM", "kind": "CORE_PACK", "rule_name": "Prot Core Engine v2.0", "pack_version": "v2.0", "reasons": ["BREAKOUT"]},
         date(2026, 9, 11),
     )
-    assert "PROBE_BUY VNM · Prot Core Engine v2.0" in text
+    assert "PROBE_BUY VNM · Prot Core Engine · Đa khung v1.0" in text
 
 
 def test_user_rule_alert_uses_rule_studio_label() -> None:
