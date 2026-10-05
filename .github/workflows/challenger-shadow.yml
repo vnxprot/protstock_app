@@ -1,0 +1,37 @@
+name: Challenger shadow session
+
+on:
+  workflow_dispatch:
+    inputs:
+      trading_date:
+        description: Completed EOD date (YYYY-MM-DD); blank uses latest stored breadth session
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: protstock-challenger-shadow
+  cancel-in-progress: false
+
+jobs:
+  shadow:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: python -m pip install -e ".[dev,data]"
+      - name: Run isolated Challenger assessments
+        env:
+          SUPABASE_URL: https://upmqxwktvvguegqeqibn.supabase.co
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          TRADING_DATE: ${{ inputs.trading_date }}
+        run: |
+          args=()
+          if [ -n "$TRADING_DATE" ]; then args+=(--date "$TRADING_DATE"); fi
+          python -m protstock.run_challenger_shadow "${args[@]}"
