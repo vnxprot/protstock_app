@@ -56,6 +56,7 @@
 .overview-signal-row:hover .overview-chart-link, .overview-signal-row:focus-visible .overview-chart-link { color: #d7ff52; }
 .overview-signal-row:focus-visible, .overview-watch-row:focus-visible { outline: 1px solid #d7ff52; outline-offset: 3px; border-radius: 4px; }
 .overview-watch-list { display: grid; max-height: 300px; overflow-y: auto; }
+@media(max-width:760px) { .overview-watch-list { overscroll-behavior-y:contain; touch-action:pan-y; } }
 .overview-watch-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 0; border-top: 1px solid #24372d; font-size: 13px; }
 .overview-watch-row:first-child { border-top: 0; padding-top: 2px; }
 .overview-watch-row:last-child { padding-bottom: 2px; }

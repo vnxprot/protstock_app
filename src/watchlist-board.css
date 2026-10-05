@@ -2,6 +2,8 @@
 .watch-board-page { display:grid; gap:20px; min-width:0; }
 .watch-board-heading { display:flex; justify-content:space-between; align-items:end; gap:20px; }
 .watch-board-heading h1 { margin:8px 0 6px; font-size:clamp(28px,3vw,38px); }
+.watch-board-heading h1 { display:flex; align-items:center; gap:9px; }
+.watch-board-heading h1 svg { flex:none; width:.8em; height:.8em; }
 .watch-board-heading p,.watch-board-footnote { margin:0; color:var(--muted); font-size:14px; line-height:1.5; }
 .watch-board-back { display:inline-flex; align-items:center; gap:5px; color:var(--mint); font-size:13px; font-weight:700; text-decoration:none; }
 .watch-board-back:hover { text-decoration:underline; }

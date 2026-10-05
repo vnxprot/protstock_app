@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { ArrowLeft, ArrowUpRight, Filter } from 'lucide-react'
+import { ArrowLeft, ArrowUpRight, Eye, Filter } from 'lucide-react'
 import { isWatchActive, updateWatchlistItem, useWatchlist, WATCHLIST_DETAIL_LIMIT, WATCHLIST_REASON_LIMIT, type WatchItem, type WatchPatch, type WatchStatus, type WatchTier } from '../lib/watchlist'
 import { useAccountId } from '../hooks/useAccountId'
 import '../watchlist-board.css'
@@ -121,7 +121,7 @@ export function WatchlistBoardPage({ syncStatus, authenticated = false }: { sync
   const updateFilter = (key: FilterKey, value: string) => setFilters(current => ({ ...current, [key]: value }))
   return <section className="workspace-page watch-board-page">
     <div className="watch-board-heading"><div><a href="#watchlist" className="watch-board-back"><ArrowLeft size={16}/> Watchlist</a>
-      <h1>Bảng Những mã để mắt tới</h1><p>Điền trực tiếp vào từng ô. Nội dung được lưu khi rời ô; bảng xếp Tier S → A → B, trong mỗi Tier mã On đứng trước.</p></div>
+      <h1><Eye size={27} aria-hidden="true"/> Bảng soi mã</h1><p>Điền trực tiếp vào từng ô. Nội dung được lưu khi rời ô; bảng xếp Tier S → A → B, trong mỗi Tier mã On đứng trước.</p></div>
       <div className="watch-board-count"><strong>{items.filter(isWatchActive).length}</strong><span>On</span><strong>{items.filter(item => !isWatchActive(item)).length}</strong><span>Off</span></div></div>
     {syncStatus === 'error' && <p className="watchlist-sync-warning" role="status">Chưa đồng bộ được bảng với tài khoản. Dữ liệu trên thiết bị này vẫn được giữ; hãy kiểm tra kết nối.</p>}
     <div className="watch-board-scroll"><table className="watch-board-table"><colgroup>

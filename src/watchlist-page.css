@@ -6,6 +6,8 @@
 .watchlist-hero-link { display:inline-flex; align-items:center; gap:5px; margin-top:14px; color:#f5ffc6; font-size:12px; font-weight:800; }
 .watchlist-hero .eyebrow { color:#dfff9c; }
 .watchlist-hero h1 { margin:8px 0 10px; max-width:680px; color:#fffcef; font-size:clamp(30px,4vw,48px); line-height:1.08; letter-spacing:-.05em; }
+.watchlist-hero h1 { display:flex; align-items:center; gap:10px; }
+.watchlist-hero h1 svg { flex:none; width:.75em; height:.75em; }
 .watchlist-hero p { max-width:625px; margin:0; color:#e2edd7; line-height:1.6; font-size:14px; }
 .watchlist-hero-count { display:grid; justify-items:center; gap:2px; flex:none; min-width:142px; padding:18px; border:1px solid #ffffff69; border-radius:19px; background:#ffffff19; color:#f5ffc6; box-shadow:0 0 42px #d6ed6d22; }
 .watchlist-hero-count strong { color:#fff; font-size:38px; line-height:1; }
@@ -128,3 +130,16 @@ html[data-theme="light"] .watchlist-add label,html[data-theme="light"] .watchlis
 .app-shell .watchlist-page .watch-stock-remove { color:#e3f3e8; }
 html[data-theme="light"] .watchlist-page .watch-tier-head h2 { color:var(--tier-strong) !important; }
 html[data-theme="light"] .watchlist-page .watchlist-hero .eyebrow { color:#dfff9c !important; }
+@media(max-width:760px) {
+  .watch-tier-s { order:1; }
+  .watch-tier-a { order:2; }
+  .watch-tier-b { order:3; }
+  .watch-tier { padding:15px; }
+  .watch-tier>p { min-height:0; margin:7px 0 9px; }
+  .watch-tier-head h2 { margin-top:1px; }
+  .watch-tier-head h2 small { margin-top:0; }
+  .watch-stock { position:relative; gap:3px; padding:10px; }
+  .watch-stock-top { min-height:29px; }
+  .watch-stock-tiers { position:absolute; top:10px; left:90px; right:45px; display:flex; justify-content:flex-start; gap:3px; margin:0; }
+  .watch-stock-tiers button { width:27px; min-height:25px; padding:0; font-size:10px; }
+}

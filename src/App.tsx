@@ -56,9 +56,10 @@ function App({ authenticated = false, profile = null }: { authenticated?: boolea
   useEffect(() => { const update = () => { setPage(currentPage()); setAccountOpen(false); setMoreOpen(false); setCompactMobileNav(false); scrollTo({ top: 0, behavior: 'auto' }) }; addEventListener('hashchange', update); return () => removeEventListener('hashchange', update) }, [])
   useEffect(() => {
     let startX = 0, startY = 0
-    const start = (event: TouchEvent) => { startX = event.touches[0]?.clientX ?? 0; startY = event.touches[0]?.clientY ?? 0 }
+    let nestedScroll = false
+    const start = (event: TouchEvent) => { startX = event.touches[0]?.clientX ?? 0; startY = event.touches[0]?.clientY ?? 0; nestedScroll = event.target instanceof Element && Boolean(event.target.closest('.overview-watch-list')) }
     const end = (event: TouchEvent) => {
-      if (!matchMedia('(max-width: 760px)').matches) return
+      if (!matchMedia('(max-width: 760px)').matches || nestedScroll) return
       const touch = event.changedTouches[0]
       if (!touch) return
       const dx = touch.clientX - startX, dy = touch.clientY - startY

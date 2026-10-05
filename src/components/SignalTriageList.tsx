@@ -61,7 +61,7 @@ export function SignalTriageList({ rows, allRows, latestDate, onExplain }: Props
       .filter(group => visibleIds.has(group.symbol_id))
   }, [rows, allRows, latestDate, previous.isSuccess, previous.data, positions.data])
   const groups = useMemo(() => filterSignalGroups(allGroups, focus, holding), [allGroups, focus, holding])
-  useEffect(() => setPage(1), [focus, holding, rows, latestDate])
+  useEffect(() => setPage(1), [focus, holding, latestDate])
   const pageCount = Math.max(1, Math.ceil(groups.length / 10))
   const currentPage = Math.min(page, pageCount)
   const visibleGroups = signalGroupPage(groups, currentPage)
