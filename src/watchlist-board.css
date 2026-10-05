@@ -33,6 +33,7 @@
 .watch-board-table input:focus,.watch-board-table select:focus,.watch-board-table textarea:focus { outline:2px solid var(--mint); background:var(--surface); }
 .watch-board-table select { cursor:pointer; }
 .watch-board-index { color:var(--muted); font-variant-numeric:tabular-nums; }
+.watch-board-table tbody td.watch-board-index { padding-top:20px; text-align:center; line-height:1.45; }
 .watch-board-symbol { display:inline-flex; align-items:center; gap:4px; border:0; background:transparent; color:var(--mint); font:inherit; font-weight:800; cursor:pointer; }
 .watch-board-status-on { color:#09875a!important; font-weight:800!important; }
 .watch-board-status-off { color:var(--muted)!important; font-weight:700!important; }
