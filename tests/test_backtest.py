@@ -27,6 +27,57 @@ def test_backtest_uses_next_bar_and_reports_required_metrics():
     assert result["trades"]
     assert result["trades"][0]["entry_date"] > rows[3]["date"]
     assert {"win_rate", "expectancy", "profit_factor", "cagr", "max_drawdown", "sharpe", "turnover"} <= result["metrics"].keys()
+    assert result["settlement_model"] == "T_PLUS_VIETNAM"
+
+
+def test_unsettled_execution_cannot_be_enabled():
+    with pytest.raises(ValueError, match="unsupported settlement_model"):
+        run_backtest(bars(4), {}, BacktestAssumptions(settlement_model="NOT_MODELLED"))
+
+
+@pytest.mark.parametrize("timing,exit_date,exit_price", [
+    ("T2_CLOSE", "2026-01-07", 8_500),
+    ("NEXT_OPEN", "2026-01-08", 9_000),
+])
+def test_locked_stop_waits_until_settlement(monkeypatch, timing, exit_date, exit_price):
+    rows = [
+        {"date": day, "open": opening, "high": max(opening, close), "low": low, "close": close, "volume": 2_000_000}
+        for day, opening, low, close in [
+            ("2026-01-02", 10, 10, 10),
+            ("2026-01-05", 10, 9.5, 10),
+            ("2026-01-06", 8, 7, 8),
+            ("2026-01-07", 8.5, 7.5, 8.5),
+            ("2026-01-08", 9, 8.5, 9),
+        ]
+    ]
+    monkeypatch.setattr("protstock.backtest.evaluate_backtest_signal", lambda history, *_: (
+        (True, "PROBE_BUY", ["SETUP"], {"sizing": {"quantity": 1000}, "invalidation_price": 9})
+        if len(history) == 1 else (False, "WATCH", [], {})))
+    result = run_backtest(rows, {}, BacktestAssumptions(
+        settlement_exit_timing=timing, fee_rate=0, sell_tax_rate=0, slippage_rate=0,
+        risk_pct=100, max_sector_weight_pct=100))
+    assert result["trades"][0]["exit_date"] == exit_date
+    assert result["trades"][0]["exit_price"] == exit_price
+    assert result["trades"][0]["exit_reason"] == "LOCKED_STOP_BREACH"
+    assert result["metrics"]["locked_stop_breach_count"] == 1
+    assert result["metrics"]["locked_drawdown_max"] == pytest.approx(-.3)
+    assert result["metrics"]["t_plus_win_rate"] == 0
+
+
+def test_t2_close_uses_fees_and_tax_but_only_next_open_slips(monkeypatch):
+    rows = [{"date": day, "open": 10, "high": 10, "low": 8, "close": close, "volume": 2_000_000}
+            for day, close in [("2026-01-02", 10), ("2026-01-05", 10),
+                               ("2026-01-06", 8), ("2026-01-07", 9)]]
+    monkeypatch.setattr("protstock.backtest.evaluate_backtest_signal", lambda history, *_: (
+        (True, "PROBE_BUY", ["SETUP"], {"sizing": {"quantity": 1000}, "invalidation_price": 9})
+        if len(history) == 1 else (False, "WATCH", [], {})))
+    result = run_backtest(rows, {}, BacktestAssumptions(
+        settlement_exit_timing="T2_CLOSE", risk_pct=100, max_sector_weight_pct=100))
+    trade = result["trades"][0]
+    assert trade["entry_price"] == pytest.approx(10_010)
+    assert trade["exit_price"] == pytest.approx(9_000)
+    expected = trade["quantity"] * (9_000 * (1 - .0015 - .001) - 10_010 * (1 + .0015))
+    assert trade["pnl"] == pytest.approx(expected)
 
 
 def test_walk_forward_never_leaks_test_into_train():
@@ -50,9 +101,8 @@ def test_next_open_order_never_changes_prior_day_equity_and_prices_are_vnd(monke
     monkeypatch.setattr("protstock.backtest.evaluate_backtest_signal", signal)
     result = run_backtest(rows, {}, BacktestAssumptions(fee_rate=0, sell_tax_rate=0, slippage_rate=0, risk_pct=100, max_sector_weight_pct=100))
     assert [point["equity"] for point in result["equity_curve"]] == [100_000_000] * 3
-    assert result["trades"][0]["quantity"] == 5000
-    assert result["trades"][0]["entry_price"] == 20_000
-    assert result["trades"][0]["entry_date"] == "2026-01-02"
+    assert result["trades"] == []  # The test ends before this lot settles.
+    assert result["metrics"]["trade_count"] == 0
     assert result["metrics"]["total_return"] == result["metrics"]["sharpe"] == result["metrics"]["max_drawdown"] == 0
 
 
@@ -63,7 +113,7 @@ def test_watch_and_risk_actions_never_become_entry_orders(monkeypatch):
 
 
 def test_exit_executes_next_open_with_costs_and_no_same_open_reentry(monkeypatch):
-    rows = [{**row, "open": 20, "high": 21, "low": 19, "close": 20} for row in bars(4)]
+    rows = [{**row, "open": 20, "high": 21, "low": 19, "close": 20} for row in bars(5)]
     def signal(history, *_args):
         if len(history) == 1:
             return True, "PROBE_BUY", ["SETUP"], {"sizing": {"quantity": 1000}, "invalidation_price": 18}
@@ -75,7 +125,7 @@ def test_exit_executes_next_open_with_costs_and_no_same_open_reentry(monkeypatch
     result = run_backtest(rows, {}, config)
     assert len(result["trades"]) == 1
     trade = result["trades"][0]
-    assert trade["entry_date"] == rows[1]["date"] and trade["exit_date"] == rows[2]["date"]
+    assert trade["entry_date"] == rows[1]["date"] and trade["exit_date"] == rows[4]["date"]
     assert trade["exit_reason"] == "RULE_EXIT"
     expected = 1000 * 19980 * (1 - .0015 - .001) - 1000 * 20020 * (1 + .0015)
     assert trade["pnl"] == pytest.approx(expected)
@@ -88,7 +138,7 @@ def test_reduce_sells_only_half_position_and_records_proportional_cost(monkeypat
         if len(history) == 2: return True, "REDUCE", ["RULE_REDUCE"], {}
         return False, "WATCH", [], {}
     monkeypatch.setattr("protstock.backtest.evaluate_backtest_signal", signal)
-    result = run_backtest(bars(4), {}, BacktestAssumptions(fee_rate=0, sell_tax_rate=0, slippage_rate=0, risk_pct=100, max_sector_weight_pct=100))
+    result = run_backtest(bars(5), {}, BacktestAssumptions(fee_rate=0, sell_tax_rate=0, slippage_rate=0, risk_pct=100, max_sector_weight_pct=100))
     assert [trade["quantity"] for trade in result["trades"]] == [500, 500]
     assert result["trades"][0]["exit_reason"] == "RULE_REDUCE"
 
@@ -160,7 +210,7 @@ def test_gap_open_rechecks_risk_and_skips_unaffordable_lot(monkeypatch):
 
 
 def test_rule_percent_stop_is_based_on_actual_fill_and_executes_next_open(monkeypatch):
-    prices = [(10, 10), (12, 11.5), (11.5, 11), (11.5, 11.5)]
+    prices = [(10, 10), (12, 11.5), (11.5, 11), (11.5, 11.5), (11.5, 11.5)]
     rows = [{"date": "2026-01-0" + str(i + 1), "open": open_price, "close": close,
              "high": max(open_price, close) + .1, "low": min(open_price, close) - .1, "volume": 1_000_000}
             for i, (open_price, close) in enumerate(prices)]
@@ -171,8 +221,8 @@ def test_rule_percent_stop_is_based_on_actual_fill_and_executes_next_open(monkey
     result = run_backtest(rows, {"risk": {"stop_loss_pct": .07}},
         BacktestAssumptions(fee_rate=0, sell_tax_rate=0, slippage_rate=0, max_sector_weight_pct=100))
     assert result["trades"][0]["entry_price"] == 12000
-    assert result["trades"][0]["exit_date"] == "2026-01-04"
-    assert result["trades"][0]["exit_reason"] == "STOP_LOSS"
+    assert result["trades"][0]["exit_date"] == "2026-01-05"
+    assert result["trades"][0]["exit_reason"] == "LOCKED_STOP_BREACH"
 
 @pytest.mark.parametrize("metadata,pattern", [
     ({"quality_status": "QUARANTINED"}, "cách ly"),

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { signalReasonSummary } from '../lib/signalExplanation'
-import { filterSignalGroups, groupSignals, signalGroupPage, type TriageFocus, type TriageHolding, type TriageSignal } from '../lib/signalTriage'
+import { filterSignalGroups, groupSignals, signalGroupPage, unsettledLotStates, type SectorStrength, type TriageFocus, type TriageHolding, type TriageSignal } from '../lib/signalTriage'
 import { supabase } from '../lib/supabase'
 import { SoftSelect } from './SoftSelect'
 
@@ -54,12 +54,51 @@ export function SignalTriageList({ rows, allRows, latestDate, onExplain }: Props
       if (error) throw error
       return new Set((data ?? []).map(item => Number(item.symbol_id)))
     } })
+  const lotStates = useQuery({ queryKey: ['signal-triage-lots', latestDate], enabled: Boolean(supabase) && Boolean(latestDate), queryFn: async () => {
+    const transactions: { symbol_id: number; trading_date: string; action: string; quantity: number; created_at: string }[] = []
+    for (let from = 0; ; from += 1000) {
+      const { data, error } = await supabase!.from('portfolio_transactions')
+        .select('symbol_id,trading_date,action,quantity,created_at').lte('trading_date', latestDate)
+        .order('trading_date').order('created_at').range(from, from + 999)
+      if (error) throw error
+      transactions.push(...(data ?? []))
+      if ((data ?? []).length < 1000) break
+    }
+    const sessions = await supabase!.from('market_breadth_snapshots').select('trading_date').lte('trading_date', latestDate).order('trading_date', { ascending: false }).limit(20)
+    if (sessions.error) throw sessions.error
+    return unsettledLotStates(transactions, latestDate, (sessions.data ?? []).map(row => row.trading_date))
+  } })
+  const sectorStrength = useQuery({ queryKey: ['signal-triage-sector', latestDate], enabled: Boolean(supabase) && Boolean(latestDate), queryFn: async () => {
+    const { data, error } = await supabase!.from('market_breadth_snapshots').select('sector_breadth').eq('trading_date', latestDate).maybeSingle()
+    if (error) throw error
+    const sectors = (data?.sector_breadth ?? []) as (SectorStrength & { sector: string })[]
+    return new Map(sectors.map(row => [row.sector, row]))
+  } })
+  const extension = useQuery({ queryKey: ['signal-triage-extension', latestDate], enabled: Boolean(supabase) && Boolean(latestDate), queryFn: async () => {
+    const result = new Map<number, number>()
+    for (let from = 0; ; from += 1000) {
+      const { data, error } = await supabase!.from('signals').select('symbol_id,evidence')
+        .eq('as_of_date', latestDate).eq('timeframe', 'D').order('symbol_id').range(from, from + 999)
+      if (error) throw error
+      for (const row of data ?? []) {
+        const evidence = row.evidence as { close?: number; base_price?: number; invalidation_price?: number; trigger_price?: number } | null
+        const close = Number(evidence?.close), base = Number(evidence?.base_price ?? evidence?.trigger_price ?? evidence?.invalidation_price)
+        if (close > 0 && base > 0) {
+          const distance = (close / base - 1) * 100
+          result.set(Number(row.symbol_id), Math.max(result.get(Number(row.symbol_id)) ?? -Infinity, distance))
+        }
+      }
+      if ((data ?? []).length < 1000) break
+    }
+    return result
+  } })
   const allGroups = useMemo(() => {
     const visibleIds = new Set(rows.map(row => row.symbol_id))
     return groupSignals(allRows.filter(row => row.as_of_date === latestDate),
-      previous.isSuccess ? previous.data : null, positions.data ?? new Set<number>())
+      previous.isSuccess ? previous.data : null, positions.data ?? new Set<number>(),
+      { settlement: lotStates.data, sectors: sectorStrength.data, extensionPct: extension.data })
       .filter(group => visibleIds.has(group.symbol_id))
-  }, [rows, allRows, latestDate, previous.isSuccess, previous.data, positions.data])
+  }, [rows, allRows, latestDate, previous.isSuccess, previous.data, positions.data, lotStates.data, sectorStrength.data, extension.data])
   const groups = useMemo(() => filterSignalGroups(allGroups, focus, holding), [allGroups, focus, holding])
   useEffect(() => setPage(1), [focus, holding, latestDate])
   const pageCount = Math.max(1, Math.ceil(groups.length / 10))
@@ -108,6 +147,9 @@ export function SignalTriageList({ rows, allRows, latestDate, onExplain }: Props
           {group.risk && <b className="triage-risk">WATCH · Rủi ro tăng</b>}
           {group.opportunity && <b className="triage-opportunity">WATCH · Cơ hội hình thành</b>}
           {group.held && <b className="triage-held">Đang nắm giữ</b>}
+          {group.settlement?.map((state, index) => <b className="triage-held" key={`${state}-${index}`}>{state}</b>)}
+          {group.extensionPct != null && group.extensionPct > 7 && <b className="triage-extension">EXTENDED (+{group.extensionPct.toFixed(1)}%)</b>}
+          {group.sectorStrength && <b className="triage-sector">Ngành {Number(group.sectorStrength.market_health_score ?? 0).toFixed(0)} · GTGD {Number(group.sectorStrength.turnover_share_pct ?? 0).toFixed(1)}%</b>}
           {group.primary.action !== 'WATCH' && <b className="triage-action">{group.primary.action}</b>}</span>
         <span className="triage-reason">{signalReasonSummary(group.primary.reasons)}</span>
         <span className="triage-count">{group.signals.length} tín hiệu {open ? '▴' : '▾'}</span></button>

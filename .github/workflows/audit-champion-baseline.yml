@@ -1,0 +1,40 @@
+name: Champion baseline audit
+
+on:
+  workflow_dispatch:
+    inputs:
+      end_date:
+        description: Completed EOD date (YYYY-MM-DD); blank uses latest stored breadth session
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: python -m pip install -e ".[dev,data]"
+      - name: Audit verified Champion cohorts without database writes
+        env:
+          SUPABASE_URL: https://upmqxwktvvguegqeqibn.supabase.co
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          END_DATE: ${{ inputs.end_date }}
+        run: |
+          args=()
+          if [ -n "$END_DATE" ]; then args+=(--end "$END_DATE"); fi
+          python -m protstock.audit_champion_baseline "${args[@]}" \
+            --output champion-baseline-audit.md --require-complete
+      - name: Preserve audit report, including incomplete coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: champion-baseline-audit
+          path: champion-baseline-audit.md
+          if-no-files-found: warn

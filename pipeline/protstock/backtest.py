@@ -34,6 +34,9 @@ class BacktestAssumptions:
     risk_pct: float = 1.0
     lot_size: int = 100
     max_sector_weight_pct: float = 30.0
+    settlement_days: float = 2.0
+    settlement_model: str = "T_PLUS_VIETNAM"
+    settlement_exit_timing: str = "NEXT_OPEN"
 
     def validate(self) -> None:
         if not isfinite(self.initial_capital) or self.initial_capital <= 0:
@@ -48,6 +51,12 @@ class BacktestAssumptions:
             raise ValueError("time_stop_bars, lot_size and risk_pct must be positive")
         if not 0 < self.max_sector_weight_pct <= 100:
             raise ValueError("max_sector_weight_pct must be in (0,100]")
+        if self.settlement_model != "T_PLUS_VIETNAM":
+            raise ValueError("unsupported settlement_model")
+        if self.settlement_model == "T_PLUS_VIETNAM" and self.settlement_days != 2.0:
+            raise ValueError("Vietnam settlement requires T+2 afternoon")
+        if self.settlement_exit_timing not in {"T2_CLOSE", "NEXT_OPEN"}:
+            raise ValueError("unsupported settlement_exit_timing")
 
 
 def _closed_periods(history: list[dict], timeframe: str, context: dict) -> list[dict]:
@@ -163,6 +172,9 @@ def run_backtest(bars: Sequence[dict], rule: dict[str, Any], assumptions: Backte
     cash, quantity, entry_price, entry_cost = config.initial_capital, 0, 0.0, 0.0
     entry_date, entry_index, highest_close, stop_price = "", 0, 0.0, 0.0
     pending: dict | None = None
+    lots: list[dict[str, Any]] = []
+    all_lots: list[dict[str, Any]] = []
+    locked_breaches = 0
     trades: list[dict] = []
     curve: list[dict] = []
     evaluations: list[dict] = []
@@ -171,15 +183,27 @@ def run_backtest(bars: Sequence[dict], rule: dict[str, Any], assumptions: Backte
     if not 0 <= effective_stop_pct < 1:
         raise ValueError("rule stop_loss_pct must be in [0,1)")
 
-    def sell(bar: dict, amount: int, reason: str) -> None:
+    def available(index: int) -> int:
+        return sum(lot["quantity"] for lot in lots if index >= lot["entry_index"] + 3)
+
+    def sell(bar: dict, amount: int, reason: str, *, at_close: bool = False) -> None:
         nonlocal cash, quantity, entry_cost
-        price = float(bar["open"]) * STOCK_PRICE_TO_VND * (1 - config.slippage_rate)
+        price = float(bar["close"] if at_close else bar["open"]) * STOCK_PRICE_TO_VND * (1 if at_close else 1 - config.slippage_rate)
         cost = entry_cost * amount / quantity
         proceeds = amount * price * (1 - config.fee_rate - config.sell_tax_rate)
         trades.append(_trade(entry_date, bar["date"], entry_price, price, amount, proceeds - cost, cost, reason))
         cash += proceeds
         entry_cost -= cost
         quantity -= amount
+        remaining = amount
+        for lot in lots:
+            eligible = index >= lot["entry_index"] + (2 if at_close else 3)
+            taken = min(remaining, lot["quantity"]) if eligible else 0
+            lot["quantity"] -= taken
+            remaining -= taken
+            if not remaining:
+                break
+        lots[:] = [lot for lot in lots if lot["quantity"]]
 
     for index, bar in enumerate(ordered):
         if bar["date"] < start:
@@ -188,7 +212,14 @@ def run_backtest(bars: Sequence[dict], rule: dict[str, Any], assumptions: Backte
         if pending:
             if pending["action"] in {"EXIT", "REDUCE"} and quantity:
                 amount = quantity if pending["action"] == "EXIT" else max(config.lot_size, (quantity // 2 // config.lot_size) * config.lot_size)
-                sell(bar, min(quantity, amount), pending["reason"])
+                filled = min(amount, available(index))
+                if filled:
+                    sell(bar, filled, pending["reason"])
+                if filled < amount:
+                    pending["remaining"] = amount - filled
+                    counts["locked_exit_deferred"] = counts.get("locked_exit_deferred", 0) + 1
+                else:
+                    pending = None
             elif pending["action"] in {"PROBE_BUY", "ADD"}:
                 price = float(bar["open"]) * STOCK_PRICE_TO_VND * (1 + config.slippage_rate)
                 budget_quantity = int(cash / (price * (1 + config.fee_rate)))
@@ -212,10 +243,32 @@ def run_backtest(bars: Sequence[dict], rule: dict[str, Any], assumptions: Backte
                     if not quantity:
                         entry_date, entry_index, highest_close = bar["date"], index, close_vnd
                     quantity += amount
+                    lot = {"quantity": amount, "entry_index": index, "entry_price": price,
+                           "locked_drawdown": 0.0, "t_plus_return": None, "breached": False}
+                    lots.append(lot)
+                    all_lots.append(lot)
                     stop_price = max(stop_price, fill_stop) if pending["action"] == "ADD" else fill_stop
                 else:
                     counts["unfilled_orders"] += 1
-            pending = None
+                pending = None
+        for lot in lots:
+            age = index - lot["entry_index"]
+            if age <= 2:
+                # Daily low on T+2 is a conservative proxy: OHLC cannot isolate morning trades.
+                lot["locked_drawdown"] = min(lot["locked_drawdown"], float(bar["low"]) * STOCK_PRICE_TO_VND / lot["entry_price"] - 1)
+            if age == 2 and lot["t_plus_return"] is None:
+                net_exit = close_vnd * (1 - config.fee_rate - config.sell_tax_rate)
+                lot["t_plus_return"] = net_exit / (lot["entry_price"] * (1 + config.fee_rate)) - 1
+            if age < 2 and not lot["breached"] and stop_price and close_vnd < stop_price:
+                lot["breached"] = True
+                locked_breaches += 1
+        if (config.settlement_exit_timing == "T2_CLOSE"
+                and pending and pending["action"] == "EXIT" and pending["reason"] == "LOCKED_STOP_BREACH"):
+            ready_at_close = sum(lot["quantity"] for lot in lots if index >= lot["entry_index"] + 2)
+            filled = min(pending.get("remaining", quantity), ready_at_close)
+            if filled:
+                sell(bar, filled, pending["reason"], at_close=True)
+                pending = None if not quantity else {**pending, "remaining": quantity}
         curve.append({"date": bar["date"], "equity": cash + quantity * close_vnd})
         history = ordered[:index + 1]
         position = ({"quantity": quantity, "entry_date": entry_date, "average_cost": entry_price / STOCK_PRICE_TO_VND,
@@ -232,20 +285,34 @@ def run_backtest(bars: Sequence[dict], rule: dict[str, Any], assumptions: Backte
                            else "TIME_STOP" if index - entry_index >= config.time_stop_bars else "")
             if stop_reason:
                 passed, action, reasons = True, "EXIT", [stop_reason, *reasons]
+            if any(lot["breached"] and index - lot["entry_index"] < 2 for lot in lots):
+                passed, action, reasons = True, "EXIT", ["LOCKED_STOP_BREACH", *reasons]
         evaluations.append({"date": bar["date"], "action": action, "matched": passed, "reasons": reasons})
         if passed and action in {"PROBE_BUY", "ADD", "REDUCE", "EXIT"} and index + 1 < len(ordered):
-            pending = {"action": action, "reason": reasons[0] if reasons else action, "evidence": evidence}
+            if not pending or pending["action"] not in {"EXIT", "REDUCE"}:
+                pending = {"action": action, "reason": reasons[0] if reasons else action, "evidence": evidence}
     if quantity:
-        # Explicit end-of-test liquidation at final close, including sell costs.
+        # Only settled shares may be liquidated; unsettled shares remain marked to market.
         last = ordered[-1]
-        price = float(last["close"]) * STOCK_PRICE_TO_VND * (1 - config.slippage_rate)
-        proceeds = quantity * price * (1 - config.fee_rate - config.sell_tax_rate)
-        trades.append(_trade(entry_date, last["date"], entry_price, price, quantity, proceeds - entry_cost, entry_cost, "END_OF_TEST"))
-        cash += proceeds
-        curve[-1]["equity"] = cash
+        final_index = len(ordered) - 1
+        final_exit_age = 2 if config.settlement_exit_timing == "T2_CLOSE" else 3
+        final_ready = sum(lot["quantity"] for lot in lots if final_index >= lot["entry_index"] + final_exit_age)
+        if final_ready:
+            price = float(last["close"]) * STOCK_PRICE_TO_VND
+            cost = entry_cost * final_ready / quantity
+            proceeds = final_ready * price * (1 - config.fee_rate - config.sell_tax_rate)
+            trades.append(_trade(entry_date, last["date"], entry_price, price, final_ready, proceeds - cost, cost, "END_OF_TEST"))
+            cash += proceeds
+            quantity -= final_ready
+            curve[-1]["equity"] = cash + quantity * float(last["close"]) * STOCK_PRICE_TO_VND
     traded_rows = [row for row in ordered if row["date"] >= start]
     revision = sha256(json.dumps({"bars": ordered, "contexts": evaluation_contexts or {}, "benchmark": list(benchmark_rows)}, sort_keys=True, separators=(",", ":"), default=str).encode()).hexdigest()
-    return {"metrics": _metrics(curve, trades, config.initial_capital),
+    matured = [lot for lot in all_lots if lot["t_plus_return"] is not None]
+    # Keep the exposure measurements independent of whether a lot later sold.
+    return {"metrics": {**_metrics(curve, trades, config.initial_capital),
+            "t_plus_win_rate": sum(lot["t_plus_return"] > 0 for lot in matured) / len(matured) if matured else None,
+            "locked_drawdown_max": min((lot["locked_drawdown"] for lot in all_lots), default=None),
+            "locked_stop_breach_count": locked_breaches},
             "benchmark_metrics": {"buy_hold_return": float(traded_rows[-1]["close"]) / float(traded_rows[0]["open"]) - 1},
             "trades": trades, "equity_curve": curve, "assumptions": asdict(config),
             "rule_snapshot": deepcopy(rule), "algorithm_version": ALGORITHM_VERSION, "data_revision": revision,
@@ -253,7 +320,8 @@ def run_backtest(bars: Sequence[dict], rule: dict[str, Any], assumptions: Backte
             "evaluation_period": {"requested_from": start, "requested_to": end, "first_date": curve[0]["date"], "last_date": curve[-1]["date"]},
             "warnings": (["MARKET_CONTEXT_MISSING"] if counts["market_context_missing"] else []) +
                         (["HIGHER_TIMEFRAME_CONTEXT_ONLY"] if timeframe != "D" else []),
-            "execution_model": "CLOSE_SIGNAL_NEXT_OPEN", "settlement_model": "NOT_MODELLED", "price_unit": "VND", "source_price_unit": "THOUSAND_VND"}
+            "execution_model": "CLOSE_SIGNAL_NEXT_OPEN", "settlement_model": config.settlement_model,
+            "settlement_exit_timing": config.settlement_exit_timing, "price_unit": "VND", "source_price_unit": "THOUSAND_VND"}
 
 
 def _trade(entry_date: str, exit_date: str, entry_price: float, exit_price: float, quantity: int, pnl: float, cost: float, reason: str) -> dict[str, Any]:

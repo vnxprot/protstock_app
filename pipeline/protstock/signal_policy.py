@@ -12,6 +12,11 @@ def average_turnover_vnd(snapshot: dict) -> float:
     return float(snapshot.get("close") or 0) * float(snapshot.get("volume_avg20") or 0) * STOCK_PRICE_TO_VND
 
 
+def order_participation_rate(order_value_vnd: float, snapshot: dict) -> float | None:
+    turnover = average_turnover_vnd(snapshot)
+    return order_value_vnd / turnover if order_value_vnd > 0 and turnover > 0 else None
+
+
 def apply_signal_policy(action: str, reasons: list[str], context: dict) -> tuple[str, list[str]]:
     """No indicator-specific confirmation here: enforce safety for EVERY source."""
     reasons = list(reasons)
@@ -83,6 +88,14 @@ def apply_signal_policy(action: str, reasons: list[str], context: dict) -> tuple
         lot_size = max(1, int(context.get("lot_size") or 100))
         quantity = min(sizing["quantity"], int(available / (close * STOCK_PRICE_TO_VND))) // lot_size * lot_size
         value = quantity * close * STOCK_PRICE_TO_VND
+        if context.get("liquidity_advisory"):
+            participation = order_participation_rate(value, context.get("daily_snapshot") or snapshot)
+            evidence["order_participation_rate"] = round(participation, 6) if participation is not None else None
+            if participation is not None and participation > float(context.get("max_order_participation_rate", 0.05)):
+                reasons.append("HIGH_PARTICIPATION_RISK")
+            floor = float(context.get("large_account_turnover_floor_vnd") or 0)
+            if floor and turnover < floor:
+                reasons.append("LARGE_ACCOUNT_LIQUIDITY_RISK")
         sector = context.get("candidate_sector")
         existing = exposure["total_value"] * exposure["sector_weights"].get(sector, 0) / 100
         evidence["sizing"] = {"quantity": quantity, "value_vnd": value, "projected_sector_weight_pct": (existing + value) / capital * 100}

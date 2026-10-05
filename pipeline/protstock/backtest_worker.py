@@ -76,7 +76,8 @@ def process_backtests(limit: int = 3) -> dict[str, Any]:
                     client.upsert("backtest_trades", trades, "id")
                 metrics = {**result["metrics"], "warnings": result["warnings"], "evaluation_summary": result["evaluation_summary"],
                            "execution_model": result["execution_model"], "price_unit": result["price_unit"],
-                           "source_price_unit": result["source_price_unit"], "settlement_model": result.get("settlement_model", "NOT_MODELLED"),
+                           "source_price_unit": result["source_price_unit"], "settlement_model": result.get("settlement_model", assumptions.settlement_model),
+                           "settlement_exit_timing": result.get("settlement_exit_timing", assumptions.settlement_exit_timing),
                            "execution_algorithm_version": result["algorithm_version"], "execution_data_revision": result["data_revision"], "price_basis": price_basis,
                            "evaluation_period": result.get("evaluation_period")}
                 payload = {"status": "SUCCEEDED", "metrics": metrics, "benchmark_metrics": result["benchmark_metrics"],

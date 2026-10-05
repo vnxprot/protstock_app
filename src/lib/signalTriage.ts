@@ -22,10 +22,49 @@ export type SignalGroup<T extends TriageSignal> = {
   risk: boolean
   opportunity: boolean
   priority: number
+  settlement?: SettlementState[]
+  extensionPct?: number
+  sectorStrength?: SectorStrength
 }
 
 export type TriageFocus = 'all' | 'changed' | 'held_risk' | 'opportunity' | 'other'
 export type TriageHolding = 'all' | 'held' | 'unheld'
+export type SettlementState = 'T0' | 'T1' | 'T2' | 'T_READY'
+export type SectorStrength = { market_health_score?: number | null; turnover_share_pct?: number | null; flow_median_score?: number | null; sample_size?: number | null; coverage_ratio?: number | null }
+export type TriageContext = {
+  settlement?: ReadonlyMap<number, SettlementState[]>
+  extensionPct?: ReadonlyMap<number, number>
+  sectors?: ReadonlyMap<string, SectorStrength>
+}
+
+export function settlementState(buyDate: string, asOfDate: string, marketDates: readonly string[]): SettlementState | null {
+  if (!marketDates.length || buyDate > asOfDate) return null
+  if (marketDates.length >= 3 && buyDate < [...marketDates].sort()[0]) return 'T_READY'
+  const tradingDays = [...new Set([...marketDates, buyDate, asOfDate])].sort()
+  const age = tradingDays.indexOf(asOfDate) - tradingDays.indexOf(buyDate)
+  if (age < 0) return null
+  return age === 0 ? 'T0' : age === 1 ? 'T1' : age === 2 ? 'T2' : 'T_READY'
+}
+
+export function unsettledLotStates(
+  transactions: readonly { symbol_id: number; trading_date: string; action: string; quantity: number; created_at?: string }[],
+  asOfDate: string, marketDates: readonly string[],
+): Map<number, SettlementState[]> {
+  const lots = new Map<number, { date: string; quantity: number }[]>()
+  for (const tx of [...transactions].filter(row => row.trading_date <= asOfDate).sort((a, b) =>
+    a.trading_date.localeCompare(b.trading_date) || (a.created_at ?? '').localeCompare(b.created_at ?? ''))) {
+    const symbol = Number(tx.symbol_id)
+    const current = lots.get(symbol) ?? []
+    if (tx.action.startsWith('BUY')) current.push({ date: tx.trading_date, quantity: Number(tx.quantity) })
+    if (tx.action.startsWith('SELL')) {
+      let remaining = Number(tx.quantity)
+      for (const lot of current) { const used = Math.min(remaining, lot.quantity); lot.quantity -= used; remaining -= used; if (!remaining) break }
+    }
+    lots.set(symbol, current)
+  }
+  return new Map([...lots].map(([symbol, held]) => [symbol, held.filter(lot => lot.quantity > 0)
+    .map(lot => settlementState(lot.date, asOfDate, marketDates)).filter((state): state is SettlementState => state !== null)]))
+}
 
 export function filterSignalGroups<T extends TriageSignal>(
   groups: SignalGroup<T>[], focus: TriageFocus, holding: TriageHolding,
@@ -65,7 +104,7 @@ function signature<T extends TriageSignal>(signals: T[], includeReasons: boolean
 }
 
 export function groupSignals<T extends TriageSignal>(
-  signals: T[], previous: TriageSignal[] | null, heldIds: ReadonlySet<number>,
+  signals: T[], previous: TriageSignal[] | null, heldIds: ReadonlySet<number>, context: TriageContext = {},
 ): SignalGroup<T>[] {
   const prior = new Map<number, TriageSignal[]>()
   previous?.forEach(signal => prior.set(signal.symbol_id, [...(prior.get(signal.symbol_id) ?? []), signal]))
@@ -92,10 +131,16 @@ export function groupSignals<T extends TriageSignal>(
       }))
     const hasSell = items.some(signal => signal.action === 'EXIT' || signal.action === 'REDUCE')
     const changed = change === 'new' || change === 'action' || change === 'reasons'
+    const sector = context.sectors?.get(primary.sector ?? '')
+    const sectorBonus = sector && Number(sector.sample_size ?? 0) >= 5 && Number(sector.coverage_ratio ?? 0) >= .8
+      && Number(sector.flow_median_score ?? 0) > 0
+      ? Math.min(15, Math.max(0, Number(sector.market_health_score ?? 0) / 10 + Number(sector.turnover_share_pct ?? 0) / 5)) : 0
     const priority = (changed ? 300 : held && (risk || hasSell) ? 200 : opportunity ? 100 : 0)
       + (held && hasSell ? 40 : hasSell ? 30 : held ? 20 : 0)
       + (change === 'new' || change === 'action' ? 10 : change === 'reasons' ? 5 : 0)
+      + sectorBonus
     return { symbol: primary.symbol, symbol_id: primary.symbol_id, sector: primary.sector,
-      signals: ordered, primary, held, change, risk, opportunity, priority }
+      signals: ordered, primary, held, change, risk, opportunity, priority,
+      settlement: context.settlement?.get(primary.symbol_id) ?? [], extensionPct: context.extensionPct?.get(primary.symbol_id), sectorStrength: sector }
   }).sort((a, b) => b.priority - a.priority || b.primary.score - a.primary.score || a.symbol.localeCompare(b.symbol))
 }

@@ -27,6 +27,7 @@ from .signal_policy import STOCK_PRICE_TO_VND, apply_signal_policy
 from .period_signals import monthly_trend, evaluate_period_signal
 from .signal_funnel import assess_funnel
 from .macd_divergence_zones import assess_macd_zone_divergence
+from .challenger_engine import assess_challenger, VERSION as CHALLENGER_VERSION
 from .wyckoff import classify_wyckoff_timeframe
 
 # VNINDEX's first session was 28/07/2000. This keeps its benchmark history full
@@ -229,6 +230,7 @@ def run_eod(
                 context["market_context"] = market_context
                 context["portfolios"] = portfolios
                 _write_analysis(client, symbol_id, timeframe, scoped_rows, index_rows, active_rules, counts, result, context, persist_evidence=False)
+            _write_challenger_shadow(client, pending_signals, market_context, trading_date, counts, warnings)
         status = "SUCCEEDED" if counts["failed"] == 0 else "PARTIAL"
         if write_breadth_snapshot and symbols:
             counts["publication_status"] = "COMPLETE" if status == "SUCCEEDED" and breadth["coverage_status"] == "COMPLETE" else "PARTIAL"
@@ -397,6 +399,8 @@ def rebuild_signals(trading_date: date, *, symbol_offset: int = 0, symbol_limit:
                             timeframe_context["market_context"] = prepared_market_context
                             timeframe_context["portfolios"] = portfolios
                             _write_analysis(client, symbol_row["id"], timeframe, rows, decision_benchmark[timeframe], active_rules, counts, results[timeframe], timeframe_context, persist_evidence=False)
+                            if timeframe == "D":
+                                pending_signals.append((symbol_row["id"], timeframe, rows, decision_benchmark[timeframe], results[timeframe], timeframe_context))
                 counts["symbols"] += 1
                 client.create_job_item({"job_run_id": job["id"], "symbol_id": symbol_row["id"], "item_key": symbol_row["symbol"], "status": "SUCCEEDED", "rows_written": 0, "duration_ms": int((monotonic() - started) * 1000)})
             except Exception as exc:
@@ -415,6 +419,9 @@ def rebuild_signals(trading_date: date, *, symbol_offset: int = 0, symbol_limit:
                 context["market_context"] = market_context
                 context["portfolios"] = portfolios
                 _write_analysis(client, symbol_id, timeframe, rows, index_rows, active_rules, counts, result, context, persist_evidence=False)
+            _write_challenger_shadow(client, pending_signals, market_context, trading_date, counts, warnings)
+        else:
+            _write_challenger_shadow(client, pending_signals, prepared_market_context, trading_date, counts, warnings)
         status = "SUCCEEDED" if not counts["failed"] else "PARTIAL"
         final_breadth = (prepared_market_context or {}).get("breadth", {}) if prepared_market_context else breadth
         counts["publication_status"] = "PARTIAL" if counts["failed"] or counts.get("skipped_missing_price") or final_breadth.get("coverage_status") != "COMPLETE" else "COMPLETE"
@@ -805,6 +812,95 @@ def _write_analysis(
         }], "symbol_id,timeframe,as_of_date")
     else:
         client.delete_consolidated_signal(symbol_id, timeframe, context.get("evaluation_date", result["as_of_date"]))
+
+
+def _write_challenger_shadow(client, pending_signals: list, market_context: dict, trading_date: date,
+                             counts: dict, warnings: list[str]) -> None:
+    """Best-effort isolated persistence: shadow failures never change Champion publication."""
+    if not hasattr(client, "_pages") or not hasattr(client, "upsert"):
+        return
+    try:
+        day = trading_date.isoformat()
+        champions = client._pages("consolidated_signals", {
+            "select": "symbol_id,composite_action,reasons", "as_of_date": f"eq.{day}",
+            "timeframe": "eq.D", "source_revision": f"eq.{ALGORITHM_VERSION}"})
+        by_symbol = {int(row["symbol_id"]): row for row in champions}
+        raw = client._pages("signals", {"select": "symbol_id,action,evidence", "as_of_date": f"eq.{day}", "timeframe": "eq.D"})
+        stops: dict[int, float] = {}
+        order_values: dict[int, float] = {}
+        bases: dict[int, float] = {}
+        for row in raw:
+            sid = int(row["symbol_id"])
+            if row["action"] == by_symbol.get(sid, {}).get("composite_action"):
+                evidence = row.get("evidence") or {}
+                if evidence.get("algorithm_version") != ALGORITHM_VERSION:
+                    continue
+                stop = evidence.get("invalidation_price")
+                if stop and sid not in stops:
+                    stops[sid] = float(stop)
+                base = evidence.get("base_price") or evidence.get("trigger_price")
+                if base and sid not in bases:
+                    bases[sid] = float(base)
+                value = (evidence.get("sizing") or {}).get("value_vnd")
+                if value and sid not in order_values:
+                    order_values[sid] = float(value)
+        assessments = []
+        for symbol_id, timeframe, rows, _index_rows, _result, context in pending_signals:
+            if timeframe != "D" or not rows or rows[-1]["date"] != day:
+                continue
+            champion = by_symbol.get(symbol_id) or {}
+            assessments.append(assess_challenger(
+                symbol_id, rows, market_context, champion.get("composite_action", "WATCH"),
+                champion.get("reasons") or (), stops.get(symbol_id), context.get("candidate_exchange"),
+                (context.get("monthly_snapshot") or {}).get("trend_state"), order_values.get(symbol_id),
+                bases.get(symbol_id)))
+        for offset in range(0, len(assessments), 100):
+            client.upsert("challenger_signal_assessments", assessments[offset:offset + 100],
+                          "symbol_id,trading_date,engine_version")
+        prior_start = (trading_date - timedelta(days=14)).isoformat()
+        prior_shadow = client._pages("challenger_signal_assessments", {
+            "select": "symbol_id,trading_date,action", "engine_version": f"eq.{CHALLENGER_VERSION}",
+            "and": f"(trading_date.gte.{prior_start},trading_date.lt.{day})"})
+        prior_champion = client._pages("consolidated_signals", {
+            "select": "symbol_id,as_of_date,composite_action", "timeframe": "eq.D",
+            "source_revision": f"eq.{ALGORITHM_VERSION}",
+            "and": f"(as_of_date.gte.{prior_start},as_of_date.lt.{day})"})
+        prior_by_key = {(int(row["symbol_id"]), row["as_of_date"]): row for row in prior_champion}
+        outcomes = []
+        for symbol_id, timeframe, rows, _index_rows, _result, _context in pending_signals:
+            if timeframe != "D" or not rows or rows[-1]["date"] != day:
+                continue
+            dates = {row["date"]: i for i, row in enumerate(rows)}
+            for shadow in prior_shadow:
+                if int(shadow["symbol_id"]) != symbol_id:
+                    continue
+                signal_date = shadow["trading_date"]
+                signal_index = dates.get(signal_date)
+                if signal_index is None or signal_index + 3 != len(rows) - 1:
+                    continue
+                entry_rows = rows[signal_index + 1:signal_index + 4]
+                if any(row.get("quality_status", "VALID") != "VALID" for row in entry_rows):
+                    continue
+                entry = float(entry_rows[0]["open"]) * 1.001
+                exit_net = float(entry_rows[2]["close"]) * (1 - .0015 - .001)
+                net_return = (exit_net / (entry * 1.0015) - 1) * 100
+                locked_drawdown = (min(float(row["low"]) for row in entry_rows) / entry - 1) * 100
+                champion = prior_by_key.get((symbol_id, signal_date)) or {}
+                for engine, action in (("CHAMPION", champion.get("composite_action")),
+                                       ("CHALLENGER", shadow["action"])):
+                    if action in {"PROBE_BUY", "ADD", "EARLY_PROBE"}:
+                        outcomes.append({"symbol_id": symbol_id, "signal_date": signal_date,
+                                         "matured_date": day, "engine": engine, "action": action,
+                                         "net_return_pct": round(net_return, 5),
+                                         "locked_drawdown_pct": round(locked_drawdown, 5)})
+        for offset in range(0, len(outcomes), 100):
+            client.upsert("dual_engine_tplus_outcomes", outcomes[offset:offset + 100],
+                          "symbol_id,signal_date,engine")
+        counts["challenger_shadow"] = len(assessments)
+        counts["dual_engine_tplus_matured"] = len(outcomes)
+        counts["challenger_version"] = CHALLENGER_VERSION
+    except Exception as exc:
+        warnings.append(f"CHALLENGER_SHADOW_UNAVAILABLE:{type(exc).__name__}")
 
 
 def _load_portfolios(client, active_rules: list[dict], trading_date: date, *, historical: bool = False) -> dict:

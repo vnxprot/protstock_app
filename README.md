@@ -21,7 +21,7 @@ Windows provides the full research workspace. iPhone navigation prioritizes Over
 
 Investment theses have immutable versions and conflict detection. Journal decisions retain their original system evidence and thesis version. Watchlist and new journal entries retain pending changes on the device for retry after connection failures.
 
-Backtests use the live engine dispatcher and policy, VND cash accounting, indicator warm-up and next-session open execution. Portfolio NAV replays transactions and capital movements chronologically. Database RPCs provide atomic, idempotent capital/trade writes and complete report histories beyond REST row limits.
+Backtests use the live engine dispatcher and policy, VND cash accounting, indicator warm-up, next-session open execution and lot-level T+2 afternoon settlement constraints. Portfolio NAV replays transactions and capital movements chronologically. Database RPCs provide atomic, idempotent capital/trade writes and complete report histories beyond REST row limits.
 
 Daily processing uses balanced shards, bounded retries, heartbeat checks and explicit COMPLETE/PARTIAL publication status. Analysis and screening queries are bounded and share a publication date/revision.
 
@@ -63,3 +63,4 @@ See:
 - EOD OHLCV uses KBS's public endpoint. The CLI rejects VCI until a separate adapter exists. New bars record their source, fetch time, price unit, and adapter version; older bars without verified provenance remain labeled as such.
 - The provisional vnstock/VCI fundamentals collector is disabled, and its old rows are hidden from stock analysis. Historical records remain in the database for audit.
 - Monthly context, weekly setup, and daily trigger research runs in a shadow funnel. It does not change live signals while historical outcomes and corporate-action coverage are being validated.
+- Champion–Challenger v2 research uses separate shadow assessments and matured T+2 outcome cohorts. Shadow records never enter Champion signals, alerts, or portfolio transactions. The baseline audit requires verified historical price coverage before its parameters can be treated as measured results.

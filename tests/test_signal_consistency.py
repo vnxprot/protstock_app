@@ -4,7 +4,7 @@ from datetime import date, timedelta
 import httpx
 import pytest
 
-from protstock.signal_policy import apply_signal_policy, average_turnover_vnd
+from protstock.signal_policy import apply_signal_policy, average_turnover_vnd, order_participation_rate
 from protstock.eod import _write_analysis, _decision_context, _initialize_engine_stats, _load_portfolios
 from protstock.divergence import evaluate_rsi_macd_confirmation
 from protstock.period_signals import monthly_trend, evaluate_period_signal
@@ -19,6 +19,17 @@ def context():
 def test_turnover_converts_thousand_vnd_exactly_once():
     assert average_turnover_vnd({"close": 7.39, "volume_avg20": 1_353_980}) == pytest.approx(10_005_912_200)
     assert apply_signal_policy("PROBE_BUY", [], context())[0] == "PROBE_BUY"
+
+
+def test_liquidity_advisory_is_opt_in_to_preserve_champion():
+    ctx = context()
+    ctx["snapshot"]["volume_avg20"] = 50_000
+    ctx.update(capital=100_000_000, risk_pct=10, candidate_sector="BANK", portfolio_positions=[], max_sector_weight_pct=100)
+    assert order_participation_rate(100_000_000, ctx["snapshot"]) == pytest.approx(.1)
+    assert "HIGH_PARTICIPATION_RISK" not in apply_signal_policy("PROBE_BUY", [], deepcopy(ctx))[1]
+    ctx["liquidity_advisory"] = True
+    action, reasons = apply_signal_policy("PROBE_BUY", [], ctx)
+    assert action == "PROBE_BUY" and "HIGH_PARTICIPATION_RISK" in reasons
 
 
 def test_degraded_breadth_is_recorded_without_blocking_a_valid_entry():

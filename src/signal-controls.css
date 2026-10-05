@@ -68,6 +68,8 @@ input:focus-visible,textarea:focus-visible,button:focus-visible,[role="combobox"
 .triage-labels .triage-held { color:var(--control-accent); border-color:var(--control-accent); }
 .triage-labels .triage-risk { color:var(--red); border-color:var(--red); }
 .triage-labels .triage-opportunity { color:var(--lime); border-color:var(--lime); }
+.triage-labels .triage-extension { color:#d88719; border-color:#d88719; background:rgba(216,135,25,.12); }
+.triage-labels .triage-sector { color:var(--control-accent); border-color:var(--control-accent); }
 .triage-labels .triage-action { color:var(--text); }
 .triage-reason { overflow:hidden; color:var(--text); font-size:12px; line-height:1.4; text-overflow:ellipsis; white-space:nowrap; }
 .triage-count { color:var(--control-accent); font-size:11px; text-align:right; white-space:nowrap; }
