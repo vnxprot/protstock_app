@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 import { unsettledLotStates } from '../lib/signalTriage'
+import type { SectorStrength } from '../lib/signalTriage'
 import './DualEngineComparePanel.css'
 
 export type ChampionSignal = { symbol_id: number; symbol: string; sector: string | null; action: string; as_of_date: string }
@@ -69,6 +70,16 @@ export function DualEngineComparePanel({ date, champion, mode }: {
     if (sessions.error) throw sessions.error
     return unsettledLotStates(transactions, date, (sessions.data ?? []).map(row => row.trading_date))
   } })
+  const symbols = useQuery({ queryKey: ['dual-engine-symbols'], enabled: Boolean(supabase), queryFn: async () => {
+    const { data, error } = await supabase!.from('symbols').select('id,symbol,sector').eq('active', true)
+    if (error) throw error
+    return new Map((data ?? []).map(row => [Number(row.id), { symbol: row.symbol as string, sector: row.sector as string | null }]))
+  } })
+  const sectors = useQuery({ queryKey: ['dual-engine-sectors', date], enabled: Boolean(supabase) && Boolean(date), queryFn: async () => {
+    const { data, error } = await supabase!.from('market_breadth_snapshots').select('sector_breadth').eq('trading_date', date).maybeSingle()
+    if (error) throw error
+    return new Map(((data?.sector_breadth ?? []) as (SectorStrength & { sector: string })[]).map(row => [row.sector, row]))
+  } })
   const championById = new Map(champion.filter(row => row.as_of_date === date).map(row => [row.symbol_id, row]))
   const rows = (shadow.data ?? []).filter(row => mode === 'compare' || ['PROBE_BUY', 'ADD', 'EARLY_PROBE'].includes(row.action))
   const championScore = score(outcomes.data ?? [], 'CHAMPION')
@@ -89,14 +100,14 @@ export function DualEngineComparePanel({ date, champion, mode }: {
       {outcomes.isError && <p className="muted">Chưa tải được kết quả T+2 của hai bộ máy.</p>}
       <div className="dual-engine-table-wrap"><table className="dual-engine-table"><thead><tr>
         <th>Mã</th>{mode === 'compare' && <th>Champion</th>}<th>Challenger</th><th>Delta Insight</th>
-        <th>Khoảng cách nền</th><th>Ngành</th><th>Trạng thái T+</th>
-      </tr></thead><tbody>{rows.map(row => { const primary = championById.get(row.symbol_id); return <tr key={row.symbol_id}>
-        <th scope="row">{primary?.symbol ?? `#${row.symbol_id}`}</th>
+        <th>Khoảng cách nền</th><th>Sức mạnh ngành</th><th>Trạng thái T+</th>
+      </tr></thead><tbody>{rows.map(row => { const primary = championById.get(row.symbol_id); const stock = symbols.data?.get(row.symbol_id); const sector = primary?.sector ?? stock?.sector; const strength = sector ? sectors.data?.get(sector) : undefined; return <tr key={row.symbol_id}>
+        <th scope="row">{primary?.symbol ?? stock?.symbol ?? `#${row.symbol_id}`}</th>
         {mode === 'compare' && <td>{primary?.action ?? '—'}</td>}
         <td>{row.action}{row.evidence?.risk_tier === 'SPECULATIVE' ? ' · thăm dò 30%' : ''}</td>
         <td><span className="dual-insight">{insight(primary, row)}</span></td>
         <td>{row.distance_to_base_pct == null ? '—' : `${Number(row.distance_to_base_pct).toFixed(1)}%`}</td>
-        <td>{primary?.sector ?? '—'}</td><td>{lots.data?.get(row.symbol_id)?.join(' · ') || '—'}</td>
+        <td>{sector ?? '—'}{strength && <small> · {Number(strength.market_health_score ?? 0).toFixed(0)} điểm · GTGD {Number(strength.turnover_share_pct ?? 0).toFixed(1)}%</small>}</td><td>{lots.data?.get(row.symbol_id)?.join(' · ') || '—'}</td>
       </tr> })}</tbody></table></div>
       {!rows.length && <p className="muted">Chưa có đánh giá Challenger cho phiên này.</p>}
     </>}
