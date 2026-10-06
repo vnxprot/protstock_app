@@ -9,7 +9,81 @@ from .signal_policy import average_turnover_vnd, order_participation_rate, MIN_A
 from .wyckoff import classify_wyckoff_timeframe
 
 VERSION = "v2.0-challenger"
+STRATEGY_CODES = ("MACD_EARLY_ZONE", "SIDEWAY_RANGE")
 LONG_ACTIONS = {"PROBE_BUY", "ADD", "EARLY_PROBE"}
+
+
+def assess_challenger_strategies(symbol_id: int, bars: Sequence[dict], market_context: dict,
+                                exchange: str | None = None, monthly_state: str | None = None,
+                                target_order_value_vnd: float | None = None,
+                                champion_action: str = "WATCH") -> list[dict]:
+    """Evaluate both research hypotheses independently on completed EOD bars."""
+    ordered = sorted(bars, key=lambda row: row["date"])
+    if not ordered:
+        raise ValueError("challenger strategies require completed daily bars")
+    last = ordered[-1]
+    close = float(last["close"])
+    market = market_context.get("vnindex_snapshot") or {}
+    breadth = market_context.get("breadth") or {}
+    regime = market.get("trend_state") or "UNKNOWN"
+    breadth_pct = breadth.get("pct_above_sma50")
+    safe_market = (regime not in {"DOWN", "UNKNOWN"} and monthly_state not in {None, "DOWN", "UNKNOWN"}
+                   and breadth_pct is not None and float(breadth_pct) >= 40
+                   and breadth.get("coverage_status") != "INCOMPLETE")
+    average_volume = sum(float(row.get("volume") or 0) for row in ordered[-20:]) / min(20, len(ordered))
+    turnover_snapshot = {"close": close, "volume_avg20": average_volume}
+    turnover = average_turnover_vnd(turnover_snapshot)
+    participation = order_participation_rate(float(target_order_value_vnd or 0), turnover_snapshot)
+
+    def result(code: str, action: str, reasons: list[str], stop: float = 0,
+               base: float = 0, extra: dict | None = None) -> dict:
+        evidence = {"shadow_only": True, "price_basis": "EOD_CLOSE", "market_regime": regime,
+                    "average_turnover_20_vnd": round(turnover),
+                    "order_participation_rate": round(participation, 6) if participation is not None else None,
+                    **(extra or {})}
+        if action in LONG_ACTIONS and champion_action in {"EXIT", "REDUCE"}:
+            action, reasons = "WATCH", [*reasons, "CHAMPION_EXIT_CONFLICT"]
+        if action in LONG_ACTIONS and not safe_market:
+            action, reasons = "WATCH", [*reasons, "MARKET_SAFETY_GATE"]
+        if action in LONG_ACTIONS and (turnover < MIN_AVERAGE_TURNOVER_VND
+                                      or participation is not None and participation > .05):
+            action = "WATCH"
+            reasons = [*reasons, "HIGH_PARTICIPATION_RISK" if participation is not None and participation > .05
+                       else "INSUFFICIENT_LIQUIDITY"]
+        distance = (close / stop - 1) * 100 if stop > 0 else None
+        if action in LONG_ACTIONS and (distance is None or distance > 8):
+            action, reasons = "WATCH", [*reasons, "CHASE_BLOCKED" if distance is not None else "STOP_UNAVAILABLE"]
+        evidence["distance_to_stop_pct"] = round(distance, 3) if distance is not None else None
+        return {"symbol_id": symbol_id, "trading_date": last["date"], "engine_version": VERSION,
+                "strategy_code": code, "action": action, "reasons": list(dict.fromkeys(reasons)),
+                "base_price": base or None,
+                "distance_to_base_pct": round((close / base - 1) * 100, 2) if base > 0 else None,
+                "invalidation_price": stop or None, "evidence": evidence}
+
+    macd = next((row for row in assess_macd_zone_divergence(symbol_id, ordered, exchange)
+                 if row["stage"] == "CONFIRMED" and row["trigger_date"] == last["date"]
+                 and row["evidence"].get("breakout_volume_ratio20") is not None
+                 and float(row["evidence"]["breakout_volume_ratio20"]) < 1.3), None)
+    macd_result = (result("MACD_EARLY_ZONE", "EARLY_PROBE",
+                          ["MACD_EARLY_PRICE_CONFIRMATION", "BREAKOUT_VOLUME_UNCONFIRMED"],
+                          float(macd["invalidation_price"]), float(macd.get("trigger_price") or 0),
+                          {"setup_id": macd["setup_id"], "risk_tier": "SPECULATIVE", "size_multiplier": .30,
+                           "breakout_volume_ratio20": macd["evidence"].get("breakout_volume_ratio20")})
+                   if macd else result("MACD_EARLY_ZONE", "WATCH", ["NO_MACD_EARLY_TRIGGER"]))
+
+    wyckoff = classify_wyckoff_timeframe("D", ordered, period_event=True) if regime == "SIDEWAYS" else {}
+    support = float((wyckoff.get("evidence") or {}).get("support") or 0)
+    prior_high20 = max((float(row["high"]) for row in ordered[-21:-1]), default=close)
+    if regime != "SIDEWAYS":
+        sideway_result = result("SIDEWAY_RANGE", "WATCH", ["MARKET_NOT_SIDEWAYS"])
+    elif wyckoff.get("event") == "SPRING_TEST":
+        sideway_result = result("SIDEWAY_RANGE", "PROBE_BUY", ["SIDEWAY_SPRING_SUPPORT"],
+                                support, support, {"spring_evidence": wyckoff.get("evidence")})
+    elif close > prior_high20:
+        sideway_result = result("SIDEWAY_RANGE", "WATCH", ["SIDEWAY_BREAKOUT_REJECTED"])
+    else:
+        sideway_result = result("SIDEWAY_RANGE", "WATCH", ["NO_RANGE_SUPPORT_SETUP"])
+    return [macd_result, sideway_result]
 
 
 def assess_challenger(symbol_id: int, bars: Sequence[dict], market_context: dict,

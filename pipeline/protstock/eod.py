@@ -27,7 +27,7 @@ from .signal_policy import STOCK_PRICE_TO_VND, apply_signal_policy
 from .period_signals import monthly_trend, evaluate_period_signal
 from .signal_funnel import assess_funnel
 from .macd_divergence_zones import assess_macd_zone_divergence
-from .challenger_engine import assess_challenger, VERSION as CHALLENGER_VERSION
+from .challenger_engine import assess_challenger, assess_challenger_strategies, VERSION as CHALLENGER_VERSION
 from .wyckoff import classify_wyckoff_timeframe
 
 # VNINDEX's first session was 28/07/2000. This keeps its benchmark history full
@@ -845,6 +845,7 @@ def _write_challenger_shadow(client, pending_signals: list, market_context: dict
                 if value and sid not in order_values:
                     order_values[sid] = float(value)
         assessments = []
+        strategy_assessments = []
         for symbol_id, timeframe, rows, _index_rows, _result, context in pending_signals:
             if timeframe != "D" or not rows or rows[-1]["date"] != day:
                 continue
@@ -854,12 +855,23 @@ def _write_challenger_shadow(client, pending_signals: list, market_context: dict
                 champion.get("reasons") or (), stops.get(symbol_id), context.get("candidate_exchange"),
                 (context.get("monthly_snapshot") or {}).get("trend_state"), order_values.get(symbol_id),
                 bases.get(symbol_id)))
+            strategy_assessments.extend(assess_challenger_strategies(
+                symbol_id, rows, market_context, context.get("candidate_exchange"),
+                (context.get("monthly_snapshot") or {}).get("trend_state"), order_values.get(symbol_id),
+                champion.get("composite_action", "WATCH")))
         for offset in range(0, len(assessments), 100):
             client.upsert("challenger_signal_assessments", assessments[offset:offset + 100],
                           "symbol_id,trading_date,engine_version")
+        for offset in range(0, len(strategy_assessments), 100):
+            client.upsert("challenger_strategy_assessments", strategy_assessments[offset:offset + 100],
+                          "symbol_id,trading_date,engine_version,strategy_code")
         prior_start = (trading_date - timedelta(days=14)).isoformat()
         prior_shadow = client._pages("challenger_signal_assessments", {
             "select": "symbol_id,trading_date,action", "engine_version": f"eq.{CHALLENGER_VERSION}",
+            "and": f"(trading_date.gte.{prior_start},trading_date.lt.{day})"})
+        prior_strategies = client._pages("challenger_strategy_assessments", {
+            "select": "symbol_id,trading_date,strategy_code,action,evidence",
+            "engine_version": f"eq.{CHALLENGER_VERSION}",
             "and": f"(trading_date.gte.{prior_start},trading_date.lt.{day})"})
         prior_champion = client._pages("consolidated_signals", {
             "select": "symbol_id,as_of_date,composite_action", "timeframe": "eq.D",
@@ -867,6 +879,7 @@ def _write_challenger_shadow(client, pending_signals: list, market_context: dict
             "and": f"(as_of_date.gte.{prior_start},as_of_date.lt.{day})"})
         prior_by_key = {(int(row["symbol_id"]), row["as_of_date"]): row for row in prior_champion}
         outcomes = []
+        strategy_outcomes = []
         for symbol_id, timeframe, rows, _index_rows, _result, _context in pending_signals:
             if timeframe != "D" or not rows or rows[-1]["date"] != day:
                 continue
@@ -893,11 +906,34 @@ def _write_challenger_shadow(client, pending_signals: list, market_context: dict
                                          "matured_date": day, "engine": engine, "action": action,
                                          "net_return_pct": round(net_return, 5),
                                          "locked_drawdown_pct": round(locked_drawdown, 5)})
+            for strategy in prior_strategies:
+                if int(strategy["symbol_id"]) != symbol_id or strategy["action"] not in {"PROBE_BUY", "EARLY_PROBE"}:
+                    continue
+                signal_date = strategy["trading_date"]
+                signal_index = dates.get(signal_date)
+                if signal_index is None or signal_index + 3 != len(rows) - 1:
+                    continue
+                entry_rows = rows[signal_index + 1:signal_index + 4]
+                if any(row.get("quality_status", "VALID") != "VALID" for row in entry_rows):
+                    continue
+                entry = float(entry_rows[0]["open"]) * 1.001
+                exit_net = float(entry_rows[2]["close"]) * (1 - .0015 - .001)
+                strategy_outcomes.append({"symbol_id": symbol_id, "signal_date": signal_date,
+                                          "matured_date": day, "engine_version": CHALLENGER_VERSION,
+                                          "strategy_code": strategy["strategy_code"], "action": strategy["action"],
+                                          "net_return_pct": round((exit_net / (entry * 1.0015) - 1) * 100, 5),
+                                          "locked_drawdown_pct": round((min(float(row["low"]) for row in entry_rows) / entry - 1) * 100, 5),
+                                          "size_multiplier": float((strategy.get("evidence") or {}).get("size_multiplier") or 1)})
         for offset in range(0, len(outcomes), 100):
             client.upsert("dual_engine_tplus_outcomes", outcomes[offset:offset + 100],
                           "symbol_id,signal_date,engine")
+        for offset in range(0, len(strategy_outcomes), 100):
+            client.upsert("challenger_strategy_tplus_outcomes", strategy_outcomes[offset:offset + 100],
+                          "symbol_id,signal_date,engine_version,strategy_code")
         counts["challenger_shadow"] = len(assessments)
+        counts["challenger_strategy_assessments"] = len(strategy_assessments)
         counts["dual_engine_tplus_matured"] = len(outcomes)
+        counts["challenger_strategy_tplus_matured"] = len(strategy_outcomes)
         counts["challenger_version"] = CHALLENGER_VERSION
     except Exception as exc:
         warnings.append(f"CHALLENGER_SHADOW_UNAVAILABLE:{type(exc).__name__}")

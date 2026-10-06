@@ -1,0 +1,26 @@
+/** Reading guide shared by members and administrators. */
+export function ScreenerGuide() {
+  return <>
+    <details className="guide-group" open><summary>Bộ lọc tín hiệu · bắt đầu từ đâu <small>EOD</small></summary><div className="guide-group-content">
+      <p>Chọn Champion, Challenger hoặc Đối chiếu Song mã ở hàng trên cùng. Đọc ngày phiên trước khi xem mã: hệ thống chỉ dùng nến ngày, tuần, tháng đã đóng, không phải giá trực tiếp. Chọn mã để mở phân tích và xem vùng giá, lý do cùng mức vô hiệu.</p>
+      <p><strong>Champion</strong> là tín hiệu tổng hợp đang công bố. <strong>Challenger</strong> là thí nghiệm song song; mọi đánh giá của nó chỉ nằm trong bảng nghiên cứu và không tạo giao dịch danh mục. <strong>Đối chiếu</strong> đặt hai kết quả của cùng mã, cùng phiên cạnh nhau.</p>
+      <p>WATCH nghĩa là theo dõi hoặc bị một điều kiện chặn; PROBE_BUY là thăm dò, ADD là tăng vị thế, REDUCE và EXIT là giảm hoặc thoát. Một mẫu hình đẹp chưa tự động thành lệnh mua: còn phải qua thị trường, thanh khoản, stop và quy mô lệnh.</p>
+    </div></details>
+    <details className="guide-group"><summary>Bốn tab đọc tín hiệu <small>CHAMPION &amp; CHALLENGER</small></summary><div className="guide-group-content">
+      <section><h3>1. Tín hiệu gốc</h3><p>Ở Champion, đây là tín hiệu tổng hợp đã công bố, có hành động, mức đồng thuận, bộ máy và lý do; không phải từng dòng bằng chứng thô. Ở Challenger, card cho thấy quyết định tổng hợp và kết quả riêng của MACD_EARLY_ZONE, SIDEWAY_RANGE. Lọc mã để đối chiếu hành động và lý do của từng nhánh.</p></section>
+      <section><h3>2. WATCH cơ hội</h3><p>Ở Champion, bảng gộp nhiều tín hiệu cùng mã, ưu tiên thay đổi mới, rủi ro của mã đang giữ, rồi cơ hội hình thành. Mở một mã để xem từng khung D/W/M và nút “Vì sao?”. Ở Challenger, tab hiện các đánh giá WATCH và lý do từng chiến lược chờ hoặc bị chặn; WATCH không phải khuyến nghị mua.</p></section>
+      <section><h3>3. Phễu tháng → tuần → ngày</h3><p>Tháng xác định bối cảnh, tuần tìm setup gần hỗ trợ, ngày chờ trigger. “Bối cảnh tháng” và “Setup tuần” là các bước quan sát; “Kích hoạt ngày” là sự kiện nghiên cứu, vẫn cần qua cổng rủi ro. Phễu là bằng chứng dùng chung khi xem cả Champion và Challenger, không phải hai phép tính khác nhau.</p></section>
+      <section><h3>4. Phân kỳ Dương · đường MACD</h3><p>Quan sát giá tạo vùng đáy thấp hơn trong khi đường MACD tạo vùng đáy cao hơn. “Chờ giá breakout” khác “Giá đã breakout”; vùng đáy bảo vệ là mốc vô hiệu. Các vùng đáy giá và MACD có thể khác ngày. Tab này hiển thị bằng chứng chung; nhánh MACD_EARLY_ZONE quyết định riêng có được thăm dò sớm hay không.</p></section>
+    </div></details>
+    <details className="guide-group"><summary>Đọc nhãn ở WATCH cơ hội <small>VÍ DỤ</small></summary><div className="guide-group-content">
+      <section><h3>EXTENDED (+X%)</h3><p>Cảnh báo khi giá đóng cửa cao hơn mốc tham chiếu trên 7%. X = (giá đóng cửa / mốc tham chiếu − 1) × 100. Ví dụ 10.000 → 10.800 đồng là +8,0%. Mốc được lấy theo thứ tự giá nền, giá kích hoạt, rồi giá vô hiệu/stop nếu thiếu hai mốc đầu. Vì thế hãy mở bằng chứng để biết X đang đo từ mốc nào. Đây không phải lợi nhuận của vị thế hay mức lỗ đã xảy ra.</p></section>
+      <section><h3>Ngành 65 · GTGD 12,3%</h3><p>65 là điểm sức khỏe ngành: tổng hợp tỷ lệ mã ở trên các đường trung bình và số mã tăng/giảm trong ngành. GTGD 12,3% nghĩa là ngành chiếm 12,3% giá trị giao dịch ước tính của các mã được quan sát trong universe ở phiên đó. Nó không đo tiền ròng chảy vào, mức tăng giá hay tỷ lệ tham gia lệnh cá nhân.</p></section>
+      <section><h3>T0 · T1 · T2 · T_READY</h3><p>Tuổi lô hàng tính bằng phiên giao dịch: T0 là ngày mua, T1 còn chờ, T2 hàng về chiều và T_READY đã khả dụng hoàn toàn. Một mã có thể hiện nhiều thẻ nếu danh mục có nhiều lô mua khác ngày. Thẻ cho biết khả năng bán, không phải tín hiệu nên bán.</p></section>
+    </div></details>
+    <details className="guide-group"><summary>Hai chiến lược Challenger và bảng đối chiếu <small>SHADOW</small></summary><div className="guide-group-content">
+      <section><h3>MACD_EARLY_ZONE</h3><p>Chỉ xét phân kỳ đường MACD đã được giá vượt trigger trong phiên EOD, khi khối lượng breakout còn dưới 1,3 lần trung bình 20 phiên. Nếu qua cổng thị trường, thanh khoản và stop không quá 8% so với giá đóng cửa, nhánh có thể ghi EARLY_PROBE với quy mô nghiên cứu 30%. Không có lệnh thật được gửi đi.</p></section>
+      <section><h3>SIDEWAY_RANGE</h3><p>Chỉ hoạt động khi VN-Index đi ngang. Nhánh từ chối mua đuổi breakout vượt đỉnh 20 phiên và tìm sự kiện Wyckoff Spring gần hỗ trợ. Spring cũng phải qua cổng thị trường, thanh khoản và stop trước khi thành PROBE_BUY nghiên cứu. Khi chưa có setup, nhánh ghi WATCH cùng lý do.</p></section>
+      <section><h3>Đối chiếu Song mã</h3><p>ALIGNED là cùng hướng; EARLY_LEAD là Challenger thăm dò khi Champion chưa mua; CHASE_BLOCKED là chặn vì stop quá xa; SIDEWAY_REJECTED là từ chối breakout lúc thị trường đi ngang. Đọc lý do và bằng chứng trước khi diễn giải nhãn. Bảng điểm T+2 chỉ tính các tín hiệu đã đủ tuổi, sau phí mua/bán, thuế bán và trượt giá giả định; số mẫu ít hoặc dấu “—” không chứng minh bộ máy nào tốt hơn. Chỉ số ghép lượt tín hiệu không phải NAV danh mục.</p></section>
+    </div></details>
+  </>
+}

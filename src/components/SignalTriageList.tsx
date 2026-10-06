@@ -125,6 +125,7 @@ export function SignalTriageList({ rows, allRows, latestDate, onExplain }: Props
   return <div className="signal-triage">
     <div className="signal-triage-summary"><strong>{allGroups.length} mã từ {signalCount} tín hiệu</strong>
       <span>{repeated > 0 ? `Đã gộp ${repeated} tín hiệu cùng mã.` : 'Mỗi mã có một tín hiệu.'} Thứ tự: thay đổi mới → rủi ro trong danh mục → WATCH cơ hội.</span></div>
+    <p className="muted">Đọc nhãn: EXTENDED là % giá đóng cửa cao hơn nền/trigger/stop tham chiếu, cảnh báo khi vượt 7%; “Ngành” là điểm sức khỏe 0–100, GTGD là tỷ trọng giao dịch của ngành trong universe phiên này, không phải dòng tiền ròng. Xem Cài đặt → Hướng dẫn để có ví dụ.</p>
     <div className="signal-triage-toolbar" aria-label="Bộ lọc bảng gộp">
       <label>Nhóm ưu tiên<SoftSelect aria-label="Lọc nhóm ưu tiên" value={focus} onChange={event => setFocus(event.target.value as TriageFocus)}>
         <option value="all">Tất cả nhóm</option><option value="changed">Thay đổi mới</option>
@@ -148,8 +149,8 @@ export function SignalTriageList({ rows, allRows, latestDate, onExplain }: Props
           {group.opportunity && <b className="triage-opportunity">WATCH · Cơ hội hình thành</b>}
           {group.held && <b className="triage-held">Đang nắm giữ</b>}
           {group.settlement?.map((state, index) => <b className="triage-held" key={`${state}-${index}`}>{state}</b>)}
-          {group.extensionPct != null && group.extensionPct > 7 && <b className="triage-extension">EXTENDED (+{group.extensionPct.toFixed(1)}%)</b>}
-          {group.sectorStrength && <b className="triage-sector">Ngành {Number(group.sectorStrength.market_health_score ?? 0).toFixed(0)} · GTGD {Number(group.sectorStrength.turnover_share_pct ?? 0).toFixed(1)}%</b>}
+          {group.extensionPct != null && group.extensionPct > 7 && <b className="triage-extension" title="Giá đóng cửa cao hơn mốc nền, trigger hoặc stop tham chiếu; không phải lợi nhuận vị thế">EXTENDED (+{group.extensionPct.toFixed(1)}%)</b>}
+          {group.sectorStrength && <b className="triage-sector" title="Điểm sức khỏe ngành · tỷ trọng giá trị giao dịch ước tính của ngành trong universe, không phải dòng tiền ròng">Ngành {Number(group.sectorStrength.market_health_score ?? 0).toFixed(0)} · GTGD {Number(group.sectorStrength.turnover_share_pct ?? 0).toFixed(1)}%</b>}
           {group.primary.action !== 'WATCH' && <b className="triage-action">{group.primary.action}</b>}</span>
         <span className="triage-reason">{signalReasonSummary(group.primary.reasons)}</span>
         <span className="triage-count">{group.signals.length} tín hiệu {open ? '▴' : '▾'}</span></button>

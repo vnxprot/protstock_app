@@ -7,4 +7,12 @@
 .dual-engine-table { width:100%; border-collapse:collapse; min-width:720px; }
 .dual-engine-table th,.dual-engine-table td { padding:.7rem .6rem; text-align:left; border-bottom:1px solid var(--line); }
 .dual-insight { font-size:.75rem; font-weight:700; letter-spacing:.02em; }
+.dual-strategy-scorecard { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:.75rem; }
+.dual-strategy-scorecard > div { display:flex; flex-direction:column; gap:.3rem; padding:.85rem 1rem; border:1px solid var(--line); border-radius:12px; }
+.dual-strategy-scorecard span,.dual-reasons { display:block; font-size:.8rem; opacity:.75; }
+.dual-strategy-label { display:block; white-space:nowrap; font-size:.8rem; margin:.15rem 0; }
+.dual-engine-controls,.dual-engine-pages { display:flex; justify-content:space-between; align-items:center; gap:1rem; }
+.dual-engine-controls input { margin-left:.5rem; padding:.4rem .6rem; border:1px solid var(--line); border-radius:8px; background:var(--surface); color:inherit; }
+.dual-engine-pages { justify-content:flex-end; }
 @media(max-width:700px) { .dual-scorecard { grid-template-columns:1fr; } }
+@media(max-width:700px) { .dual-strategy-scorecard { grid-template-columns:1fr; } }
