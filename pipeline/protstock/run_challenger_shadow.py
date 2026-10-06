@@ -7,6 +7,8 @@ from datetime import date
 
 from .config import Settings
 from .eod import _write_challenger_shadow
+from .challenger_engine import recovery_status
+from .indicators import calculate_indicators
 from .period_signals import monthly_trend
 from .provider_vnstock import STOCK_PRICE_UNIT
 from .supabase_rest import SupabaseRestClient
@@ -21,8 +23,15 @@ def run_shadow_session(client: SupabaseRestClient, trading_date: str | None = No
         raise ValueError("No completed market breadth snapshot is available")
     breadth = breadth_rows[0]
     day = breadth["trading_date"]
+    index_bars = []
+    if hasattr(client, "market_index") and hasattr(client, "index_price_history"):
+        index = client.market_index("VNINDEX")
+        index_bars = [{**row, "date": row["trading_date"]} for row in client.index_price_history(index["id"], 900)
+                      if row["trading_date"] <= day]
+    index_snapshot = (calculate_indicators(index_bars).to_dict() if index_bars and index_bars[-1]["date"] == day
+                      else {"trend_state": breadth.get("vnindex_trend_state", "UNKNOWN")})
     market_context = {"trading_date": day, "breadth": breadth,
-                      "vnindex_snapshot": {"trend_state": breadth.get("vnindex_trend_state", "UNKNOWN")}}
+                      "vnindex_snapshot": index_snapshot, "recovery": recovery_status(index_bars)}
     pending = []
     skipped = []
     symbols = client.active_symbols()

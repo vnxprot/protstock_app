@@ -27,7 +27,7 @@ from .signal_policy import STOCK_PRICE_TO_VND, apply_signal_policy
 from .period_signals import monthly_trend, evaluate_period_signal
 from .signal_funnel import assess_funnel
 from .macd_divergence_zones import assess_macd_zone_divergence
-from .challenger_engine import assess_challenger, assess_challenger_strategies, VERSION as CHALLENGER_VERSION
+from .challenger_engine import assess_challenger, assess_challenger_strategies, recovery_status, VERSION as CHALLENGER_VERSION
 from .wyckoff import classify_wyckoff_timeframe
 
 # VNINDEX's first session was 28/07/2000. This keeps its benchmark history full
@@ -223,7 +223,7 @@ def run_eod(
             counts["breadth_snapshots"] += 1
             if breadth["coverage_status"] != "COMPLETE":
                 warnings.append(f"BREADTH_DATA_{breadth['coverage_status']}: {breadth['observed_count']}/{breadth['eligible_count']} eligible")
-            market_context = _same_day_market_context(trading_date, breadth, vnindex_snapshot)
+            market_context = _same_day_market_context(trading_date, breadth, vnindex_snapshot, benchmark_daily)
             past_session = any(row["trading_date"] > trading_date.isoformat() for row in benchmark_history)
             portfolios = _load_portfolios(client, active_rules, trading_date, historical=historical or past_session)
             for symbol_id, timeframe, scoped_rows, index_rows, result, context in pending_signals:
@@ -276,7 +276,7 @@ def finalize_fast_lane(trading_date: date, *, allow_partial: bool = False, prepa
         client.close()
     prepared = load_prepared_analyses(prepared_dir, trading_date) if prepared_dir is not None else None
     options = {"prepared_analyses": prepared} if prepared else {}
-    rebuilt = rebuild_signals(trading_date, prepared_market_context=_same_day_market_context(trading_date, breadth, vnindex_snapshot), **options)
+    rebuilt = rebuild_signals(trading_date, prepared_market_context=_same_day_market_context(trading_date, breadth, vnindex_snapshot, benchmark), **options)
     if rebuilt["status"] != "SUCCEEDED":
         raise RuntimeError(f"Fast Lane signal evaluation was {rebuilt['status']}")
     return {
@@ -412,7 +412,7 @@ def rebuild_signals(trading_date: date, *, symbol_offset: int = 0, symbol_limit:
             vnindex_snapshot = _benchmark_snapshot(benchmark_daily, trading_date)
             breadth = _persist_universe_breadth(client, trading_date, vnindex_snapshot["trend_state"])
             counts["breadth_snapshots"] += 1
-            market_context = _same_day_market_context(trading_date, breadth, vnindex_snapshot)
+            market_context = _same_day_market_context(trading_date, breadth, vnindex_snapshot, benchmark_daily)
             past_session = any(row["trading_date"] > trading_date.isoformat() for row in benchmark_history)
             portfolios = _load_portfolios(client, active_rules, trading_date, historical=historical or past_session)
             for symbol_id, timeframe, rows, index_rows, result, context in pending_signals:
@@ -569,8 +569,11 @@ def _benchmark_snapshot(rows: list[dict], trading_date: date) -> dict:
     return calculate_indicators(rows).to_dict()
 
 
-def _same_day_market_context(trading_date: date, breadth: dict, vnindex_snapshot: dict) -> dict:
-    return {"trading_date": trading_date.isoformat(), "breadth": breadth, "vnindex_snapshot": vnindex_snapshot}
+def _same_day_market_context(trading_date: date, breadth: dict, vnindex_snapshot: dict,
+                             benchmark_daily: list[dict] | None = None) -> dict:
+    return {"trading_date": trading_date.isoformat(), "breadth": breadth,
+            "vnindex_snapshot": vnindex_snapshot,
+            "recovery": recovery_status(benchmark_daily or [])}
 
 
 def _fetch_history_with_retry(provider: VnstockProvider, symbol: str, start: date, end: date) -> list:

@@ -8,12 +8,12 @@ import './DualEngineComparePanel.css'
 export type ChampionSignal = { symbol_id: number; symbol: string; sector: string | null; action: string; as_of_date: string }
 type ShadowRow = { symbol_id: number; trading_date: string; action: string; reasons: string[];
   distance_to_base_pct: number | null; evidence: { market_regime?: string; risk_tier?: string; shadow_only?: boolean } }
-type StrategyCode = 'MACD_EARLY_ZONE' | 'SIDEWAY_RANGE'
+type StrategyCode = 'UPTREND_CORE' | 'SIDEWAY_RANGE' | 'ADAPTIVE_FUNNEL' | 'MACD_EARLY_ZONE' | 'DOWNTREND_SPRING'
 type StrategyRow = { symbol_id: number; strategy_code: StrategyCode; action: string; reasons: string[];
   distance_to_base_pct: number | null; evidence: { size_multiplier?: number } }
 type StrategyOutcome = { strategy_code: StrategyCode; net_return_pct: number; locked_drawdown_pct: number; size_multiplier: number }
 type Outcome = { engine: 'CHAMPION' | 'CHALLENGER'; action: string; net_return_pct: number; locked_drawdown_pct: number }
-const strategyNames: Record<StrategyCode, string> = { MACD_EARLY_ZONE: 'MACD vào sớm', SIDEWAY_RANGE: 'Biên đi ngang / Spring' }
+const strategyNames: Record<StrategyCode, string> = { UPTREND_CORE: 'Uptrend · Breakout/VCP/Pullback', SIDEWAY_RANGE: 'Sideway · hồi về nền/Pocket Pivot', ADAPTIVE_FUNNEL: 'Phễu MTF thích ứng', MACD_EARLY_ZONE: 'MACD đáy 2 · vào sớm', DOWNTREND_SPRING: 'Downtrend · Spring thăm dò' }
 
 function score(rows: Outcome[], engine: Outcome['engine']) {
   const samples = rows.filter(row => row.engine === engine)
@@ -23,7 +23,7 @@ function score(rows: Outcome[], engine: Outcome['engine']) {
   return { count: samples.length,
     win: samples.filter(row => Number(row.net_return_pct) > 0).length / samples.length * 100,
     drawdown: samples.reduce((sum, row) => sum + Number(row.locked_drawdown_pct), 0) / samples.length,
-    cumulative: (samples.reduce((value, row) => value * (1 + Number(row.net_return_pct) * (row.action === 'EARLY_PROBE' ? .30 : 1) / 100), 1) - 1) * 100,
+    cumulative: (samples.reduce((value, row) => value * (1 + Number(row.net_return_pct) / 100), 1) - 1) * 100,
     profitFactor: losses ? gains / losses : null }
 }
 
@@ -133,9 +133,9 @@ export function DualEngineComparePanel({ date, champion, mode }: {
         <div><span>Chỉ số ghép lượt tín hiệu</span><strong>Champion {championScore ? `${championScore.cumulative.toFixed(1)}%` : '—'}</strong><strong>Challenger {challengerScore ? `${challengerScore.cumulative.toFixed(1)}%` : '—'}</strong></div>
         <div><span>Profit factor T+2</span><strong>Champion {championScore?.profitFactor == null ? '—' : championScore.profitFactor.toFixed(2)}</strong><strong>Challenger {challengerScore?.profitFactor == null ? '—' : challengerScore.profitFactor.toFixed(2)}</strong></div>
       </div>
-      <p className="muted">Chỉ tính lượt đã đủ T+2. Chỉ số ghép lượt tín hiệu áp dụng 30% quy mô cho EARLY_PROBE, không phải NAV danh mục; số lượt mỗi bên có thể khác nhau. Đáy ngày T+2 là proxy bảo thủ cho buổi sáng. Số phiên dẫn trước cần quan sát tiếp.</p>
+      <p className="muted">Chỉ tính lượt đã đủ T+2. Chỉ số ghép lượt tín hiệu dùng quy mô đơn vị, không phải NAV danh mục; số lượt mỗi bên có thể khác nhau. Đáy ngày T+2 là proxy bảo thủ cho buổi sáng. Số phiên dẫn trước cần quan sát tiếp.</p>
       {outcomes.isError && <p className="muted">Chưa tải được kết quả T+2 của hai bộ máy.</p>}
-      <div className="dual-strategy-scorecard" aria-label="Kết quả riêng từng chiến lược Challenger">{(['MACD_EARLY_ZONE', 'SIDEWAY_RANGE'] as const).map(code => {
+      <div className="dual-strategy-scorecard" aria-label="Kết quả riêng từng chiến lược Challenger">{(['UPTREND_CORE', 'SIDEWAY_RANGE', 'ADAPTIVE_FUNNEL', 'MACD_EARLY_ZONE', 'DOWNTREND_SPRING'] as const).map(code => {
         const samples = (strategyOutcomes.data ?? []).filter(row => row.strategy_code === code)
         const wins = samples.filter(row => Number(row.net_return_pct) > 0).length
         const drawdown = samples.reduce((sum, row) => sum + Number(row.locked_drawdown_pct), 0) / (samples.length || 1)
@@ -143,7 +143,7 @@ export function DualEngineComparePanel({ date, champion, mode }: {
         const buys = (strategies.data ?? []).filter(row => row.strategy_code === code && ['PROBE_BUY', 'EARLY_PROBE'].includes(row.action)).length
         return <div key={code}><strong>{strategyNames[code]}</strong><span>{buys} tín hiệu mua phiên này · T+2 {samples.length ? `${(wins / samples.length * 100).toFixed(1)}% thắng · lợi suất theo quy mô ${weightedReturn.toFixed(1)}% · sụt giảm ${drawdown.toFixed(1)}% · n=${samples.length}` : 'chưa có mẫu đủ tuổi'}</span></div>
       })}</div>
-      {strategies.isError && <p className="form-error" role="alert">Chưa đọc được hai nhánh chiến lược Challenger.</p>}
+      {strategies.isError && <p className="form-error" role="alert">Chưa đọc được các nhánh chiến lược Challenger.</p>}
       {strategyOutcomes.isError && <p className="muted">Chưa đọc được outcome T+2 theo từng chiến lược.</p>}
       {mode !== 'summary' && <>
       <div className="dual-engine-controls"><label>Tìm mã <input value={search} onChange={event => { setSearch(event.target.value); setPage(1) }} placeholder="Ví dụ: FPT" /></label><span>{rows.length} mã · trang {Math.min(page, pageCount)}/{pageCount}</span></div>
