@@ -30,7 +30,8 @@ def run_shadow_session(client: SupabaseRestClient, trading_date: str | None = No
         history = client.price_history(symbol["id"], 900)
         rows = [{**row, "date": row["trading_date"]} for row in history if row["trading_date"] <= day]
         if (not rows or rows[-1]["date"] != day
-                or any(row.get("quality_status") != "VALID" or row.get("price_unit") != STOCK_PRICE_UNIT for row in rows)):
+                or rows[-1].get("quality_status") != "VALID"
+                or rows[-1].get("price_unit") != STOCK_PRICE_UNIT):
             skipped.append(symbol["symbol"])
             continue
         completed_months = [bar for bar in aggregate_bars(rows, "M") if bar["is_complete"]]
@@ -44,7 +45,7 @@ def run_shadow_session(client: SupabaseRestClient, trading_date: str | None = No
     if warnings:
         raise RuntimeError(", ".join(warnings))
     return {"trading_date": day, "expected_symbols": len(symbols), "priced_symbols": len(pending),
-            "skipped_symbols": skipped, **counts}
+            "skipped_count": len(skipped), "skipped_examples": skipped[:20], **counts}
 
 
 def main() -> None:

@@ -1,17 +1,49 @@
 # Kiểm toán Champion 2025–2026
 
-**Trạng thái: CHƯA CHẠY TRÊN DỮ LIỆU LỊCH SỬ ĐÃ XÁC MINH.** Manifest hiện tại `data/universe.csv` có 275 mã duy nhất và đều đang hoạt động. Workspace chưa có bản xuất chuỗi giá nghiên cứu tương ứng hoặc cấu hình đọc dữ liệu lịch sử cho pipeline. Vì vậy chưa có số liệu thực nghiệm; không suy diễn hoặc điền số giả.
+Kỳ tín hiệu: 2025-01-01 đến 2026-09-30. Dữ liệu: tín hiệu Champion đã lưu và chuỗi giá nghiên cứu KBS được xác minh.
 
-## Phạm vi và cách đo đã triển khai
+**Trạng thái: CHƯA ĐỦ PHỦ – không dùng làm ground truth**. Mã có giá đạt chuẩn: 270/275; lượt mua D đủ tuổi T+2: 28.
 
-Module `protstock.audit_champion_baseline` nhận bản xuất JSON gồm `symbols`, `bars`, `price_status`, `breadth`, `champion_signals`, `raw_signals`, hoặc đọc các bảng tương ứng qua cấu hình Supabase của pipeline. Module chỉ đọc nguồn và ghi tệp báo cáo này. Nó kiểm tra trạng thái giá nghiên cứu `MATCHED`, phiên bản nguồn KBS, khoảng phủ ngày và chất lượng từng thanh giá trước khi đưa một mã vào mẫu.
+Dải ngày tín hiệu lưu trữ: 2026-09-11 đến 2026-09-30.
+Phiên breadth có ít nhất một tín hiệu Champion: 14/432.
+Phiên bản Champion trong mẫu: {'legacy': 1528, 'core-rules-v3.0.0': 83} (phiên bản hiện hành: core-rules-v4.0.0).
+Universe manifest SHA-256: d01dcbf6cd531c8d5f9c46a58e7f3ccc9a075b90534573f722982e8e2f18340c.
 
-Với mỗi lượt Champion mua khung D đã lưu, module lấy giá Open phiên kế tiếp có trượt giá 0,1%, phí mua 0,15%, đo khoảng cách tới pivot và stop trong bằng chứng tín hiệu, rồi tính lãi/lỗ khi có thể bán ở Close T+2 sau phí bán 0,15% và thuế bán 0,1%. Đáy ngày T+2 chỉ là **proxy bảo thủ** cho buổi sáng T+2 vì OHLC EOD không cho biết thời điểm xảy ra đáy. Module còn đo lợi suất nắm giữ cố định 20 phiên, bull trap T+3 và phân nhóm theo trạng thái VN-Index.
+Đây là nghiên cứu theo lượt tín hiệu, không phải lợi suất NAV danh mục. Các lượt có thể trùng mã/ngày; lợi suất 20 phiên là giữ cố định, chưa mô phỏng tái cân bằng danh mục. Đáy OHLC của T+2 là proxy bảo thủ cho buổi sáng, không xác định được giờ xảy ra.
 
-Đây là nghiên cứu **theo lượt tín hiệu**, chưa phải backtest NAV của một danh mục với phân bổ vốn và tái cân bằng. Báo cáo kiểm tra danh sách active trong cơ sở dữ liệu khớp manifest, mọi mã trong mẫu có giá đạt chuẩn, không thiếu lượt mua cần đo, và dải tín hiệu lịch sử phủ kỳ nghiên cứu. Mẫu số không được cố định ở 272; số liệu thiếu sẽ được nêu rõ, không được dùng để hiệu chỉnh ngưỡng.
+Mã bị loại do giá chưa xác minh: 5.
 
-## Điều kiện để hoàn tất bước 2
+Lượt tín hiệu bị loại: {'unverified_price': 1}.
 
-Cung cấp bản xuất lịch sử đã xác minh hoặc cấu hình Supabase có quyền **đọc** các bảng trên; không cần gửi khóa bí mật trong chat. Sau đó chạy module với `--snapshot <đường dẫn JSON>` hoặc dùng cấu hình đọc của pipeline. Đầu ra này sẽ thay thế báo cáo trạng thái bằng bảng số liệu thực và cho phép hiệu chỉnh Challenger từ ground truth.
+## Điểm vào và rủi ro T+
 
-Các ngưỡng Challenger 5% tham gia lệnh, 7% cảnh báo và 8% chặn hiện là **giả thuyết theo đặc tả**, chưa được xác nhận bằng hồi cứu universe 275 mã. Scorecard A/B chỉ hiển thị các lượt shadow phát sinh và đủ tuổi sau khi triển khai; chưa có kết quả lịch sử để khẳng định Challenger tốt hơn Champion.
+Khoảng cách entry tới pivot/base: đủ bằng chứng 16/28 lượt; trung vị 0.72% và P90 5.21%.
+Khoảng cách entry tới invalidation stop: đủ bằng chứng 23/28 lượt; trung vị 8.24% và P90 17.53%.
+Tỷ lệ khoảng cách >5% / >8% / >12%: 18.8% / 0.0% / 0.0%
+Sụt giảm trong cửa sổ khóa: trung bình -2.76%, xấu nhất -7.03%.
+Thắng tại T+2 close sau chi phí: 28.6%.
+Bull trap (lãi close ngày mua, lỗ tại T+3): 17.9%.
+
+## Tổn thương theo nhóm bộ máy
+
+- Core: 28 lượt; sụt giảm khóa trung bình -2.76%.
+- MACD: 4 lượt; sụt giảm khóa trung bình -3.33%.
+
+## Hiệu suất theo trạng thái VN-Index
+
+| Trạng thái | Lượt đủ T+ | T+ thắng | Lượt đủ 20 phiên | Lợi suất 20 phiên TB | Win rate 20 phiên | Profit factor 20 phiên |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| UP | 25 | 24.0% | 0 | — | — | — |
+| SIDEWAYS | 3 | 66.7% | 0 | — | — | — |
+| DOWN | 0 | — | 0 | — | — | — |
+| UNKNOWN | 0 | — | 0 | — | — | — |
+
+Các ngưỡng Challenger chỉ nên hiệu chỉnh sau khi đủ dữ liệu điều chỉnh giá, cùng tập mẫu cho Champion và Challenger, và một giai đoạn quan sát ngoài mẫu.
+
+## Kiểm tra độ mới dữ liệu và quyết định
+
+- Lượt chạy tại phiên 05/10/2026: **0/275** chuỗi nghiên cứu đáp ứng điều kiện phủ đến phiên đó; tín hiệu Champion lưu trữ có mặt ở **17/435** phiên. Đây là thiếu đồng bộ nghiên cứu đến ngày mới, không phải kết quả thua lỗ của 275 mã.
+- Lượt chạy tại mốc 30/09/2026 ở trên: **270/275** mã có chuỗi đạt chuẩn; **28** lượt mua đủ T+2, nhưng **0** lượt đủ 20 phiên. Các thống kê 28 lượt là số liệu mô tả một mẫu ngắn, không đủ để chọn ngưỡng 5%/7%/8% hay kết luận hiệu suất theo pha thị trường.
+- Tín hiệu Champion lưu trữ chỉ phủ **14/432** phiên trong kỳ 2025–30/09/2026 và trộn nhãn `legacy` với `core-rules-v3.0.0`; không phải bản replay toàn kỳ của Champion v4 hiện hành. Bước kiểm toán toàn kỳ cần replay trên cùng dữ liệu điều chỉnh giá và phiên bản quy tắc được đóng băng, sau đó đối chiếu ngoài mẫu.
+
+Nguồn kiểm chứng: [audit 30/09](https://github.com/vnxprot/protstock_app/actions/runs/37360205746), [audit 05/10](https://github.com/vnxprot/protstock_app/actions/runs/37359848546). Hai workflow kết thúc trạng thái failure có chủ đích vì cờ `--require-complete` từ chối gắn nhãn đủ phủ cho các mẫu thiếu dữ liệu.
