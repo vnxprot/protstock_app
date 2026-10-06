@@ -28,7 +28,7 @@ Hệ thống vận hành theo nguyên tắc: **Chung dữ liệu đầu vào EOD
 
 ```
                                   DỮ LIỆU ĐẦU VÀO EOD BATCH
-                         (OHLCV 272 Cổ phiếu, VN-Index, Breadth)
+                         (OHLCV theo universe hiện hành, VN-Index, Breadth)
                                             │
                      ┌──────────────────────┴──────────────────────┐
                      ▼                                             ▼
@@ -126,7 +126,7 @@ Theo quy chế VSDC hiện hành (áp dụng từ 29/08/2022), chu kỳ thanh to
 * Tài liệu kết quả: `docs/champion-baseline-audit-2026-10.md`
 
 ### 3.2. Nội dung kiểm toán thực nghiệm
-Chạy hồi cứu toàn bộ 272 mã cổ phiếu từ `01/01/2025` đến `30/09/2026` với bộ đo lường T+ đã chuẩn hóa ở Bước 1:
+Chạy hồi cứu toàn bộ universe hiện hành (275 mã tại ngày 06/10/2026) từ `01/01/2025` đến phiên EOD mới nhất có dữ liệu xác minh, với bộ đo lường T+ đã chuẩn hóa ở Bước 1. Số mã được lấy từ manifest và Supabase tại thời điểm chạy, không cố định ở 272:
 1. **Đo độ trễ điểm vào (Entry Lag Distribution):**
    * Tính khoảng cách $\% = (Price_{entry} - Price_{pivot}) / Price_{pivot}$ so với nền giá hoặc điểm breakout ban đầu.
    * Thống kê tỷ lệ các lệnh mua được kích hoạt khi giá đã tăng $> 5\%$, $> 8\%$, $> 12\%$ so với nền.
