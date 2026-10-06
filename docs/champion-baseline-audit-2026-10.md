@@ -50,3 +50,9 @@ Các ngưỡng Challenger chỉ nên hiệu chỉnh sau khi đủ dữ liệu đ
 - [Migration production](https://github.com/vnxprot/protstock_app/actions/runs/37360022878) tạo hai bảng shadow độc lập, không sửa dữ liệu danh mục Champion.
 - [Lượt shadow 05/10](https://github.com/vnxprot/protstock_app/actions/runs/37403261265) xử lý **274/275** mã và ghi 274 assessment riêng. GVT thiếu giá EOD cùng phiên nên được bỏ qua. Chưa có outcome T+2 trưởng thành (`dual_engine_tplus_matured=0`); bảng điểm A/B để trống cho đến khi có mẫu thực.
 - Web production hiển thị ba chế độ Champion, Challenger, Đối chiếu; cột ngành lấy điểm sức khỏe và tỷ trọng giao dịch từ breadth của cùng phiên. Challenger chỉ đọc dữ liệu EOD và không đặt lệnh vào danh mục.
+
+### Bản phát hành v2.0.0 ngày 06/10/2026
+
+- `MACD_EARLY_ZONE` và `SIDEWAY_RANGE` nay có assessment và outcome T+2 riêng trong hai bảng nghiên cứu mới. Các nhánh giữ cổng thị trường, thanh khoản và stop; lệnh mua nghiên cứu bị chặn nếu Champion cùng mã đang `EXIT` hoặc `REDUCE`.
+- [Migration chiến lược](https://github.com/vnxprot/protstock_app/actions/runs/37417406666) đã áp dụng. [Lượt chạy bù 05/10](https://github.com/vnxprot/protstock_app/actions/runs/37417566235) ghi 274 assessment tổng hợp và 548 assessment chiến lược cho 274/275 mã có giá EOD; GVT vẫn bị bỏ qua. Chưa có outcome T+2 trưởng thành cho các nhánh.
+- Giao diện Challenger có bốn tab tương ứng Champion và giữ card nghiên cứu ở mọi tab. Phễu và MACD là bằng chứng chung; bảng chiến lược trong card cho biết quyết định riêng. Phần Hướng dẫn ở Cài đặt giải thích logic này cho cả thành viên thường.

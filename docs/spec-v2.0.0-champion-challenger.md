@@ -188,6 +188,10 @@ Challenger V2 tập trung giải quyết các điểm nghẽn đã đo được 
      * Ưu tiên các tín hiệu mua tại hỗ trợ / biên dưới Wyckoff Accumulation hoặc Spring.
 3. **Bộ chặn Cứng Xa Nền (Base Distance Hard Gate):**
    * Từ chối toàn bộ lệnh mua mới nếu khoảng cách tới `invalidation_price` $> 8.0\%$.
+4. **Hai nhánh nghiên cứu độc lập:**
+   * `MACD_EARLY_ZONE`: đánh giá điểm vượt trigger khi volume chưa đạt 1,3 lần trung bình 20 phiên; tín hiệu `EARLY_PROBE` mang hệ số quy mô 30%.
+   * `SIDEWAY_RANGE`: ở pha SIDEWAYS, từ chối breakout đỉnh 20 phiên và chỉ xét điểm Spring gần hỗ trợ.
+   * Mỗi nhánh lưu assessment và outcome T+2 riêng trong `challenger_strategy_assessments` và `challenger_strategy_tplus_outcomes`; bảng Challenger tổng hợp vẫn tách biệt Champion. Hai nhánh không ghi giao dịch danh mục và không mua khi Champion cùng mã đang `EXIT`/`REDUCE`.
 
 ### 5.3. Giao diện Đối chiếu Song song (Head-to-Head A/B Dashboard)
 1. **Thanh điều hướng Switcher:**
