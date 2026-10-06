@@ -29,8 +29,8 @@ const reasonNames: Record<string, string> = {
   CHASE_BLOCKED: 'Khoảng cách đến stop vượt 8% hoặc giá dưới stop',
   CHAMPION_EXIT_CONFLICT: 'Champion đang phát EXIT/REDUCE cho mã này',
   ADAPTIVE_DAILY_TRIGGER: 'Setup tuần đã có trigger xác nhận bằng nến ngày',
-  NO_OVERSOLD_SPRING: 'Chưa đồng thời có quá bán và Spring',
-  DOWNTREND_SPRING_BOUNCE: 'Spring xác nhận trong trạng thái quá bán',
+  NO_OVERSOLD_PANIC_SPRING: 'Chưa đồng thời có quá bán và Spring volume lớn lấy lại nền',
+  DOWNTREND_PANIC_SPRING: 'Quét thủng đáy với volume ≥ 2× và nến kế tiếp lấy lại nền',
 }
 const number = (value: number | null | undefined) => value == null ? '—' : Number(value).toLocaleString('vi-VN', { maximumFractionDigits: 2 })
 

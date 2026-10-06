@@ -21,6 +21,11 @@ def recovery_status(index_bars: Sequence[dict]) -> dict:
     ordered = sorted(index_bars, key=lambda item: item.get("date") or item["trading_date"])
     if len(ordered) < 35:
         return {"state": "UNKNOWN", "reason": "INDEX_HISTORY_SHORT"}
+    closes = [float(item["close"]) for item in ordered]
+    ma20 = mean(closes[-20:])
+    ma50 = mean(closes[-50:]) if len(closes) >= 50 else None
+    ma200 = mean(closes[-200:]) if len(closes) >= 210 else None
+    prior_ma200 = mean(closes[-210:-10]) if len(closes) >= 210 else None
     start = max(0, len(ordered) - 30)
     low_index = min(range(start, len(ordered)), key=lambda i: float(ordered[i]["low"]))
     day = len(ordered) - low_index
@@ -33,7 +38,10 @@ def recovery_status(index_bars: Sequence[dict]) -> dict:
             break
     return {"state": "FTD_CONFIRMED" if confirmed else "RALLY_ATTEMPT" if day >= 2 else "NEW_LOW",
             "rally_low_date": ordered[low_index].get("date") or ordered[low_index]["trading_date"], "rally_day": day,
-            "ftd_date": confirmed, "method": "INDEX_GAIN_1PCT_VOLUME_GT_PREVIOUS_DAY_FROM_DAY4"}
+            "ftd_date": confirmed, "method": "INDEX_GAIN_1PCT_VOLUME_GT_PREVIOUS_DAY_FROM_DAY4",
+            "below_ma20": closes[-1] < ma20,
+            "below_ma50": ma50 is not None and closes[-1] < ma50,
+            "ma200_falling_10_sessions": ma200 is not None and prior_ma200 is not None and ma200 < prior_ma200}
 
 
 def market_regime(context: dict) -> str:
@@ -44,7 +52,11 @@ def market_regime(context: dict) -> str:
     trend = index.get("trend_state")
     if trend not in {"UP", "DOWN", "SIDEWAYS"}:
         return "UNKNOWN"
-    if trend == "DOWN" or float(pct) < 30:
+    recovery = context.get("recovery") or {}
+    sell_pressure = breadth.get("up_down_volume_ratio") is not None and float(breadth["up_down_volume_ratio"]) < 1
+    structural_down = (recovery.get("below_ma20") and recovery.get("below_ma50")
+                       and recovery.get("ma200_falling_10_sessions") and sell_pressure)
+    if trend == "DOWN" or float(pct) < 30 or structural_down:
         if (trend == "DOWN" and float(pct) >= 40
                 and (context.get("recovery") or {}).get("state") == "FTD_CONFIRMED"):
             return "RECOVERY_FTD"
@@ -88,13 +100,21 @@ def early_second_low(bars: Sequence[dict], symbol_id: int) -> dict | None:
 def oversold_evidence(bars: Sequence[dict]) -> dict:
     closes = [float(item["close"]) for item in bars]
     rsi = _rsi(closes)
+    previous_rsi = _rsi(closes[:-1]) if len(closes) > 15 else None
     prior = closes[-21:-1]
     mid = mean(prior) if len(prior) == 20 else None
     lower = mid - 2 * mean([(item - mid) ** 2 for item in prior]) ** .5 if mid is not None else None
     band = lower is not None and float(bars[-1]["low"]) <= lower
+    prior_window = closes[-22:-2]
+    prior_mid = mean(prior_window) if len(prior_window) == 20 else None
+    prior_lower = (prior_mid - 2 * mean([(item - prior_mid) ** 2 for item in prior_window]) ** .5
+                   if prior_mid is not None else None)
+    prior_band = prior_lower is not None and float(bars[-2]["low"]) <= prior_lower
     return {"rsi14": round(rsi, 2) if rsi is not None else None,
             "prior_lower_band": round(lower, 4) if lower is not None else None,
-            "lower_band_breach": band, "oversold": bool(rsi is not None and rsi < 25 or band)}
+            "lower_band_breach": band or prior_band,
+            "oversold": bool(rsi is not None and rsi < 25 or previous_rsi is not None and previous_rsi < 25
+                             or band or prior_band)}
 
 
 def sideway_setup(bars: Sequence[dict]) -> dict | None:
@@ -113,6 +133,24 @@ def sideway_setup(bars: Sequence[dict]) -> dict | None:
     return {"kind": "POCKET_PIVOT_AT_BASE" if pocket else "MEAN_REVERSION_SUPPORT",
             "base": support, "stop": min(support, float(current["low"])) * .99,
             "target_return_pct_range": [7, 10], "target_is_research_hypothesis": True}
+
+
+def panic_spring(bars: Sequence[dict]) -> dict | None:
+    """High-volume undercut followed by immediate next-session reclaim."""
+    if len(bars) < 45:
+        return None
+    prior, sweep, reclaim = bars[-42:-2], bars[-2], bars[-1]
+    support = min(float(item["low"]) for item in prior)
+    average_volume = mean(float(item.get("volume") or 0) for item in prior[-20:])
+    volume_ratio = float(sweep.get("volume") or 0) / average_volume if average_volume else 0
+    if not (float(sweep["low"]) < support * .99 and volume_ratio >= 2
+            and float(reclaim["close"]) > support and float(reclaim["close"]) > float(reclaim["open"])
+            and float(reclaim["low"]) > float(sweep["low"])):
+        return None
+    return {"kind": "DOWNTREND_PANIC_SPRING", "base": support,
+            "stop": float(sweep["low"]) * .99, "sweep_date": sweep["date"],
+            "reclaim_date": reclaim["date"], "sweep_volume_ratio20": round(volume_ratio, 3),
+            "target": "MA20_OR_10_TO_12_PCT", "target_is_research_hypothesis": True}
 
 
 def uptrend_setup(bars: Sequence[dict]) -> dict | None:
@@ -219,14 +257,12 @@ def assess_challenger_strategies(symbol_id: int, bars: Sequence[dict], market_co
     if early and regime == "DOWNTREND" and not oversold["oversold"]:
         macd["reasons"].append("DOWNTREND_OVERSOLD_REQUIRED")
     result.append(macd)
-    bounce = None
-    if regime == "DOWNTREND" and spring.get("support") and oversold["oversold"]:
-        support = float(spring["support"])
-        bounce = {"kind": "DOWNTREND_SPRING_BOUNCE", "base": support, "stop": support * .99,
-                  "target": "MA20_OR_10_TO_12_PCT", "target_is_research_hypothesis": True}
+    bounce = panic_spring(ordered) if regime == "DOWNTREND" else None
+    if bounce and not oversold["oversold"]:
+        bounce = None
     result.append(build("DOWNTREND_SPRING", bounce, regime == "DOWNTREND",
-                        "NO_OVERSOLD_SPRING", .3,
-                        {"oversold": oversold, "wyckoff_event": wyckoff.get("event")}))
+                        "NO_OVERSOLD_PANIC_SPRING", .3,
+                        {"oversold": oversold, "sweep_volume_threshold": 2.0}))
     return result
 
 

@@ -1,7 +1,7 @@
 from datetime import date, timedelta
 
 from protstock.challenger_research import (assess_challenger, assess_challenger_strategies,
-                                           early_second_low, market_regime, recovery_status)
+                                           early_second_low, market_regime, panic_spring, recovery_status)
 from protstock.signal_funnel import assess_funnel
 
 
@@ -82,3 +82,19 @@ def test_ftd_requires_day_four_and_higher_volume():
     rows[-1] = {**rows[-1], "close": 8.7, "volume": 3_000_000}
     assert recovery_status(rows)["state"] == "FTD_CONFIRMED"
     assert market_regime({**context("DOWN", 45), "recovery": recovery_status(rows)}) == "RECOVERY_FTD"
+
+
+def test_downtrend_panic_spring_requires_high_volume_and_next_day_reclaim(monkeypatch):
+    rows = bars()
+    rows[-2] = {**rows[-2], "low": 9.5, "close": 9.6, "volume": 5_000_000}
+    rows[-1] = {**rows[-1], "open": 9.7, "low": 9.6, "close": 10.0}
+    setup = panic_spring(rows)
+    assert setup["kind"] == "DOWNTREND_PANIC_SPRING"
+    assert setup["sweep_volume_ratio20"] >= 2
+    monkeypatch.setattr("protstock.challenger_research.oversold_evidence", lambda *_: {"oversold": True})
+    branch = assess_challenger_strategies(1, rows, context("DOWN", 20))[4]
+    assert branch["action"] == "PROBE_BUY"
+    assert branch["evidence"]["size_multiplier"] == .3
+    rows[-2]["volume"] = 1_000_000
+    assert panic_spring(rows) is None
+    assert assess_challenger_strategies(1, rows, context("DOWN", 20))[4]["action"] == "WATCH"
