@@ -87,7 +87,7 @@ def analyze(snapshot: dict, end: str) -> dict:
                        or row.get("price_unit") != STOCK_PRICE_UNIT
                        or row.get("basis") != "KBS_VENDOR_REBASED"
                        or row.get("source_version") != KBS_SOURCE_VERSION for row in rows)):
-            skipped[key] = "RESEARCH_PRICE_COVERAGE_UNVERIFIED"
+            skipped[symbol["symbol"]] = "RESEARCH_PRICE_COVERAGE_UNVERIFIED"
             continue
         valid[key] = sorted(rows, key=lambda row: row["trading_date"])
     samples = []
@@ -177,7 +177,8 @@ def render_report(result: dict, end: str) -> str:
              "lợi suất 20 phiên là giữ cố định, chưa mô phỏng tái cân bằng danh mục. "
              "Đáy OHLC của T+2 là proxy bảo thủ cho buổi sáng, không xác định được giờ xảy ra.", ""]
     if result["skipped_symbols"]:
-        lines += [f"Mã bị loại do giá chưa xác minh: {len(result['skipped_symbols'])}.", ""]
+        names = ", ".join(sorted(result["skipped_symbols"]))
+        lines += [f"Mã bị loại do giá chưa xác minh: {len(result['skipped_symbols'])} ({names}).", ""]
     if result["universe_mismatch"]:
         lines += [f"Universe trong nguồn không khớp manifest: {', '.join(result['universe_mismatch'])}.", ""]
     if result["missing"]:

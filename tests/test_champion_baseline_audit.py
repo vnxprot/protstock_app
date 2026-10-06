@@ -34,3 +34,4 @@ def test_audit_uses_active_manifest_instead_of_fixed_272():
     assert result["symbols_total"] == 1
     assert result["universe_mismatch"] == ["BBB"]
     assert result["complete"] is False
+    assert "Mã bị loại do giá chưa xác minh: 1 (AAA)." in render_report(result, "2026-09-30")
