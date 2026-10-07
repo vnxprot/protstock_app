@@ -3,6 +3,8 @@ import { useQuery } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 import { unsettledLotStates } from '../lib/signalTriage'
 import type { SectorStrength } from '../lib/signalTriage'
+import { ResearchPagination } from './ResearchPagination'
+import { SoftSelect } from './SoftSelect'
 import './DualEngineComparePanel.css'
 
 export type ChampionSignal = { symbol_id: number; symbol: string; sector: string | null; action: string; as_of_date: string }
@@ -40,6 +42,16 @@ export function DualEngineComparePanel({ date, champion, mode }: {
 }) {
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(25)
+  const [championAction, setChampionAction] = useState('ALL')
+  const [challengerAction, setChallengerAction] = useState('ALL')
+  const [insightFilter, setInsightFilter] = useState('ALL')
+  const [strategyFilter, setStrategyFilter] = useState('ALL')
+  const [sectorFilter, setSectorFilter] = useState('ALL')
+  const [maxBaseDistance, setMaxBaseDistance] = useState('')
+  const [minSectorScore, setMinSectorScore] = useState('')
+  const [settlementFilter, setSettlementFilter] = useState('ALL')
+  const [reasonFilter, setReasonFilter] = useState('')
   const shadow = useQuery({ queryKey: ['challenger-shadow', date], enabled: Boolean(supabase) && Boolean(date), queryFn: async () => {
     const rows: ShadowRow[] = []
     for (let from = 0; ; from += 1000) {
@@ -115,10 +127,22 @@ export function DualEngineComparePanel({ date, champion, mode }: {
   const championById = new Map(champion.filter(row => row.as_of_date === date).map(row => [row.symbol_id, row]))
   const strategyById = new Map<number, StrategyRow[]>()
   for (const row of strategies.data ?? []) strategyById.set(row.symbol_id, [...(strategyById.get(row.symbol_id) ?? []), row])
-  const rows = (shadow.data ?? []).filter(row => (mode === 'watch' ? row.action === 'WATCH' : true)
-    && (symbols.data?.get(row.symbol_id)?.symbol ?? championById.get(row.symbol_id)?.symbol ?? '').toLowerCase().includes(search.toLowerCase()))
-  const pageCount = Math.max(1, Math.ceil(rows.length / 25))
-  const visibleRows = rows.slice((Math.min(page, pageCount) - 1) * 25, Math.min(page, pageCount) * 25)
+  const allRows = shadow.data ?? []
+  const sectorsAvailable = [...new Set(allRows.map(row => championById.get(row.symbol_id)?.sector ?? symbols.data?.get(row.symbol_id)?.sector).filter((value): value is string => Boolean(value)))].sort()
+  const rows = allRows.filter(row => (mode === 'watch' ? row.action === 'WATCH' : true)
+    && (symbols.data?.get(row.symbol_id)?.symbol ?? championById.get(row.symbol_id)?.symbol ?? '').toLocaleLowerCase('vi').includes(search.trim().toLocaleLowerCase('vi'))
+    && (championAction === 'ALL' || (championById.get(row.symbol_id)?.action ?? 'NONE') === championAction)
+    && (challengerAction === 'ALL' || row.action === challengerAction)
+    && (insightFilter === 'ALL' || insight(championById.get(row.symbol_id), row) === insightFilter)
+    && (strategyFilter === 'ALL' || (strategyById.get(row.symbol_id) ?? []).some(item => item.strategy_code === strategyFilter))
+    && (sectorFilter === 'ALL' || (championById.get(row.symbol_id)?.sector ?? symbols.data?.get(row.symbol_id)?.sector) === sectorFilter)
+    && (!maxBaseDistance || row.distance_to_base_pct != null && Number(row.distance_to_base_pct) <= Number(maxBaseDistance))
+    && (!minSectorScore || Number(sectors.data?.get(championById.get(row.symbol_id)?.sector ?? symbols.data?.get(row.symbol_id)?.sector ?? '')?.market_health_score ?? -1) >= Number(minSectorScore))
+    && (settlementFilter === 'ALL' || (settlementFilter === 'NONE' ? !(lots.data?.get(row.symbol_id)?.length) : Boolean(lots.data?.get(row.symbol_id)?.includes(settlementFilter as 'T0' | 'T1' | 'T2' | 'T_READY'))))
+    && (!reasonFilter || row.reasons.join(' ').toLocaleLowerCase('vi').includes(reasonFilter.trim().toLocaleLowerCase('vi'))))
+  const pageCount = Math.max(1, Math.ceil(rows.length / pageSize))
+  const currentPage = Math.min(page, pageCount)
+  const visibleRows = rows.slice((currentPage - 1) * pageSize, currentPage * pageSize)
   const championScore = score(outcomes.data ?? [], 'CHAMPION')
   const challengerScore = score(outcomes.data ?? [], 'CHALLENGER')
   return <article className="panel dual-engine-panel">
@@ -148,7 +172,18 @@ export function DualEngineComparePanel({ date, champion, mode }: {
       {strategies.isError && <p className="form-error" role="alert">Chưa đọc được các nhánh chiến lược Challenger.</p>}
       {strategyOutcomes.isError && <p className="muted">Chưa đọc được outcome T+2 theo từng chiến lược.</p>}
       {mode !== 'summary' && <>
-      <div className="dual-engine-controls"><label>Tìm mã <input value={search} onChange={event => { setSearch(event.target.value); setPage(1) }} placeholder="Ví dụ: FPT" /></label><span>{rows.length} mã · trang {Math.min(page, pageCount)}/{pageCount}</span></div>
+      <div className="dual-engine-controls"><label>Tìm mã <input value={search} onChange={event => { setSearch(event.target.value); setPage(1) }} placeholder="Ví dụ: FPT" /></label>
+        <label>Champion <SoftSelect value={championAction} onChange={event => { setChampionAction(event.target.value); setPage(1) }}><option value="ALL">Mọi hành động</option><option value="NONE">Không có tín hiệu</option>{['WATCH','PROBE_BUY','ADD','REDUCE','EXIT'].map(value => <option key={value} value={value}>{value}</option>)}</SoftSelect></label>
+        <label>Challenger <SoftSelect value={challengerAction} onChange={event => { setChallengerAction(event.target.value); setPage(1) }}><option value="ALL">Mọi hành động</option>{['WATCH','PROBE_BUY','EARLY_PROBE'].map(value => <option key={value} value={value}>{value}</option>)}</SoftSelect></label>
+        <label>Delta Insight <SoftSelect value={insightFilter} onChange={event => { setInsightFilter(event.target.value); setPage(1) }}><option value="ALL">Tất cả</option>{['ALIGNED','EARLY_LEAD','CHASE_BLOCKED','SIDEWAY_REJECTED','DIFFERENT'].map(value => <option key={value} value={value}>{value}</option>)}</SoftSelect></label>
+        <label>Chiến lược <SoftSelect value={strategyFilter} onChange={event => { setStrategyFilter(event.target.value); setPage(1) }}><option value="ALL">Tất cả</option>{Object.entries(strategyNames).map(([code, name]) => <option key={code} value={code}>{name}</option>)}</SoftSelect></label>
+        <label>Ngành <SoftSelect value={sectorFilter} onChange={event => { setSectorFilter(event.target.value); setPage(1) }}><option value="ALL">Tất cả</option>{sectorsAvailable.map(value => <option key={value} value={value}>{value}</option>)}</SoftSelect></label>
+        <label>Xa nền tối đa % <input type="number" step="0.1" value={maxBaseDistance} onChange={event => { setMaxBaseDistance(event.target.value); setPage(1) }} placeholder="Bất kỳ" /></label>
+        <label>Điểm ngành tối thiểu <input type="number" min="0" max="100" value={minSectorScore} onChange={event => { setMinSectorScore(event.target.value); setPage(1) }} placeholder="Bất kỳ" /></label>
+        <label>Trạng thái T+ <SoftSelect value={settlementFilter} onChange={event => { setSettlementFilter(event.target.value); setPage(1) }}><option value="ALL">Tất cả</option><option value="NONE">Không có lô</option>{['T0','T1','T2','T_READY'].map(value => <option key={value} value={value}>{value}</option>)}</SoftSelect></label>
+        <label>Lý do Challenger <input value={reasonFilter} onChange={event => { setReasonFilter(event.target.value); setPage(1) }} placeholder="Mã lý do…" /></label>
+        <button type="button" className="secondary-button" onClick={() => { setSearch(''); setChampionAction('ALL'); setChallengerAction('ALL'); setInsightFilter('ALL'); setStrategyFilter('ALL'); setSectorFilter('ALL'); setMaxBaseDistance(''); setMinSectorScore(''); setSettlementFilter('ALL'); setReasonFilter(''); setPage(1) }}>Xóa bộ lọc</button>
+        <span>{rows.length} mã · trang {currentPage}/{pageCount}</span></div>
       <div className="dual-engine-table-wrap"><table className="dual-engine-table"><thead><tr>
         <th>Mã</th>{mode === 'compare' && <th>Champion</th>}<th>Challenger</th><th>Delta Insight</th>
         <th>Chiến lược riêng</th><th>Khoảng cách nền</th><th>Sức mạnh ngành</th><th>Trạng thái T+</th>
@@ -161,7 +196,7 @@ export function DualEngineComparePanel({ date, champion, mode }: {
         <td>{row.distance_to_base_pct == null ? '—' : `${Number(row.distance_to_base_pct).toFixed(1)}%`}</td>
         <td>{sector ?? '—'}{strength && <small> · {Number(strength.market_health_score ?? 0).toFixed(0)} điểm · GTGD {Number(strength.turnover_share_pct ?? 0).toFixed(1)}%</small>}</td><td>{lots.data?.get(row.symbol_id)?.join(' · ') || '—'}</td>
       </tr> })}</tbody></table></div>
-      {pageCount > 1 && <nav className="dual-engine-pages"><button type="button" disabled={page <= 1} onClick={() => setPage(value => value - 1)}>‹ Trước</button><button type="button" disabled={page >= pageCount} onClick={() => setPage(value => value + 1)}>Sau ›</button></nav>}
+      <ResearchPagination label="Phân trang đối chiếu Champion Challenger" page={currentPage} pageSize={pageSize} total={rows.length} onPage={setPage} onPageSize={size => { setPageSize(size); setPage(1) }}/>
       {!rows.length && Boolean(shadow.data?.length) && <p className="muted">Không có đánh giá Challenger khớp bộ lọc hiện tại.</p>}
       </>}
     </>}

@@ -11,8 +11,11 @@
 .dual-strategy-scorecard > div { display:flex; flex-direction:column; gap:.3rem; padding:.85rem 1rem; border:1px solid var(--line); border-radius:12px; }
 .dual-strategy-scorecard span,.dual-reasons { display:block; font-size:.8rem; opacity:.75; }
 .dual-strategy-label { display:block; white-space:nowrap; font-size:.8rem; margin:.15rem 0; }
-.dual-engine-controls,.dual-engine-pages { display:flex; justify-content:space-between; align-items:center; gap:1rem; }
-.dual-engine-controls input { margin-left:.5rem; padding:.4rem .6rem; border:1px solid var(--line); border-radius:8px; background:var(--surface); color:inherit; }
+.dual-engine-controls,.dual-engine-pages { display:flex; justify-content:space-between; align-items:end; gap:.75rem; flex-wrap:wrap; }
+.dual-engine-controls label { display:grid; gap:.3rem; font-size:.8rem; }
+.dual-engine-controls input { min-height:2.2rem; padding:.4rem .6rem; border:1px solid var(--line); border-radius:8px; background:var(--surface); color:inherit; }
+.dual-engine-controls .soft-select { min-width:135px; }
+.dual-engine-controls>span { margin-left:auto; font-size:.8rem; }
 .dual-engine-pages { justify-content:flex-end; }
 @media(max-width:700px) { .dual-scorecard { grid-template-columns:1fr; } }
 @media(max-width:700px) { .dual-strategy-scorecard { grid-template-columns:1fr; } }

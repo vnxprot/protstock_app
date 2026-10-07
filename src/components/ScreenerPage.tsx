@@ -141,7 +141,7 @@ export function ScreenerPage({ authenticated, canJournal = false }: { authentica
     {tab==='macd'&&<div id="screener-panel-macd" role="tabpanel" aria-labelledby="screener-tab-macd">{latestDate?<MacdDivergencePanel date={latestDate} authenticated={authenticated}/>:<p className="muted">Chưa có phiên dữ liệu để xem phân kỳ.</p>}</div>}
     </>}
     {engineMode==='challenger'&&<>
-      {tab==='original'&&<p className="muted">Tín hiệu gốc Challenger gồm đánh giá tổng hợp và hai nhánh MACD_EARLY_ZONE, SIDEWAY_RANGE của cùng phiên EOD. Mỗi nhánh có kết quả T+2 riêng khi đủ tuổi.</p>}
+      {tab==='original'&&<p className="muted">Tín hiệu gốc Challenger gồm quyết định tổng hợp và năm nhánh UPTREND_CORE, SIDEWAY_RANGE, ADAPTIVE_FUNNEL, MACD_EARLY_ZONE, DOWNTREND_SPRING của cùng phiên EOD. Mỗi nhánh có kết quả T+2 riêng khi đủ tuổi.</p>}
       {tab==='watch'&&<p className="muted">WATCH là nhánh đang chờ hoặc bị cổng an toàn chặn. Lý do nằm ngay dưới hành động; nhãn chiến lược cho biết quyết định độc lập của từng nhánh. Đây không phải lệnh mua.</p>}
       {tab==='funnel'&&<div id="screener-panel-funnel" role="tabpanel" aria-labelledby="screener-tab-funnel">{latestDate?<ChallengerResearchTab date={latestDate} tab="funnel"/>:<p className="muted">Chưa có phiên dữ liệu để xem phễu.</p>}</div>}
       {tab==='macd'&&<div id="screener-panel-macd" role="tabpanel" aria-labelledby="screener-tab-macd">{latestDate?<ChallengerResearchTab date={latestDate} tab="macd"/>:<p className="muted">Chưa có phiên dữ liệu để xem phân kỳ.</p>}</div>}
