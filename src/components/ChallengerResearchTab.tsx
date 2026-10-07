@@ -83,6 +83,6 @@ export function ChallengerResearchTab({ date, tab }: { date: string; tab: 'funne
         {candidate.target != null && <small>Mục tiêu nghiên cứu: {String(candidate.target)}; chỉ đánh giá sau thời điểm hàng được bán T+2.</small>}
       </section>
     })}</div><nav className="dual-engine-pages"><button disabled={current <= 1} onClick={() => setPage(current - 1)}>‹ Trước</button><button disabled={current >= pages} onClick={() => setPage(current + 1)}>Sau ›</button></nav>
-      {!rows.length && <p className="muted">Chưa có tín hiệu riêng Challenger khớp bộ lọc ở phiên này.</p>}</>}
+      {!rows.length && <p className={query.data?.length ? 'muted' : 'form-error'} role={query.data?.length ? undefined : 'alert'}>{query.data?.length ? 'Không có đánh giá khớp bộ lọc hiện tại.' : `Phiên ${date} chưa có assessment Challenger cho tab này trong database.`}</p>}</>}
   </article>
 }

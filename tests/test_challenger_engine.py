@@ -12,7 +12,8 @@ def test_eod_shadow_writes_only_isolated_tables(monkeypatch):
         "action": "WATCH", "reasons": [], "evidence": {"shadow_only": True}})
     monkeypatch.setattr("protstock.eod.assess_challenger_strategies", lambda *args: [{
         "symbol_id": 1, "trading_date": today.isoformat(), "engine_version": "v2.0-challenger",
-        "strategy_code": "MACD_EARLY_ZONE", "action": "WATCH", "reasons": [], "evidence": {"shadow_only": True}}])
+        "strategy_code": code, "action": "WATCH", "reasons": [], "evidence": {"shadow_only": True}}
+        for code in ("UPTREND_CORE", "SIDEWAY_RANGE", "ADAPTIVE_FUNNEL", "MACD_EARLY_ZONE", "DOWNTREND_SPRING")])
 
     class Client:
         def __init__(self):
@@ -44,6 +45,8 @@ def test_eod_shadow_writes_only_isolated_tables(monkeypatch):
                                                   "challenger_strategy_tplus_outcomes"]
     assert counts["dual_engine_tplus_matured"] == 2
     assert counts["challenger_strategy_tplus_matured"] == 1
+    assert counts["challenger_shadow_expected"] == 1
+    assert counts["challenger_status"] == "COMPLETE"
     assert {row["engine"] for row in client.writes[2][1]} == {"CHAMPION", "CHALLENGER"}
     assert all(row["net_return_pct"] < 0 for row in client.writes[2][1])
     assert client.writes[3][1][0]["size_multiplier"] == .3

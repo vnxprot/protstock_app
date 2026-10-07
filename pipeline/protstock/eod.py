@@ -27,7 +27,7 @@ from .signal_policy import STOCK_PRICE_TO_VND, apply_signal_policy
 from .period_signals import monthly_trend, evaluate_period_signal
 from .signal_funnel import assess_funnel
 from .macd_divergence_zones import assess_macd_zone_divergence
-from .challenger_engine import assess_challenger, assess_challenger_strategies, recovery_status, VERSION as CHALLENGER_VERSION
+from .challenger_engine import assess_challenger, assess_challenger_strategies, recovery_status, VERSION as CHALLENGER_VERSION, CODES as CHALLENGER_STRATEGY_CODES
 from .wyckoff import classify_wyckoff_timeframe
 
 # VNINDEX's first session was 28/07/2000. This keeps its benchmark history full
@@ -285,6 +285,10 @@ def finalize_fast_lane(trading_date: date, *, allow_partial: bool = False, prepa
         "missing_symbols": sorted(row["symbol"] for row in active_symbols if row["id"] in missing),
         "breadth": breadth, "signals": rebuilt["signals"],
         "published_signals": rebuilt.get("published_signals", 0),
+        "challenger_shadow": rebuilt.get("challenger_shadow", 0),
+        "challenger_shadow_expected": rebuilt.get("challenger_shadow_expected", 0),
+        "challenger_strategy_assessments": rebuilt.get("challenger_strategy_assessments", 0),
+        "challenger_status": rebuilt.get("challenger_status", "UNKNOWN"),
     }
 
 
@@ -338,6 +342,8 @@ def rebuild_signals(trading_date: date, *, symbol_offset: int = 0, symbol_limit:
                     for _symbol_id, timeframe, scoped_rows, index_rows, result, context in cached:
                         context = {**context, "market_context": prepared_market_context, "portfolios": portfolios}
                         _write_analysis(client, symbol_row["id"], timeframe, scoped_rows, index_rows, active_rules, counts, result, context, persist_evidence=False)
+                        if timeframe == "D":
+                            pending_signals.append((symbol_row["id"], timeframe, scoped_rows, index_rows, result, context))
                     counts["symbols"] += 1
                     counts["analysis_reused"] = counts.get("analysis_reused", 0) + 1
                     client.create_job_item({"job_run_id": job["id"], "symbol_id": symbol_row["id"], "item_key": symbol_row["symbol"], "status": "SUCCEEDED", "rows_written": 0, "duration_ms": int((monotonic() - started) * 1000)})
@@ -820,10 +826,17 @@ def _write_analysis(
 def _write_challenger_shadow(client, pending_signals: list, market_context: dict, trading_date: date,
                              counts: dict, warnings: list[str]) -> None:
     """Best-effort isolated persistence: shadow failures never change Champion publication."""
+    day = trading_date.isoformat()
+    expected = sum(timeframe == "D" and bool(rows) and rows[-1]["date"] == day
+                   for _symbol_id, timeframe, rows, *_rest in pending_signals)
+    counts["challenger_shadow_expected"] = expected
+    counts["challenger_shadow"] = 0
+    counts["challenger_strategy_assessments"] = 0
+    counts["challenger_status"] = "PENDING"
     if not hasattr(client, "_pages") or not hasattr(client, "upsert"):
+        counts["challenger_status"] = "UNAVAILABLE"
         return
     try:
-        day = trading_date.isoformat()
         champions = client._pages("consolidated_signals", {
             "select": "symbol_id,composite_action,reasons", "as_of_date": f"eq.{day}",
             "timeframe": "eq.D", "source_revision": f"eq.{ALGORITHM_VERSION}"})
@@ -938,7 +951,13 @@ def _write_challenger_shadow(client, pending_signals: list, market_context: dict
         counts["dual_engine_tplus_matured"] = len(outcomes)
         counts["challenger_strategy_tplus_matured"] = len(strategy_outcomes)
         counts["challenger_version"] = CHALLENGER_VERSION
+        counts["challenger_status"] = ("COMPLETE" if expected and len(assessments) == expected
+                                        and len(strategy_assessments) == expected * len(CHALLENGER_STRATEGY_CODES)
+                                        else "EMPTY_OR_INCOMPLETE")
+        if counts["challenger_status"] != "COMPLETE" and counts.get("symbols", 0):
+            warnings.append("CHALLENGER_SHADOW_EMPTY_OR_INCOMPLETE")
     except Exception as exc:
+        counts["challenger_status"] = "FAILED"
         warnings.append(f"CHALLENGER_SHADOW_UNAVAILABLE:{type(exc).__name__}")
 
 

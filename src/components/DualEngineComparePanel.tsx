@@ -126,6 +126,8 @@ export function DualEngineComparePanel({ date, champion, mode }: {
       <small>Chỉ dữ liệu EOD · Challenger không ghi lệnh vào danh mục</small></div><small>{date}</small></div>
     {shadow.isLoading && <p role="status">Đang tải đánh giá Challenger…</p>}
     {shadow.isError && <p className="form-error" role="alert">Chưa đọc được dữ liệu Challenger. Kiểm tra migration và lượt EOD gần nhất.</p>}
+    {!shadow.isLoading && !shadow.isError && shadow.data?.length === 0 &&
+      <p className="form-error" role="alert">Phiên {date} chưa có bản đánh giá Challenger trong database. Champion vẫn có {championById.size} mã để đối chiếu; cần chạy bù phiên shadow này.</p>}
     {!shadow.isLoading && !shadow.isError && <>
       <div className="dual-scorecard" aria-label="Bảng điểm Champion Challenger">
         <div><span>Win rate lúc T+2</span><strong>Champion {championScore ? `${championScore.win.toFixed(1)}% · n=${championScore.count}` : '—'}</strong><strong>Challenger {challengerScore ? `${challengerScore.win.toFixed(1)}% · n=${challengerScore.count}` : '—'}</strong></div>
@@ -160,7 +162,7 @@ export function DualEngineComparePanel({ date, champion, mode }: {
         <td>{sector ?? '—'}{strength && <small> · {Number(strength.market_health_score ?? 0).toFixed(0)} điểm · GTGD {Number(strength.turnover_share_pct ?? 0).toFixed(1)}%</small>}</td><td>{lots.data?.get(row.symbol_id)?.join(' · ') || '—'}</td>
       </tr> })}</tbody></table></div>
       {pageCount > 1 && <nav className="dual-engine-pages"><button type="button" disabled={page <= 1} onClick={() => setPage(value => value - 1)}>‹ Trước</button><button type="button" disabled={page >= pageCount} onClick={() => setPage(value => value + 1)}>Sau ›</button></nav>}
-      {!rows.length && <p className="muted">Chưa có đánh giá Challenger khớp bộ lọc cho phiên này.</p>}
+      {!rows.length && Boolean(shadow.data?.length) && <p className="muted">Không có đánh giá Challenger khớp bộ lọc hiện tại.</p>}
       </>}
     </>}
   </article>

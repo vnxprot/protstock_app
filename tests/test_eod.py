@@ -1,7 +1,7 @@
 from datetime import date, timedelta
 from types import SimpleNamespace
 
-from protstock.eod import FAST_LANE_BENCHMARK_FETCH_DAYS, _benchmark_snapshot, _confirmed_week_end, _fetch_history_with_retry, _load_portfolios, _rows_as_of, finalize_fast_lane, resolve_eod_session, run_eod
+from protstock.eod import FAST_LANE_BENCHMARK_FETCH_DAYS, _benchmark_snapshot, _confirmed_week_end, _fetch_history_with_retry, _load_portfolios, _rows_as_of, finalize_fast_lane, rebuild_signals, resolve_eod_session, run_eod
 
 
 class RateLimitedProvider:
@@ -69,6 +69,44 @@ def test_prepared_analysis_rejects_duplicate_symbol_timeframe(tmp_path) -> None:
         json.dump({"trading_date": day.isoformat(), "source_revision": ALGORITHM_VERSION, "analyses": [item, item]}, f)
     with pytest.raises(ValueError, match="Duplicate"):
         load_prepared_analyses(tmp_path, day)
+
+
+def test_reused_daily_analysis_still_reaches_challenger(monkeypatch) -> None:
+    day = date(2026, 10, 6)
+    stamp = day.isoformat()
+    observed = []
+
+    class Client:
+        def create_job(self, _payload): return {"id": "job"}
+        def active_symbols(self): return [{"id": 1, "symbol": "AAA", "sector": "TEST"}]
+        def active_rule_versions(self): return [{"id": "version", "rules": {"id": "rule", "name": "Core"},
+                                                 "dsl": {"timeframes": ["D"]}}]
+        def market_index(self, _code): return {"id": 1}
+        def index_price_history(self, *_args): return [{"trading_date": stamp, "open": 10, "high": 11,
+                                                       "low": 9, "close": 10, "volume": 1000}]
+        def create_job_item(self, _payload): pass
+        def consolidated_signal_count(self, *_args): return 1
+        def finish_job(self, *_args): pass
+        def close(self): pass
+
+    item = (1, "D", [{"date": stamp, "open": 10, "high": 11, "low": 9, "close": 10, "volume": 1000}],
+            [], {"as_of_date": stamp}, {"data_date": stamp, "candidate_exchange": "HOSE"})
+    monkeypatch.setattr("protstock.eod.SupabaseRestClient", lambda _settings: Client())
+    monkeypatch.setattr("protstock.eod.Settings.from_env", lambda: object())
+    monkeypatch.setattr("protstock.eod.resolve_eod_session", lambda _client, requested: requested)
+    monkeypatch.setattr("protstock.eod._load_portfolios", lambda *_args, **_kwargs: {})
+    monkeypatch.setattr("protstock.eod._write_analysis", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr("protstock.eod._persist_engine_stats", lambda *_args: None)
+
+    def shadow(_client, pending, _market, _date, counts, _warnings):
+        observed.extend(pending)
+        counts["challenger_shadow"] = len(pending)
+
+    monkeypatch.setattr("protstock.eod._write_challenger_shadow", shadow)
+    result = rebuild_signals(day, prepared_market_context={"trading_date": stamp}, prepared_analyses={1: [item]})
+    assert result["analysis_reused"] == 1
+    assert result["challenger_shadow"] == 1
+    assert observed[0][1] == "D" and observed[0][2][-1]["date"] == stamp
 
 
 
