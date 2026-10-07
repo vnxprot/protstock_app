@@ -84,7 +84,7 @@ export function ChallengerResearchTab({ date, tab }: { date: string; tab: 'funne
   const current = Math.min(page, pages)
   return <article className="panel challenger-research-panel">
     <div className="panel-title"><div><h3>{tab === 'funnel' ? 'Phễu MTF Challenger · tín hiệu riêng' : 'Phân kỳ MACD Challenger · Early Stage'}</h3>
-      <small>{tab === 'funnel' ? 'Monthly UP/SIDEWAYS → Weekly Context → Daily Setup → Daily Trigger' : 'Đáy 2 tạm thời + MACD cắt lên Signal · Downtrend cần điều kiện quá bán'}</small></div><small>{date}</small></div>
+      <small>{tab === 'funnel' ? 'Tháng UP/SIDEWAYS → setup tuần đã đóng → trigger ngày' : 'Đáy 2 tạm thời + MACD cắt lên Signal · Downtrend cần điều kiện quá bán'}</small></div><small>{date}</small></div>
     <p className="muted">Tín hiệu tính sau khi nến ngày đóng; điểm mua giả định sớm nhất là Open phiên sau. PROBE_BUY chỉ là tín hiệu nghiên cứu, không ghi lệnh vào danh mục.</p>
     {tab === 'funnel' && <div className="signal-funnel-counts" role="group" aria-label="Lọc giai đoạn phễu Challenger">{stages.map(value => <button type="button" key={value} className={stage === value ? 'selected' : ''} aria-pressed={stage === value} onClick={() => { setStage(value); setPage(1) }}>{value === 'ALL' ? 'Tất cả' : stageNames[value]} ({counts[value]})</button>)}</div>}
     <div className="challenger-research-controls"><label>Mã <input value={search} onChange={event => { setSearch(event.target.value); setPage(1) }} placeholder="Tìm mã…" /></label>
