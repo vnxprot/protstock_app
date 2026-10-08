@@ -6,6 +6,7 @@ import { SoftSelect } from './SoftSelect'
 import { DateField } from './DateField'
 import { compareEngines } from '../lib/engineCatalog'
 import { displayStructureName, displaySystemRevision } from '../lib/releaseLabels'
+import { LoadingLabel } from './LoadingLabel'
 
 const today = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date())
 const stateLabels: Record<string, string> = { QUEUED: 'Đang chờ', RUNNING: 'Đang tính', SUCCEEDED: 'Hoàn tất', FAILED: 'Chưa hoàn tất' }
@@ -79,7 +80,7 @@ export function BacktestPage({ authenticated }: { authenticated: boolean }) {
           <label>Rủi ro mỗi vị thế · % vốn<input type="number" min=".1" max="100" step=".1" value={riskPct} onChange={e => setRiskPct(Number(e.target.value))}/></label>
           <label>Giữ tối đa · phiên<input type="number" min="1" step="1" value={holdBars} onChange={e => setHoldBars(Number(e.target.value))}/></label>
         </details>
-        <button disabled={submitting || !versionId || !versions.data?.length}>{submitting ? 'Đang tạo lượt kiểm thử…' : 'Chạy kiểm thử'}</button>
+        <button disabled={submitting || !versionId || !versions.data?.length}>{submitting ? <LoadingLabel>Đang tạo lượt kiểm thử…</LoadingLabel> : 'Chạy kiểm thử'}</button>
         {formError && <p className="form-error" role="alert">{formError}</p>}{message && <p className="form-ok" role="status">{message}</p>}
       </form>
       <article className="panel"><div className="panel-title"><h3>Cách mô phỏng</h3><span>SAU PHIÊN</span></div>

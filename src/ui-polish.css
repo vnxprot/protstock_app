@@ -1,12 +1,4 @@
 /* Shared surface rhythm for both themes; loaded after legacy page paint. */
-:root {
-  --line: #1e3027;
-  --line-bright: #304a3b;
-  --radius-md: 12px;
-  --radius-lg: 20px;
-  --control-radius: 12px;
-}
-:root[data-theme="light"] { --line: #cadad0; --line-bright: #9ebbb0; }
 .app-shell :is(.panel,.analytic-card,.overview-kpi,.core-engine-section,.core-pack-card,.signal-visual-card,.guide-group,.metric-card),
 .auth-card { border-radius: var(--radius-lg); border-color: var(--line); }
 .app-shell :is(.screener-field,.screener-filter-toolbar,.status-chip,.theme-toggle,.icon-button,.command-trigger,.secondary-button,.symbol-picker button,.chart-tools button,.timeframe-tabs button,.position-row button,.rule-mode-tabs button,.view-switcher button,.screener-toolbar-chips button),

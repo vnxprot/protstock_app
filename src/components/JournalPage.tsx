@@ -1,6 +1,8 @@
 import { type CSSProperties, type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { BookOpen, CheckCircle2, Pencil, Plus, Trash2, X } from 'lucide-react'
+import { BookOpen, Pencil, Plus, Trash2, X } from 'lucide-react'
+import { FeedbackToast, type FeedbackTone } from './FeedbackToast'
+import { LoadingLabel } from './LoadingLabel'
 import { supabase } from '../lib/supabase'
 import { useAccountId } from '../hooks/useAccountId'
 import { useDialogFocus } from '../hooks/useDialogFocus'
@@ -42,7 +44,8 @@ export function JournalPage({ authenticated }: { authenticated: boolean }) {
   const [symbol,setSymbol] = useState(''), [rationale,setRationale] = useState(''), [review,setReview] = useState<Review>('OBSERVATION')
   const [setup,setSetup] = useState(''), [marketState,setMarketState] = useState(''), [emotion,setEmotion] = useState('DISCIPLINED')
   const [editing,setEditing] = useState<JournalEntry|null>(null), [formOpen,setFormOpen] = useState(false), [submitting,setSubmitting] = useState(false)
-  const [toast,setToast] = useState(''), [page,setPage] = useState(1), [filter,setFilter] = useState('')
+  const [toast,setToast] = useState(''), [toastTone,setToastTone] = useState<FeedbackTone>('success'), [page,setPage] = useState(1), [filter,setFilter] = useState('')
+  const notify = (message:string,tone:FeedbackTone='success') => { setToastTone(tone); setToast(message) }
   const [queued,setQueued] = useState<QueuedNote[]>([]), [syncing,setSyncing] = useState(false)
   const formRef = useRef<HTMLFormElement>(null), lock = useRef(false), noteId = useRef(crypto.randomUUID()), syncLock = useRef(false)
   const closeForm = useCallback(() => { if (!lock.current) setFormOpen(false) },[])
@@ -95,7 +98,7 @@ export function JournalPage({ authenticated }: { authenticated: boolean }) {
   useEffect(()=>{
     if(!userId||!formOpen)return
     const key=editing?'protstock-journal-edit-draft:'+userId+':'+editing.id:draftKey(userId,symbol)
-    try{localStorage.setItem(key,JSON.stringify({id:noteId.current,symbol,rationale,review,setup,marketState,emotion}));if(!editing)localStorage.setItem('protstock-journal-lastdraft:'+userId,symbol)}catch{setToast('Thiết bị không lưu được bản nháp. Hãy lưu ghi chú trước khi đóng.')}
+    try{localStorage.setItem(key,JSON.stringify({id:noteId.current,symbol,rationale,review,setup,marketState,emotion}));if(!editing)localStorage.setItem('protstock-journal-lastdraft:'+userId,symbol)}catch{notify('Thiết bị không lưu được bản nháp. Hãy lưu ghi chú trước khi đóng.','error')}
   },[userId,formOpen,editing,symbol,rationale,review,setup,marketState,emotion])
 
   const retryQueue=useCallback(async()=>{
@@ -123,7 +126,7 @@ export function JournalPage({ authenticated }: { authenticated: boolean }) {
   async function save(event:FormEvent){
     event.preventDefault()
     if(!supabase||!userId||lock.current)return
-    if((!selectedSymbol&&!editing)||!rationale.trim()){setToast('Chọn mã và ghi ít nhất một câu nhận xét.');return}
+    if((!selectedSymbol&&!editing)||!rationale.trim()){notify('Chọn mã và ghi ít nhất một câu nhận xét.','warning');return}
     lock.current=true;setSubmitting(true)
     const snapshot:Evidence={as_of_date:publication.data?.date??null,source_revision:publication.data?.sourceRevision??null,captured_at:new Date().toISOString(),signals:evidence.data??[]}
     const context=journalContext(editing,snapshot,thesis.data?.current_version_id??null)
@@ -132,18 +135,18 @@ export function JournalPage({ authenticated }: { authenticated: boolean }) {
       const {error}=editing?await supabase.from('journal_entries').update(payload).eq('id',editing.id).eq('user_id',userId):await supabase.from('journal_entries').insert(payload)
       if(error&&(editing||error.code!=='23505')){
         if(editing||error.code?.startsWith('23')||error.code==='42501')throw error
-        queueJournalNote(userId,payload);setQueued(readQueue(userId));setToast('Đã lưu trên thiết bị, đang chờ đồng bộ. Có thể thử lại khi có mạng.')
-      }else{setToast('Đã lưu nhật ký cùng luận điểm và bằng chứng tại thời điểm ghi.');await client.invalidateQueries({queryKey:['journal']})}
+        queueJournalNote(userId,payload);setQueued(readQueue(userId));notify('Đã lưu trên thiết bị, đang chờ đồng bộ. Có thể thử lại khi có mạng.','warning')
+      }else{notify('Đã lưu nhật ký cùng luận điểm và bằng chứng tại thời điểm ghi.');await client.invalidateQueries({queryKey:['journal']})}
       if(editing)localStorage.removeItem('protstock-journal-edit-draft:'+userId+':'+editing.id)
       if(!editing){clearSavedJournalDrafts(userId,payload.id);localStorage.removeItem('protstock-journal-lastdraft:'+userId)}
       setFormOpen(false);if(symbolFromRoute())history.replaceState(null,'','#journal')
-    }catch{setToast('Chưa lưu được ghi chú. Nội dung vẫn được giữ để bạn thử lại.')}
+    }catch{notify('Chưa lưu được ghi chú. Nội dung vẫn được giữ để bạn thử lại.','error')}
     finally{lock.current=false;setSubmitting(false)}
   }
   async function remove(item:JournalEntry){
     if(!supabase||!userId||lock.current||!confirm('Xóa nhận xét '+(item.symbols?.symbol??'')+'?'))return
     lock.current=true
-    try{const {error}=await supabase.from('journal_entries').delete().eq('id',item.id).eq('user_id',userId);if(error)throw error;await client.invalidateQueries({queryKey:['journal']});setToast('Đã xóa nhận xét.')}catch{setToast('Không xóa được nhận xét. Kiểm tra kết nối và thử lại.')}finally{lock.current=false}
+    try{const {error}=await supabase.from('journal_entries').delete().eq('id',item.id).eq('user_id',userId);if(error)throw error;await client.invalidateQueries({queryKey:['journal']});notify('Đã xóa nhận xét.')}catch{notify('Không xóa được nhận xét. Kiểm tra kết nối và thử lại.','error')}finally{lock.current=false}
   }
   return <section className="workspace-page journal-page journal-v3-page">
     <div className="page-title-row"><div><h1>Nhật ký quyết định</h1><p className="muted">Đo chất lượng quyết định, không chỉ kết quả giao dịch.</p></div><button type="button" className="primary-button" disabled={!userId} onClick={()=>openNew()}><Plus size={16}/> Ghi nhận xét</button></div>
@@ -156,7 +159,7 @@ export function JournalPage({ authenticated }: { authenticated: boolean }) {
       {entries.isLoading?<p role="status">Đang tải nhật ký…</p>:entries.isError?<p className="form-error" role="alert">Không tải được nhật ký. <button type="button" onClick={()=>void entries.refetch()}>Thử lại</button></p>:!rows.length?<div className="empty-state"><BookOpen size={24}/><p>{filter?'Không có nhận xét khớp mã.':'Chưa có nhận xét. Ghi lại lý do theo dõi và điều có thể làm luận điểm thay đổi.'}</p></div>:rows.map(item=><article className="personal-journal-entry journal-v3-entry" key={item.id}><header><div><strong>{item.symbols?.symbol??'—'}</strong><span>{reviews[item.review_status??'OBSERVATION']}</span><time>{formatDate(item.decision_date)}</time></div><div><button type="button" aria-label={'Sửa nhận xét '+item.symbols?.symbol} onClick={()=>openEdit(item)}><Pencil size={16}/> Sửa</button><button type="button" aria-label={'Xóa nhận xét '+item.symbols?.symbol} onClick={()=>void remove(item)}><Trash2 size={16}/> Xóa</button></div></header><p>{item.rationale}</p><small>{item.thesis_version_id?'Đã gắn phiên bản luận điểm cá nhân':'Chưa gắn luận điểm'} · {emotionLabels[item.lesson?.match(/\[emotion:(\w+)\]/)?.[1]??'']??'Chưa gắn tâm lý'}</small><details><summary>Bằng chứng tại thời điểm ghi · {formatDate(item.evidence_snapshot?.as_of_date)}</summary>{item.evidence_snapshot?.signals?.length?<><p>Phiên {formatDate(item.evidence_snapshot.as_of_date)} · {displaySystemRevision(item.evidence_snapshot.source_revision)}</p>{item.evidence_snapshot.signals.map(signal=><p key={signal.timeframe}>{signal.timeframe} · {signal.action} · {signal.score.toFixed(0)} điểm</p>)}</>:<p>Nhận xét này chưa có snapshot engine. Dữ liệu hiện tại không được dùng thay thế dữ liệu lịch sử.</p>}</details>{item.thesis_version_id&&<HistoricalThesis versionId={item.thesis_version_id} userId={userId}/>}</article>)}
       {pageCount>1&&<nav className="screener-pagination" aria-label="Phân trang nhật ký"><span>Trang {page}/{pageCount}</span><div><button disabled={page===1} onClick={()=>setPage(value=>value-1)}>Trước</button><button disabled={page>=pageCount} onClick={()=>setPage(value=>value+1)}>Sau</button></div></nav>}
     </article>
-    {formOpen&&<div className="sheet-backdrop" onMouseDown={closeForm}><form ref={formRef} role="dialog" aria-modal="true" aria-labelledby="journal-title" tabIndex={-1} className="bottom-sheet position-sheet rule-form journal-sheet" onSubmit={save} onMouseDown={event=>event.stopPropagation()}><div className="sheet-handle"/><div className="sheet-title"><h2 id="journal-title">{editing?'Sửa nhận xét':'Ghi nhật ký nhanh'}</h2><button type="button" className="icon-button" disabled={submitting} aria-label="Đóng nhật ký, giữ bản nháp" onClick={closeForm}><X size={20}/></button></div><SymbolAutocomplete symbols={symbols.data??[]} value={symbol} onChange={setSymbol} disabled={Boolean(editing)}/><fieldset className="journal-review-picker"><legend>Trạng thái review</legend>{Object.entries(reviews).map(([code,label])=><button key={code} type="button" aria-pressed={review===code} className={review===code?'active':''} onClick={()=>setReview(code as Review)}>{label}</button>)}</fieldset><label>Điều tôi nghĩ <textarea rows={4} required value={rationale} onChange={event=>setRationale(event.target.value)} placeholder="Vì sao theo dõi, điều mới quan sát hoặc điều khiến luận điểm thay đổi…"/></label><div className="journal-snapshot-note"><strong>{editing?editing.thesis_version_id?'Giữ phiên bản luận điểm đã gắn':'Nhận xét cũ chưa gắn luận điểm':thesis.data?'Gắn với luận điểm v'+thesis.data.current_version.version:'Chưa có luận điểm cá nhân cho mã này'}</strong><small>{editing?editing.evidence_snapshot?'Giữ nguyên bằng chứng đã ghi':'Không có snapshot lịch sử; giữ nguyên trạng thái chưa có bằng chứng.':evidence.data?.length?'Kèm bằng chứng EOD '+formatDate(publication.data?.date):'Chưa có bằng chứng engine; lưu nhận xét cá nhân và ghi rõ thiếu dữ liệu.'}</small></div><details><summary>Phân loại thêm</summary><label>Setup<input value={setup} onChange={event=>setSetup(event.target.value)} placeholder="Ví dụ: nhịp hồi về hỗ trợ"/></label><label>Bối cảnh thị trường<input value={marketState} onChange={event=>setMarketState(event.target.value)}/></label><label>Tâm lý<SoftSelect value={emotion} onChange={event=>setEmotion(event.target.value)} aria-label="Tâm lý khi nhận xét">{Object.entries(emotionLabels).map(([code,label])=><option value={code} key={code}>{label}</option>)}</SoftSelect></label></details><p className="muted">Bản nháp được giữ trên thiết bị theo tài khoản. Ghi chú không tạo giao dịch.</p><div className="form-sticky-actions"><button disabled={submitting}>{submitting?'Đang lưu…':'Lưu nhận xét'}</button></div></form></div>}
-    {toast&&<div className="toast" role="status"><CheckCircle2 size={18}/>{toast}</div>}
+    {formOpen&&<div className="sheet-backdrop" onMouseDown={closeForm}><form ref={formRef} role="dialog" aria-modal="true" aria-labelledby="journal-title" tabIndex={-1} className="bottom-sheet position-sheet rule-form journal-sheet" onSubmit={save} onMouseDown={event=>event.stopPropagation()}><div className="sheet-handle"/><div className="sheet-title"><h2 id="journal-title">{editing?'Sửa nhận xét':'Ghi nhật ký nhanh'}</h2><button type="button" className="icon-button" disabled={submitting} aria-label="Đóng nhật ký, giữ bản nháp" onClick={closeForm}><X size={20}/></button></div><SymbolAutocomplete symbols={symbols.data??[]} value={symbol} onChange={setSymbol} disabled={Boolean(editing)}/><fieldset className="journal-review-picker"><legend>Trạng thái review</legend>{Object.entries(reviews).map(([code,label])=><button key={code} type="button" aria-pressed={review===code} className={review===code?'active':''} onClick={()=>setReview(code as Review)}>{label}</button>)}</fieldset><label>Điều tôi nghĩ <textarea rows={4} required value={rationale} onChange={event=>setRationale(event.target.value)} placeholder="Vì sao theo dõi, điều mới quan sát hoặc điều khiến luận điểm thay đổi…"/></label><div className="journal-snapshot-note"><strong>{editing?editing.thesis_version_id?'Giữ phiên bản luận điểm đã gắn':'Nhận xét cũ chưa gắn luận điểm':thesis.data?'Gắn với luận điểm v'+thesis.data.current_version.version:'Chưa có luận điểm cá nhân cho mã này'}</strong><small>{editing?editing.evidence_snapshot?'Giữ nguyên bằng chứng đã ghi':'Không có snapshot lịch sử; giữ nguyên trạng thái chưa có bằng chứng.':evidence.data?.length?'Kèm bằng chứng EOD '+formatDate(publication.data?.date):'Chưa có bằng chứng engine; lưu nhận xét cá nhân và ghi rõ thiếu dữ liệu.'}</small></div><details><summary>Phân loại thêm</summary><label>Setup<input value={setup} onChange={event=>setSetup(event.target.value)} placeholder="Ví dụ: nhịp hồi về hỗ trợ"/></label><label>Bối cảnh thị trường<input value={marketState} onChange={event=>setMarketState(event.target.value)}/></label><label>Tâm lý<SoftSelect value={emotion} onChange={event=>setEmotion(event.target.value)} aria-label="Tâm lý khi nhận xét">{Object.entries(emotionLabels).map(([code,label])=><option value={code} key={code}>{label}</option>)}</SoftSelect></label></details><p className="muted">Bản nháp được giữ trên thiết bị theo tài khoản. Ghi chú không tạo giao dịch.</p><div className="form-sticky-actions"><button disabled={submitting}>{submitting?<LoadingLabel>Đang lưu…</LoadingLabel>:'Lưu nhận xét'}</button></div></form></div>}
+    <FeedbackToast feedback={toast ? {text:toast,tone:toastTone} : null}/>
   </section>
 }

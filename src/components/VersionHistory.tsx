@@ -1,6 +1,11 @@
 import './VersionHistory.css'
 
 const releases = [
+  { version: '3.0.0', date: '09/10/2026', title: 'Giao diện đồng nhất và rõ trạng thái hơn', areas: [
+    { name: 'Giao diện', changes: ['Thống nhất token chữ, khoảng cách, bo góc và kích thước điều khiển.', 'Nút chính nổi bật trong giao diện sáng; Watchlist có màu phù hợp cả hai giao diện.'] },
+    { name: 'Luồng sử dụng', changes: ['Danh mục ưu tiên nút Giao dịch; trang Phân tích gom bằng chứng kỹ thuật có thể mở rộng.', 'Nội dung mobile chừa chỗ cho thanh điều hướng đáy.'] },
+    { name: 'Phản hồi', changes: ['Thông báo phân biệt thành công, cảnh báo và lỗi; nút lưu hiển thị tiến trình.', 'Vòng quay Watchlist có tùy chọn âm thanh và rung, mặc định tắt.'] },
+  ] },
   { version: '2.0.2', date: '08/10/2026', title: 'Bản đồ cơ hội dễ đọc hơn', areas: [
     { name: 'Radar cơ hội', changes: ['Hiển thị một hàng tóm tắt mỗi mã, ưu tiên mốc mới và rủi ro điểm vào; số liệu chi tiết nằm trong phần mở rộng.', 'Đối chiếu cùng phiên với tín hiệu Champion/WATCH, Phễu gốc, Phễu Challenger và phân kỳ MACD; mở trực tiếp đúng mã ở từng bảng.', 'Bộ lọc bắt đầu từ Tất cả, tách giai đoạn kỹ thuật khỏi điều kiện rủi ro và nguồn bằng chứng.'] },
     { name: 'Phễu tháng → tuần → ngày', changes: ['Cột rộng hơn, hàng chính một dòng và cuộn ngang trên màn hình hẹp.', 'Diễn giải lý do ngắn gọn; điều kiện kỹ thuật đầy đủ mở theo từng mã.'] },

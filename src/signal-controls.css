@@ -1,6 +1,4 @@
 /* Shared input surfaces: quiet mouse focus, visible keyboard focus. */
-:root { --control-surface: #10211b; --control-popup: #12271e; --control-accent: #55e6b1; }
-:root[data-theme="light"] { --control-surface: #eef5f1; --control-popup: #fff; --control-accent: #167b56; }
 .soft-select { display:inline-flex; position:relative; min-width:0; width:100%; vertical-align:middle; }
 .soft-select .soft-select-native { display:none !important; }
 .soft-select .soft-select-trigger { display:flex; align-items:center; justify-content:space-between; gap:10px; width:100%; min-width:0; min-height:42px; padding:10px 12px; border:0; border-radius:12px; background:var(--control-surface); color:var(--text); font:inherit; cursor:pointer; text-align:left; box-shadow:none; }

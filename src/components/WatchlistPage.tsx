@@ -41,11 +41,13 @@ export function WatchlistPage({ authenticated, syncStatus }: { authenticated: bo
   const [query, setQuery] = useState('')
   const [selectedTiers, setSelectedTiers] = useState<WatchTier[]>(['B', 'A', 'S'])
   const [spinning, setSpinning] = useState(false)
+  const [effectsEnabled, setEffectsEnabled] = useState(() => localStorage.getItem('protstock-roulette-effects') === '1')
   const [rotation, setRotation] = useState(0)
   const [preview, setPreview] = useState('')
   const [winner, setWinner] = useState<WatchItem | null>(null)
   const timers = useRef<number[]>([])
-  useEffect(() => () => { timers.current.forEach(timer => { clearInterval(timer); clearTimeout(timer) }) }, [])
+  const audioRef = useRef<AudioContext | null>(null)
+  useEffect(() => () => { timers.current.forEach(timer => { clearInterval(timer); clearTimeout(timer) }); void audioRef.current?.close() }, [])
   const publication = useQuery({ queryKey: ['watchlist-publication'], enabled: authenticated && Boolean(supabase), staleTime: 60_000, refetchInterval: 60_000, queryFn: latestSignalPublication })
   const date = publication.data?.date ?? ''
   const ids = useMemo(() => items.map(item => symbolByCode.get(item.symbol)?.id).filter((id): id is number => id != null), [items, symbolByCode])
@@ -106,7 +108,8 @@ export function WatchlistPage({ authenticated, syncStatus }: { authenticated: bo
     setWinner(null)
     setSpinning(true)
     setPreview(eligible[0].symbol)
-    if (matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches
+    if (reducedMotion) {
       setRotation(value => value + step)
       setPreview(selected.symbol)
       setWinner(selected)
@@ -114,12 +117,28 @@ export function WatchlistPage({ authenticated, syncStatus }: { authenticated: bo
       return
     }
     setRotation(value => value + 1440 + step)
-    const cycle = window.setInterval(() => setPreview(eligible[Math.floor(Math.random() * eligible.length)].symbol), 95)
+    let audio: AudioContext | null = null
+    if (effectsEnabled) { try { audio = new AudioContext(); audioRef.current = audio } catch { /* Audio is optional. */ } }
+    let tickCount = 0
+    const cycle = window.setInterval(() => {
+      setPreview(eligible[Math.floor(Math.random() * eligible.length)].symbol)
+      if (audio && ++tickCount % 2 === 0) {
+        const oscillator = audio.createOscillator(), gain = audio.createGain()
+        oscillator.type = 'sine'; oscillator.frequency.value = 660
+        gain.gain.setValueAtTime(0.025, audio.currentTime)
+        gain.gain.exponentialRampToValueAtTime(0.001, audio.currentTime + 0.035)
+        oscillator.connect(gain); gain.connect(audio.destination)
+        oscillator.start(); oscillator.stop(audio.currentTime + 0.04)
+      }
+    }, 95)
     const finish = window.setTimeout(() => {
       clearInterval(cycle)
       setPreview(selected.symbol)
       setWinner(selected)
       setSpinning(false)
+      if (effectsEnabled) navigator.vibrate?.(35)
+      void audio?.close()
+      audioRef.current = null
       timers.current = timers.current.filter(timer => timer !== cycle && timer !== finish)
     }, 2900)
     timers.current.push(cycle, finish)
@@ -141,7 +160,7 @@ export function WatchlistPage({ authenticated, syncStatus }: { authenticated: bo
       const macdState = macdPoint?.macd == null || macdPoint.macd_signal == null ? macd.isError ? 'MACD: chưa tải được' : 'MACD: chờ dữ liệu' : macdPoint.macd > macdPoint.macd_signal ? 'MACD trên Signal' : 'MACD dưới Signal'
       return <article key={item.symbol} className="watch-stock"><div className="watch-stock-top"><button type="button" className="watch-stock-symbol" onDoubleClick={() => setFocusedSymbol(item.symbol)} onClick={() => { if (matchMedia('(max-width: 760px)').matches) setFocusedSymbol(item.symbol) }} title="Nhấp đúp để xem lý do, điểm mua, mục tiêu và cắt lỗ" aria-label={`Nhấp đúp để xem thông tin mã ${item.symbol}`}>{item.symbol}<ArrowUpRight size={14}/></button><button type="button" className="watch-stock-remove" onClick={() => removeStock(item)} aria-label={`Chuyển ${item.symbol} sang Off, giữ lý do trong bảng`}><X size={15}/></button></div><span className="watch-stock-name">{symbol?.company_name ?? 'Mã ngoài universe hoạt động'}</span><small>{symbol?.sector ?? 'Chưa phân ngành'} · {status}</small><div className="watch-stock-signals"><span>{macdState}</span>{decisions.length ? decisions.sort((a, b) => 'DWM'.indexOf(a.timeframe) - 'DWM'.indexOf(b.timeframe)).map(signal => <span key={signal.timeframe}>{signal.timeframe} · {signal.composite_action}</span>) : <span>{signals.isError ? 'Chưa tải được tín hiệu' : signals.isLoading ? 'Đang tải tín hiệu…' : 'Không có tín hiệu mới'}</span>}</div><div className="watch-stock-tiers" role="group" aria-label={`Chọn Tier cho ${item.symbol}`}>{tiers.map(option => <button key={option.tier} type="button" className={option.tier === tier ? 'active' : ''} aria-pressed={option.tier === tier} onClick={() => setWatchlistTier(item.symbol, option.tier)}>{option.tier}</button>)}</div></article>
     })}{!tierCounts[tier] && <p className="watch-tier-empty">Chưa có mã. Một lựa chọn mới có thể bắt đầu từ đây.</p>}</div></section>)}</div>
-    <section className="watch-roulette panel" aria-label="Roulette chọn mã để nghiên cứu"><div className="watch-roulette-intro"><span className="eyebrow">RANDOM DISCOVERY</span><h2>Roulette · chọn mã để nghiên cứu</h2><p>Chọn Tier tham gia. Mỗi mã đủ điều kiện có xác suất bằng nhau; kết quả không phải khuyến nghị mua.</p></div><div className="watch-roulette-layout"><div className="watch-wheel-stage"><div className="watch-wheel-pointer" aria-hidden="true"/><div className="watch-wheel" style={{ background: wheelGradient, transform: `rotate(${rotation}deg)` }} aria-hidden="true"/><div className="watch-wheel-center" aria-live="polite"><span>{spinning ? 'ĐANG QUAY' : winner ? 'MÃ ĐƯỢC CHỌN' : 'SẴN SÀNG'}</span><strong>{preview || 'PROT'}</strong></div></div><div className="watch-roulette-controls"><div className="watch-roulette-tier-select" role="group" aria-label="Tier tham gia Roulette">{tiers.map(item => <button key={item.tier} type="button" disabled={spinning} aria-pressed={selectedTiers.includes(item.tier)} className={`roulette-tier roulette-tier-${item.tier.toLowerCase()}${selectedTiers.includes(item.tier) ? ' active' : ''}`} onClick={() => toggleTier(item.tier)}>Tier {item.tier}<small>{tierCounts[item.tier]} mã</small></button>)}</div><div className="watch-roulette-odds"><strong>{eligible.length ? `1/${eligible.length}` : '—'}</strong><span>xác suất mỗi mã đủ điều kiện · EOD {formatDate(date)}</span></div><p className="watch-roulette-note">{items.length - eligible.length} mã đang ngoài vòng quay do Tier chưa chọn, trạng thái giao dịch hoặc thiếu dữ liệu EOD hợp lệ.</p><button className="watch-spin-button" type="button" disabled={spinning || !eligible.length || eod.isLoading || eod.isError} onClick={spin}>{spinning ? 'Đang quay…' : winner ? <><RotateCcw size={18}/> Quay lại</> : <><Sparkles size={18}/> Bắt đầu quay</>}</button>{!eligible.length && <small className="watch-roulette-disabled">{publication.isLoading || eod.isLoading ? 'Đang kiểm tra danh sách và EOD…' : 'Chọn Tier có mã giao dịch bình thường và có giá đúng phiên để quay.'}</small>}</div></div>
+    <section className="watch-roulette panel" aria-label="Roulette chọn mã để nghiên cứu"><div className="watch-roulette-intro"><span className="eyebrow">RANDOM DISCOVERY</span><h2>Roulette · chọn mã để nghiên cứu</h2><p>Chọn Tier tham gia. Mỗi mã đủ điều kiện có xác suất bằng nhau; kết quả không phải khuyến nghị mua.</p></div><div className="watch-roulette-layout"><div className="watch-wheel-stage"><div className="watch-wheel-pointer" aria-hidden="true"/><div className="watch-wheel" style={{ background: wheelGradient, transform: `rotate(${rotation}deg)` }} aria-hidden="true"/><div className="watch-wheel-center" aria-live="polite"><span>{spinning ? 'ĐANG QUAY' : winner ? 'MÃ ĐƯỢC CHỌN' : 'SẴN SÀNG'}</span><strong>{preview || 'PROT'}</strong></div></div><div className="watch-roulette-controls"><div className="watch-roulette-tier-select" role="group" aria-label="Tier tham gia Roulette">{tiers.map(item => <button key={item.tier} type="button" disabled={spinning} aria-pressed={selectedTiers.includes(item.tier)} className={`roulette-tier roulette-tier-${item.tier.toLowerCase()}${selectedTiers.includes(item.tier) ? ' active' : ''}`} onClick={() => toggleTier(item.tier)}>Tier {item.tier}<small>{tierCounts[item.tier]} mã</small></button>)}</div><label className="watch-roulette-effects"><input type="checkbox" checked={effectsEnabled} onChange={event => { setEffectsEnabled(event.target.checked); localStorage.setItem('protstock-roulette-effects', event.target.checked ? '1' : '0') }}/> Âm thanh và rung khi quay</label><div className="watch-roulette-odds"><strong>{eligible.length ? `1/${eligible.length}` : '—'}</strong><span>xác suất mỗi mã đủ điều kiện · EOD {formatDate(date)}</span></div><p className="watch-roulette-note">{items.length - eligible.length} mã đang ngoài vòng quay do Tier chưa chọn, trạng thái giao dịch hoặc thiếu dữ liệu EOD hợp lệ.</p><button className="watch-spin-button" type="button" disabled={spinning || !eligible.length || eod.isLoading || eod.isError} onClick={spin}>{spinning ? 'Đang quay…' : winner ? <><RotateCcw size={18}/> Quay lại</> : <><Sparkles size={18}/> Bắt đầu quay</>}</button>{!eligible.length && <small className="watch-roulette-disabled">{publication.isLoading || eod.isLoading ? 'Đang kiểm tra danh sách và EOD…' : 'Chọn Tier có mã giao dịch bình thường và có giá đúng phiên để quay.'}</small>}</div></div>
       {winner && <div className={`watch-roulette-result watch-tier-${winner.tier.toLowerCase()}`} role="status"><div><span>Kết quả ngẫu nhiên · Tier {winner.tier}</span><strong>{winner.symbol}</strong><small>{winnerInfo?.company_name ?? winnerInfo?.sector ?? 'Xem phân tích mã'} · EOD {formatDate(date)}</small><div>{winnerSignals.length ? winnerSignals.map(signal => <span key={signal.timeframe}>{signal.timeframe} · {signal.composite_action}</span>) : <span>{signals.isError ? 'Chưa tải được tín hiệu' : signals.isLoading ? 'Đang tải tín hiệu…' : 'Không có tín hiệu mới'}</span>}</div></div><button type="button" onClick={() => openAnalysis(winner.symbol)}>Xem phân tích <ArrowUpRight size={16}/></button></div>}
       <p className="watch-roulette-disclaimer">Roulette chỉ quyết định mã nào được xem xét trước. Kiểm tra signal, Market Gate, giá và rủi ro danh mục trước mọi quyết định giải ngân. Watchlist được đồng bộ theo tài khoản; lượt quay không lưu lịch sử, không gửi Telegram hay tạo giao dịch.</p>
     </section>

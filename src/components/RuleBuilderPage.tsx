@@ -10,6 +10,8 @@ import {
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { compileRuleText, explainRule } from "../lib/ruleDsl";
+import { FeedbackToast, type FeedbackTone } from './FeedbackToast'
+import { LoadingLabel } from './LoadingLabel'
 async function sha256(value: string) {
   const data = await crypto.subtle.digest(
     "SHA-256",
@@ -148,6 +150,8 @@ export function RuleBuilderPage({ authenticated }: { authenticated: boolean }) {
   const [formError, setFormError] = useState("");
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState("");
+  const [toastTone, setToastTone] = useState<FeedbackTone>('success');
+  const notify = (message: string, tone: FeedbackTone = 'success') => { setToastTone(tone); setToast(message) };
   const [expandedPack, setExpandedPack] = useState<string | null>(null);
   const preview = useMemo(() => {
     try {
@@ -202,7 +206,7 @@ export function RuleBuilderPage({ authenticated }: { authenticated: boolean }) {
         return setFormError("Bản nháp chưa có phiên bản hoàn chỉnh và chưa được bật. " + versionError.message);
       }
       setMessage("Đã lưu bản nháp phiên bản 1. Kiểm tra lời giải thích trước khi bật.");
-      setToast("Đã lưu bản nháp; chưa chạy trong EOD");
+      notify("Đã lưu bản nháp; chưa chạy trong EOD");
       setTimeout(() => setToast(""), 3000);
       await client.invalidateQueries({ queryKey: ["rules"] });
     } catch {
@@ -233,30 +237,30 @@ export function RuleBuilderPage({ authenticated }: { authenticated: boolean }) {
     rule_versions?: unknown[];
   }) {
     if (!supabase) return;
-    if (rule.status === "ARCHIVED" || rule.name === "Prot Core Pack · Phân kỳ Dương MACD") return setToast("Quy tắc đã lưu trữ hoặc chỉ dùng nghiên cứu; không thể bật lại từ giao diện.");
-    if (rule.status !== "ACTIVE" && !rule.rule_versions?.length) return setToast("Bản nháp thiếu phiên bản hoàn chỉnh; chưa thể bật.");
+    if (rule.status === "ARCHIVED" || rule.name === "Prot Core Pack · Phân kỳ Dương MACD") return notify("Quy tắc đã lưu trữ hoặc chỉ dùng nghiên cứu; không thể bật lại từ giao diện.","warning");
+    if (rule.status !== "ACTIVE" && !rule.rule_versions?.length) return notify("Bản nháp thiếu phiên bản hoàn chỉnh; chưa thể bật.","warning");
     const status = rule.status === "ACTIVE" ? "PAUSED" : "ACTIVE";
     const { error } = await supabase
       .from("rules")
       .update({ status })
       .eq("id", rule.id);
-    if (error) return setToast(error.message);
-    setToast(`${rule.name}: ${status === "ACTIVE" ? "đã bật" : "đã tắt"}`);
+    if (error) return notify(error.message,"error");
+    notify(`${rule.name}: ${status === "ACTIVE" ? "đã bật" : "đã tắt"}`);
     setTimeout(() => setToast(""), 3000);
     client.invalidateQueries({ queryKey: ["rules"] });
   }
   async function toggleClassicalModel(pack: any, model: string) {
     const version = [...(pack.rule_versions ?? [])].sort((a,b)=>b.version-a.version)[0];
-    if (pack.status === "ARCHIVED" || pack.name === "Prot Core Pack · Phân kỳ Dương MACD") return setToast("Core Pack chỉ dùng nghiên cứu hoặc đã lưu trữ; không thay đổi ở đây.");
-    if (!supabase || !version) return setToast("Chưa tìm thấy cấu hình Core Engine mẫu hình");
+    if (pack.status === "ARCHIVED" || pack.name === "Prot Core Pack · Phân kỳ Dương MACD") return notify("Core Pack chỉ dùng nghiên cứu hoặc đã lưu trữ; không thay đổi ở đây.","warning");
+    if (!supabase || !version) return notify("Chưa tìm thấy cấu hình Core Engine mẫu hình","warning");
     const models = version.dsl?.overrides?.models ?? {};
     const dsl = { ...version.dsl, overrides: { ...(version.dsl?.overrides ?? {}), models: { ...models, [model]: models[model] === false } } };
     const { error } = await supabase.from("rule_versions").insert({
       rule_id: pack.id, version: version.version + 1, dsl, compiled_hash: await sha256(JSON.stringify(dsl)),
     });
-    if (error) { client.invalidateQueries({ queryKey: ["rules"] }); return setToast("Chưa lưu được phiên bản mới: " + error.message); }
+    if (error) { client.invalidateQueries({ queryKey: ["rules"] }); return notify("Chưa lưu được phiên bản mới: " + error.message,"error"); }
     const label = classicalModels.find((item) => item.id === model)?.label ?? model;
-    setToast(`${label}: ${dsl.overrides.models[model] ? "đã bật" : "đã tắt"}`);
+    notify(`${label}: ${dsl.overrides.models[model] ? "đã bật" : "đã tắt"}`);
     setTimeout(() => setToast(""), 3000);
     client.invalidateQueries({ queryKey: ["rules"] });
   }
@@ -471,7 +475,7 @@ export function RuleBuilderPage({ authenticated }: { authenticated: boolean }) {
             </div>
           )}
           <button disabled={saving || !preview.dsl || !name.trim()}>
-            <Sparkles size={15} /> {saving ? "Đang lưu…" : "Lưu bản nháp"}
+            <Sparkles size={15} /> {saving ? <LoadingLabel>Đang lưu…</LoadingLabel> : "Lưu bản nháp"}
           </button>
           {(message || formError || preview.error) && (
             <p className={preview.error || formError ? "form-error" : "form-ok"} role={preview.error || formError ? "alert" : "status"}>
@@ -536,12 +540,7 @@ export function RuleBuilderPage({ authenticated }: { authenticated: boolean }) {
           </p>
         )}
       </article>
-      {toast && (
-        <div className="toast" role="status">
-          <CheckCircle2 size={18} />
-          {toast}
-        </div>
-      )}
+      <FeedbackToast feedback={toast ? {text:toast,tone:toastTone} : null}/>
     </section>
   );
 }
