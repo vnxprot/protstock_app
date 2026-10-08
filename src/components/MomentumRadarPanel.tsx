@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { ArrowUpRight, ChevronDown, Search } from 'lucide-react'
 import { supabase } from '../lib/supabase'
-import { matchesRadarStage, radarMilestonesToday, radarOpportunityPriority } from '../lib/radarOverview'
+import { isCurrentMacdLink, matchesRadarStage, radarMilestonesToday, radarOpportunityPriority } from '../lib/radarOverview'
 import { ResearchPagination } from './ResearchPagination'
 import { SoftSelect } from './SoftSelect'
 import './MomentumRadarPanel.css'
@@ -14,7 +14,8 @@ type RadarRow = { symbol_id: number; symbol: string; as_of_date: string; event_s
   breakout_date: string | null; weekly_confirmed_date: string | null; reacceleration_date: string | null;
   breakout_level: number | null; structural_stop: number | null; stage: string; entry_status: string; evidence: Evidence }
 type FunnelRow = { symbol_id: number; stage: string; setup_kind: string | null; setup_date: string | null; trigger_date: string | null }
-type MacdRow = { symbol_id: number; stage: string; confirmed_on: string; trigger_date: string | null; swings: number }
+type MacdRow = { symbol_id: number; stage: string; confirmed_on: string; trigger_date: string | null; swings: number;
+  evidence: { trigger_age_sessions?: number | null } | null }
 type AdaptiveRow = { symbol_id: number; action: string; evidence: { funnel_stage?: string; weekly_setup?: string | null } | null }
 export type RadarChampionSignal = { symbol_id: number; action: string; timeframe: string; as_of_date: string }
 export type RadarDestination = 'watch' | 'funnel' | 'macd' | 'analysis'
@@ -31,9 +32,10 @@ const stageOrder = ['ALL', 'DAILY_BREAKOUT', 'WEEKLY_CONFIRMED', 'REACCELERATING
   'SURGE_WATCH', 'CONTINUING', 'INVALIDATED', 'DATA_CHECK', 'NO_EVENT'] as const
 const activeStages = new Set(['SURGE_WATCH', 'DAILY_BREAKOUT', 'WEEKLY_CONFIRMED', 'CONTINUING', 'REACCELERATING'])
 const day = (value: string | null | undefined) => value ? `${value.slice(8, 10)}/${value.slice(5, 7)}` : '—'
+const fullDay = (value: string | null | undefined) => value ? `${day(value)}/${value.slice(0, 4)}` : '—'
 const number = (value: number | null | undefined, digits = 2) => value == null ? '—' : Number(value).toLocaleString('vi-VN', { maximumFractionDigits: digits })
 const isBuy = (action: string) => action === 'PROBE_BUY' || action === 'ADD'
-const macdText = (row: MacdRow) => row.stage === 'CONFIRMED' ? `Xác nhận ${day(row.trigger_date)}`
+const macdText = (row: MacdRow) => row.stage === 'CONFIRMED' ? `Xác nhận ${fullDay(row.trigger_date)}`
   : row.stage === 'WATCH_PRICE_CONFIRMATION' ? 'Chờ giá xác nhận'
   : row.stage === 'INVALIDATED' ? 'Đã vô hiệu' : row.stage === 'EXPIRED' ? 'Đã hết hạn' : row.stage
 const macdPriority = (row: MacdRow, date: string) => row.stage === 'CONFIRMED' && row.trigger_date === date ? 0
@@ -96,7 +98,7 @@ export function MomentumRadarPanel({ date, championSignals, championLoading, cha
     const rows: MacdRow[] = []
     for (let from = 0; ; from += 1000) {
       const { data, error } = await supabase!.from('macd_divergence_assessments')
-        .select('symbol_id,stage,confirmed_on,trigger_date,swings')
+        .select('symbol_id,stage,confirmed_on,trigger_date,swings,evidence')
         .eq('as_of_date', date).eq('version', 'MACD_BULLISH_DIVERGENCE_ZONE_V4').eq('oscillator', 'MACD_LINE')
         .order('symbol_id').range(from, from + 999)
       if (error) throw error
@@ -122,6 +124,7 @@ export function MomentumRadarPanel({ date, championSignals, championLoading, cha
   const macdById = useMemo(() => {
     const map = new Map<number, MacdRow>()
     for (const item of macd.data ?? []) {
+      if (!isCurrentMacdLink(item, date)) continue
       const old = map.get(item.symbol_id)
       if (!old || macdPriority(item, date) < macdPriority(old, date)) map.set(item.symbol_id, item)
     }
