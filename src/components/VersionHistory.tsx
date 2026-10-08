@@ -1,6 +1,10 @@
 import './VersionHistory.css'
 
 const releases = [
+  { version: '2.0.2', date: '08/10/2026', title: 'Bản đồ cơ hội dễ đọc hơn', areas: [
+    { name: 'Radar cơ hội', changes: ['Hiển thị một hàng tóm tắt mỗi mã, ưu tiên mốc mới và rủi ro điểm vào; số liệu chi tiết nằm trong phần mở rộng.', 'Đối chiếu cùng phiên với tín hiệu Champion/WATCH, Phễu gốc, Phễu Challenger và phân kỳ MACD; mở trực tiếp đúng mã ở từng bảng.', 'Bộ lọc bắt đầu từ Tất cả, tách giai đoạn kỹ thuật khỏi điều kiện rủi ro và nguồn bằng chứng.'] },
+    { name: 'Phễu tháng → tuần → ngày', changes: ['Cột rộng hơn, hàng chính một dòng và cuộn ngang trên màn hình hẹp.', 'Diễn giải lý do ngắn gọn; điều kiện kỹ thuật đầy đủ mở theo từng mã.'] },
+  ] },
   { version: '2.0.1', date: '08/10/2026', title: 'Theo dõi đà tăng rõ hơn', areas: [
     { name: 'Bộ lọc tín hiệu', changes: ['Thêm Radar đà tăng: phát hiện đột biến giá và khối lượng, breakout ngày, xác nhận tuần, tiếp diễn và tăng tốc lại.', 'Một đợt tăng giữ chung lịch sử sự kiện qua nhiều phiên; tách diễn biến khỏi đánh giá điểm vào và khoảng cách đến stop.'] },
     { name: 'Phễu tháng → tuần → ngày', changes: ['Breakout được xác nhận khi đóng tuần có thể ghi nhận nến trigger của chính ngày đóng tuần.', 'Giữ trigger đã xảy ra của setup còn hiệu lực khi xuất hiện setup tuần mới.'] },

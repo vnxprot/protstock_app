@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Filter, Search } from 'lucide-react'
 import { supabase } from '../lib/supabase'
@@ -86,12 +86,13 @@ function ZoneRow({ row, date }: { row: Row; date: string }) {
   </details>
 }
 
-export function MacdDivergencePanel({ date, authenticated }: { date: string; authenticated: boolean }) {
+export function MacdDivergencePanel({ date, authenticated, focusSymbol = '' }: { date: string; authenticated: boolean; focusSymbol?: string }) {
   const [stage, setStage] = useState('ACTIVE')
   const [segments, setSegments] = useState(0)
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(25)
   const [symbol, setSymbol] = useState('')
+  useEffect(() => { if (focusSymbol) { setSymbol(focusSymbol); setPage(1) } }, [focusSymbol])
   const query = useQuery({
     queryKey: ['macd-zone-divergence-v4', date], enabled: authenticated && Boolean(supabase), refetchInterval: 60_000,
     queryFn: async (): Promise<Row[]> => {
