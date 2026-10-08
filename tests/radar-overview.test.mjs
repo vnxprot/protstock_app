@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { matchesRadarStage, radarOpportunityPriority } from '../src/lib/radarOverview.ts'
+import { isCurrentMacdLink, matchesRadarStage, radarOpportunityPriority } from '../src/lib/radarOverview.ts'
 
 const row = (stage, entryStatus, milestones = []) => ({
   as_of_date: '2026-09-25', stage, entry_status: entryStatus, evidence: { milestones },
@@ -30,4 +30,12 @@ test('published buys lead while an extended reacceleration stays below fresh val
   assert.equal(radarOpportunityPriority(extended, [{ action: 'PROBE_BUY' }]), 0)
   assert.ok(radarOpportunityPriority(row('NO_EVENT', 'NO_ENTRY'), [], { stage: 'WEEKLY_READY' })
     < radarOpportunityPriority(row('NO_EVENT', 'NO_ENTRY'), []))
+})
+
+test('MACD source link includes current watch and recent breakout, not old confirmation', () => {
+  assert.equal(isCurrentMacdLink({ stage: 'WATCH_PRICE_CONFIRMATION', trigger_date: null }, '2026-10-07'), true)
+  assert.equal(isCurrentMacdLink({ stage: 'CONFIRMED', trigger_date: '2026-10-07' }, '2026-10-07'), true)
+  assert.equal(isCurrentMacdLink({ stage: 'CONFIRMED', trigger_date: '2026-10-02', evidence: { trigger_age_sessions: 4 } }, '2026-10-07'), true)
+  assert.equal(isCurrentMacdLink({ stage: 'CONFIRMED', trigger_date: '2025-12-04', evidence: { trigger_age_sessions: 200 } }, '2026-10-07'), false)
+  assert.equal(isCurrentMacdLink({ stage: 'INVALIDATED', trigger_date: '2026-10-07' }, '2026-10-07'), false)
 })

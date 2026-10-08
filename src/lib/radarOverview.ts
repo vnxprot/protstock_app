@@ -3,10 +3,17 @@ export type RadarAssessment = { as_of_date: string; stage: string; entry_status:
   evidence?: { milestones?: RadarMilestone[] } | null }
 export type FunnelAssessment = { stage: string }
 export type MacdAssessment = { stage: string; trigger_date: string | null }
+export type MacdLink = MacdAssessment & { evidence?: { trigger_age_sessions?: number | null } | null }
 export type PublishedAction = { action: string }
 
 export const radarMilestonesToday = (row: RadarAssessment) => row.evidence?.milestones?.filter(item => item.date === row.as_of_date) ?? []
 export const hasRadarStageToday = (row: RadarAssessment, stage: string) => radarMilestonesToday(row).some(item => item.kind === stage)
+
+export function isCurrentMacdLink(row: MacdLink, date: string) {
+  return row.stage === 'WATCH_PRICE_CONFIRMATION'
+    || row.stage === 'CONFIRMED' && (row.trigger_date === date
+      || row.evidence?.trigger_age_sessions != null && row.evidence.trigger_age_sessions <= 5)
+}
 
 export function matchesRadarStage(row: RadarAssessment, filter: string) {
   if (filter === 'ALL') return true
