@@ -4,6 +4,7 @@ import { ArrowLeft, ArrowUpRight, Eye, Filter } from 'lucide-react'
 import { isWatchActive, updateWatchlistItem, useWatchlist, WATCHLIST_DETAIL_LIMIT, WATCHLIST_REASON_LIMIT, type WatchItem, type WatchPatch, type WatchStatus, type WatchTier } from '../lib/watchlist'
 import { useAccountId } from '../hooks/useAccountId'
 import '../watchlist-board.css'
+import { SoftSelect } from './SoftSelect'
 
 type TextField = 'reason' | 'buyZone' | 'targetPrice' | 'stopLoss'
 const columns: { key: TextField; label: string }[] = [
@@ -137,10 +138,10 @@ export function WatchlistBoardPage({ syncStatus, authenticated = false }: { sync
       <th scope="col"><HeaderFilter label="Tình trạng" value={filters.status} onChange={value => updateFilter('status', value)} choices={[{ value: 'ALL', label: 'Tất cả' }, { value: 'On', label: 'On' }, { value: 'Off', label: 'Off' }]}/></th>
     </tr></thead><tbody>{visible.map(({ item, number }) => <tr key={item.symbol} className={isWatchActive(item) ? '' : 'watch-board-off'}>
       <td className="watch-board-index">{number}</td>
-      <td><select aria-label={`Tier ${item.symbol}`} value={item.tier} onChange={event => updateWatchlistItem(item.symbol, { tier: event.target.value as WatchTier, status: 'On' })}><option value="S">S</option><option value="A">A</option><option value="B">B</option></select></td>
+      <td><SoftSelect aria-label={`Tier ${item.symbol}`} value={item.tier} onChange={event => updateWatchlistItem(item.symbol, { tier: event.target.value as WatchTier, status: 'On' })}><option value="S">S</option><option value="A">A</option><option value="B">B</option></SoftSelect></td>
       <td><button type="button" className="watch-board-symbol" onClick={() => openAnalysis(item.symbol)}>{item.symbol}<ArrowUpRight size={14}/></button></td>
       {columns.map(column => <td key={column.key}><EditableCell item={item} field={column.key} userId={userId}/></td>)}
-      <td><select aria-label={`Tình trạng ${item.symbol}`} className={item.status === 'On' ? 'watch-board-status-on' : 'watch-board-status-off'} value={item.status as WatchStatus} onChange={event => updateWatchlistItem(item.symbol, { status: event.target.value as WatchStatus })}><option value="On">On</option><option value="Off">Off</option></select></td>
+      <td><SoftSelect aria-label={`Tình trạng ${item.symbol}`} className={item.status === 'On' ? 'watch-board-status-on' : 'watch-board-status-off'} value={item.status as WatchStatus} onChange={event => updateWatchlistItem(item.symbol, { status: event.target.value as WatchStatus })}><option value="On">On</option><option value="Off">Off</option></SoftSelect></td>
     </tr>)}</tbody></table>
       {!visible.length && <p className="watch-board-empty">{items.length ? 'Không có mã khớp bộ lọc.' : 'Chưa có mã. Thêm mã vào Tier B, A hoặc S ở trang Watchlist.'}</p>}
     </div><p className="watch-board-footnote">On: đang theo dõi hoặc nắm giữ · Off: đã hoàn thành, không còn ở Card Tier. Chọn lại On hoặc chọn Tier để đưa mã trở lại.</p>

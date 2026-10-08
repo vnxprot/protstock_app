@@ -4,6 +4,7 @@ import { useAccountId } from '../hooks/useAccountId'
 import { useStockThesis, type ThesisStatus, type ThesisVersion } from '../hooks/useStockThesis'
 import { supabase } from '../lib/supabase'
 import { formatDateTime } from '../lib/date'
+import { SoftSelect } from './SoftSelect'
 
 const statuses: Record<ThesisStatus, string> = { OBSERVATION: 'Đang quan sát', MAINTAIN: 'Giữ luận điểm', REVIEW: 'Cần xem lại', INVALIDATED: 'Đã vô hiệu' }
 type Form = { thesis: string; catalysts: string; invalidation_conditions: string; risk_notes: string; review_status: ThesisStatus }
@@ -58,7 +59,7 @@ function ThesisEditor({ symbol, compact, authenticated, userId, canJournal }: { 
       <label>Chất xúc tác cần theo dõi<textarea disabled={save.isPending} rows={2} value={form.catalysts} onChange={e => change('catalysts', e.target.value)}/></label>
       <label>Khi nào luận điểm không còn đúng?<textarea disabled={save.isPending} rows={2} value={form.invalidation_conditions} onChange={e => change('invalidation_conditions', e.target.value)}/></label>
       <label>Rủi ro và giới hạn vị thế<textarea disabled={save.isPending} rows={2} value={form.risk_notes} onChange={e => change('risk_notes', e.target.value)}/></label>
-      <label>Trạng thái<select disabled={save.isPending} value={form.review_status} onChange={e => change('review_status', e.target.value)}>{Object.entries(statuses).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+      <label>Trạng thái<SoftSelect aria-label="Trạng thái luận điểm" disabled={save.isPending} value={form.review_status} onChange={e => change('review_status', e.target.value)}>{Object.entries(statuses).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</SoftSelect></label>
       {save.isError && <p role="alert" className="negative">{String((save.error as { message?: string })?.message).includes('THESIS_CONFLICT') ? <>Luận điểm đã thay đổi trên thiết bị khác. Bản nháp vẫn được giữ. <button type="button" className="text-button" onClick={() => void reload()}>Tải phiên bản mới để đối chiếu</button>{query.data?.current_version && <small>Phiên bản máy chủ: {query.data.current_version.thesis}</small>}</> : 'Chưa lưu được. Bản nháp vẫn được giữ; hãy thử lại.'}</p>}
       <div className="thesis-actions"><button className="primary-button" disabled={!form.thesis.trim() || save.isPending || query.isError}>{save.isPending ? 'Đang lưu…' : 'Lưu phiên bản mới'}</button><button type="button" className="text-button" disabled={save.isPending} onClick={() => setEditing(false)}>Thu gọn</button><small>{dirty ? 'Bản nháp trên thiết bị này' : 'Mỗi lần lưu tạo một phiên bản'}</small></div>
     </form> : <>

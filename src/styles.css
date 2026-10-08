@@ -390,7 +390,7 @@ main { min-width:0; }
 @media(max-width:760px){
   body { overscroll-behavior-x:none; }
   .app-shell,.app-shell.sidebar-collapsed,main,.workspace-page,.dashboard-page,.analysis-page { width:100%; max-width:100%; min-width:0; }
-  main { overflow-x:hidden; touch-action:pan-y; }
+  main { overflow-x:clip; touch-action:auto; }
   .market-strip { display:grid; grid-template-columns:1fr 1fr; overflow:hidden; gap:8px; margin:0 0 12px; padding:0; white-space:normal; }
   .market-strip>* { min-width:0; overflow:hidden; text-overflow:ellipsis; }
   .chart-tools,.rule-mode-tabs { overflow-x:hidden; flex-wrap:wrap; }

@@ -1,0 +1,35 @@
+/* Shared top-bar rhythm and dropdown appearance. */
+.topbar-actions { display:flex; align-items:center; gap:8px; }
+.topbar-actions :is(.account-chip,.theme-toggle,.status-chip) { box-sizing:border-box; display:inline-flex; align-items:center; justify-content:center; gap:8px; height:40px; min-height:40px; margin:0; padding:0 12px; border:1px solid var(--line-bright); border-radius:12px; background:var(--surface-2); color:var(--text); font-size:12px; font-weight:600; line-height:1; white-space:nowrap; }
+.topbar-actions :is(.account-chip,.theme-toggle,.status-chip) > svg { flex:none; width:16px; height:16px; }
+.topbar-actions .status-chip.ready > svg { color:var(--mint); }
+.topbar-actions .status-chip.pending > svg { color:var(--amber); }
+.topbar-actions .status-chip.error > svg { color:var(--red); }
+.status-loading-icon { animation:status-turn 1.2s linear infinite; }
+@keyframes status-turn { to { transform:rotate(360deg); } }
+@media(prefers-reduced-motion:reduce) { .status-loading-icon { animation:none; } }
+
+.market-calendar-selects .soft-select { width:100%; max-width:215px; }
+.market-calendar-selects .soft-select-trigger,
+.transaction-filters .soft-select-trigger,
+.thesis-form .soft-select-trigger,
+.watch-board-table .soft-select-trigger { min-height:40px; border:1px solid var(--line-bright); border-radius:10px; background:var(--surface-2); color:var(--text); font:inherit; }
+.transaction-filters .soft-select { width:100%; }
+.transaction-filters .soft-select-trigger { background:var(--surface); }
+.thesis-form .soft-select { width:100%; }
+.watch-board-table .soft-select { width:100%; }
+.watch-board-table .soft-select-trigger { min-height:38px; padding:6px 8px; border-color:var(--line); font-size:13px; }
+.watch-board-table .watch-board-status-on .soft-select-trigger { color:var(--mint); }
+.watch-board-table .watch-board-status-off .soft-select-trigger { color:var(--muted); }
+
+@media(max-width:760px) {
+  html,body,#root { width:100%; max-width:100%; overflow-x:clip; }
+  .app-shell,.app-shell.sidebar-collapsed { width:100%; max-width:100%; overflow-x:clip; }
+  .app-shell main { min-width:0; width:100%; max-width:100%; overflow-x:clip; touch-action:auto; }
+  .app-shell :is(.workspace-page,.dashboard-page,.panel,.page-title-row,.chart-toolbar,.market-page,.screener-page,.watchlist-page,.portfolio-page,.journal-page,.settings-page) { min-width:0; max-width:100%; }
+  .app-shell :is(input,textarea,.soft-select) { min-width:0; max-width:100%; }
+  .app-shell :is(.data-table,.watch-board-scroll,.universe-table,.market-calendar-chart-scroll) { max-width:100%; overscroll-behavior-inline:contain; touch-action:pan-x pan-y; }
+  .app-shell .skeleton-title { max-width:100%; }
+  .market-calendar-selects .soft-select { max-width:none; }
+  .watch-tier-glow { pointer-events:none; }
+}
