@@ -1,4 +1,4 @@
-# Prot Stock · v1.0.0
+# Prot Stock · v2.0.2
 
 Personal PWA for end-of-day analysis of a curated Vietnamese stock universe.
 
@@ -13,7 +13,7 @@ Personal PWA for end-of-day analysis of a curated Vietnamese stock universe.
 
 ## Current release
 
-Prot Stock v2.0.1 adds a research-only momentum radar, corrects the monthly–weekly–daily funnel's same-week breakout timing, and adds an in-app version history from v1.0.0. Champion trade signals remain governed by their existing rules. See [v2.0.1 release notes](docs/release-v2.0.1.md) and [v1.0.0 foundation notes](docs/release-v1.0.0.md).
+Prot Stock v2.0.2 turns the momentum radar into a compact opportunity overview with same-session links to Champion/WATCH, both funnels, and MACD divergence. The funnel table now keeps its main rows on one line. Champion trade rules are unchanged. See [v2.0.2 release notes](docs/release-v2.0.2.md), [v2.0.1 release notes](docs/release-v2.0.1.md), and [v1.0.0 foundation notes](docs/release-v1.0.0.md).
 
 ## Historical development
 

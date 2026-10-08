@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 import { ResearchPagination } from './ResearchPagination'
@@ -39,8 +39,9 @@ const stageNames: Record<string, string> = { MONTHLY_CONTEXT: 'Bối cảnh thá
 const stages = ['ALL', ...Object.keys(stageNames)]
 const values = (items: (string | null | undefined)[]) => [...new Set(items.filter((value): value is string => Boolean(value)))].sort()
 
-export function ChallengerResearchTab({ date, tab }: { date: string; tab: 'funnel' | 'macd' }) {
+export function ChallengerResearchTab({ date, tab, focusSymbol = '' }: { date: string; tab: 'funnel' | 'macd'; focusSymbol?: string }) {
   const [search, setSearch] = useState('')
+  useEffect(() => { if (focusSymbol) { setSearch(focusSymbol); setPage(1) } }, [focusSymbol])
   const [status, setStatus] = useState('ALL')
   const [stage, setStage] = useState('ALL')
   const [regime, setRegime] = useState('ALL')

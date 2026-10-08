@@ -1,7 +1,7 @@
 {
   "name": "protstock-app",
   "private": true,
-  "version": "2.0.1",
+  "version": "2.0.2",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -10,6 +10,7 @@
     "test:sector": "node --experimental-strip-types --test tests/sector-history.test.mjs",
     "test:watchlist": "node --experimental-strip-types --test tests/watchlist.test.mjs tests/watchlist-sync.test.mjs",
     "test:signals": "node --experimental-strip-types --test tests/signal-triage.test.mjs",
+    "test:radar": "node --experimental-strip-types --test tests/radar-overview.test.mjs",
     "test:runtime": "node --experimental-strip-types --test tests/v4-runtime.test.mjs tests/release-labels.test.mjs",
     "test:portfolio": "node --experimental-strip-types --test tests/portfolio-ledger.test.mjs",
     "test:journal": "node --experimental-strip-types --test tests/journal-evidence.test.mjs tests/journal-outbox.test.mjs"

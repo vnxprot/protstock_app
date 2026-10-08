@@ -1,32 +1,24 @@
-.signal-funnel-panel { margin-block: 1rem; }
-.signal-funnel-panel .panel-title { display: flex; justify-content: space-between; gap: 1rem; align-items: flex-start; }
-.signal-funnel-panel .panel-title p { margin: .3rem 0 0; }
-.signal-funnel-counts { display: flex; flex-wrap: wrap; gap: .4rem; margin: 1rem 0; }
-.signal-funnel-counts button { border: 1px solid var(--border, #ccd2d9); border-radius: .6rem; padding: .45rem .6rem; background: transparent; color: inherit; cursor: pointer; }
-.signal-funnel-counts button.selected { border-color: var(--accent, #4b77b7); background: rgba(75,119,183,.12); }
-.signal-funnel-counts strong { margin-left: .4rem; }
-.signal-funnel-table { overflow-x: auto; }
-.signal-funnel-head, .signal-funnel-row { display: grid; grid-template-columns: 4rem 5rem 11rem 15rem 7rem minmax(14rem,1fr); min-width: 760px; align-items: center; gap: .7rem; padding: .6rem .5rem; border-bottom: 1px solid var(--border, #ccd2d9); }
-.signal-funnel-head { font-weight: 700; }
-.signal-funnel-row small { overflow-wrap: anywhere; }
-.signal-funnel-pagination { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding-top: .7rem; }
-.signal-funnel-pagination button { margin-left: .4rem; }
-
-/* Match the consolidated signal table controls and alternating rows. */
-.signal-funnel-counts { margin: 14px 0; }
-.signal-funnel-counts .screener-field { width:min(320px,100%); }
-.signal-funnel-head { background:var(--surface-2); color:var(--muted); border-radius:10px 10px 0 0; }
-.signal-funnel-row:nth-of-type(even) { background:color-mix(in srgb,var(--surface-2) 72%,var(--surface)); }
-.signal-funnel-row:nth-of-type(odd) { background:var(--surface); }
-.signal-funnel-row { color:var(--text); line-height:1.5; }
-.signal-funnel-row > * { min-width:0; overflow-wrap:anywhere; }
-.signal-funnel-table { border:1px solid var(--line); border-radius:10px; }
-@media(max-width:760px) { .signal-funnel-counts .screener-field { width:100%; } }
-.signal-funnel-counts { align-items:center; gap:7px; }
-.signal-funnel-counts button { display:inline-flex; align-items:center; gap:6px; min-height:36px; padding:6px 11px; border-radius:999px; border-color:var(--line-bright); background:var(--surface-2); color:var(--text); font-size:12px; font-weight:700; white-space:nowrap; }
+.signal-funnel-panel { margin-block:.7rem; }
+.signal-funnel-panel .panel-title { display:flex; justify-content:space-between; gap:.8rem; align-items:flex-start; }
+.signal-funnel-panel .panel-title p { margin:.2rem 0 0; }
+.signal-funnel-counts { display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin:10px 0; }
+.signal-funnel-counts button { display:inline-flex; align-items:center; gap:6px; min-height:32px; padding:5px 10px; border:1px solid var(--line-bright); border-radius:999px; background:var(--surface-2); color:var(--text); font-size:12px; font-weight:700; white-space:nowrap; cursor:pointer; }
 .signal-funnel-counts button.selected { background:var(--lime); border-color:var(--lime); color:#14200d; }
 :root[data-theme="light"] .signal-funnel-counts button.selected { background:#d7ff52; border-color:#94b238; color:#172d23; }
-.signal-funnel-counts .signal-funnel-filter-toggle { margin-left:auto; border-radius:10px; }
-.signal-funnel-column-filters { display:flex; flex-wrap:wrap; gap:8px; margin:-5px 0 14px; }
+.signal-funnel-counts .signal-funnel-filter-toggle { margin-left:auto; border-radius:9px; }
+.signal-funnel-column-filters { display:flex; flex-wrap:wrap; gap:8px; margin:0 0 10px; }
 .signal-funnel-column-filters .screener-field { width:min(220px,100%); }
+.signal-funnel-scroll-hint { margin:0 0 5px; color:var(--muted); font-size:11px; }
+.signal-funnel-table { border:1px solid var(--line); border-radius:10px; overflow-x:auto; }
+.signal-funnel-head,.signal-funnel-row { display:grid; grid-template-columns:72px 95px 172px 270px 126px minmax(230px,1fr); min-width:1040px; align-items:center; gap:10px; padding:8px 12px; border-bottom:1px solid var(--line); white-space:nowrap; }
+.signal-funnel-head { position:sticky; top:0; z-index:1; background:var(--surface-2); color:var(--muted); font-size:12px; font-weight:800; }
+.signal-funnel-row { min-height:43px; color:var(--text); font-size:13px; }
+.signal-funnel-table > div:nth-child(odd) .signal-funnel-row { background:color-mix(in srgb,var(--surface-2) 70%,var(--surface)); }
+.signal-funnel-row > * { min-width:0; white-space:nowrap; }
+.signal-funnel-head > :first-child,.signal-funnel-row > :first-child { position:sticky; left:0; z-index:2; background:var(--surface-2); }
+.signal-funnel-row > :first-child { align-self:stretch; display:flex; align-items:center; margin:-8px 0 -8px -12px; padding-left:12px; }
+.signal-funnel-reason { display:flex; align-items:center; gap:9px; }
+.signal-funnel-reason button { border:0; padding:3px 5px; background:none; color:var(--lime); font:inherit; font-weight:700; cursor:pointer; }
+.signal-funnel-detail { display:flex; gap:10px; padding:9px 14px; min-width:1040px; background:var(--surface-2); border-bottom:1px solid var(--line); font-size:12px; }
+.signal-funnel-detail span { overflow-wrap:anywhere; }
 @media(max-width:760px) { .signal-funnel-counts .signal-funnel-filter-toggle { margin-left:0; } .signal-funnel-column-filters .screener-field { width:100%; } }
