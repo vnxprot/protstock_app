@@ -64,6 +64,11 @@ html[data-theme="light"] .watch-tier-orbit { background: #ffffffa8; }
 .portfolio-positions-table .position-row > strong small,.portfolio-positions-table .position-row > span:not(:first-child) { color: var(--muted); }
 .portfolio-positions-table .position-row > b.positive { color: var(--mint); }
 .portfolio-positions-table .position-row > b.negative { color: var(--red); }
+.screener-table .screener-symbol { font-size: 14px; font-weight: 700; }
+.screener-table .screener-symbol small { color: var(--muted); font-size: 12px; font-weight: 500; }
+.screener-table .signal-confluence small,.signal-visual-head > b { font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.screener-table .signal-date,.signal-visual-date { color: var(--muted); font-size: 12px; font-weight: 500; }
+html[data-theme="light"] .app-shell :is(.screener-table .signal-date,.signal-visual-date) { color: var(--muted) !important; }
 
 .analysis-evidence { display: grid; gap: var(--space-6); margin-top: var(--space-6); }
 .analysis-evidence > .analysis-columns { margin-top: 0; }

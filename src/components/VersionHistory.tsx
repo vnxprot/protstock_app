@@ -2,7 +2,7 @@ import './VersionHistory.css'
 
 const releases = [
   { version: '3.0.0', date: '09/10/2026', title: 'Giao diện đồng nhất và rõ trạng thái hơn', areas: [
-    { name: 'Giao diện', changes: ['Thống nhất token chữ, khoảng cách, bo góc và kích thước điều khiển.', 'Nút chính nổi bật trong giao diện sáng; Watchlist có màu phù hợp cả hai giao diện.'] },
+    { name: 'Giao diện', changes: ['Thống nhất token chữ, khoảng cách, bo góc và kích thước điều khiển.', 'Nút chính nổi bật trong giao diện sáng; Watchlist có màu phù hợp cả hai giao diện.', 'Mã và điểm tín hiệu dễ quét hơn; ngày và ngành giữ vai trò thông tin phụ.'] },
     { name: 'Luồng sử dụng', changes: ['Danh mục ưu tiên nút Giao dịch; trang Phân tích gom bằng chứng kỹ thuật có thể mở rộng.', 'Nội dung mobile chừa chỗ cho thanh điều hướng đáy.'] },
     { name: 'Phản hồi', changes: ['Thông báo phân biệt thành công, cảnh báo và lỗi; nút lưu hiển thị tiến trình.', 'Vòng quay Watchlist có tùy chọn âm thanh và rung, mặc định tắt.'] },
   ] },
