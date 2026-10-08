@@ -26,6 +26,7 @@ from .timeframes import aggregate_bars
 from .signal_policy import STOCK_PRICE_TO_VND, apply_signal_policy
 from .period_signals import monthly_trend, evaluate_period_signal
 from .signal_funnel import assess_funnel
+from .momentum_radar import assess_momentum_radar
 from .macd_divergence_zones import assess_macd_zone_divergence
 from .challenger_engine import assess_challenger, assess_challenger_strategies, recovery_status, VERSION as CHALLENGER_VERSION, CODES as CHALLENGER_STRATEGY_CODES
 from .wyckoff import classify_wyckoff_timeframe
@@ -148,6 +149,14 @@ def run_eod(
                 history = _rows_as_of(client.price_history(symbol_row["id"], MULTI_TIMEFRAME_HISTORY_LIMIT), trading_date)
                 analysis_rows = [{**row, "date": row["trading_date"]} for row in history]
                 if analysis_rows:
+                    try:
+                        client.upsert("momentum_radar_assessments", [assess_momentum_radar(
+                            symbol_row["id"], analysis_rows,
+                            confirmed_week_end=confirmed_week_end,
+                            confirmed_month_end=confirmed_month_end,
+                        )], "symbol_id,as_of_date,version")
+                    except Exception as radar_error:
+                        warnings.append(f"{symbol_row['symbol']}: momentum radar {type(radar_error).__name__}")
                     try:
                         assessment = assess_funnel(symbol_row["id"], analysis_rows,
                                                    confirmed_week_end=confirmed_week_end,
@@ -339,6 +348,19 @@ def rebuild_signals(trading_date: date, *, symbol_offset: int = 0, symbol_limit:
                         and cached_daily[2][-1].get("date") == trading_date.isoformat()
                         and cached_daily[4].get("as_of_date") == trading_date.isoformat()
                         and all(item[5].get("data_date") == trading_date.isoformat() for item in cached)):
+                    try:
+                        client.upsert("momentum_radar_assessments", [assess_momentum_radar(
+                            symbol_row["id"], cached_daily[2],
+                            confirmed_week_end=confirmed_week_end,
+                            confirmed_month_end=confirmed_month_end,
+                        )], "symbol_id,as_of_date,version")
+                        client.upsert("signal_funnel_assessments", [assess_funnel(
+                            symbol_row["id"], cached_daily[2],
+                            confirmed_week_end=confirmed_week_end,
+                            confirmed_month_end=confirmed_month_end,
+                        )], "symbol_id,as_of_date,version")
+                    except Exception as shadow_error:
+                        warnings.append(f"{symbol_row['symbol']}: shadow research {type(shadow_error).__name__}")
                     for _symbol_id, timeframe, scoped_rows, index_rows, result, context in cached:
                         context = {**context, "market_context": prepared_market_context, "portfolios": portfolios}
                         _write_analysis(client, symbol_row["id"], timeframe, scoped_rows, index_rows, active_rules, counts, result, context, persist_evidence=False)
@@ -361,9 +383,19 @@ def rebuild_signals(trading_date: date, *, symbol_offset: int = 0, symbol_limit:
                     _heartbeat(client, job["id"])
                     continue
                 try:
+                    client.upsert("momentum_radar_assessments", [assess_momentum_radar(
+                        symbol_row["id"], analysis_rows,
+                        confirmed_week_end=confirmed_week_end,
+                        confirmed_month_end=confirmed_month_end,
+                    )], "symbol_id,as_of_date,version")
+                except Exception as radar_error:
+                    warnings.append(f"{symbol_row['symbol']}: momentum radar {type(radar_error).__name__}")
+                try:
                     assessment = assess_funnel(symbol_row["id"], analysis_rows,
                                                confirmed_week_end=confirmed_week_end,
                                                confirmed_month_end=confirmed_month_end)
+                    client.upsert("signal_funnel_assessments", [assessment],
+                                  "symbol_id,as_of_date,version")
                     if assessment["stage"] != "DATA_QUARANTINED":
                         client.upsert("macd_divergence_assessments",
                                       assess_macd_zone_divergence(symbol_row["id"], analysis_rows, symbol_row.get("exchange")),

@@ -75,7 +75,7 @@ jobs:
           supabase db dump --db-url "$SUPABASE_DB_URL" --schema public --file remote_schema.sql
           # Supabase quotes identifiers and emits IF NOT EXISTS / OR REPLACE.
           sed 's/"//g' remote_schema.sql > remote_schema_unquoted.sql
-          for table in investment_theses investment_thesis_versions challenger_signal_assessments dual_engine_tplus_outcomes challenger_strategy_assessments challenger_strategy_tplus_outcomes; do
+          for table in investment_theses investment_thesis_versions challenger_signal_assessments dual_engine_tplus_outcomes challenger_strategy_assessments challenger_strategy_tplus_outcomes momentum_radar_assessments; do
             grep -Eq "^CREATE TABLE( IF NOT EXISTS)? public\.${table}[[:space:](]" remote_schema_unquoted.sql || { echo "Missing v4 table: $table"; exit 1; }
           done
           for function in record_portfolio_capital_movement record_portfolio_transaction portfolio_report_data search_consolidated_signals stock_analysis_data claim_backtest_jobs replace_backtest_trades save_investment_thesis apply_watchlist_entry; do

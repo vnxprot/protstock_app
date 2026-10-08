@@ -1,0 +1,26 @@
+import './VersionHistory.css'
+
+const releases = [
+  { version: '2.0.1', date: '08/10/2026', title: 'Theo dõi đà tăng rõ hơn', areas: [
+    { name: 'Bộ lọc tín hiệu', changes: ['Thêm Radar đà tăng: phát hiện đột biến giá và khối lượng, breakout ngày, xác nhận tuần, tiếp diễn và tăng tốc lại.', 'Một đợt tăng giữ chung lịch sử sự kiện qua nhiều phiên; tách diễn biến khỏi đánh giá điểm vào và khoảng cách đến stop.'] },
+    { name: 'Phễu tháng → tuần → ngày', changes: ['Breakout được xác nhận khi đóng tuần có thể ghi nhận nến trigger của chính ngày đóng tuần.', 'Giữ trigger đã xảy ra của setup còn hiệu lực khi xuất hiện setup tuần mới.'] },
+    { name: 'Cài đặt & dữ liệu', changes: ['Thêm mục Phiên bản và diễn giải logic Radar.', 'Lưu các đánh giá Radar theo phiên để theo dõi và đối chiếu; không tự phát sinh lệnh giao dịch.'] },
+  ] },
+  { version: '2.0.0', date: '06/10/2026', title: 'Champion và Challenger', areas: [
+    { name: 'Nghiên cứu chiến lược', changes: ['Thêm Challenger v2.0 chạy song song Champion và bộ đối chiếu kết quả.', 'Ghi nhận đánh giá nghiên cứu, bối cảnh thị trường và kết quả T+ theo từng phiên.'] },
+    { name: 'Giao diện & hướng dẫn', changes: ['Bổ sung ba chế độ Champion, Challenger và Đối chiếu trong Bộ lọc tín hiệu.', 'Giải thích quyết định riêng của mỗi bộ máy; phễu và phân kỳ MACD là bằng chứng chung.'] },
+  ] },
+  { version: '1.0.0', date: 'Trước 06/10/2026', title: 'Bản phát hành nền tảng', areas: [
+    { name: 'Sản phẩm', changes: ['Thống nhất tên và nhãn phiên bản Prot Stock v1.0.0 trên ứng dụng và PWA.', 'Giữ các tính năng Core Engine, Prot Flow, sức khỏe thị trường và ngành, phân tích đa khung, watchlist và nhật ký.'] },
+    { name: 'Tính tái lập', changes: ['Giữ nguyên mã định danh thuật toán và lịch sử tín hiệu để có thể đối chiếu các phiên đã công bố.'] },
+  ] },
+] as const
+
+export function VersionHistory({ currentVersion }: { currentVersion: string }) {
+  return <div className="version-history"><div className="version-intro panel"><h2>Lịch sử phiên bản</h2><p>Phiên bản đang dùng: <strong>v{currentVersion}</strong>. Mỗi bản ghi nêu phần được thay đổi và tác động người dùng có thể quan sát.</p></div>
+    {releases.map(release => <article className="panel version-release" key={release.version}>
+      <header><div><span className="version-pill">v{release.version}</span><h3>{release.title}</h3></div><time>{release.date}</time></header>
+      <div className="version-areas">{release.areas.map(area => <section key={area.name}><h4>{area.name}</h4><ul>{area.changes.map(change => <li key={change}>{change}</li>)}</ul></section>)}</div>
+    </article>)}
+  </div>
+}

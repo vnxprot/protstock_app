@@ -15,6 +15,7 @@ import { downloadSignalCsv, downloadSignalExcel, downloadSignalPdf } from '../li
 import { explainSignal, signalReasonSummary } from '../lib/signalExplanation'
 import { SignalTriageList } from './SignalTriageList'
 import { SignalFunnelPanel } from './SignalFunnelPanel'
+import { MomentumRadarPanel } from './MomentumRadarPanel'
 import { MacdDivergencePanel } from './MacdDivergencePanel'
 import { DualEngineComparePanel } from './DualEngineComparePanel'
 import { ChallengerResearchTab } from './ChallengerResearchTab'
@@ -60,7 +61,7 @@ async function fetchConsolidatedSignals(filters:SignalFilters,exportAll=false):P
 
 export function ScreenerPage({ authenticated, canJournal = false }: { authenticated: boolean; canJournal?: boolean }) {
   const [engineMode,setEngineMode]=useState<'champion'|'challenger'|'compare'>('champion')
-  const [tab,setTab]=useState<'original'|'watch'|'funnel'|'macd'>('original')
+  const [tab,setTab]=useState<'original'|'watch'|'funnel'|'macd'|'radar'>('original')
   const [query,setQuery]=useState(''); const [action,setAction]=useState('ALL'); const [showHistory,setShowHistory]=useState(false); const showRaw=true; const minScoreText=''; const descending=true; const [page,setPage]=useState(1); const [pageSize,setPageSize]=useState(25); const [view,setView]=useState<'table'|'cards'>(()=>localStorage.getItem('protstock-screener-view')==='cards'?'cards':'table'); const [favorites,setFavorites]=useState<string[]>(()=>loadWatchlist().filter(isWatchActive).map(item=>item.symbol)); const [exportNotice,setExportNotice]=useState(''); const [exportOpen,setExportOpen]=useState(false); const [advancedOpen,setAdvancedOpen]=useState(false)
   const [explainingSignal,setExplainingSignal]=useState<SignalRow|null>(null)
   const [exporting,setExporting]=useState(false)
@@ -116,11 +117,12 @@ export function ScreenerPage({ authenticated, canJournal = false }: { authentica
       {([['champion','🛡️ Champion (v1.0)'],['challenger','⚡ Challenger (v2.0)'],['compare','⚔️ Đối chiếu Song mã']] as const).map(([id,label])=><button key={id} type="button" role="tab" aria-selected={engineMode===id} className={engineMode===id?'active':''} onClick={()=>setEngineMode(id)}>{label}</button>)}
     </div>
     {engineMode==='compare'&&latestDate&&<DualEngineComparePanel date={latestDate} champion={showHistory?latestSignals.data?.rows??[]:source} mode="compare"/>}
-    {engineMode==='challenger'&&latestDate&&<DualEngineComparePanel date={latestDate} champion={showHistory?latestSignals.data?.rows??[]:source} mode={tab==='watch'?'watch':tab==='original'?'challenger':'summary'}/>}
+    {engineMode==='challenger'&&latestDate&&tab!=='radar'&&<DualEngineComparePanel date={latestDate} champion={showHistory?latestSignals.data?.rows??[]:source} mode={tab==='watch'?'watch':tab==='original'?'challenger':'summary'}/>}
     {engineMode!=='compare'&&<>
     <div className="timeframe-tabs screener-tabs" role="tablist" aria-label="Nhóm bảng tín hiệu">
-      {([['original','Tín hiệu gốc'],['watch','WATCH cơ hội'],['funnel','Phễu tháng → tuần → ngày'],['macd','Phân kỳ Dương · đường MACD']] as const).map(([id,label])=><button key={id} id={`screener-tab-${id}`} type="button" role="tab" aria-selected={tab===id} aria-controls={`screener-panel-${id}`} className={tab===id?'active':''} onClick={()=>setTab(id)}>{label}</button>)}
+      {([['original','Tín hiệu gốc'],['watch','WATCH cơ hội'],['radar','Radar đà tăng'],['funnel','Phễu tháng → tuần → ngày'],['macd','Phân kỳ Dương · đường MACD']] as const).map(([id,label])=><button key={id} id={`screener-tab-${id}`} type="button" role="tab" aria-selected={tab===id} aria-controls={`screener-panel-${id}`} className={tab===id?'active':''} onClick={()=>setTab(id)}>{label}</button>)}
     </div>
+    {tab==='radar'&&(latestDate?<MomentumRadarPanel date={latestDate}/>:<p className="muted">Chưa có phiên dữ liệu để xem Radar.</p>)}
     {engineMode==='champion'&&<>
     {tab==='original'&&<div id="screener-panel-original" role="tabpanel" aria-labelledby="screener-tab-original">
     <div className="screener-filter-toolbar" aria-label="Bộ lọc tín hiệu">
