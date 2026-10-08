@@ -1,24 +1,43 @@
 import { todayInVietnam } from './date.ts'
+import { tradeCosts, type CostRate } from './portfolioCosts.ts'
 
-export type LedgerTransaction = { id: string; symbol_id: string | number; trading_date: string; created_at?: string; action: string; quantity: number; price: number | null; symbols?: { symbol: string; sector?: string | null } | null }
+export type LedgerTransaction = { id: string; symbol_id: string | number; trading_date: string; created_at?: string; action: string; quantity: number; price: number | null; broker_fee_override?: number | null; sell_tax_override?: number | null; symbols?: { symbol: string; sector?: string | null } | null }
 export type CapitalMovement = { id: string; movement_type: string; amount: number; effective_date: string; created_at?: string; note?: string | null }
 export type LedgerPrice = { symbol_id: string | number; trading_date: string; close: number }
 export type LedgerReport = { portfolio: { capital: number; created_at?: string; initial_capital?: number }; initial_capital?: number; transactions: LedgerTransaction[]; capital_movements: CapitalMovement[]; prices: LedgerPrice[] }
 export type RealizedSlice = { costBasis: number; pnl: number; returnPct: number; openedAt: string; quantity: number }
 
 const chronological = (a: LedgerTransaction, b: LedgerTransaction) => a.trading_date.localeCompare(b.trading_date) || (a.created_at ?? '').localeCompare(b.created_at ?? '') || a.id.localeCompare(b.id)
-export function realizedSlices(rows: LedgerTransaction[]): Record<string, RealizedSlice> {
+export function openCostBasis(rows: LedgerTransaction[], rates: CostRate[] = []) {
+  const holdings: Record<string, { quantity: number; cost: number }> = {}
+  for (const item of [...rows].sort(chronological)) {
+    const key = String(item.symbol_id), quantity = Number(item.quantity), price = Number(item.price)
+    if (['BUY_NEW', 'BUY_ADD'].includes(item.action) && quantity > 0 && price > 0) {
+      const held = holdings[key] ?? { quantity: 0, cost: 0 }
+      holdings[key] = { quantity: held.quantity + quantity, cost: held.cost + quantity * price + tradeCosts(item, rates).brokerFee }
+    } else if (['SELL_REDUCE', 'SELL_CLOSE'].includes(item.action) && holdings[key] && quantity > 0) {
+      const held = holdings[key]
+      const used = Math.min(quantity, held.quantity)
+      held.cost -= held.cost / held.quantity * used
+      held.quantity -= used
+      if (!held.quantity) delete holdings[key]
+    }
+  }
+  return holdings
+}
+export function realizedSlices(rows: LedgerTransaction[], rates: CostRate[] = []): Record<string, RealizedSlice> {
   const holdings: Record<string, { quantity: number; cost: number; openedAt: string }> = {}
   const results: Record<string, RealizedSlice> = {}
   for (const item of [...rows].sort(chronological)) {
     const key = String(item.symbol_id), quantity = Number(item.quantity), price = Number(item.price)
+    const costs = tradeCosts(item, rates)
     if (['BUY_NEW', 'BUY_ADD'].includes(item.action) && quantity > 0 && price > 0) {
       const held = holdings[key] ?? { quantity: 0, cost: 0, openedAt: item.trading_date }
-      holdings[key] = { quantity: held.quantity + quantity, cost: held.cost + quantity * price, openedAt: held.openedAt }
+      holdings[key] = { quantity: held.quantity + quantity, cost: held.cost + quantity * price + costs.brokerFee, openedAt: held.openedAt }
     } else if (['SELL_REDUCE', 'SELL_CLOSE'].includes(item.action) && quantity > 0 && price > 0) {
       const held = holdings[key]
       if (!held || held.quantity < quantity) continue
-      const costBasis = held.cost / held.quantity * quantity, pnl = quantity * price - costBasis
+      const costBasis = held.cost / held.quantity * quantity, pnl = quantity * price - costs.total - costBasis
       results[item.id] = { costBasis, pnl, returnPct: costBasis ? pnl / costBasis * 100 : 0, openedAt: held.openedAt, quantity }
       held.quantity -= quantity; held.cost -= costBasis
       if (!held.quantity) delete holdings[key]
@@ -27,7 +46,7 @@ export function realizedSlices(rows: LedgerTransaction[]): Record<string, Realiz
   return results
 }
 
-export function portfolioTimeline(report: LedgerReport) {
+export function portfolioTimeline(report: LedgerReport, rates: CostRate[] = []) {
   const transactions = [...report.transactions].sort(chronological)
   const movements = [...report.capital_movements].sort((a, b) => a.effective_date.localeCompare(b.effective_date) || (a.created_at ?? '').localeCompare(b.created_at ?? '') || a.id.localeCompare(b.id))
   const signed = (item: CapitalMovement) => (item.movement_type === 'DEPOSIT' ? 1 : -1) * Number(item.amount)
@@ -49,13 +68,14 @@ export function portfolioTimeline(report: LedgerReport) {
     capital += flow; cash += flow
     while (txIndex < transactions.length && transactions[txIndex].trading_date <= date) {
       const item = transactions[txIndex++], key = String(item.symbol_id), quantity = Number(item.quantity), price = Number(item.price)
+      const costs = tradeCosts(item, rates)
       if (['BUY_NEW', 'BUY_ADD'].includes(item.action) && quantity > 0 && price > 0) {
         const held = holdings[key] ?? { quantity: 0, cost: 0 }
-        holdings[key] = { quantity: held.quantity + quantity, cost: held.cost + quantity * price }
-        cash -= quantity * price
+        holdings[key] = { quantity: held.quantity + quantity, cost: held.cost + quantity * price + costs.brokerFee }
+        cash -= quantity * price + costs.brokerFee
       } else if (['SELL_REDUCE', 'SELL_CLOSE'].includes(item.action) && quantity > 0 && price > 0 && holdings[key]) {
         const held = holdings[key], used = Math.min(quantity, held.quantity), average = held.cost / held.quantity
-        cash += used * price; held.quantity -= used; held.cost -= used * average
+        cash += used * price - costs.total; held.quantity -= used; held.cost -= used * average
         if (!held.quantity) delete holdings[key]
       }
     }

@@ -101,6 +101,16 @@ try {
  await scalar(`select update_portfolio_transaction($1,'BUY_NEW',10,10000,9000,null,'2026-09-28')`,[trade])
  await reject(`update portfolio_transactions set quantity=20 where id=$1`,/permission denied/,[trade])
  await reject(`select record_portfolio_transaction($1,$2,'BUY_NEW',10,10000,9000,null,'2099-01-01')`,/Future/,[portfolio,symbol])
+ await db.query(`insert into portfolio_cost_rates(portfolio_id,effective_date,buy_fee_pct,sell_fee_pct,sell_tax_pct) values($1,'2026-09-01',0.15,0.15,0.1)`,[portfolio])
+ await reject(`insert into portfolio_cost_rates(portfolio_id,effective_date,buy_fee_pct,sell_fee_pct,sell_tax_pct) values($1,'2026-09-01',0.15,0.15,0.1)`,/policy|permission denied/,['bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'])
+ const costRequest='eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee'
+ const costTradeSql=`select record_portfolio_transaction($1,$2,'BUY_ADD',10,10000,9000,null,'2026-09-29',$3,123,null)`
+ const costTrade=await scalar(costTradeSql,[portfolio,symbol,costRequest])
+ assert.equal(await scalar(costTradeSql,[portfolio,symbol,costRequest]),costTrade)
+ await reject(`select record_portfolio_transaction($1,$2,'BUY_ADD',10,10000,9000,null,'2026-09-29',$3,124,null)`,/different costs/,[portfolio,symbol,costRequest])
+ assert.equal(Number(await scalar(`select broker_fee_override from portfolio_transactions where id=$1`,[costTrade])),123)
+ await scalar(`select update_portfolio_transaction($1,'BUY_ADD',10,10000,9000,null,'2026-09-29',0,null)`,[costTrade])
+ assert.equal(Number(await scalar(`select broker_fee_override from portfolio_transactions where id=$1`,[costTrade])),0)
  console.log('PASS: trade idempotency, position ledger and future rejection')
  await db.exec(`reset role; select set_config('request.jwt.claim.sub','',false),set_config('request.jwt.claim.role','service_role',false);`)
  await db.query(`insert into daily_prices(symbol_id,trading_date,open,high,low,close,volume,source,quality_status)
@@ -131,7 +141,7 @@ try {
  assert.equal(report.initial_capital,1000000); assert.equal(report.portfolio.capital,1000000); assert.equal(report.transactions.length,0)
  const latestReport = await scalar(`select portfolio_report_data($1,'2026-10-02')`,[portfolio])
  assert.equal(latestReport.initial_capital,1000000); assert.equal(latestReport.portfolio.capital,1100000)
- assert.equal(latestReport.transactions.length,1)
+ assert.equal(latestReport.transactions.length,2)
  assert.equal(latestReport.prices.length,1); assert.equal(latestReport.prices[0].close,10)
  console.log('PASS: >1000 history/page aggregates, stock bundle and as-of capital')
  const rv = (await db.query(`select rv.* from rule_versions rv join rules r on r.id=rv.rule_id where r.kind='CORE_PACK' order by rv.created_at desc limit 1`)).rows[0]

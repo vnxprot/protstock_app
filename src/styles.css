@@ -562,6 +562,18 @@ input[type="number"] {
 .journal-entry-actions button,.transaction-actions button { display:grid; place-items:center; min-width:30px; min-height:30px; border:1px solid var(--line); border-radius:8px; color:var(--muted); background:var(--surface-2); cursor:pointer; }
 .journal-entry-actions button:hover,.transaction-actions button:hover { color:var(--text); background:var(--surface-3); }
 .transaction-history { display:grid; gap:10px; }
+.portfolio-cost-card { display:grid; gap:14px; margin-top:var(--space-4); }
+.portfolio-cost-card .panel-title { margin:0; }
+.portfolio-cost-form { display:grid; grid-template-columns:repeat(4,minmax(120px,1fr)) auto; gap:12px; align-items:end; }
+.portfolio-cost-form label,.trade-cost-inputs label { display:grid; gap:6px; font-size:13px; }
+.portfolio-cost-form input,.trade-cost-inputs input { width:100%; min-height:42px; padding:8px 10px; border:1px solid var(--line); border-radius:9px; background:var(--surface-2); color:var(--text); }
+.portfolio-cost-form button { min-height:42px; }
+.portfolio-cost-history { display:flex; flex-wrap:wrap; align-items:center; gap:8px 12px; font-size:12px; }
+.portfolio-cost-history button { border:1px solid var(--line); border-radius:8px; padding:6px 9px; background:var(--surface-2); color:var(--text); text-align:left; }
+.portfolio-cost-formula { margin:0; line-height:1.55; }
+.trade-cost-inputs { display:grid; gap:12px; padding:12px; border:1px solid var(--line); border-radius:10px; }
+@media (max-width:950px) { .portfolio-cost-form { grid-template-columns:repeat(2,minmax(0,1fr)); }.portfolio-cost-form button { grid-column:1/-1; } }
+@media (max-width:520px) { .portfolio-cost-form { grid-template-columns:1fr; } }
 .transaction-filters { display:grid; grid-template-columns:minmax(150px,1.1fr) repeat(2,minmax(145px,.8fr)) minmax(180px,1fr) auto; gap:8px; align-items:end; padding:10px; border:1px solid var(--line); border-radius:var(--radius-md); background:var(--surface-2); }
 .transaction-filters label { display:grid; gap:5px; min-width:0; }
 .transaction-filters label span { color:var(--muted); font-size:var(--text-caption); font-weight:600; }
