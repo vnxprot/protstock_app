@@ -1,0 +1,13 @@
+.version-history { display:grid; gap:1rem; margin-top:1rem; }
+.version-intro p { margin-bottom:0; }
+.version-release header { display:flex; align-items:flex-start; justify-content:space-between; gap:1rem; }
+.version-release header > div { display:flex; align-items:center; flex-wrap:wrap; gap:.7rem; }
+.version-release h3 { margin:0; }
+.version-release time { color:var(--muted); white-space:nowrap; }
+.version-pill { border:1px solid var(--line-bright); border-radius:999px; padding:.25rem .6rem; color:var(--lime); font-weight:800; }
+.version-areas { display:grid; gap:.85rem; margin-top:1rem; }
+.version-areas section { border-top:1px solid var(--line-bright); padding-top:.75rem; }
+.version-areas h4 { margin:0 0 .4rem; }
+.version-areas ul { margin:0; padding-left:1.3rem; }
+.version-areas li { margin:.3rem 0; line-height:1.5; }
+@media(max-width:600px) { .version-release header { display:block; } .version-release time { display:block; margin-top:.5rem; } }

@@ -38,7 +38,7 @@ export function SignalFunnelPanel({ date, authenticated }: { date: string; authe
       for (let from = 0; ; from += 1000) {
         const { data, error } = await supabase!.from('signal_funnel_assessments')
           .select('monthly_state,stage,setup_kind,setup_date,trigger_date,reasons,symbols!inner(symbol)')
-          .eq('as_of_date', date).eq('version', 'MTF_FUNNEL_SHADOW_V1')
+          .eq('as_of_date', date).eq('version', 'MTF_FUNNEL_SHADOW_V2')
           .order('symbol_id').range(from, from + 999)
         if (error) throw error
         result.push(...(data ?? []).map((item: any) => ({
@@ -69,7 +69,7 @@ export function SignalFunnelPanel({ date, authenticated }: { date: string; authe
   const visible = filtered.slice((current - 1) * pageSize, current * pageSize)
 
   return <article className="panel signal-funnel-panel">
-    <div className="panel-title"><div><h3>Phễu tháng → tuần → ngày v1.0</h3><p className="muted">Bản nghiên cứu song song · chưa quyết định tín hiệu giao dịch</p></div><span>{date}</span></div>
+    <div className="panel-title"><div><h3>Phễu tháng → tuần → ngày v2.0.1</h3><p className="muted">Bản nghiên cứu song song · nhận diện breakout ngay khi tuần đóng · chưa quyết định tín hiệu giao dịch</p></div><span>{date}</span></div>
     {funnel.isError && <p className="muted">Không tải được phễu nghiên cứu.</p>}
     {funnel.isLoading && <p className="muted">Đang tải phễu nghiên cứu…</p>}
     {!funnel.isLoading && !funnel.isError && <>

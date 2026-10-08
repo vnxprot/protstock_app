@@ -10,8 +10,8 @@ from typing import Sequence
 from .indicators import _ema_series
 from .timeframes import aggregate_bars
 
-FUNNEL_VERSION = "MTF_FUNNEL_SHADOW_V1"
-ADAPTIVE_FUNNEL_VERSION = "MTF_ADAPTIVE_CHALLENGER_V2"
+FUNNEL_VERSION = "MTF_FUNNEL_SHADOW_V2"
+ADAPTIVE_FUNNEL_VERSION = "MTF_ADAPTIVE_CHALLENGER_V3"
 SETUP_TTL_SESSIONS = 20
 
 
@@ -102,6 +102,8 @@ def assess_funnel(symbol_id: int, daily_bars: Sequence[dict], *,
     if monthly["state"] != "UP" and not (adaptive and monthly["state"] == "SIDEWAYS"):
         return assessment
     candidates = _weekly_candidates(weeks, adaptive=adaptive)
+    latest_ready = None
+    triggered = []
     for setup in reversed(candidates):
         setup_start = next((i for i, bar in enumerate(daily) if bar["date"] == setup["date"]), None)
         if setup_start is None or len(daily) - setup_start - 1 > SETUP_TTL_SESSIONS:
@@ -110,11 +112,19 @@ def assess_funnel(symbol_id: int, daily_bars: Sequence[dict], *,
         if any(float(bar["close"]) < setup["invalidation"] for bar in after):
             continue
         setup_id = sha256(f"{symbol_id}:{setup['kind']}:{setup['date']}".encode()).hexdigest()[:24]
-        assessment.update({"stage": "WEEKLY_READY", "setup_id": setup_id,
+        candidate_assessment = {**assessment, "stage": "WEEKLY_READY", "setup_id": setup_id,
                            "setup_kind": setup["kind"], "setup_date": setup["date"],
                            "reasons": [*monthly["reasons"], "WEEKLY_SETUP_READY"],
-                           "evidence": {"monthly": monthly, "weekly": setup}})
-        for i in range(setup_start + 1, len(daily)):
+                           "evidence": {"monthly": monthly, "weekly": setup}}
+        if latest_ready is None:
+            latest_ready = candidate_assessment
+        # A weekly breakout is only known at the week's close. Its final daily
+        # candle can confirm the first crossing at that same EOD; requiring a
+        # later recross makes a continuous breakout impossible to trigger.
+        first_index = setup_start if setup["kind"] == "WEEKLY_BREAKOUT_13" else setup_start + 1
+        for i in range(first_index, len(daily)):
+            if i == 0:
+                continue
             bar = daily[i]
             previous = daily[i - 1]
             volume_window = daily[max(0, i - 20):i]
@@ -126,10 +136,17 @@ def assess_funnel(symbol_id: int, daily_bars: Sequence[dict], *,
             if (average_volume and float(bar["close"]) > trigger
                     and float(previous["close"]) <= trigger
                     and (range_rebound or float(bar["volume"]) >= 1.3 * average_volume)):
-                assessment["trigger_date"] = bar["date"]
-                assessment["stage"] = "DAILY_TRIGGER" if bar["date"] == as_of else "TRIGGERED_EARLIER"
-                assessment["reasons"] = [*monthly["reasons"], "WEEKLY_SETUP_READY", "DAILY_TRIGGER_CONFIRMED"]
+                candidate_assessment["trigger_date"] = bar["date"]
+                candidate_assessment["stage"] = "DAILY_TRIGGER" if bar["date"] == as_of else "TRIGGERED_EARLIER"
+                candidate_assessment["reasons"] = [*monthly["reasons"], "WEEKLY_SETUP_READY", "DAILY_TRIGGER_CONFIRMED"]
+                triggered.append(candidate_assessment)
                 break
-        return assessment
+    if triggered:
+        newest_setup = max(item["setup_date"] for item in triggered)
+        return min((item for item in triggered if item["setup_date"] == newest_setup),
+                   key=lambda item: (item["trigger_date"],
+                                     0 if item["setup_kind"] == "WEEKLY_BREAKOUT_13" else 1))
+    if latest_ready is not None:
+        return latest_ready
     assessment["reasons"].append("WEEKLY_SETUP_MISSING")
     return assessment

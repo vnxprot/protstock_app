@@ -1,0 +1,45 @@
+name: Replay v2.0.1 research
+
+on:
+  workflow_dispatch:
+    inputs:
+      as_of_date:
+        description: Stored EOD session (YYYY-MM-DD)
+        required: true
+        default: '2026-10-07'
+        type: string
+      symbols:
+        description: Optional comma-separated symbols; blank means all active symbols
+        required: false
+        default: ''
+        type: string
+      apply:
+        description: Persist Radar and funnel assessments
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  replay:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12', cache: pip }
+      - run: python -m pip install -e .
+      - name: Assess stored EOD without publishing trade signals
+        env:
+          SUPABASE_URL: https://upmqxwktvvguegqeqibn.supabase.co
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          AS_OF_DATE: ${{ inputs.as_of_date }}
+          SYMBOLS: ${{ inputs.symbols }}
+          APPLY: ${{ inputs.apply }}
+        run: |
+          args=(--date "$AS_OF_DATE")
+          if [ -n "$SYMBOLS" ]; then args+=(--symbols "$SYMBOLS"); fi
+          if [ "$APPLY" = 'true' ]; then args+=(--apply); fi
+          python -m protstock.replay_v201 "${args[@]}"

@@ -13,7 +13,7 @@ Personal PWA for end-of-day analysis of a curated Vietnamese stock universe.
 
 ## Current release
 
-Prot Stock v1.0.0 is the consolidated product release. Core Engine, Core Pack, Prot Flow, sector and market health, EOD, signals, MACD divergence, the monthly–weekly–daily funnel and watch opportunities retain their existing quantitative implementations. System structures are presented as v1.0. Historical algorithm IDs and database revisions remain unchanged for reproducibility. See [release notes](docs/release-v1.0.0.md).
+Prot Stock v2.0.1 adds a research-only momentum radar, corrects the monthly–weekly–daily funnel's same-week breakout timing, and adds an in-app version history from v1.0.0. Champion trade signals remain governed by their existing rules. See [v2.0.1 release notes](docs/release-v2.0.1.md) and [v1.0.0 foundation notes](docs/release-v1.0.0.md).
 
 ## Historical development
 

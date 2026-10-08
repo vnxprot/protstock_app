@@ -1,0 +1,28 @@
+.momentum-radar-panel { margin-block: 1rem; }
+.momentum-radar-panel .panel-title { display:flex; justify-content:space-between; gap:1rem; align-items:flex-start; }
+.momentum-radar-panel .panel-title p { margin:.3rem 0 0; }
+.radar-summary { display:flex; flex-wrap:wrap; gap:.6rem; margin:1rem 0; }
+.radar-summary span { padding:.6rem .85rem; border:1px solid var(--line-bright); border-radius:10px; background:var(--surface-2); }
+.radar-summary b { color:var(--lime); margin-right:.3rem; }
+.radar-filters { display:flex; flex-wrap:wrap; align-items:end; gap:.75rem; margin:1rem 0; }
+.radar-filters label { display:grid; gap:.3rem; font-size:12px; color:var(--muted); }
+.radar-filters input,.radar-filters select { min-height:38px; padding:7px 10px; color:var(--text); background:var(--surface-2); border:1px solid var(--line-bright); border-radius:8px; font:inherit; }
+.radar-filters > span { margin-left:auto; color:var(--muted); }
+.radar-list { display:grid; gap:.8rem; }
+.radar-card { border:1px solid var(--line-bright); border-radius:12px; background:var(--surface-2); padding:1rem; }
+.radar-card header { display:flex; align-items:center; justify-content:space-between; gap:1rem; }
+.radar-card header > div { display:grid; gap:.2rem; }
+.radar-card header strong { font-size:1.25rem; }
+.radar-card header small { color:var(--muted); }
+.radar-card header > b { color:var(--lime); border:1px solid var(--line-bright); border-radius:999px; padding:.35rem .7rem; font-size:12px; }
+.radar-columns { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:1rem; margin-top:1rem; }
+.radar-columns > div { min-width:0; padding:.7rem; border-radius:9px; background:var(--surface); }
+.radar-columns small { color:var(--muted); font-weight:700; letter-spacing:.04em; }
+.radar-columns p { margin:.4rem 0 0; line-height:1.5; }
+.radar-columns .radar-risk { color:var(--orange,#ffa86b); font-weight:700; }
+.radar-card details { margin-top:.8rem; }
+.radar-card summary { cursor:pointer; font-weight:700; }
+.radar-card ol { display:grid; gap:.45rem; margin:.75rem 0 0; padding-left:1.3rem; }
+.radar-card li { display:flex; flex-wrap:wrap; gap:.4rem .8rem; line-height:1.4; }
+.radar-card li time { color:var(--muted); }
+@media(max-width:760px) { .radar-columns { grid-template-columns:1fr; gap:.45rem; } .radar-filters > span { margin-left:0; width:100%; } .radar-card header { align-items:flex-start; } }
