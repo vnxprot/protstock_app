@@ -77,6 +77,15 @@ export function IntradaySpikeRadar({ date, authenticated, mode }: { date: string
     return symbol.toUpperCase().includes(query.trim().toUpperCase()) && Number(event.volume_ratio) >= minRatio
       && (direction === 'ALL' || event.direction === direction)
   }), [events.data, query, direction, minRatio])
+  const displayed = useMemo(() => {
+    if (mode === 'screener') return filtered.slice(0, 100)
+    const symbols = new Set<number>()
+    return filtered.filter(event => {
+      if (symbols.has(event.symbol_id)) return false
+      symbols.add(event.symbol_id)
+      return true
+    }).slice(0, 12)
+  }, [filtered, mode])
   const completed = coverage.data?.filter(row => row.coverage_status === 'COMPLETE').length ?? 0
   const observed = coverage.data?.length ?? 0
   const uniqueSymbols = new Set((events.data ?? []).filter(event => event.trading_date === date).map(event => event.symbol_id)).size
@@ -94,7 +103,7 @@ export function IntradaySpikeRadar({ date, authenticated, mode }: { date: string
     {(events.isError || coverage.isError) && <p className="spike-error" role="alert">Không tải được Radar giao dịch. <button type="button" onClick={() => { void events.refetch(); void coverage.refetch() }}>Thử lại</button></p>}
     {(events.isLoading || coverage.isLoading) && <p className="spike-empty">Đang tải dữ liệu giao dịch phút…</p>}
     {!events.isLoading && !events.isError && <div className="spike-list">
-      {filtered.slice(0, mode === 'market' ? 12 : 100).map(event => {
+      {displayed.map(event => {
         const active = selectedId === event.id
         return <article className={`spike-item ${event.direction.toLowerCase()}${active ? ' selected' : ''}`} key={event.id}>
           <button type="button" className="spike-item-main" aria-expanded={active} onClick={() => setSelectedId(active ? null : event.id)}>
