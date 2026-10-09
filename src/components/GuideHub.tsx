@@ -34,7 +34,7 @@ function scoreMatch(query: string, title: string, aliases: string[], text: strin
   if (titleText.includes(query) || aliasText.some(alias => alias.includes(query))) return 3
   if (bodyText.includes(query)) return 1
   const words = query.split(/\s+/).filter(Boolean)
-  return words.length > 1 && words.every(word => `${titleText} ${aliasText.join(' ')} ${bodyText}`.includes(word)) ? 1 : 0
+  return words.length > 1 && (words.every(word => titleText.includes(word)) || aliasText.some(alias => words.every(word => alias.includes(word)))) ? 2 : 0
 }
 
 export function GuideHub({ isAdmin }: { isAdmin: boolean }) {
@@ -61,8 +61,8 @@ export function GuideHub({ isAdmin }: { isAdmin: boolean }) {
   const needle = normalizeGuideText(search)
   const results = useMemo(() => {
     if (!needle) return []
-    const topics = guideTopics.map(item => ({ kind: 'guide' as const, item, score: scoreMatch(needle, item.title, item.aliases ?? [], `${item.summary} ${item.details.join(' ')} ${item.category}`) }))
-    const terms = guideTerms.map(item => ({ kind: 'term' as const, item, score: scoreMatch(needle, item.label, item.aliases ?? [], `${item.meaning} ${item.reading} ${item.group} ${item.subgroup}`) }))
+    const topics = guideTopics.map(item => ({ kind: 'guide' as const, item, score: scoreMatch(needle, item.title, item.aliases ?? [], `${item.summary} ${item.details.join(' ')}`) }))
+    const terms = guideTerms.map(item => ({ kind: 'term' as const, item, score: scoreMatch(needle, item.label, item.aliases ?? [], `${item.meaning} ${item.reading}`) }))
     return [...topics, ...terms].filter(result => result.score > 0).sort((a, b) => b.score - a.score || (a.kind === 'guide' ? -1 : 1)).slice(0, 25)
   }, [needle])
   const visibleTerms = guideTerms.filter(term => termGroup === 'Tất cả' || term.group === termGroup)
