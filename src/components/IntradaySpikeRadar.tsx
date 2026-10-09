@@ -100,6 +100,7 @@ export function IntradaySpikeRadar({ date, authenticated, mode }: { date: string
   }, [filtered, mode])
   const completed = coverage.data?.filter(row => row.coverage_status === 'COMPLETE').length ?? 0
   const observed = coverage.data?.length ?? 0
+  const ready = Boolean(events.data) && !coverage.isLoading && (mode === 'market' || !latestDay.isLoading)
   const uniqueSymbols = events.data?.symbols ?? 0
   function resetPage() { setPage(1); setSelectedId(null) }
   function chooseExactDate(value: string) { setExactDate(value); setFromDate(''); setToDate(''); resetPage() }
@@ -121,9 +122,9 @@ export function IntradaySpikeRadar({ date, authenticated, mode }: { date: string
     {mode === 'screener' && advancedOpen && <div className="spike-advanced"><DateField label="Từ ngày" value={fromDate} onChange={value => chooseRange(setFromDate, value)}/><DateField label="Đến ngày" value={toDate} onChange={value => chooseRange(setToDate, value)}/><button type="button" onClick={() => { setExactDate(''); setFromDate(''); setToDate(''); resetPage() }}>Toàn bộ lịch sử</button><button type="button" onClick={() => { setQuery(''); setSession('ALL'); setDirection('ALL'); setMinRatio(3); chooseExactDate(latestDay.data || date) }}>Xóa bộ lọc</button></div>}
     {fromDate && toDate && fromDate > toDate && <p className="spike-error" role="alert">Từ ngày phải trước hoặc bằng đến ngày.</p>}
     {(events.isError || coverage.isError) && <p className="spike-error" role="alert">Không tải được Radar giao dịch. <button type="button" onClick={() => { void events.refetch(); void coverage.refetch() }}>Thử lại</button></p>}
-    {(events.isLoading || coverage.isLoading) && <p className="spike-empty">Đang tải dữ liệu giao dịch phút…</p>}
-    {mode === 'screener' && !events.isLoading && !events.isError && <p className="spike-result-count">{events.data?.total ? `${(page - 1) * pageSize + 1}–${Math.min(page * pageSize, events.data.total)} / ${events.data.total} sự kiện` : '0 sự kiện'}</p>}
-    {!events.isLoading && !events.isError && <div className="spike-list">
+    {!ready && !events.isError && <p className="spike-empty">Đang tải dữ liệu giao dịch phút…</p>}
+    {mode === 'screener' && ready && !events.isError && <p className="spike-result-count">{events.data?.total ? `${(page - 1) * pageSize + 1}–${Math.min(page * pageSize, events.data.total)} / ${events.data.total} sự kiện` : '0 sự kiện'}</p>}
+    {ready && !events.isError && <div className="spike-list">
       {mode === 'screener' && displayed.length > 0 && <div className="spike-list-head"><span>Mã</span><span>Khoảng giao dịch</span><span>Đột biến · khối lượng</span><span>Diễn biến giá</span><span/></div>}
       {displayed.map(event => {
         const active = selectedId === event.id
@@ -140,10 +141,10 @@ export function IntradaySpikeRadar({ date, authenticated, mode }: { date: string
               <a href="#analysis" onClick={() => { const symbol = event.symbol; localStorage.setItem('protstock-symbol', symbol); dispatchEvent(new CustomEvent('protstock:symbol', { detail: symbol })) }}>Xem phân tích mã <ArrowUpRight size={15}/></a></div>}
         </article>
       })}
-      {!filtered.length && !events.isLoading && !events.isError && <p className="spike-empty">{observed === 0 && mode === 'market' ? 'Chưa có dữ liệu phút cho phiên này. Radar sẽ xuất hiện sau lượt thu thập EOD.' : 'Không có sự kiện khớp bộ lọc và ngưỡng dữ liệu hiện tại.'}</p>}
+      {!filtered.length && <p className="spike-empty">{observed === 0 && mode === 'market' ? 'Chưa có dữ liệu phút cho phiên này. Radar sẽ xuất hiện sau lượt thu thập EOD.' : 'Không có sự kiện khớp bộ lọc và ngưỡng dữ liệu hiện tại.'}</p>}
     </div>}
-    {mode === 'screener' && !events.isError && (events.data?.total ?? 0) > 0 && <ResearchPagination label="Phân trang giao dịch đột biến" page={page} pageSize={pageSize} total={events.data?.total ?? 0} onPage={value => { setPage(value); setSelectedId(null) }} onPageSize={value => { setPageSize(value); resetPage() }}/>}
-    {mode === 'market' && (events.data?.total ?? 0) > 12 && <a className="spike-more" href="#screener?tab=spikes">Xem toàn bộ trong Bộ lọc tín hiệu <ArrowUpRight size={15}/></a>}
+    {mode === 'screener' && ready && !events.isError && (events.data?.total ?? 0) > 0 && <ResearchPagination label="Phân trang giao dịch đột biến" page={page} pageSize={pageSize} total={events.data?.total ?? 0} onPage={value => { setPage(value); setSelectedId(null) }} onPageSize={value => { setPageSize(value); resetPage() }}/>}
+    {mode === 'market' && ready && (events.data?.total ?? 0) > 12 && <a className="spike-more" href="#screener?tab=spikes">Xem toàn bộ trong Bộ lọc tín hiệu <ArrowUpRight size={15}/></a>}
     <p className="spike-note">“Đột biến” mô tả khối lượng khớp trong khoảng phút; hướng giá là diễn biến quan sát được, không xác định danh tính hay bên đặt lệnh. Phiên có dữ liệu thiếu không được chấm sự kiện.</p>
   </section>
 }
