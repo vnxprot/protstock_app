@@ -1,4 +1,4 @@
-# Prot Stock · v3.0.0
+# Prot Stock · v3.0.1
 
 Personal PWA for end-of-day analysis of a curated Vietnamese stock universe.
 
@@ -13,7 +13,7 @@ Personal PWA for end-of-day analysis of a curated Vietnamese stock universe.
 
 ## Current release
 
-Prot Stock v3.0.0 unifies the interface tokens and controls, clarifies primary actions in both themes, improves mobile spacing and analysis grouping, and adds semantic feedback. Champion trade rules are unchanged. See [v3.0.0 release notes](docs/release-v3.0.0.md), [v2.0.2 release notes](docs/release-v2.0.2.md), and [v1.0.0 foundation notes](docs/release-v1.0.0.md).
+Prot Stock v3.0.1 reorganizes the in-app guide around the system workflow, searchable topics, a classified glossary, data provenance, and the distinction between published signals and shadow research. Champion trade rules are unchanged. See [v3.0.1 release notes](docs/release-v3.0.1.md), [v3.0.0 release notes](docs/release-v3.0.0.md), and [v2.0.2 release notes](docs/release-v2.0.2.md).
 
 ## Historical development
 

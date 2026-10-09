@@ -1,0 +1,95 @@
+.guide-hub{display:grid;gap:16px;min-width:0}
+.guide-hub :is(h2,h3,p){margin-top:0}
+.guide-hub :is(.guide-hero,.guide-index,.guide-orientation,.guide-dictionary,.guide-article,.guide-term-detail,.guide-results){margin:0}
+.guide-eyebrow{display:block;color:var(--lime);font-size:12px;font-weight:800;letter-spacing:.11em;margin-bottom:8px}
+.guide-hero{display:grid;gap:16px;padding:24px;background:linear-gradient(125deg,color-mix(in srgb,var(--lime) 9%,var(--surface)),var(--surface))}
+.guide-hero h2{font-size:clamp(23px,3vw,32px);line-height:1.2;margin-bottom:8px}
+.guide-hero-copy p{color:var(--muted);font-size:16px;line-height:1.6;max-width:68ch;margin-bottom:0}
+.guide-search{display:flex;align-items:center;gap:12px;width:100%;min-height:56px;padding:0 15px;border:1px solid var(--line-bright);border-radius:14px;background:var(--surface-2);color:var(--muted)}
+.guide-search:focus-within{outline:2px solid var(--lime);outline-offset:2px}
+.guide-search input{flex:1;min-width:0;border:0;background:transparent;color:var(--text);font:inherit;font-size:16px;outline:none}
+.guide-search input::placeholder{color:var(--muted)}
+.guide-search button{display:grid;place-items:center;min-width:32px;min-height:32px;border:0;background:transparent;color:var(--muted);cursor:pointer}
+.guide-prompts,.guide-group-filter{display:flex;flex-wrap:wrap;gap:8px}
+.guide-prompts button,.guide-group-filter button{padding:8px 12px;min-height:36px;border:1px solid var(--line);border-radius:999px;background:var(--surface-2);color:var(--text);font:inherit;font-size:13px;cursor:pointer}
+.guide-prompts button:hover,.guide-group-filter button:hover,.guide-group-filter button.active{border-color:var(--lime);color:var(--lime)}
+.guide-index{display:flex;align-items:center;gap:18px;padding:14px 20px}
+.guide-index .guide-eyebrow{margin:0;white-space:nowrap}
+.guide-index>div{display:flex;gap:6px;overflow-x:auto;scrollbar-width:thin}
+.guide-index a{padding:9px 11px;border-radius:8px;color:var(--text);text-decoration:none;white-space:nowrap;font-size:14px}
+.guide-index a:hover,.guide-index a:focus-visible{background:var(--surface-2);color:var(--lime)}
+.guide-section-head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px}
+.guide-section-head h3{font-size:clamp(20px,2vw,25px);margin-bottom:7px}
+.guide-section-head p{color:var(--muted);line-height:1.55;margin-bottom:0}
+.guide-section-head>small{color:var(--muted);white-space:nowrap}
+.guide-orientation,.guide-dictionary,.guide-results{padding:22px}
+.guide-orientation>p{color:var(--muted);line-height:1.6;margin:5px 0 18px}
+.guide-journey{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:7px;padding:0;margin:0 0 20px;list-style:none}
+.guide-journey li{position:relative;display:grid;align-content:start;gap:8px;padding:12px 10px;min-height:86px;border:1px solid var(--line);border-radius:10px;background:var(--surface-2)}
+.guide-journey li:not(:last-child):after{content:'›';position:absolute;right:-8px;top:32px;color:var(--lime);font-size:20px;z-index:1}
+.guide-journey span{color:var(--lime);font-size:12px;font-weight:800}
+.guide-journey strong{font-size:13px;line-height:1.3;font-weight:650}
+.guide-start-paths{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.guide-start-paths button{display:flex;align-items:flex-start;gap:11px;padding:15px;text-align:left;border:1px solid var(--line);border-radius:12px;background:var(--surface-2);color:var(--text);cursor:pointer}
+.guide-start-paths button:hover,.guide-topic-card:hover{border-color:var(--lime)}
+.guide-start-paths svg{color:var(--lime);flex:none}
+.guide-start-paths strong,.guide-start-paths small{display:block}
+.guide-start-paths small{color:var(--muted);line-height:1.4;margin-top:3px}
+.guide-topic-sections{display:grid;gap:20px}
+.guide-topic-section{scroll-margin-top:20px}
+.guide-topic-section>.guide-section-head{margin:6px 2px 12px}
+.guide-topic-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.guide-topic-card{display:flex;flex-direction:column;gap:10px;min-height:155px;padding:17px;text-align:left;border:1px solid var(--line);border-radius:13px;background:var(--surface);color:var(--text);cursor:pointer}
+.guide-topic-card.active{border-color:var(--lime);box-shadow:inset 3px 0 var(--lime)}
+.guide-topic-card strong{font-size:16px;line-height:1.35}
+.guide-topic-card small{color:var(--muted);font-size:14px;line-height:1.5}
+.guide-status{display:inline-flex;align-items:center;width:max-content;padding:4px 8px;border-radius:999px;background:color-mix(in srgb,var(--lime) 13%,var(--surface-2));color:var(--lime);font-size:11px;font-weight:800;line-height:1.2;white-space:nowrap}
+.guide-status-research{background:color-mix(in srgb,#7fb8ff 18%,var(--surface-2));color:#8ec4ff}
+.guide-status-personal{background:color-mix(in srgb,#e1acff 16%,var(--surface-2));color:#deb2ff}
+.guide-status-limit{background:color-mix(in srgb,#f4b66a 15%,var(--surface-2));color:#efb779}
+.guide-article,.guide-term-detail{padding:22px;scroll-margin-top:18px}
+.guide-article-breadcrumb{color:var(--muted);font-size:13px;margin-bottom:12px}
+.guide-article>p,.guide-term-detail>p{font-size:16px;line-height:1.7;max-width:78ch}
+.guide-article>.secondary-button,.guide-term-detail>.secondary-button{display:inline-flex;margin-top:8px}
+.guide-dictionary{scroll-margin-top:18px}
+.guide-group-filter{margin:17px 0}
+.guide-term-table-wrap{overflow-x:auto}
+.guide-term-table{width:100%;border-collapse:collapse;min-width:640px}
+.guide-term-table th{text-align:left;color:var(--muted);font-size:12px;letter-spacing:.04em;border-bottom:1px solid var(--line);padding:12px}
+.guide-term-table td{padding:12px;border-bottom:1px solid var(--line);font-size:14px;line-height:1.45;vertical-align:top}
+.guide-term-table td:first-child{color:var(--muted);width:18%}
+.guide-term-table td:nth-child(2){width:26%}
+.guide-term-table td:nth-child(4){width:15%}
+.guide-term-table td button{padding:0;border:0;background:none;color:var(--text);font:inherit;font-weight:750;text-align:left;text-decoration:underline;text-decoration-color:var(--line-bright);text-underline-offset:3px;cursor:pointer}
+.guide-term-table td button:hover{color:var(--lime)}
+.guide-result-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin-top:16px}
+.guide-result-list button{display:grid;justify-items:start;gap:5px;padding:14px;text-align:left;border:1px solid var(--line);border-radius:11px;background:var(--surface-2);color:var(--text);cursor:pointer}
+.guide-result-list button:hover{border-color:var(--lime)}
+.guide-result-meta{color:var(--lime);font-size:12px}
+.guide-result-list small{color:var(--muted);font-size:13px;line-height:1.45}
+.guide-result-list .guide-status{margin-top:3px}
+.guide-hub :is(button,a):focus-visible{outline:2px solid var(--lime);outline-offset:2px}
+
+html[data-theme="light"] .guide-status-research{color:#225b9a}
+html[data-theme="light"] .guide-status-personal{color:#744190}
+html[data-theme="light"] .guide-status-limit{color:#8b530d}
+
+@media(max-width:1100px){.guide-journey{grid-template-columns:repeat(4,minmax(0,1fr))}
+.guide-topic-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media(max-width:760px){.guide-hero,.guide-orientation,.guide-dictionary,.guide-results,.guide-article,.guide-term-detail{padding:17px}
+.guide-index{display:block;padding:12px 15px}
+.guide-index .guide-eyebrow{margin-bottom:4px}
+.guide-journey{grid-template-columns:repeat(2,minmax(0,1fr))}
+.guide-journey li:not(:last-child):after{display:none}
+.guide-start-paths,.guide-topic-grid,.guide-result-list{grid-template-columns:1fr}
+.guide-topic-card{min-height:0}
+.guide-term-table{min-width:0}
+.guide-term-table thead{display:none}
+.guide-term-table,.guide-term-table tbody,.guide-term-table tr,.guide-term-table td{display:block;width:100%!important}
+.guide-term-table tr{padding:10px 0;border-bottom:1px solid var(--line)}
+.guide-term-table td{padding:3px 0;border:0}
+.guide-term-table td:first-child{font-size:12px}
+.guide-term-table td:nth-child(2) button{font-size:16px}
+.guide-search{min-height:52px}
+}

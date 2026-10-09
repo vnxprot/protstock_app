@@ -1,6 +1,6 @@
 # Hướng dẫn tín hiệu Prot Stock: Champion, Challenger và Đối chiếu song mã
 
-Tài liệu này mô tả **giao diện và logic đang chạy**. Xem cùng mục **Cài đặt → Hướng dẫn** trong ứng dụng. Prot Stock xử lý dữ liệu cuối ngày (EOD); một tín hiệu chỉ phản ánh nến và dữ liệu đã có ở phiên ghi trên màn hình. Không đọc tín hiệu của phiên cũ như giá hay lệnh trực tiếp của hiện tại.
+Tài liệu này mô tả **giao diện và logic đang chạy**. Xem cùng mục **Cài đặt → Hướng dẫn** trong ứng dụng. Tín hiệu chính xử lý dữ liệu cuối ngày (EOD); Radar giao dịch đột biến nghiên cứu nến phút sau phiên. Một tín hiệu chỉ phản ánh nến và dữ liệu đã có ở phiên ghi trên màn hình. Không đọc tín hiệu của phiên cũ như giá hay lệnh trực tiếp của hiện tại.
 
 ## 1. Đường đi từ dữ liệu đến quyết định
 
@@ -11,7 +11,7 @@ Tài liệu này mô tả **giao diện và logic đang chạy**. Xem cùng mụ
 
 Một mã có thể có nhiều dòng Champion ở các khung khác nhau, nhưng chỉ có một assessment Challenger tổng hợp trên cùng phiên. Dấu `—` là thiếu/không áp dụng/không tính được, không phải số 0.
 
-## 2. Cách dùng ba chế độ và bốn tab
+## 2. Cách dùng ba chế độ và sáu tab
 
 | Chế độ | Ý nghĩa | Nên xem gì trước |
 | --- | --- | --- |
@@ -30,6 +30,14 @@ Một mã có thể có nhiều dòng Champion ở các khung khác nhau, nhưng
 **Champion:** gộp các tín hiệu cùng mã và xếp theo thay đổi mới → rủi ro của mã đang giữ → cơ hội hình thành. Mở hàng để đọc tín hiệu D/W/M và “Vì sao?”. Lọc nhóm ưu tiên và vị thế. `WATCH` chỉ là theo dõi, trong đó lý do có thể biểu thị cơ hội hoặc rủi ro. `EXTENDED (+X%)` cảnh báo giá đi xa hơn 7% so với mốc nền, trigger hoặc stop tham chiếu; X không phải lợi nhuận vị thế. Điểm ngành 0–100 đo sức khỏe ngành trong universe; `GTGD` là tỷ trọng giá trị giao dịch ước tính, không phải tiền mua ròng. `T0`, `T1`, `T2`, `T_READY` là tuổi lô hàng theo phiên và khả năng bán.
 
 **Challenger:** chỉ hiện assessment tổng hợp `WATCH`; lý do và các nhánh giải thích vì sao chưa phát thăm dò. Có cùng bộ lọc và phân trang như bảng Challenger gốc. Chọn một Delta Insight như `CHASE_BLOCKED` để tìm các trường hợp bị chặn theo stop.
+
+### Radar cơ hội
+
+Mỗi hàng tóm tắt diễn biến của một mã trong phiên và đối chiếu tín hiệu Champion/WATCH, phễu và phân kỳ MACD. Mở hàng để xem số liệu và đi đến đúng mã ở bảng liên quan. Khoảng cách stop đạt sơ bộ không phải lệnh mua.
+
+### Giao dịch đột biến
+
+Radar dùng dữ liệu nến phút sau phiên để tìm cụm khối lượng bất thường trong 1–15 phút so với cùng thời điểm ở các phiên đủ dữ liệu trước đó. Xem độ phủ phút, hướng giá và nguồn trong chi tiết sự kiện. Đây là nghiên cứu EOD, không phải báo giá trực tiếp; khối lượng không xác định bên đặt lệnh hay dòng tiền mua ròng. Phiên thiếu dữ liệu phút không được chấm sự kiện.
 
 ### Phễu tháng → tuần → ngày
 
