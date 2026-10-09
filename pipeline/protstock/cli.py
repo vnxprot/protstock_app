@@ -229,7 +229,7 @@ def main() -> None:
             symbols={item.strip().upper() for item in args.symbols.split(",") if item.strip()} if args.symbols else None,
             pause_seconds=args.pause_seconds)
         print(json.dumps(result, ensure_ascii=False))
-        raise SystemExit(0 if result["status"] == "SUCCEEDED" else 1)
+        raise SystemExit(0 if result["status"] in {"SUCCEEDED", "PARTIAL"} else 1)
 
 
 if __name__ == "__main__":

@@ -147,7 +147,8 @@ def _fetch_kbs_minutes(symbol: str, start: date, end: date) -> dict[str, list[di
 def run_intraday_spikes(trading_date: date, *, symbol_offset: int = 0, symbol_limit: int | None = None,
                         symbols: set[str] | None = None, pause_seconds: float = 0.35) -> dict:
     db = SupabaseRestClient(Settings.from_env())
-    counts = {"symbols": 0, "complete": 0, "partial": 0, "empty": 0, "events": 0, "failed": []}
+    counts = {"symbols": 0, "complete": 0, "partial": 0, "empty": 0, "events": 0,
+              "coverage_issues": [], "failed": []}
     try:
         universe = db.active_symbols()
         selected = [row for row in universe if row["symbol"] in symbols] if symbols else universe[symbol_offset:symbol_offset + symbol_limit if symbol_limit else None]
@@ -180,6 +181,8 @@ def run_intraday_spikes(trading_date: date, *, symbol_offset: int = 0, symbol_li
                 current = next((item for item in rows if item["trading_date"] == trading_date.isoformat()), None)
                 status = current["coverage_status"] if current else "EMPTY"
                 counts[status.lower()] += 1
+                if status != "COMPLETE":
+                    counts["coverage_issues"].append({"symbol": symbol, "status": status})
                 if status == "COMPLETE":
                     previous = [item for item in rows if item["trading_date"] < trading_date.isoformat() and item["coverage_status"] == "COMPLETE"]
                     previous.extend(item for item in stored if item["trading_date"] < trading_date.isoformat()
@@ -201,5 +204,5 @@ def run_intraday_spikes(trading_date: date, *, symbol_offset: int = 0, symbol_li
             response.raise_for_status()
     finally:
         db.close()
-    counts["status"] = "PARTIAL" if counts["failed"] or counts["partial"] or counts["empty"] else "SUCCEEDED"
+    counts["status"] = "FAILED" if counts["failed"] else "PARTIAL" if counts["coverage_issues"] else "SUCCEEDED"
     return counts
