@@ -109,3 +109,27 @@ html[data-theme="light"] .toast { background: #fff; color: var(--text); box-shad
 .app-shell .macd-divergence-tools input,
 .app-shell .challenger-research-controls input { text-align:left !important; }
 .app-shell .soft-select-trigger>span { text-align:left; }
+
+/* Keep related signal lists on the same type scale and alternating surface rhythm. */
+.app-shell .radar-filters label { font-size:12px; }
+.app-shell .radar-filters label.radar-search,
+.app-shell .radar-filters input,
+.app-shell .radar-filters .soft-select-trigger,
+.app-shell .challenger-research-controls input,
+.app-shell .challenger-research-controls .soft-select-trigger { min-height:40px; }
+.app-shell .radar-symbol strong,
+.app-shell .challenger-research-row header strong { font-size:14px; line-height:1.4; }
+.app-shell .radar-current b,
+.app-shell .radar-risk b,
+.app-shell .macd-divergence-list summary { font-size:13px; line-height:1.45; }
+.app-shell .radar-symbol small,
+.app-shell .radar-current small,
+.app-shell .radar-risk small,
+.app-shell .challenger-research-row small { font-size:12px; line-height:1.4; }
+.app-shell .challenger-research-controls label { font-size:12px; }
+.app-shell .challenger-research-facts,
+.app-shell .challenger-research-row p { font-size:13px; line-height:1.5; }
+.app-shell .radar-list .radar-item:nth-child(odd),
+.app-shell .challenger-research-grid .challenger-research-row:nth-child(odd) { background:color-mix(in srgb,var(--surface-2) 72%,var(--surface)); }
+.app-shell .radar-list .radar-item:nth-child(even),
+.app-shell .challenger-research-grid .challenger-research-row:nth-child(even) { background:var(--surface); }
