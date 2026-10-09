@@ -21,6 +21,7 @@ from .repair_history import repair_missing_history
 from .history_coverage import audit_history_coverage
 from .exchanges import sync_exchanges
 from .config import vietnam_today
+from .intraday_spikes import run_intraday_spikes
 
 
 def validate_universe(path: Path) -> int:
@@ -126,6 +127,12 @@ def main() -> None:
     archive = subparsers.add_parser("archive-pattern-evidence")
     archive.add_argument("--retention-days", type=int, default=180)
     archive.add_argument("--date", dest="archive_date", type=date.fromisoformat, default=vietnam_today())
+    spikes = subparsers.add_parser("intraday-spikes")
+    spikes.add_argument("--date", dest="trading_date", type=date.fromisoformat, default=vietnam_today())
+    spikes.add_argument("--symbol-offset", type=int, default=0)
+    spikes.add_argument("--symbol-limit", type=int)
+    spikes.add_argument("--symbols", help="Comma-separated symbols")
+    spikes.add_argument("--pause-seconds", type=float, default=0.35)
     args = parser.parse_args()
     if args.command == "validate-universe":
         raise SystemExit(validate_universe(args.path))
@@ -217,6 +224,12 @@ def main() -> None:
     if args.command == "archive-pattern-evidence":
         print(json.dumps(archive_pattern_evidence(args.retention_days, args.archive_date), ensure_ascii=False))
         raise SystemExit(0)
+    if args.command == "intraday-spikes":
+        result = run_intraday_spikes(args.trading_date, symbol_offset=args.symbol_offset, symbol_limit=args.symbol_limit,
+            symbols={item.strip().upper() for item in args.symbols.split(",") if item.strip()} if args.symbols else None,
+            pause_seconds=args.pause_seconds)
+        print(json.dumps(result, ensure_ascii=False))
+        raise SystemExit(0 if result["status"] == "SUCCEEDED" else 1)
 
 
 if __name__ == "__main__":

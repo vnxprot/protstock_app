@@ -10,6 +10,7 @@ import { supabase } from '../lib/supabase'
 import '../market-page.css'
 import { HealthMethodDetails } from './HealthMethodDetails'
 import { SoftSelect } from './SoftSelect'
+import { IntradaySpikeRadar } from './IntradaySpikeRadar'
 
 type Membership = { symbol_id: number; status: string }
 type ChartPoint = { key: string; label: string; score: number | null; complete: boolean }
@@ -195,5 +196,6 @@ export function MarketPage({ authenticated }: { authenticated: boolean }) {
       <div className="market-footnote"><span>Kỳ lịch thực, không phải cửa sổ 5/20/60/250 phiên. Chỉ xếp hạng khi ≥80% phiên VN-Index trong kỳ có mẫu ngành hợp lệ; mỗi phiên cần ≥5 mã và độ phủ ngành ≥80%.</span><button type="button" aria-expanded={showMethod} onClick={() => setShowMethod(value => !value)}>{showMethod ? 'Ẩn cách tính' : 'Xem cách tính'}</button></div>
       {showMethod && <div className="market-method"><p><strong>Sức khỏe:</strong> điểm kỳ là trung vị điểm sức khỏe của các phiên đủ mẫu; “phiên khỏe” là tỷ lệ phiên có điểm ≥65. Điểm một phiên gồm các tỷ lệ trên SMA20/50/200, cấu trúc MA và số mã tăng.</p><p><strong>Sector Flow:</strong> điểm kỳ là trung vị điểm Flow ngành của các phiên đủ mẫu; “phiên dương” là tỷ lệ phiên có Flow &gt;0. Flow mỗi phiên có nền 20 phiên; không diễn giải điểm kỳ là lượng tiền vào ròng của cả tháng/quý.</p><p><strong>Phạm vi:</strong> mẫu số là các ngày giao dịch VN-Index có dữ liệu đến phiên đã công bố. Lịch sử tính theo Prot Universe và nhãn ngành hiện tại; nhóm đổi ngành hoặc mã mới niêm yết có thể có độ phủ thấp. Kỳ đang diễn ra là tạm thời.</p></div>}
     </section>
+    <IntradaySpikeRadar date={latestDate} authenticated={authenticated} mode="market"/>
   </section>
 }

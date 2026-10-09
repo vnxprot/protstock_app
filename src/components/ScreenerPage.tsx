@@ -19,6 +19,7 @@ import { MomentumRadarPanel, type RadarDestination } from './MomentumRadarPanel'
 import { MacdDivergencePanel } from './MacdDivergencePanel'
 import { DualEngineComparePanel } from './DualEngineComparePanel'
 import { ChallengerResearchTab } from './ChallengerResearchTab'
+import { IntradaySpikeRadar } from './IntradaySpikeRadar'
 import type { TriageSignal } from '../lib/signalTriage'
 type SignalRow = TriageSignal & { confluence_count:number; confluence_badge:string; consensus_engines:string[]; source_revision:string }
 type WyckoffEvidence = { event_date:string; confirmed_on:string; timeframe:string; support:number; resistance:number; volume_ratio20:number; range_width_pct:number; clv:number }
@@ -61,7 +62,7 @@ async function fetchConsolidatedSignals(filters:SignalFilters,exportAll=false):P
 
 export function ScreenerPage({ authenticated, canJournal = false }: { authenticated: boolean; canJournal?: boolean }) {
   const [engineMode,setEngineMode]=useState<'champion'|'challenger'|'compare'>('champion')
-  const [tab,setTab]=useState<'original'|'watch'|'funnel'|'macd'|'radar'>('original')
+  const [tab,setTab]=useState<'original'|'watch'|'funnel'|'macd'|'radar'|'spikes'>(()=>location.hash.includes('tab=spikes')?'spikes':'original')
   const [linkedSymbol,setLinkedSymbol]=useState('')
   const [query,setQuery]=useState(''); const [action,setAction]=useState('ALL'); const [showHistory,setShowHistory]=useState(false); const showRaw=true; const minScoreText=''; const descending=true; const [page,setPage]=useState(1); const [pageSize,setPageSize]=useState(25); const [view,setView]=useState<'table'|'cards'>(()=>localStorage.getItem('protstock-screener-view')==='cards'?'cards':'table'); const [favorites,setFavorites]=useState<string[]>(()=>loadWatchlist().filter(isWatchActive).map(item=>item.symbol)); const [exportNotice,setExportNotice]=useState(''); const [exportOpen,setExportOpen]=useState(false); const [advancedOpen,setAdvancedOpen]=useState(false)
   const [explainingSignal,setExplainingSignal]=useState<SignalRow|null>(null)
@@ -126,9 +127,10 @@ export function ScreenerPage({ authenticated, canJournal = false }: { authentica
     {engineMode==='challenger'&&latestDate&&tab!=='radar'&&<DualEngineComparePanel date={latestDate} champion={showHistory?latestSignals.data?.rows??[]:source} mode={tab==='watch'?'watch':tab==='original'?'challenger':'summary'}/>}
     {engineMode!=='compare'&&<>
     <div className="timeframe-tabs screener-tabs" role="tablist" aria-label="Nhóm bảng tín hiệu">
-      {([['original','Tín hiệu gốc'],['watch','WATCH cơ hội'],['radar','Radar cơ hội'],['funnel','Phễu tháng → tuần → ngày'],['macd','Phân kỳ Dương · đường MACD']] as const).map(([id,label])=><button key={id} id={`screener-tab-${id}`} type="button" role="tab" aria-selected={tab===id} aria-controls={`screener-panel-${id}`} className={tab===id?'active':''} onClick={()=>{setTab(id);setLinkedSymbol('')}}>{label}</button>)}
+      {([['original','Tín hiệu gốc'],['watch','WATCH cơ hội'],['radar','Radar cơ hội'],['spikes','Giao dịch đột biến'],['funnel','Phễu tháng → tuần → ngày'],['macd','Phân kỳ Dương · đường MACD']] as const).map(([id,label])=><button key={id} id={`screener-tab-${id}`} type="button" role="tab" aria-selected={tab===id} aria-controls={`screener-panel-${id}`} className={tab===id?'active':''} onClick={()=>{setTab(id);setLinkedSymbol('')}}>{label}</button>)}
     </div>
     {tab==='radar'&&(latestDate?<MomentumRadarPanel date={latestDate} championSignals={watchSource} championLoading={showHistory?latestSignals.isLoading:signals.isLoading} championError={showHistory?latestSignals.isError:signals.isError} onNavigate={openRelated}/>:<p className="muted">Chưa có phiên dữ liệu để xem Radar.</p>)}
+    {tab==='spikes'&&<div id="screener-panel-spikes" role="tabpanel" aria-labelledby="screener-tab-spikes">{latestDate?<IntradaySpikeRadar date={latestDate} authenticated={authenticated} mode="screener"/>:<p className="muted">Chưa có phiên dữ liệu để xem giao dịch đột biến.</p>}</div>}
     {engineMode==='champion'&&<>
     {tab==='original'&&<div id="screener-panel-original" role="tabpanel" aria-labelledby="screener-tab-original">
     <div className="screener-filter-toolbar" aria-label="Bộ lọc tín hiệu">
