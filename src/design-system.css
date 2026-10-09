@@ -101,3 +101,11 @@ html[data-theme="light"] .toast { background: #fff; color: var(--text); box-shad
   .analysis-evidence { gap: var(--space-6); }
 }
 @media (prefers-reduced-motion: reduce) { .inline-spinner { animation-duration: 1.5s; } }
+
+/* Filter text follows the original signal screener's left edge in every tab. */
+.app-shell .screener-field :is(input,select),
+.app-shell .signal-search-advanced :is(input,select),
+.app-shell .radar-filters input,
+.app-shell .macd-divergence-tools input,
+.app-shell .challenger-research-controls input { text-align:left !important; }
+.app-shell .soft-select-trigger>span { text-align:left; }
