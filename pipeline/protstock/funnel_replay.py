@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from calendar import monthrange
 from datetime import date, timedelta
+import os
 
 from .config import Settings
 from .outcomes import evaluate_signal_outcome
@@ -89,6 +90,8 @@ def run_funnel_replay(start_date: date, end_date: date, *, symbol_offset: int = 
                       price_basis: str = "stored", symbols: set[str] | None = None) -> dict:
     if start_date > end_date:
         raise ValueError("start_date must be on or before end_date")
+    if apply and os.environ.get("ALLOW_LEGACY_REPLAY_PERSIST") != "true":
+        raise ValueError("Historical funnel replay persistence is disabled to protect database capacity; use dry-run or an explicit maintenance override")
     if price_basis not in {"stored", "research"}:
         raise ValueError("price_basis must be stored or research")
     client = SupabaseRestClient(Settings.from_env())

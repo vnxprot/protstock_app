@@ -170,7 +170,7 @@ class SupabaseRestClient:
         for offset in range(0, limit, 1000):
             response = self._get(
                 "/research_price_bars",
-                params={"select": "trading_date,open,high,low,close,volume,volume_basis,volume_adjustment_factor,source,source_version,price_unit,quality_status,basis",
+                params={"select": "trading_date,open,high,low,close,volume,volume_basis,volume_adjustment_factor,source,source_url,source_version,price_unit,quality_status,basis",
                         "symbol_id": f"eq.{symbol_id}", "order": "trading_date.desc"},
                 headers={"Range": f"{offset}-{min(offset + 1000, limit) - 1}"},
             )

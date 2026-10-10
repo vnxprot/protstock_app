@@ -1,0 +1,49 @@
+name: Archive and reclaim database capacity
+
+on:
+  schedule:
+    # Archive bars leaving the 400-day window after the weekly KBS sync.
+    - cron: '0 2 * * 0'
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Archive only first; cleanup archives again and verifies before deleting old data
+        required: true
+        default: archive
+        type: choice
+        options: [archive, archive-and-clean, rollover]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: protstock-database-capacity
+  cancel-in-progress: false
+
+jobs:
+  capacity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      CAPACITY_MODE: ${{ github.event_name == 'schedule' && 'rollover' || inputs.mode }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install 'psycopg[binary]>=3.2,<4' 'httpx>=0.28,<1'
+      - name: Prepare database connection
+        run: |
+          python - <<'PY'
+          import os
+          from urllib.parse import quote
+          password = quote(os.environ['SUPABASE_DB_PASSWORD'], safe='')
+          url = f'postgresql://postgres.upmqxwktvvguegqeqibn:{password}@aws-0-ap-southeast-1.pooler.supabase.com:5432/postgres'
+          with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as env:
+              env.write(f'SUPABASE_DB_URL={url}\n')
+          print(f'::add-mask::{url}')
+          PY
+      - name: Archive, verify, and optionally reclaim capacity
+        run: python .github/scripts/database_capacity.py

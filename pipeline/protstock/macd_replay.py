@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import date
+import os
 
 from .config import Settings
 from .macd_divergence import assess_macd_divergence
@@ -80,6 +81,8 @@ def replay_macd_symbol(symbol_id: int, rows: list[dict], start_date: date,
 def run_macd_replay(start_date: date, end_date: date, *, symbol_offset: int = 0,
                     symbol_limit: int | None = None, symbols: set[str] | None = None,
                     apply: bool = False) -> dict:
+    if apply and os.environ.get("ALLOW_LEGACY_REPLAY_PERSIST") != "true":
+        raise ValueError("Historical MACD replay persistence is disabled to protect database capacity; use dry-run or an explicit maintenance override")
     client = SupabaseRestClient(Settings.from_env())
     totals = {"symbols": 0, "assessments": 0, "confirmed": 0,
               "outcomes": 0, "missing_price_series": 0,

@@ -63,7 +63,7 @@ jobs:
           APPLY: ${{ inputs.apply }}
         run: |
           if [ "$GITHUB_EVENT_NAME" = 'schedule' ]; then
-            START_DATE='2021-01-01'
+            START_DATE=$(date -u -d '400 days ago' +%F)
             END_DATE=$(date -u +%F)
             SYMBOL_OFFSET=0
             SYMBOL_LIMIT=100000

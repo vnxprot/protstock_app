@@ -167,7 +167,7 @@ export function MomentumRadarPanel({ date, championSignals, championLoading, cha
       <label>Điểm vào <SoftSelect aria-label="Lọc rủi ro Radar" value={risk} onChange={event => { setRisk(event.target.value); setPage(1) }}><option value="ALL">Tất cả</option><option value="NEW">Mốc mới phiên này</option><option value="RISK_WINDOW">Khoảng cách stop đạt sơ bộ</option><option value="EXTENDED">Quá xa stop</option></SoftSelect></label>
       <label>Nguồn <SoftSelect aria-label="Lọc nguồn bằng chứng" value={source} onChange={event => { setSource(event.target.value); setPage(1) }}><option value="ALL">Tất cả</option><option value="CHAMPION">Champion / WATCH</option><option value="FUNNEL">Phễu gốc</option><option value="ADAPTIVE">Phễu Challenger</option><option value="MACD">Phân kỳ MACD</option></SoftSelect></label>
       <span>{rows.length} mã · trang {current}/{pages}</span></div>
-    <p className="radar-help">Ưu tiên tín hiệu Champion đã công bố và mốc mới có khoảng cách stop phù hợp. Radar là nghiên cứu EOD; khối lượng khớp lệnh không phải tiền mua ròng.</p>
+    <p className="radar-help">Ưu tiên tín hiệu Champion đã công bố và mốc mới có khoảng cách stop phù hợp. Radar giúp tìm mã theo dữ liệu cuối phiên; khối lượng khớp lệnh không phải tiền mua ròng.</p>
     {radar.isLoading && <p>Đang tải Radar…</p>}
     {radar.isError && <p className="form-error" role="alert">Không tải được Radar. <button className="text-button" onClick={() => void radar.refetch()}>Thử lại</button></p>}
     {(funnel.isError || macd.isError || adaptive.isError) && <p className="muted" role="status">Một nguồn đối chiếu chưa tải được; nhãn liên quan sẽ ghi rõ “Chưa tải được”.</p>}

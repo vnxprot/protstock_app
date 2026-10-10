@@ -29,7 +29,7 @@ on:
         default: ''
         type: string
       apply:
-        description: Persist shadow assessments and outcomes
+        description: Historical persistence is disabled for database capacity; use dry-run
         required: true
         default: false
         type: boolean

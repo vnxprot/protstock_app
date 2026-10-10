@@ -1,11 +1,15 @@
 from datetime import date, timedelta
 from types import SimpleNamespace
+import pytest
 
 from protstock.macd_divergence import assess_macd_divergence
 from protstock.engines import evaluate_named_engine
 from protstock.macd_replay import _outcome
 from protstock.provider_vnstock import KBS_SOURCE_VERSION
-from protstock.research_prices import research_price_rows
+from protstock.research_prices import changed_research_rows, research_price_rows
+from protstock.research_prices import sync_research_prices
+from protstock.funnel_replay import run_funnel_replay
+from protstock.macd_replay import run_macd_replay
 
 
 def _candidate_bars():
@@ -92,6 +96,26 @@ def test_research_series_quarantines_scale_jump_and_preserves_source():
     assert all(row["source_version"] == KBS_SOURCE_VERSION for row in rows)
     after = SimpleNamespace(**{**bars[-1].__dict__, "trading_date": date(2026, 9, 15)})
     assert research_price_rows(1, "TRC", [after])[0]["volume_adjustment_factor"] == 1
+
+
+def test_research_sync_skips_unchanged_bars_but_keeps_vendor_revisions():
+    current = {"trading_date": "2026-10-09", "open": 20, "high": 21, "low": 19,
+               "close": 20, "volume": 100, "source_version": KBS_SOURCE_VERSION,
+               "collected_at": "new collection time"}
+    stored = {**current, "collected_at": "old collection time"}
+    assert changed_research_rows([current], [stored]) == []
+    assert changed_research_rows([{**current, "close": 20.5}], [stored]) == [{**current, "close": 20.5}]
+
+
+def test_broad_price_sync_and_legacy_replay_cannot_refill_database(monkeypatch):
+    monkeypatch.delenv("ALLOW_FULL_RESEARCH_PRICE_SYNC", raising=False)
+    monkeypatch.delenv("ALLOW_LEGACY_REPLAY_PERSIST", raising=False)
+    with pytest.raises(ValueError, match="400 days"):
+        sync_research_prices(date(2021, 1, 1), date(2026, 10, 10), apply=True)
+    with pytest.raises(ValueError, match="disabled"):
+        run_funnel_replay(date(2025, 1, 1), date(2026, 9, 30), apply=True)
+    with pytest.raises(ValueError, match="disabled"):
+        run_macd_replay(date(2025, 1, 1), date(2026, 9, 30), apply=True)
 
 
 def test_outcome_uses_next_open_and_includes_fees_and_tax():

@@ -87,9 +87,9 @@ export function SignalFunnelPanel({ date, authenticated, focusSymbol = '' }: { d
   const visible = filtered.slice((current - 1) * pageSize, current * pageSize)
 
   return <article className="panel signal-funnel-panel">
-    <div className="panel-title"><div><h3>Phễu tháng → tuần → ngày</h3><p className="muted">Bản nghiên cứu song song · nhận diện breakout ngay khi tuần đóng · chưa quyết định tín hiệu giao dịch</p></div><span>{date}</span></div>
-    {funnel.isError && <p className="muted">Không tải được phễu nghiên cứu.</p>}
-    {funnel.isLoading && <p className="muted">Đang tải phễu nghiên cứu…</p>}
+    <div className="panel-title"><div><h3>Phễu tháng → tuần → ngày</h3><p className="muted">Công cụ lọc mã theo bối cảnh tháng, setup tuần và điểm kích hoạt ngày · tự xem xét trước khi giao dịch</p></div><span>{date}</span></div>
+    {funnel.isError && <p className="muted">Không tải được dữ liệu phễu.</p>}
+    {funnel.isLoading && <p className="muted">Đang tải dữ liệu phễu…</p>}
     {!funnel.isLoading && !funnel.isError && <>
       <div className="signal-funnel-counts" role="group" aria-label="Lọc giai đoạn phễu">{[['ALL','Tất cả',rows.length],...Object.entries(stageNames).map(([key,label])=>[key,label,counts[key]??0])] .map(([key,label,count])=><button type="button" key={key} className={stage===key?'selected':''} aria-pressed={stage===key} onClick={()=>{setStage(String(key));setPage(1)}}>{label} ({count})</button>)}<button type="button" className={filtersOpen?'signal-funnel-filter-toggle selected':'signal-funnel-filter-toggle'} aria-expanded={filtersOpen} onClick={()=>setFiltersOpen(value=>!value)}><SlidersHorizontal size={15}/> Bộ lọc{symbol||monthlyState!=='ALL'?' •':''}</button></div>
       {filtersOpen&&<div className="signal-funnel-column-filters"><label className="screener-field"><Search size={16}/><input aria-label="Lọc mã phễu" placeholder="Mã…" value={symbol} onChange={event=>{setSymbol(event.target.value);setPage(1)}}/></label><label className="screener-field"><Filter size={16}/><SoftSelect aria-label="Lọc trạng thái tháng" value={monthlyState} onChange={event=>{setMonthlyState(event.target.value);setPage(1)}}><option value="ALL">Mọi trạng thái tháng</option>{monthlyStates.map(value=><option key={value} value={value}>{value}</option>)}</SoftSelect></label></div>}
