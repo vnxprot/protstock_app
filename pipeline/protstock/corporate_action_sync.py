@@ -61,6 +61,9 @@ def vci_action_rows(symbol_id: int, frame) -> list[dict]:
                          "event_title": str(raw.get("event_title_vi") or ""),
                          "event_code": code, "public_date": _date(raw.get("public_date"))},
         })
+        if action_type == "OTHER" and ("cho cbc nv" in title or "cho cbcnv" in title
+                                       or "phát hành riêng lẻ" in title):
+            result[-1]["metadata"]["entitlement_policy"] = "NO_EXISTING_HOLDER_ENTITLEMENT"
     return result
 
 

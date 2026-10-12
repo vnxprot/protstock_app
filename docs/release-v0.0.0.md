@@ -16,12 +16,15 @@ membership manifest; future changes are allowed by editing and reseeding it.
 3. VCI company events are candidates. Share-volume rebasing requires a
    separately verified entitlement **and** a verified finding that the vendor
    volume before the event was unadjusted. The VSDC TRC 1:3 bonus event of
-   15 September 2026 is currently the only such verified factor. Duplicate
-   VCI/VSDC descriptions apply it once.
+   September 2026 and TLG's two 10:1 stock dividends of November 2024 and
+   December 2025 have verified factors. Duplicate VCI/VSDC descriptions apply
+   once. Employee and private placements carry no existing-holder factor.
    The daily job checks the market-wide VCI dividend calendar, while a weekly
    full refresh catches older or revised company disclosures without spending
    a full-universe job on every trading day.
-4. Unverified share-event windows have `WARNING` quality. Core Engine,
+4. The current calculation window uses up to 1,300 trading sessions, covering
+   more than 50 complete monthly bars. Older records remain stored for audit.
+   Unverified share-event windows have `WARNING` quality. Core Engine,
    Core Pack, Flow, Market Health, Funnel, Radar, MACD, outcomes and backtests
    use a canonical window or withhold the result. Historical cash trade
    backtests spanning later rights events remain blocked until original
@@ -41,14 +44,16 @@ Core Pack rule versions begin at v0.0.0.
 - [x] Implement VCI/KBS whole-window source control and event provenance.
 - [x] Add fail-closed quality gates and fresh v0.0.0 IDs.
 - [x] Pass Python, web build, frontend and SQL migration tests locally.
-- [ ] Commit and push the code.
-- [ ] Apply the four v0.0.0 Supabase migrations.
-- [ ] Assert the live universe matches the 277-symbol manifest.
+- [x] Commit and push the code (`417f5b7`).
+- [x] Apply the first four v0.0.0 Supabase migrations.
+- [ ] Apply the TLG verification migration.
+- [x] Assert the live universe matches the 277-symbol manifest.
 - [ ] Sync VCI event candidates and inspect failed symbols and event coverage.
 - [ ] Backfill canonical bars in small batches and monitor database size.
 - [ ] Audit source/volume factors; quarantine unresolved event windows.
 - [ ] Publish one complete EOD only after breadth and signal checks.
-- [ ] Deploy frontend on Vercel and inspect the live app and data-quality view.
+- [x] Deploy frontend on Vercel and confirm the live title is `Prot Stock v0.0.0`.
+- [ ] Inspect the live data-quality view after the canonical backfill.
 
 The database was 275 MB on 12 October 2026 when read through the linked
 Supabase project. Batch backfills and monitor headroom against the Free plan's

@@ -86,6 +86,7 @@ def canonical_price_rows(symbol_id: int, bars: Iterable[DailyBar], events: Itera
                    and bar.trading_date < date.fromisoformat(str(item["ex_date"])[:10])]
         pending.extend(item for item in actions if item.get("action_type") in {"RIGHTS_ISSUE", "OTHER"}
                        and item.get("verification_status") != "REJECTED"
+                       and (item.get("metadata") or {}).get("entitlement_policy") != "NO_EXISTING_HOLDER_ENTITLEMENT"
                        and bar.trading_date < date.fromisoformat(str(item["ex_date"])[:10]))
         provisional = bool(pending)
         adjusted_volume = int((Decimal(bar.volume) * factor).quantize(Decimal(1), rounding=ROUND_HALF_UP))

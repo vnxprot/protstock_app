@@ -40,8 +40,9 @@ BENCHMARK_LOOKBACK_DAYS = (date(2050, 1, 1) - VNINDEX_HISTORY_START).days
 # asks the upstream source for a small overlap to capture the newly closed session.
 FAST_LANE_BENCHMARK_FETCH_DAYS = 14
 # Daily, weekly and monthly analysis must share enough stored bars for SMA50 on monthly bars.
-# 2,600 daily sessions cover roughly ten Vietnamese trading years without an upstream fetch.
-MULTI_TIMEFRAME_HISTORY_LIMIT = 2600
+# 1,300 sessions preserve more than 50 complete monthly bars for SMA50 while
+# avoiding irrelevant older, unverified events in today's calculation window.
+MULTI_TIMEFRAME_HISTORY_LIMIT = 1300
 
 
 def run_eod(

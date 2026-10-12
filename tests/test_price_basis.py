@@ -44,3 +44,13 @@ def test_cash_event_changes_revision_and_refreshes_whole_price_window():
     revised = canonical_price_rows(1, [bar("2026-09-14")], [action], as_of_date=date(2026, 9, 15))
     assert revised[0]["data_revision"] != original[0]["data_revision"]
     assert revised[0]["volume_adjustment_factor"] == 1
+
+
+def test_employee_placement_stays_in_ledger_without_blocking_holder_volume():
+    placement = {"action_type": "OTHER", "ex_date": "2025-09-12", "ratio": 0.015,
+                 "verification_status": "SOURCE_REPORTED",
+                 "metadata": {"entitlement_policy": "NO_EXISTING_HOLDER_ENTITLEMENT"}}
+    rows = canonical_price_rows(1, [bar("2025-09-11"), bar("2025-09-12")],
+                                [placement], as_of_date=date(2025, 9, 12))
+    assert all(row["quality_status"] == "VALID" for row in rows)
+    assert all(row["volume_adjustment_factor"] == 1 for row in rows)
