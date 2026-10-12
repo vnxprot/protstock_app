@@ -7,7 +7,7 @@ membership manifest; future changes are allowed by editing and reseeding it.
 ## Canonical market-data contract
 
 1. Vnstock generation 5 requests VCI OHLCV for equities. Operational VCI
-   failures or empty histories use KBS. A calculation window has one vendor
+   failures, invalid OHLC bars or empty histories use KBS. A calculation window has one vendor
    and one data revision; switching vendor refreshes the whole window.
 2. Each stored bar records vendor/source version, vendor volume, comparable
    share volume, volume factor, price/volume basis, quality and a revision hash.
@@ -24,7 +24,8 @@ membership manifest; future changes are allowed by editing and reseeding it.
    a full-universe job on every trading day.
 4. The current calculation window uses up to 1,300 trading sessions, covering
    more than 50 complete monthly bars. Older records remain stored for audit.
-   Unverified share-event windows have `WARNING` quality. Core Engine,
+   Unverified share-event windows, including conflicting vendor ratios, have
+   `WARNING` quality. Core Engine,
    Core Pack, Flow, Market Health, Funnel, Radar, MACD, outcomes and backtests
    use a canonical window or withhold the result. Historical cash trade
    backtests spanning later rights events remain blocked until original
@@ -44,9 +45,9 @@ Core Pack rule versions begin at v0.0.0.
 - [x] Implement VCI/KBS whole-window source control and event provenance.
 - [x] Add fail-closed quality gates and fresh v0.0.0 IDs.
 - [x] Pass Python, web build, frontend and SQL migration tests locally.
-- [x] Commit and push the code (`417f5b7`).
-- [x] Apply the first four v0.0.0 Supabase migrations.
-- [x] Apply the TLG verification migration.
+- [x] Commit and push the v0.0.0 code (through `21aad92`).
+- [x] Apply all v0.0.0 Supabase migrations, including the breadth quality denominator.
+- [x] Apply the TLG and TRC verification migrations.
 - [x] Assert the live universe matches the 277-symbol manifest.
 - [x] Sync VCI event candidates: 277 symbols, 3,652 new events, zero failed symbols.
 - [ ] Review unresolved event classes before claiming complete technical coverage.
@@ -55,6 +56,11 @@ Core Pack rule versions begin at v0.0.0.
 - [ ] Publish one complete EOD only after breadth and signal checks.
 - [x] Deploy frontend on Vercel and confirm the live title is `Prot Stock v0.0.0`.
 - [ ] Inspect the live data-quality view after the canonical backfill.
+
+The Market Health view now counts symbols awaiting event verification separately
+from missing prices and short histories. A partial publication is allowed for
+inspection, but must not be described as complete while the event ledger has
+unverified shareholder entitlements.
 
 The database was 275 MB on 12 October 2026 when read through the linked
 Supabase project. Batch backfills and monitor headroom against the Free plan's

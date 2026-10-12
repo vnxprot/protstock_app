@@ -39,7 +39,11 @@ def distinct_share_events(events: Iterable[dict]) -> list[dict]:
             chosen[key] = event
         elif previous and priority.get(event.get("verification_status"), 0) == priority.get(previous.get("verification_status"), 0):
             if str(event.get("ratio")) != str(previous.get("ratio")):
-                raise ValueError(f"Conflicting share-event ratios: {key}")
+                if event.get("verification_status") in VERIFIED_STATUSES:
+                    raise ValueError(f"Conflicting verified share-event ratios: {key}")
+                # Two vendor descriptions with different ratios are still
+                # unverified. Keep the bars for audit and quarantine the
+                # pre-event window instead of blocking the entire import.
     return [chosen[key] for key in sorted(chosen)]
 
 

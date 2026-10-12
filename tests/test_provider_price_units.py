@@ -1,7 +1,7 @@
 from datetime import date
 from decimal import Decimal
 
-from protstock.provider_vnstock import VnstockProvider
+from protstock.provider_vnstock import ProviderDataError, VnstockProvider
 
 
 def test_provider_accepts_only_named_sources():
@@ -10,6 +10,31 @@ def test_provider_accepts_only_named_sources():
     assert VnstockProvider("AUTO").source == "AUTO"
     with pytest.raises(ValueError, match="AUTO"):
         VnstockProvider("UNKNOWN")
+
+
+def test_auto_replaces_whole_invalid_vci_window_with_kbs(monkeypatch):
+    import pytest
+
+    provider = VnstockProvider("AUTO")
+    requests = []
+    start, end = date(2026, 9, 1), date(2026, 9, 25)
+
+    def invalid_vci(symbol, first, last):
+        requests.append(("VCI", symbol, first, last))
+        raise ProviderDataError("Invalid VCI bar")
+
+    def kbs_window(symbol, first, last):
+        requests.append(("KBS", symbol, first, last))
+        return ["complete KBS window"]
+
+    monkeypatch.setattr(provider, "_vci_history", invalid_vci)
+    monkeypatch.setattr(provider, "_kbs_history", kbs_window)
+    assert provider.history("MPC", start, end) == ["complete KBS window"]
+    assert requests == [("VCI", "MPC", start, end), ("KBS", "MPC", start, end)]
+
+    monkeypatch.setattr(provider, "_vci_history", lambda *_: (_ for _ in ()).throw(ValueError("bad argument")))
+    with pytest.raises(ValueError, match="bad argument"):
+        provider.history("MPC", start, end)
 
 
 class Response:

@@ -1,4 +1,5 @@
 from datetime import date
+import pytest
 
 from protstock.models import DailyBar
 from protstock.price_basis import canonical_price_rows, same_source_window
@@ -30,6 +31,21 @@ def test_vendor_event_without_volume_basis_is_quarantined():
                                 [event], as_of_date=date(2026, 9, 15))
     assert rows[0]["volume"] == 100 and rows[0]["quality_status"] == "WARNING"
     assert rows[1]["volume"] == 100 and rows[1]["quality_status"] == "VALID"
+
+
+def test_conflicting_vendor_ratios_keep_auditable_bars_quarantined():
+    first = {"action_type": "STOCK_DIVIDEND", "ex_date": "2026-09-15", "ratio": 0.1,
+             "verification_status": "SOURCE_REPORTED", "metadata": {}}
+    second = {**first, "ratio": 0.2}
+    rows = canonical_price_rows(1, [bar("2026-09-14"), bar("2026-09-15")],
+                                [first, second], as_of_date=date(2026, 9, 15))
+    assert [row["quality_status"] for row in rows] == ["WARNING", "VALID"]
+    assert [row["volume_adjustment_factor"] for row in rows] == [1, 1]
+    with pytest.raises(ValueError, match="Conflicting verified"):
+        canonical_price_rows(1, [bar("2026-09-14")],
+                             [{**first, "verification_status": "VERIFIED"},
+                              {**second, "verification_status": "VERIFIED"}],
+                             as_of_date=date(2026, 9, 15))
 
 
 def test_mixed_source_or_basis_revision_is_rejected():

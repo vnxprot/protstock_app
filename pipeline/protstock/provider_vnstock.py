@@ -13,6 +13,10 @@ STOCK_PRICE_UNIT = "THOUSAND_VND_PER_SHARE"
 INDEX_PRICE_UNIT = "INDEX_POINTS"
 
 
+class ProviderDataError(ValueError):
+    """The vendor returned an OHLCV bar that cannot be used in a price series."""
+
+
 class VnstockProvider:
     """Vnstock v5 VCI equity prices with a labelled KBS fallback.
 
@@ -41,7 +45,7 @@ class VnstockProvider:
             # Only operational source failures may activate the fallback.  A
             # bad symbol, argument, entitlement or programming error must fail.
             from vnstock.core.exceptions import NetworkError, ProviderError
-            if not isinstance(exc, (NetworkError, ProviderError)):
+            if not isinstance(exc, (NetworkError, ProviderError, ProviderDataError)):
                 raise
         return self._kbs_history(symbol, start, end)
 
@@ -71,7 +75,7 @@ class VnstockProvider:
                 collected_at=collected_at,
             )
             if bar.validate():
-                raise ValueError(f"Invalid VCI bar for {symbol} on {trading_day}: {bar.validate()}")
+                raise ProviderDataError(f"Invalid VCI bar for {symbol} on {trading_day}: {bar.validate()}")
             result.append(bar)
         by_date = {bar.trading_date: bar for bar in result}
         return [by_date[day] for day in sorted(by_date)]
