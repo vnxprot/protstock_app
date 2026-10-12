@@ -57,6 +57,8 @@ def test_missing_eligible_symbol_is_audited_and_blocks_only_when_coverage_is_low
     breadth, membership = build_breadth_membership(symbols, prior, current, "2026-09-11")
     assert breadth["coverage_status"] == "INCOMPLETE"
     assert breadth["coverage_ratio"] == 0.93
+    assert breadth["market_health_score"] is None
+    assert breadth["market_health_state"] == "UNKNOWN"
     assert next(row for row in membership if row["symbol_id"] == 100)["status"] == "DATA_MISSING_OR_HALTED"
     assert regime_ok(breadth, {"trend_state": "UP"}) == (False, ["BREADTH_COVERAGE_INCOMPLETE"])
 

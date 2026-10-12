@@ -176,6 +176,9 @@ def build_breadth_membership(active_symbols: Sequence[dict], prior_snapshots: Se
     prior_by_symbol = {item["symbol_id"]: item for item in prior_snapshots}
     sector_by_symbol = {item["id"]: item.get("sector") for item in active_symbols}
     breadth = compute_breadth([current_by_symbol[symbol_id] for symbol_id in observed_ids], prior_by_symbol, sector_by_symbol)
+    if coverage_status == "INCOMPLETE":
+        breadth["market_health_score"] = None
+        breadth["market_health_state"] = "UNKNOWN"
     return {**breadth, "universe_size": len(active_ids), "eligible_count": eligible_count, "observed_count": observed_count, "coverage_ratio": coverage_ratio, "coverage_status": coverage_status}, membership
 
 

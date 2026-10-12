@@ -46,17 +46,18 @@ Core Pack rule versions begin at v0.0.0.
 - [x] Implement VCI/KBS whole-window source control and event provenance.
 - [x] Add fail-closed quality gates and fresh v0.0.0 IDs.
 - [x] Pass Python, web build, frontend and SQL migration tests locally.
-- [x] Commit and push the v0.0.0 code (through `21aad92`).
+- [x] Commit and push the v0.0.0 code.
 - [x] Apply all v0.0.0 Supabase migrations, including the breadth quality denominator.
 - [x] Apply the TLG and TRC verification migrations.
 - [x] Assert the live universe matches the 277-symbol manifest.
 - [x] Sync VCI event candidates: 277 symbols, 3,652 new events, zero failed symbols.
 - [ ] Review unresolved event classes before claiming complete technical coverage.
-- [ ] Backfill canonical bars in small batches and monitor database size.
-- [ ] Audit source/volume factors; quarantine unresolved event windows.
-- [ ] Publish one complete EOD only after breadth and signal checks.
+- [x] Backfill the 277-symbol universe in small batches, then retry only vendor-data errors.
+- [x] Audit TLG/TRC source-volume factors and quarantine unresolved event windows.
+- [x] Publish and inspect a partial 12 October EOD with the buy gate closed.
+- [ ] Publish a complete EOD after independently verifying the remaining entitlements.
 - [x] Deploy frontend on Vercel and confirm the live title is `Prot Stock v0.0.0`.
-- [ ] Inspect the live data-quality view after the canonical backfill.
+- [x] Inspect the live data-quality state after the canonical backfill.
 
 The Market Health view now counts symbols awaiting event verification separately
 from missing prices and short histories. A partial publication is allowed for
@@ -72,3 +73,22 @@ The initial full ledger import on 13 October 2026 left 921 source-reported
 share events and 214 rights issues without independent verification. These
 events remain visible for audit. Windows crossing them are withheld rather
 than labelled as valid comparable-volume history.
+
+## Live 12 October 2026 EOD audit
+
+- Universe: 277 active symbols, including TLG. The canonical daily price table
+  has current-session bars for 275 symbols: 254 from VCI and 21 from KBS.
+  DVM and GVT have no current-session bar from either source.
+- Current v0.0.0 daily snapshots: 75/277. Market Health observed 73/275
+  price-present eligible symbols (26.55%); 202 were quality-blocked and two
+  had no current-session data. Publication and coverage are `PARTIAL` and
+  `INCOMPLETE`. The market health headline is withheld on incomplete coverage.
+- Ten current-revision consolidated signals were stored, all `WATCH`; zero
+  `BUY`. No incomplete market sample authorizes new buys.
+- The database measured 344 MB after the full backfill and targeted retry,
+  below the 500 MB Supabase Free database
+  quota. Recheck actual usage as the data grows; no paid plan is configured.
+
+The remaining quality work is independent verification of holder entitlements
+and vendor volume bases for the unresolved event windows. The system keeps
+those symbols visible with explicit quarantine instead of inventing factors.
