@@ -7,7 +7,8 @@ membership manifest; future changes are allowed by editing and reseeding it.
 ## Canonical market-data contract
 
 1. Vnstock generation 5 requests VCI OHLCV for equities. Operational VCI
-   failures, invalid OHLC bars or empty histories use KBS. A calculation window has one vendor
+   failures, invalid OHLC bars, omitted last sessions or empty histories use KBS.
+   A calculation window has one vendor
    and one data revision; switching vendor refreshes the whole window.
 2. Each stored bar records vendor/source version, vendor volume, comparable
    share volume, volume factor, price/volume basis, quality and a revision hash.

@@ -1,7 +1,7 @@
 from datetime import date, timedelta
 from types import SimpleNamespace
 
-from protstock.eod import FAST_LANE_BENCHMARK_FETCH_DAYS, _benchmark_snapshot, _confirmed_week_end, _fetch_history_with_retry, _load_portfolios, _rows_as_of, finalize_fast_lane, rebuild_signals, resolve_eod_session, run_eod
+from protstock.eod import FAST_LANE_BENCHMARK_FETCH_DAYS, _benchmark_snapshot, _confirmed_week_end, _fetch_history_with_retry, _fetch_requested_session, _load_portfolios, _rows_as_of, finalize_fast_lane, rebuild_signals, resolve_eod_session, run_eod
 
 
 class RateLimitedProvider:
@@ -34,6 +34,25 @@ def test_timeout_retries_same_honest_provider(monkeypatch) -> None:
     provider = Provider()
     assert _fetch_history_with_retry(provider, "FPT", date(2026, 1, 1), date(2026, 1, 2)) == ["ok"]
     assert provider.calls == 3
+
+
+def test_missing_vci_last_session_uses_whole_kbs_window(monkeypatch) -> None:
+    day = date(2026, 9, 25)
+    start = day - timedelta(days=30)
+    calls = []
+
+    class Provider:
+        def __init__(self, source): self.source = source
+        def history(self, symbol, first, last):
+            calls.append((self.source, symbol, first, last))
+            bar_day = day - timedelta(days=1) if self.source == "VCI" else day
+            source = "VCI_VNSTOCK_5.0.0" if self.source == "VCI" else "KBS_PUBLIC"
+            return [SimpleNamespace(trading_date=bar_day, source=source)]
+
+    monkeypatch.setattr("protstock.eod.VnstockProvider", Provider)
+    rows = _fetch_requested_session(Provider("VCI"), "AUTO", "DVM", start, day)
+    assert rows[-1].trading_date == day and rows[-1].source == "KBS_PUBLIC"
+    assert calls == [("VCI", "DVM", start, day), ("KBS", "DVM", start, day)]
 
 
 def test_prepared_analysis_rejects_other_session_or_revision(tmp_path) -> None:

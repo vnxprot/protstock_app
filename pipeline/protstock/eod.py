@@ -137,8 +137,8 @@ def run_eod(
             try:
                 stored = _rows_as_of(client.price_history(symbol_row["id"], MULTI_TIMEFRAME_HISTORY_LIMIT), trading_date)
                 events = client.corporate_actions(symbol_row["id"])
-                fetched = _fetch_history_with_retry(provider, symbol_row["symbol"],
-                                                    trading_date - timedelta(days=lookback_days), trading_date)
+                fetched = _fetch_requested_session(provider, source, symbol_row["symbol"],
+                                                   trading_date - timedelta(days=lookback_days), trading_date)
                 if not fetched or fetched[-1].trading_date != trading_date:
                     raise ValueError("SOURCE_MISSING_REQUESTED_SESSION")
                 preview = canonical_price_rows(symbol_row["id"], fetched[-1:], events, as_of_date=trading_date)
@@ -149,10 +149,11 @@ def run_eod(
                 if needs_full_history:
                     first_day = (date.fromisoformat(stored[0]["trading_date"]) if stored
                                  else trading_date - timedelta(days=3650))
-                    fetched = _fetch_history_with_retry(provider, symbol_row["symbol"], first_day, trading_date)
+                    fetched = _fetch_requested_session(provider, source, symbol_row["symbol"], first_day, trading_date)
                     available = {bar.trading_date.isoformat() for bar in fetched}
                     missing_stored = {row["trading_date"] for row in stored} - available
-                    if missing_stored and source == "AUTO":
+                    if ((missing_stored or not fetched or fetched[-1].trading_date != trading_date)
+                            and source == "AUTO" and fetched and source_family(fetched[0].source) == "VCI"):
                         fetched = _fetch_history_with_retry(VnstockProvider("KBS"), symbol_row["symbol"], first_day, trading_date)
                         available = {bar.trading_date.isoformat() for bar in fetched}
                         missing_stored = {row["trading_date"] for row in stored} - available
@@ -641,6 +642,16 @@ def _same_day_market_context(trading_date: date, breadth: dict, vnindex_snapshot
     return {"trading_date": trading_date.isoformat(), "breadth": breadth,
             "vnindex_snapshot": vnindex_snapshot,
             "recovery": recovery_status(benchmark_daily or [])}
+
+
+def _fetch_requested_session(provider: VnstockProvider, source: str, symbol: str,
+                             start: date, end: date) -> list:
+    """Try KBS for the entire requested window if VCI omits its last session."""
+    fetched = _fetch_history_with_retry(provider, symbol, start, end)
+    if (fetched and fetched[-1].trading_date != end and source == "AUTO"
+            and source_family(fetched[0].source) == "VCI"):
+        return _fetch_history_with_retry(VnstockProvider("KBS"), symbol, start, end)
+    return fetched
 
 
 def _fetch_history_with_retry(provider: VnstockProvider, symbol: str, start: date, end: date) -> list:
