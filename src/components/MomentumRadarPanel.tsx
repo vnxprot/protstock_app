@@ -14,7 +14,7 @@ type RadarRow = { symbol_id: number; symbol: string; as_of_date: string; event_s
   breakout_date: string | null; weekly_confirmed_date: string | null; reacceleration_date: string | null;
   breakout_level: number | null; structural_stop: number | null; stage: string; entry_status: string; evidence: Evidence }
 type FunnelRow = { symbol_id: number; stage: string; setup_kind: string | null; setup_date: string | null; trigger_date: string | null }
-type MacdRow = { symbol_id: number; stage: string; confirmed_on: string; trigger_date: string | null; swings: number;
+type MacdRow = { symbol_id: number; stage: string; confirmed_on: string | null; trigger_date: string | null; swings: number;
   evidence: { trigger_age_sessions?: number | null } | null }
 type AdaptiveRow = { symbol_id: number; action: string; evidence: { funnel_stage?: string; weekly_setup?: string | null } | null }
 export type RadarChampionSignal = { symbol_id: number; action: string; timeframe: string; as_of_date: string }
@@ -36,10 +36,11 @@ const fullDay = (value: string | null | undefined) => value ? `${day(value)}/${v
 const number = (value: number | null | undefined, digits = 2) => value == null ? '—' : Number(value).toLocaleString('vi-VN', { maximumFractionDigits: digits })
 const isBuy = (action: string) => action === 'PROBE_BUY' || action === 'ADD'
 const macdText = (row: MacdRow) => row.stage === 'CONFIRMED' ? `Xác nhận ${fullDay(row.trigger_date)}`
+  : row.stage === 'WATCH_PIVOT_CONFIRMATION' ? 'Ứng viên đáy mới'
   : row.stage === 'WATCH_PRICE_CONFIRMATION' ? 'Chờ giá xác nhận'
   : row.stage === 'INVALIDATED' ? 'Đã vô hiệu' : row.stage === 'EXPIRED' ? 'Đã hết hạn' : row.stage
 const macdPriority = (row: MacdRow, date: string) => row.stage === 'CONFIRMED' && row.trigger_date === date ? 0
-  : row.stage === 'WATCH_PRICE_CONFIRMATION' ? 1 : row.stage === 'CONFIRMED' ? 2 : 3
+  : row.stage === 'WATCH_PIVOT_CONFIRMATION' ? 1 : row.stage === 'WATCH_PRICE_CONFIRMATION' ? 2 : row.stage === 'CONFIRMED' ? 3 : 4
 
 function riskText(row: RadarRow) {
   if (row.entry_status === 'EXTENDED') return `Quá xa stop ${number(row.evidence?.distance_to_stop_pct)}%`
@@ -51,6 +52,7 @@ function riskText(row: RadarRow) {
 function nextStep(row: RadarRow, funnel?: FunnelRow, macd?: MacdRow) {
   if (row.entry_status === 'EXTENDED') return 'Chờ vùng rủi ro phù hợp hơn'
   if (funnel?.stage === 'WEEKLY_READY') return 'Chờ trigger ngày của Phễu'
+  if (macd?.stage === 'WATCH_PIVOT_CONFIRMATION') return 'Chờ xác nhận đáy phân kỳ'
   if (macd?.stage === 'WATCH_PRICE_CONFIRMATION') return 'Chờ giá xác nhận phân kỳ'
   if (row.stage === 'SURGE_WATCH') return 'Chờ breakout và xác nhận tuần'
   if (activeStages.has(row.stage)) return 'Theo dõi cấu trúc và stop'
@@ -99,7 +101,7 @@ export function MomentumRadarPanel({ date, championSignals, championLoading, cha
     for (let from = 0; ; from += 1000) {
       const { data, error } = await supabase!.from('macd_divergence_assessments')
         .select('symbol_id,stage,confirmed_on,trigger_date,swings,evidence')
-        .eq('as_of_date', date).eq('version', 'MACD_BULLISH_DIVERGENCE_ZONE_V4').eq('oscillator', 'MACD_LINE')
+        .eq('as_of_date', date).eq('version', 'MACD_BULLISH_DIVERGENCE_ZONE_V5').eq('oscillator', 'MACD_LINE')
         .order('symbol_id').range(from, from + 999)
       if (error) throw error
       rows.push(...(data ?? []) as MacdRow[])

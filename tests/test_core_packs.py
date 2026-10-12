@@ -28,6 +28,18 @@ def test_vcp_breakout_pack_detects_contraction_dry_up_and_breakout() -> None:
     assert evaluate_vcp_breakout_v1({"bars": bars, "snapshot": {"volume_ratio20": 2.0}})[0:2] == (True, "PROBE_BUY")
 
 
+def test_vcp_dry_up_needs_two_individual_sessions_even_after_volume_spike() -> None:
+    bars = []
+    for index in range(10): bars.append(_bar(index, 90, 100, high=100, low=80))
+    for index in range(10, 20): bars.append(_bar(index, 92, 100, high=100, low=85))
+    for index in range(20, 30): bars.append(_bar(index, 95, 100, high=100, low=90))
+    bars[22]["volume"] = 500
+    for index, volume in ((27, 50), (28, 85), (29, 100)):
+        bars[index]["volume"] = volume
+    bars.append(_bar(30, 102, 250, high=103, low=100))
+    assert evaluate_vcp_breakout_v1({"bars": bars, "snapshot": {"volume_ratio20": 9}})[0:2] == (False, "WATCH")
+
+
 def test_rsi_macd_divergence_pack_does_not_use_current_rsi_for_unconfirmed_pivot() -> None:
     closes = [120 - index * 2 for index in range(15)] + [92, 95, 98, 100, 98, 96, 94, 92, 89]
     bars = [_bar(index, close, 100, high=close + 1, low=close - 1) for index, close in enumerate(closes)]

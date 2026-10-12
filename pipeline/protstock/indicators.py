@@ -106,7 +106,8 @@ def calculate_indicators(bars: Sequence[dict]) -> IndicatorSnapshot:
     trend = "UNKNOWN"
     if sma20 is not None and sma50 is not None:
         trend = "UP" if closes[-1] > sma20 > sma50 else "DOWN" if closes[-1] < sma20 < sma50 else "SIDEWAYS"
-    volume_avg = _sma(volumes, 20)
+    # The evaluated bar must not raise its own volume benchmark.
+    volume_avg = _sma(volumes[:-1], 20)
     return IndicatorSnapshot(
         close=closes[-1], sma20=sma20, sma50=sma50, sma200=sma200,
         ema10=_ema_series(closes, 10)[-1], ema20=_ema_series(closes, 20)[-1], ema50=_ema_series(closes, 50)[-1],

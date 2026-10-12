@@ -81,14 +81,14 @@ jobs:
           with httpx.Client(base_url=base, headers=headers, timeout=30) as client:
               response = client.get('/macd_divergence_assessments', params={
                   'select': 'symbol_id', 'as_of_date': 'eq.' + day,
-                  'version': 'eq.MACD_BULLISH_DIVERGENCE_ZONE_V4',
+                  'version': 'eq.MACD_BULLISH_DIVERGENCE_ZONE_V5',
                   'oscillator': 'eq.MACD_LINE', 'limit': '1',
               })
               response.raise_for_status()
               count = int(response.headers['content-range'].split('/')[-1])
               if count == 0:
-                  raise RuntimeError('No MACD V4 assessments stored for ' + day)
-              print(f'MACD V4 stored assessments on {day}: {count}')
+                  raise RuntimeError('No MACD V5 assessments stored for ' + day)
+              print(f'MACD V5 stored assessments on {day}: {count}')
               symbol = os.environ.get('TARGET_SYMBOL', '').upper()
               if symbol:
                   response = client.get('/symbols', params={'select': 'id', 'symbol': 'eq.' + symbol})
@@ -99,13 +99,13 @@ jobs:
                   response = client.get('/macd_divergence_assessments', params={
                       'select': 'swings,stage,trigger_date,evidence',
                       'symbol_id': 'eq.' + str(symbols[0]['id']), 'as_of_date': 'eq.' + day,
-                      'version': 'eq.MACD_BULLISH_DIVERGENCE_ZONE_V4',
+                      'version': 'eq.MACD_BULLISH_DIVERGENCE_ZONE_V5',
                       'oscillator': 'eq.MACD_LINE', 'order': 'swings.asc',
                   })
                   response.raise_for_status()
                   rows = response.json()
                   if not rows:
-                      raise RuntimeError(f'No MACD V4 assessment for {symbol} on {day}')
+                      raise RuntimeError(f'No MACD V5 assessment for {symbol} on {day}')
                   for row in rows:
                       zones = row['evidence']['zones']
                       print(symbol, row['swings'], row['stage'], row['trigger_date'],

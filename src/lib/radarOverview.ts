@@ -10,7 +10,7 @@ export const radarMilestonesToday = (row: RadarAssessment) => row.evidence?.mile
 export const hasRadarStageToday = (row: RadarAssessment, stage: string) => radarMilestonesToday(row).some(item => item.kind === stage)
 
 export function isCurrentMacdLink(row: MacdLink, date: string) {
-  return row.stage === 'WATCH_PRICE_CONFIRMATION'
+  return row.stage === 'WATCH_PIVOT_CONFIRMATION' || row.stage === 'WATCH_PRICE_CONFIRMATION'
     || row.stage === 'CONFIRMED' && (row.trigger_date === date
       || row.evidence?.trigger_age_sessions != null && row.evidence.trigger_age_sessions <= 5)
 }
@@ -30,7 +30,7 @@ export function radarOpportunityPriority(row: RadarAssessment, champion: Publish
   if (row.entry_status === 'EXTENDED') return 6
   if (fresh) return 2
   if (hasRadarStageToday(row, 'REACCELERATING') && row.entry_status === 'RISK_WINDOW') return 3
-  if (funnel?.stage === 'WEEKLY_READY' || macd?.stage === 'WATCH_PRICE_CONFIRMATION') return 4
+  if (funnel?.stage === 'WEEKLY_READY' || macd?.stage === 'WATCH_PIVOT_CONFIRMATION' || macd?.stage === 'WATCH_PRICE_CONFIRMATION') return 4
   if (['SURGE_WATCH', 'CONTINUING', 'REACCELERATING'].includes(row.stage)) return 5
   return row.stage === 'INVALIDATED' ? 7 : row.stage === 'DATA_CHECK' ? 8 : 9
 }

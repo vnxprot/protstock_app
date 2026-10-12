@@ -251,15 +251,21 @@ def evaluate_pullback_continuation(context: dict[str, Any]) -> tuple[bool, str, 
 
 
 def evaluate_vcp_breakout_v1(context: dict[str, Any]) -> tuple[bool, str, list[str]]:
-    bars, snapshot = context.get("bars", []), context.get("snapshot", {})
-    if len(bars) < 31 or (snapshot.get("volume_ratio20") or 0) <= 1.5:
+    bars = context.get("bars", [])
+    if len(bars) < 31:
         return False, "WATCH", []
     windows = (bars[-31:-21], bars[-21:-11], bars[-11:-1])
     depths = [(_high(window) - _low(window)) / _high(window) for window in windows]
-    baseline = sum(float(item.get("volume", 0)) for item in bars[-24:-4]) / 20
-    dry_up = baseline > 0 and sum(float(item.get("volume", 0)) for item in bars[-4:-1]) / 3 < baseline * 0.7
+    volumes = [float(item.get("volume") or 0) for item in bars]
+    prior20 = sum(volumes[-21:-1]) / 20
+    breakout_volume = prior20 > 0 and volumes[-1] >= 1.5 * prior20
+    dry_sessions = []
+    for index in range(len(bars) - 4, len(bars) - 1):
+        average = sum(volumes[index - 20:index]) / 20
+        dry_sessions.append(average > 0 and volumes[index] <= 0.6 * average)
+    dry_up = sum(dry_sessions) >= 2
     breakout = float(bars[-1]["close"]) > max(float(item["high"]) for item in bars[-11:-1])
-    if not (depths[2] < depths[1] < depths[0] and dry_up and breakout):
+    if not (depths[2] < depths[1] < depths[0] and dry_up and breakout and breakout_volume):
         return False, "WATCH", []
     return True, "PROBE_BUY", ["VCP_DEPTH_CONTRACTING", "VCP_VOLUME_DRY_UP", "VCP_BREAKOUT_VOLUME"]
 
@@ -305,7 +311,7 @@ def evaluate_macd_bullish_divergence_v4(context: dict[str, Any]) -> tuple[bool, 
     rows = assess_macd_zone_divergence(context.get("symbol_id", 0), context.get("bars") or [],
                                        context.get("candidate_exchange"))
     today = context.get("data_date")
-    active = [row for row in rows if row["stage"] == "WATCH_PRICE_CONFIRMATION"
+    active = [row for row in rows if row["stage"] in {"WATCH_PIVOT_CONFIRMATION", "WATCH_PRICE_CONFIRMATION"}
               or row["stage"] == "CONFIRMED" and (row["evidence"].get("trigger_age_sessions") or 0) <= RECENT_BREAKOUT_SESSIONS]
     if not active:
         return False, "WATCH", []
@@ -313,20 +319,25 @@ def evaluate_macd_bullish_divergence_v4(context: dict[str, Any]) -> tuple[bool, 
     # still on WATCH; within the same urgency, prefer the stronger structure.
     top = max(active, key=lambda row: (
         row["stage"] == "CONFIRMED" and row["trigger_date"] == today,
-        row["swings"], row["confirmed_on"],
+        row["swings"], row["confirmed_on"] or "",
     ))
     evidence = top["evidence"]
     context["engine_evidence"] = {
         "pattern_type": "MACD_BULLISH_DIVERGENCE", "evidence_cluster": "MACD_BULLISH_DIVERGENCE",
-        "engine_version": "v4", "setup_id": top["setup_id"], "oscillator": "MACD_LINE",
+        "engine_version": "v5", "setup_id": top["setup_id"], "oscillator": "MACD_LINE",
         "segments": top["swings"] - 1, "zones": evidence["zones"], "strength": evidence["strength"],
         "trigger_price": top["trigger_price"], "invalidation_price": top["invalidation_price"],
         "confirmed_on": top["confirmed_on"], "trigger_date": top["trigger_date"],
         "breakout_volume_ratio20": evidence.get("breakout_volume_ratio20"),
+        "sweep_reversal": evidence.get("sweep_reversal"),
     }
     reasons = [f"MACD_ZONE_DIVERGENCE_{top['swings'] - 1}_SEGMENTS", "MACD_LINE_HIGHER_ZONE_LOWS"]
     if evidence["strength"] == "THIN":
         reasons.append("ZONE_DIVERGENCE_THIN")
+    if evidence.get("sweep_reversal"):
+        reasons.append("SWEEP_REVERSAL_LOW")
+    if top["stage"] == "WATCH_PIVOT_CONFIRMATION":
+        return True, "WATCH", [*reasons, "WAIT_PIVOT_CONFIRMATION"]
     if evidence.get("pending_lower_low_on"):
         return True, "WATCH", [*reasons, "ZONE_LOW_BEING_REVISED"]
     if top["stage"] == "WATCH_PRICE_CONFIRMATION":

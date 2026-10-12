@@ -38,8 +38,9 @@ def test_four_price_zones_revise_recent_low_and_breakout_only_when_closed(monkey
     assert [zone["macd_low"] for zone in four["evidence"]["zones"]] == [-4, -3, -2, -1]
     assert four["evidence"]["zones"][0]["price_date"] != four["evidence"]["zones"][0]["macd_date"]
     pending = next(row for row in zone_rule.assess_macd_zone_divergence(7, bars[:66], "HOSE") if row["swings"] == 4)
-    assert pending["stage"] == "WATCH_PRICE_CONFIRMATION"
-    assert pending["evidence"]["pending_lower_low_on"] == bars[64]["date"]
+    assert pending["stage"] == "WATCH_PIVOT_CONFIRMATION"
+    assert pending["confirmed_on"] is None
+    assert pending["evidence"]["zones"][-1]["price_date"] == bars[64]["date"]
     revised = next(row for row in zone_rule.assess_macd_zone_divergence(7, bars[:67], "HOSE") if row["swings"] == 4)
     assert revised["stage"] == "WATCH_PRICE_CONFIRMATION"
     assert revised["evidence"]["zones"][-1]["price_low"] == 22.0
@@ -68,3 +69,40 @@ def test_v4_emits_buy_only_on_volume_confirmed_breakout_day(monkeypatch) -> None
     context["data_date"] = bars[-1]["date"]
     emitted, action, reasons = evaluate_macd_bullish_divergence_v4(context)
     assert emitted and action == "WATCH" and "RECENT_PRICE_BREAKOUT" in reasons
+
+
+def test_sweep_low_is_provisional_then_breaks_out_on_pivot_confirmation_day(monkeypatch) -> None:
+    def line(closes: list[float]) -> tuple[list[float], list[float]]:
+        values = [1.0] * len(closes)
+        values[30] = -1.149
+        values[63] = 0.573
+        return [value * close / 100 for value, close in zip(values, closes)], [0.0] * len(closes)
+
+    monkeypatch.setattr(zone_rule, "_macd_series", line)
+    bars = []
+    for index in range(68):
+        bars.append({"date": (date(2026, 7, 5) + timedelta(days=index)).isoformat(),
+                     "open": 52.0, "high": 53.8, "low": 49.0, "close": 52.0, "volume": 100.0})
+    bars[30]["low"] = 47.0
+    bars[45]["high"] = 54.4
+    bars[65].update(open=50.0, high=51.5, low=46.4, close=51.2)
+    bars[66]["close"] = 52.3
+    bars[67].update(open=53.0, high=55.5, low=52.0, close=55.1, volume=1000.0)
+
+    early = next(row for row in zone_rule.assess_macd_zone_divergence(7, bars[:66], "HOSE") if row["swings"] == 2)
+    assert early["stage"] == "WATCH_PIVOT_CONFIRMATION"
+    assert early["confirmed_on"] is None
+    assert early["evidence"]["sweep_reversal"] is True
+    confirmed = next(row for row in zone_rule.assess_macd_zone_divergence(7, bars, "HOSE") if row["swings"] == 2)
+    assert confirmed["stage"] == "CONFIRMED"
+    assert confirmed["confirmed_on"] == bars[67]["date"] == confirmed["trigger_date"]
+    assert confirmed["trigger_price"] == 54.4
+    assert confirmed["evidence"]["breakout_volume_ratio20"] == 10.0
+
+    context = {"timeframe": "D", "symbol_id": 7, "candidate_exchange": "HOSE", "bars": bars,
+               "data_date": bars[67]["date"]}
+    assert evaluate_macd_bullish_divergence_v4(context)[1] == "PROBE_BUY"
+    bars.append({**bars[-1], "date": (date.fromisoformat(bars[-1]["date"]) + timedelta(days=1)).isoformat(),
+                 "high": 54.5, "low": 53.0, "close": 54.0, "volume": 100.0})
+    context["data_date"] = bars[-1]["date"]
+    assert evaluate_macd_bullish_divergence_v4(context)[1] == "WATCH"

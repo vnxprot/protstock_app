@@ -34,6 +34,7 @@ test('published buys lead while an extended reacceleration stays below fresh val
 
 test('MACD source link includes current watch and recent breakout, not old confirmation', () => {
   assert.equal(isCurrentMacdLink({ stage: 'WATCH_PRICE_CONFIRMATION', trigger_date: null }, '2026-10-07'), true)
+  assert.equal(isCurrentMacdLink({ stage: 'WATCH_PIVOT_CONFIRMATION', trigger_date: null }, '2026-10-07'), true)
   assert.equal(isCurrentMacdLink({ stage: 'CONFIRMED', trigger_date: '2026-10-07' }, '2026-10-07'), true)
   assert.equal(isCurrentMacdLink({ stage: 'CONFIRMED', trigger_date: '2026-10-02', evidence: { trigger_age_sessions: 4 } }, '2026-10-07'), true)
   assert.equal(isCurrentMacdLink({ stage: 'CONFIRMED', trigger_date: '2025-12-04', evidence: { trigger_age_sessions: 200 } }, '2026-10-07'), false)

@@ -5,15 +5,17 @@ import { supabase } from '../lib/supabase'
 import { SoftSelect } from './SoftSelect'
 import './MacdDivergencePanel.css'
 
-const VERSION = 'MACD_BULLISH_DIVERGENCE_ZONE_V4'
+const VERSION = 'MACD_BULLISH_DIVERGENCE_ZONE_V5'
 type Zone = { start_date: string; end_date: string; price_date: string; price_low: number; macd_date: string; macd_low: number; revisions: { date: string; price_low: number }[] }
 type Evidence = { zones: Zone[]; strength: 'THIN' | 'ROBUST'; price_declines_pct: number[]; macd_rises_pct_points: number[];
   breakout_volume_ratio20?: number | null; trigger_age_sessions?: number | null; pending_lower_low_on?: string | null;
-  invalidated_on?: string | null; latest_close: number; distance_to_trigger_pct: number }
-type Row = { symbol_id: number; symbol: string; setup_id: string; swings: number; stage: string; confirmed_on: string;
+  invalidated_on?: string | null; latest_close: number; distance_to_trigger_pct: number;
+  sweep_reversal?: boolean; sweep_date?: string | null; lower_wick_ratio?: number; close_location?: number }
+type Row = { symbol_id: number; symbol: string; setup_id: string; swings: number; stage: string; confirmed_on: string | null;
   trigger_price: number; invalidation_price: number; trigger_date: string | null; evidence: Evidence }
 
 const stages: Record<string, string> = {
+  WATCH_PIVOT_CONFIRMATION: 'Ứng viên đáy · chờ xác nhận',
   WATCH_PRICE_CONFIRMATION: 'Chờ giá breakout', CONFIRMED: 'Giá đã breakout',
   INVALIDATED: 'Cấu trúc đã hỏng', EXPIRED: 'Hết thời hạn theo dõi',
 }
@@ -21,10 +23,11 @@ const price = (value: number) => value.toLocaleString('vi-VN', { maximumFraction
 function priority(row: Row, date: string) {
   if (row.stage === 'CONFIRMED' && row.trigger_date === date) return 0
   if (row.stage === 'CONFIRMED') return 1
-  if (row.evidence.pending_lower_low_on) return 2
-  if (row.confirmed_on === date) return 3
-  if (row.stage === 'WATCH_PRICE_CONFIRMATION') return 4
-  return 5
+  if (row.stage === 'WATCH_PIVOT_CONFIRMATION') return 2
+  if (row.evidence.pending_lower_low_on) return 3
+  if (row.confirmed_on === date) return 4
+  if (row.stage === 'WATCH_PRICE_CONFIRMATION') return 5
+  return 6
 }
 
 function ZoneHistory({ row, date, open }: { row: Row; date: string; open: boolean }) {
@@ -63,6 +66,7 @@ function ZoneRow({ row, date }: { row: Row; date: string }) {
   const status = evidence.pending_lower_low_on ? 'Đáy đang cập nhật'
     : latest ? 'Vừa breakout'
     : row.stage === 'CONFIRMED' ? 'Breakout gần đây'
+    : row.stage === 'WATCH_PIVOT_CONFIRMATION' ? 'Ứng viên đáy mới'
     : row.confirmed_on === date ? 'Vừa phát hiện'
     : stages[row.stage] ?? row.stage
   return <details className={latest ? 'macd-zone-fresh' : ''} onToggle={event => setOpen(event.currentTarget.open)}>
@@ -70,6 +74,8 @@ function ZoneRow({ row, date }: { row: Row; date: string }) {
       <span>{status}</span><small>{evidence.strength === 'THIN' ? 'Biên mỏng' : 'Biên rõ'}
         {' · '}{row.stage === 'CONFIRMED' ? 'đã vượt' : 'cách ngưỡng'} {Math.abs(evidence.distance_to_trigger_pct).toFixed(1)}%</small></summary>
     <p className="macd-zone-levels">Đóng cửa gần nhất <b>{price(evidence.latest_close)}</b> · Vượt <b>{price(row.trigger_price)}</b> để xác nhận giá · Đáy bảo vệ <b>{price(row.invalidation_price)}</b></p>
+    {row.stage === 'WATCH_PIVOT_CONFIRMATION' && <p className="macd-zone-note">Đáy giá mới chỉ là ứng viên. Cần đủ hai phiên giao dịch đóng sau đáy để xác nhận pivot; trong thời gian đó không tạo tín hiệu mua từ mẫu này.</p>}
+    {evidence.sweep_reversal && <p className="macd-zone-note">Đáy {evidence.sweep_date} là nến quét đáy rút chân: râu dưới {((evidence.lower_wick_ratio ?? 0) * 100).toFixed(0)}% biên nến, đóng cửa ở {((evidence.close_location ?? 0) * 100).toFixed(0)}% biên nến. Giá thấp nhất vẫn là đáy kỹ thuật, nhưng phản ánh cú quét hơn là nhiều phiên tích lũy tại đáy.</p>}
     {row.trigger_date && <p>Giá vượt ngày <b>{row.trigger_date}</b>
       {evidence.breakout_volume_ratio20 != null ? ' · khối lượng ' + evidence.breakout_volume_ratio20.toFixed(1) + '× trung bình 20 phiên trước' : ''}.
       {row.trigger_date !== date && ' Đây là sự kiện đã qua; rule không phát lệnh mua muộn.'}</p>}
@@ -81,7 +87,7 @@ function ZoneRow({ row, date }: { row: Row; date: string }) {
       {index > 0 && <small>Giá giảm {evidence.price_declines_pct[index - 1].toFixed(2)}% · MACD tăng {evidence.macd_rises_pct_points[index - 1].toFixed(3)} điểm %</small>}
       {zone.revisions.length > 1 && <small>Cập nhật đáy: {zone.revisions.map(item => item.date + ' (' + price(item.price_low) + ')').join(' → ')}</small>}
     </div>)}</div>
-    <p className="macd-zone-note">Vùng đáy giá và đáy đường MACD được tìm riêng; ngày có thể lệch nhau. “Biên mỏng” vẫn được theo dõi, nhưng chỉ đề xuất mua khi giá breakout cùng khối lượng xác nhận và qua bộ lọc rủi ro chung. Histogram không tham gia rule này.</p>
+    <p className="macd-zone-note">Vùng đáy giá và đáy đường MACD được tìm riêng; ngày có thể lệch nhau. Breakout là lần đầu đóng cửa trên đỉnh giữa hai đáy sau khi pivot được xác nhận, kể cả chính phiên xác nhận; volume cần ≥1,3× trung bình 20 phiên trước để xét mua. Sự kiện giá vẫn được lưu nếu volume thiếu; các bộ lọc rủi ro chung vẫn có thể chặn mua. Histogram không tham gia rule này.</p>
     <ZoneHistory row={row} date={date} open={open}/>
   </details>
 }
@@ -94,7 +100,7 @@ export function MacdDivergencePanel({ date, authenticated, focusSymbol = '' }: {
   const [symbol, setSymbol] = useState('')
   useEffect(() => { if (focusSymbol) { setSymbol(focusSymbol); setPage(1) } }, [focusSymbol])
   const query = useQuery({
-    queryKey: ['macd-zone-divergence-v4', date], enabled: authenticated && Boolean(supabase), refetchInterval: 60_000,
+    queryKey: ['macd-zone-divergence-v5', date], enabled: authenticated && Boolean(supabase), refetchInterval: 60_000,
     queryFn: async (): Promise<Row[]> => {
       const rows: Row[] = []
       for (let from = 0; ; from += 1000) {
@@ -113,13 +119,13 @@ export function MacdDivergencePanel({ date, authenticated, focusSymbol = '' }: {
   const rows = query.data ?? []
   const filtered = useMemo(() => {
     const matches = rows.filter(row => row.symbol.includes(symbol.trim().toUpperCase())
-      && (stage === 'ALL' || stage === 'FRESH' && row.stage === 'WATCH_PRICE_CONFIRMATION' && !row.evidence.pending_lower_low_on && row.confirmed_on === date || stage === 'ACTIVE' && (row.stage === 'WATCH_PRICE_CONFIRMATION'
+      && (stage === 'ALL' || stage === 'FRESH' && (row.stage === 'WATCH_PIVOT_CONFIRMATION' || row.stage === 'WATCH_PRICE_CONFIRMATION' && !row.evidence.pending_lower_low_on && row.confirmed_on === date) || stage === 'ACTIVE' && (row.stage === 'WATCH_PIVOT_CONFIRMATION' || row.stage === 'WATCH_PRICE_CONFIRMATION'
         || row.stage === 'CONFIRMED' && (row.evidence.trigger_age_sessions ?? 999) <= 5)
         || row.stage === stage)
       && (segments <= 0 || row.swings === segments + 1))
       .sort((a, b) => priority(a, date) - priority(b, date)
         || Math.max(0, a.evidence.distance_to_trigger_pct) - Math.max(0, b.evidence.distance_to_trigger_pct)
-        || b.swings - a.swings || b.confirmed_on.localeCompare(a.confirmed_on))
+        || b.swings - a.swings || (b.confirmed_on ?? '').localeCompare(a.confirmed_on ?? ''))
     if (segments !== 0) return matches
     const seen = new Set<string>()
     return matches.filter(row => { if (seen.has(row.symbol)) return false; seen.add(row.symbol); return true })
@@ -127,7 +133,7 @@ export function MacdDivergencePanel({ date, authenticated, focusSymbol = '' }: {
   const pages = Math.max(1, Math.ceil(filtered.length / pageSize))
   const current = Math.min(page, pages)
   const fresh = rows.filter(row => row.stage === 'CONFIRMED' && row.trigger_date === date).length
-  const watching = new Set(rows.filter(row => row.stage === 'WATCH_PRICE_CONFIRMATION').map(row => row.symbol)).size
+  const watching = new Set(rows.filter(row => row.stage === 'WATCH_PIVOT_CONFIRMATION' || row.stage === 'WATCH_PRICE_CONFIRMATION').map(row => row.symbol)).size
   return <article className="panel macd-divergence-panel">
     <div className="panel-title"><div><h3>Phân kỳ Dương · đường MACD v1.0</h3>
       <p className="muted">1 đoạn = 2 vùng đáy · 2 đoạn = 3 vùng · 3 đoạn = 4 vùng. Ưu tiên breakout mới và mã gần ngưỡng giá.</p></div><span>{date}</span></div>

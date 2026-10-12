@@ -15,7 +15,7 @@ from .divergence import PIVOT_RADIUS
 from .macd_divergence import _macd_series
 
 
-VERSION = "MACD_BULLISH_DIVERGENCE_ZONE_V4"
+VERSION = "MACD_BULLISH_DIVERGENCE_ZONE_V5"
 MAX_SETUP_AGE = 60
 MAX_ZONE_GAP = 5
 MAX_ZONE_SPREAD = 0.01
@@ -37,11 +37,13 @@ def _quote_tick(price: float, exchange: str | None) -> float:
 
 
 def _price_pivots(bars: Sequence[dict]) -> list[int]:
-    """Accept equal-low plateaus, requiring at least one strict neighbor."""
+    """Include the last two provisional lows; they cannot confirm until two later closes."""
     result = []
-    for index in range(max(PIVOT_RADIUS, len(bars) - 240), len(bars) - PIVOT_RADIUS):
+    for index in range(max(PIVOT_RADIUS, len(bars) - 240), len(bars)):
         low = float(bars[index]["low"])
-        neighbors = [float(bars[other]["low"]) for other in range(index - PIVOT_RADIUS, index + PIVOT_RADIUS + 1)
+        if index + PIVOT_RADIUS >= len(bars) and low >= min(float(bars[other]["low"]) for other in range(index - PIVOT_RADIUS, index)) - 1e-8:
+            continue
+        neighbors = [float(bars[other]["low"]) for other in range(index - PIVOT_RADIUS, min(len(bars), index + PIVOT_RADIUS + 1))
                      if other != index]
         if all(low <= other + 1e-8 for other in neighbors) and any(low < other - 1e-8 for other in neighbors):
             result.append(index)
@@ -142,7 +144,7 @@ def assess_macd_zone_divergence(symbol_id: int, bars: Sequence[dict], exchange: 
         confirmed_index = last["confirmed_index"]
         expiry_index = confirmed_index + MAX_SETUP_AGE
         trigger_index = invalidated_index = pending_index = None
-        for index in range(confirmed_index + 1, len(ordered)):
+        for index in range(confirmed_index, len(ordered)):
             if index > expiry_index and trigger_index is None:
                 break
             if float(ordered[index]["low"]) < stop - 1e-8:
@@ -155,8 +157,14 @@ def assess_macd_zone_divergence(symbol_id: int, bars: Sequence[dict], exchange: 
                     and float(ordered[index - 1]["close"]) <= trigger):
                 trigger_index = index
         age = len(ordered) - 1 - confirmed_index
-        stage = ("INVALIDATED" if invalidated_index is not None else "CONFIRMED" if trigger_index is not None
+        stage = ("WATCH_PIVOT_CONFIRMATION" if age < 0 else
+                 "INVALIDATED" if invalidated_index is not None else "CONFIRMED" if trigger_index is not None
                  else "EXPIRED" if age > MAX_SETUP_AGE else "WATCH_PRICE_CONFIRMATION")
+        pivot_bar = ordered[last["price_index"]]
+        span = float(pivot_bar["high"]) - float(pivot_bar["low"])
+        wick_ratio = (min(float(pivot_bar["open"]), float(pivot_bar["close"])) - float(pivot_bar["low"])) / span if span > 0 else 0
+        close_location = (float(pivot_bar["close"]) - float(pivot_bar["low"])) / span if span > 0 else 0
+        sweep_reversal = wick_ratio >= 0.45 and close_location >= 0.7
         declines = [100 * (left["price_low"] - right["price_low"]) / left["price_low"]
                     for left, right in zip(selected, selected[1:])]
         rises = [right["macd_low"] - left["macd_low"] for left, right in zip(selected, selected[1:])]
@@ -169,7 +177,7 @@ def assess_macd_zone_divergence(symbol_id: int, bars: Sequence[dict], exchange: 
         results.append({
             "symbol_id": symbol_id, "as_of_date": ordered[-1]["date"], "version": VERSION,
             "oscillator": "MACD_LINE", "swings": swings, "setup_id": setup_id,
-            "stage": stage, "confirmed_on": ordered[confirmed_index]["date"],
+            "stage": stage, "confirmed_on": ordered[confirmed_index]["date"] if age >= 0 else None,
             "trigger_date": ordered[trigger_index]["date"] if trigger_index is not None else None,
             "trigger_price": round(trigger, 4), "invalidation_price": round(stop, 4),
             "evidence": {
@@ -179,6 +187,8 @@ def assess_macd_zone_divergence(symbol_id: int, bars: Sequence[dict], exchange: 
                 "price_declines_pct": [round(value, 3) for value in declines],
                 "macd_rises_pct_points": [round(value, 3) for value in rises],
                 "strength": "THIN" if thin else "ROBUST",
+                "sweep_reversal": sweep_reversal, "sweep_date": last["price_date"] if sweep_reversal else None,
+                "lower_wick_ratio": round(wick_ratio, 3), "close_location": round(close_location, 3),
                 "breakout_volume_ratio20": _breakout_volume(ordered, trigger_index) if trigger_index is not None else None,
                 "trigger_age_sessions": len(ordered) - 1 - trigger_index if trigger_index is not None else None,
                 "latest_close": round(closes[-1], 4),
