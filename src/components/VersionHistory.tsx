@@ -1,6 +1,11 @@
 import './VersionHistory.css'
 
 const releases = [
+  { version: '0.0.0', date: '12/10/2026', title: 'Khởi động lại trên cơ sở dữ liệu thống nhất', areas: [
+    { name: 'Nguồn dữ liệu', changes: ['VCI qua Vnstock thế hệ 5 là nguồn cổ phiếu chính; KBS dự phòng theo cả chuỗi.', 'Giữ nguồn, phiên bản nguồn, volume gốc và hệ số volume cho từng phiên; sự kiện chưa xác minh chặn tính toán liên quan.'] },
+    { name: 'Phạm vi', changes: ['Universe hiện tại gồm 277 mã, có TLG đang hoạt động.', 'Prot Stock là ứng dụng cá nhân, phi thương mại.'] },
+    { name: 'Phiên bản', changes: ['Nhãn phát hành hiện hành bắt đầu lại từ v0.0.0. Mã định danh lịch sử được giữ để đối chiếu các kết quả cũ.'] },
+  ] },
   { version: '3.0.1', date: '09/10/2026', title: 'Hướng dẫn hệ thống và từ điển tra cứu', areas: [
     { name: 'Hướng dẫn', changes: ['Thêm bản đồ từ dữ liệu đến quyết định, lối vào theo chủ đề và quy trình đọc một mã.', 'Tìm kiếm không dấu hoặc có dấu trong bài hướng dẫn và từ điển, với liên kết đến đúng nội dung.'] },
     { name: 'Dữ liệu và tín hiệu', changes: ['Giải thích nguồn, độ phủ, trạng thái công bố và giới hạn dữ liệu lịch sử.', 'Phân biệt Champion, Challenger shadow, sáu bảng tín hiệu và Radar giao dịch đột biến sau phiên.'] },

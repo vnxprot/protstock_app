@@ -59,7 +59,7 @@ export function ChallengerResearchTab({ date, tab, focusSymbol = '' }: { date: s
     for (let from = 0; ; from += 1000) {
       const { data, error } = await supabase!.from('challenger_strategy_assessments')
         .select('symbol_id,strategy_code,action,reasons,base_price,invalidation_price,evidence,symbols!inner(symbol)')
-        .eq('trading_date', date).eq('engine_version', 'v2.0-challenger')
+        .eq('trading_date', date).eq('engine_version', 'v0.0.0-challenger')
         .in('strategy_code', codes).order('symbol_id').range(from, from + 999)
       if (error) throw error
       result.push(...(data ?? []).map((item: any) => ({ ...item,

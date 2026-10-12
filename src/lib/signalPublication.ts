@@ -16,6 +16,7 @@ async function readPublication(): Promise<SignalPublication | null> {
   const { data, error } = await supabase!.from('job_runs')
     .select('trading_date,counts,finished_at,source_revision')
     .eq('status', 'SUCCEEDED')
+    .eq('source_revision', 'core-rules-v0.0.0')
     .not('counts->>published_signals', 'is', null)
     .order('trading_date', { ascending: false })
     .order('finished_at', { ascending: false })

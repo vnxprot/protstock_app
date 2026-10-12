@@ -33,8 +33,6 @@ on:
         required: true
         default: false
         type: boolean
-  schedule:
-    - cron: '0 1 * * 0'
 
 permissions:
   contents: read

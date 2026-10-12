@@ -6,7 +6,7 @@ from protstock.backtest_worker import process_backtests, _evaluation_contexts
 def request():
     return {"id": "run", "symbol_id": 7, "timeframe": "D", "date_from": "2026-01-02", "date_to": "2026-01-03",
             "started_at": "lease-1", "rule_dsl": {"engine": "core_ladder_v2"},
-            "algorithm_version": "core-rules-v4.0.1", "data_revision": "published-revision",
+            "algorithm_version": "core-rules-v0.0.0", "data_revision": "published-revision",
             "rule_versions": {"dsl": {"all": [], "action": "WATCH"}}, "assumptions": {"initial_capital": 100_000_000}}
 
 
@@ -15,7 +15,8 @@ def test_worker_keeps_warmup_and_uses_frozen_rule_snapshot_and_lease(monkeypatch
     class Client:
         def queued_backtests(self, _limit): return [request()]
         def price_history(self, *_args):
-            return [{"trading_date": "2026-01-0" + str(i), "open": 20, "high": 21, "low": 19, "close": 20, "volume": 1000} for i in range(1, 5)]
+            return [{"trading_date": "2026-01-0" + str(i), "open": 20, "high": 21, "low": 19, "close": 20, "volume": 1000,
+                     "source": "VCI_VNSTOCK_5.0.0", "data_revision": "basis-1", "quality_status": "VALID"} for i in range(1, 5)]
         def breadth_history(self, start, end):
             assert start == date(2026, 1, 1) and end == date(2026, 1, 3)
             return []
@@ -31,7 +32,7 @@ def test_worker_keeps_warmup_and_uses_frozen_rule_snapshot_and_lease(monkeypatch
         return {"trades": [], "metrics": {"total_return": 0}, "warnings": ["MARKET_CONTEXT_MISSING"],
                 "evaluation_summary": {"evaluated": 2}, "execution_model": "CLOSE_SIGNAL_NEXT_OPEN",
                 "price_unit": "VND", "source_price_unit": "THOUSAND_VND", "benchmark_metrics": {}, "equity_curve": [],
-                "algorithm_version": "core-rules-v4.0.1", "data_revision": "data-hash"}
+                "algorithm_version": "core-rules-v0.0.0", "data_revision": "data-hash"}
     monkeypatch.setattr("protstock.backtest_worker.SupabaseRestClient", lambda _settings: Client())
     monkeypatch.setattr("protstock.backtest_worker.Settings.from_env", lambda: object())
     monkeypatch.setattr("protstock.backtest_worker.run_backtest", simulate)
@@ -42,7 +43,7 @@ def test_worker_keeps_warmup_and_uses_frozen_rule_snapshot_and_lease(monkeypatch
     assert rule == request()["rule_dsl"] and kwargs["date_from"] == "2026-01-02"
     assert replacements == [("run", [], "lease-1")]  # Clears any trades left by a prior attempt.
     assert all(update[2] == "lease-1" for update in updates)
-    assert updates[-1][1]["metrics"]["execution_algorithm_version"] == "core-rules-v4.0.1"
+    assert updates[-1][1]["metrics"]["execution_algorithm_version"] == "core-rules-v0.0.0"
     assert updates[-1][1]["metrics"]["execution_data_revision"] == "data-hash"
     assert updates[-1][1]["metrics"]["warnings"] == ["MARKET_CONTEXT_MISSING"]
 
@@ -78,7 +79,8 @@ def test_worker_refuses_to_execute_a_different_pinned_algorithm(monkeypatch):
     class Client:
         def queued_backtests(self, _limit): return [{**request(), "algorithm_version": "core-rules-v3.0.0"}]
         def price_history(self, *_args):
-            return [{"trading_date": "2026-01-0" + str(i), "open": 20, "high": 21, "low": 19, "close": 20, "volume": 1000} for i in range(1, 4)]
+            return [{"trading_date": "2026-01-0" + str(i), "open": 20, "high": 21, "low": 19, "close": 20, "volume": 1000,
+                     "source": "VCI_VNSTOCK_5.0.0", "data_revision": "basis-1", "quality_status": "VALID"} for i in range(1, 4)]
         def update_backtest(self, run_id, payload, lease=None): updates.append(payload)
         def replace_backtest_trades(self, *args): replacements.append(args)
         def close(self): pass
@@ -90,17 +92,16 @@ def test_worker_refuses_to_execute_a_different_pinned_algorithm(monkeypatch):
     assert "Phiên bản tính toán đã thay đổi" in updates[-1]["error_message"]
     assert not replacements
 
-def test_worker_prefers_matched_research_and_keeps_exchange_context(monkeypatch):
-    from protstock.provider_vnstock import KBS_SOURCE_VERSION, STOCK_PRICE_UNIT
+def test_worker_uses_canonical_prices_and_keeps_exchange_context(monkeypatch):
+    from protstock.provider_vnstock import STOCK_PRICE_UNIT
     updates = []
     class Client:
         def queued_backtests(self, _limit): return [request()]
         def symbol_by_id(self, symbol_id): return {"id": symbol_id, "exchange": "HNX", "sector": "TEST"}
-        def research_price_status(self, _symbol): return {"coverage_status": "MATCHED", "source_version": KBS_SOURCE_VERSION, "requested_start_date": "2026-01-01", "requested_end_date": "2026-01-03"}
-        def research_price_history(self, *_args):
+        def price_history(self, *_args):
             return [{"trading_date": "2026-01-0" + str(i), "open": 20, "high": 21, "low": 19, "close": 20,
-                     "volume": 1000, "price_unit": STOCK_PRICE_UNIT, "source_version": KBS_SOURCE_VERSION, "quality_status": "VALID"} for i in range(1, 4)]
-        def price_history(self, *_args): raise AssertionError("Matched coherent research must not use legacy stored prices")
+                     "volume": 1000, "price_unit": STOCK_PRICE_UNIT, "source": "VCI_VNSTOCK_5.0.0",
+                     "data_revision": "basis-1", "quality_status": "VALID"} for i in range(1, 4)]
         def closed_trading_sessions(self, exchange, *_args):
             assert exchange == "HNX"
             return set()
@@ -113,25 +114,22 @@ def test_worker_prefers_matched_research_and_keeps_exchange_context(monkeypatch)
         assert context["symbol_id"] == 7 and context["exchange"] == "HNX" and context["sector"] == "TEST"
         return {"trades": [], "metrics": {"total_return": 0}, "warnings": [], "evaluation_summary": {},
                 "execution_model": "CLOSE_SIGNAL_NEXT_OPEN", "price_unit": "VND", "source_price_unit": "THOUSAND_VND",
-                "benchmark_metrics": {}, "equity_curve": [], "algorithm_version": "core-rules-v4.0.1", "data_revision": "research-hash"}
+                "benchmark_metrics": {}, "equity_curve": [], "algorithm_version": "core-rules-v0.0.0", "data_revision": "research-hash"}
     monkeypatch.setattr("protstock.backtest_worker.SupabaseRestClient", lambda _settings: Client())
     monkeypatch.setattr("protstock.backtest_worker.Settings.from_env", lambda: object())
     monkeypatch.setattr("protstock.backtest_worker.run_backtest", simulate)
     assert process_backtests() == {"succeeded": 1, "failed": 0}
-    assert updates[-1]["metrics"]["price_basis"] == "KBS_VENDOR_REBASED"
+    assert updates[-1]["metrics"]["price_basis"] == "CANONICAL_EVENT_REBASED"
 
-def test_shorter_research_sync_does_not_truncate_requested_backtest(monkeypatch):
-    from protstock.provider_vnstock import KBS_SOURCE_VERSION
+def test_research_sync_cannot_override_canonical_backtest(monkeypatch):
     updates, stored_calls = [], []
     class Client:
         def queued_backtests(self, _limit): return [request()]
-        def research_price_status(self, _symbol):
-            return {"coverage_status": "MATCHED", "source_version": KBS_SOURCE_VERSION,
-                    "requested_start_date": "2026-01-01", "requested_end_date": "2026-01-02"}
-        def research_price_history(self, *_args): raise AssertionError("Research does not cover the requested end")
+        def research_price_history(self, *_args): raise AssertionError("Research source must not be used")
         def price_history(self, *_args):
             stored_calls.append(True)
-            return [{"trading_date": "2026-01-0" + str(i), "open": 20, "high": 21, "low": 19, "close": 20, "volume": 1000} for i in range(1, 4)]
+            return [{"trading_date": "2026-01-0" + str(i), "open": 20, "high": 21, "low": 19, "close": 20, "volume": 1000,
+                     "source": "KBS_PUBLIC", "data_revision": "basis-1", "quality_status": "VALID"} for i in range(1, 4)]
         def update_backtest(self, run_id, payload, lease=None): updates.append(payload)
         def replace_backtest_trades(self, *_args): pass
         def close(self): pass
@@ -139,5 +137,5 @@ def test_shorter_research_sync_does_not_truncate_requested_backtest(monkeypatch)
     monkeypatch.setattr("protstock.backtest_worker.Settings.from_env", lambda: object())
     assert process_backtests() == {"succeeded": 1, "failed": 0}
     assert stored_calls == [True]
-    assert updates[-1]["metrics"]["price_basis"] == "STORED_VERIFIED"
+    assert updates[-1]["metrics"]["price_basis"] == "CANONICAL_EVENT_REBASED"
     assert updates[-1]["metrics"]["evaluation_period"]["last_date"] == "2026-01-03"

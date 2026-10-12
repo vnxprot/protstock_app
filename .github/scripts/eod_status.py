@@ -38,7 +38,7 @@ def decide(mode: str, jobs: list[dict], breadth_exists: bool, *, force_rerun: bo
 def balanced_shards(symbols: list[dict], shard_count: int = 2) -> list[dict]:
     names = sorted({item["symbol"] for item in symbols})
     count = min(max(shard_count, 1), max(len(names), 1))
-    return [{"shard": i + 1, "label": f"Lô {i + 1}", "source": "KBS", "symbols": ",".join(names[i * len(names) // count:(i + 1) * len(names) // count])} for i in range(count)]
+    return [{"shard": i + 1, "label": f"Lô {i + 1}", "source": "AUTO", "symbols": ",".join(names[i * len(names) // count:(i + 1) * len(names) // count])} for i in range(count)]
 
 
 def main() -> None:

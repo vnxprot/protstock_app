@@ -11,7 +11,7 @@ from .signal_funnel import assess_funnel
 from .signal_policy import average_turnover_vnd, order_participation_rate, MIN_AVERAGE_TURNOVER_VND
 from .wyckoff import classify_wyckoff_timeframe
 
-VERSION = "v2.0-challenger"
+VERSION = "v0.0.0-challenger"
 LONG = {"PROBE_BUY", "EARLY_PROBE"}
 CODES = ("UPTREND_CORE", "SIDEWAY_RANGE", "ADAPTIVE_FUNNEL", "MACD_EARLY_ZONE", "DOWNTREND_SPRING")
 

@@ -111,7 +111,7 @@ def test_health_unknown_long_history_is_not_a_bearish_vote():
     assert breadth["market_health_score"] == 100
     assert breadth["health_components"]["above_sma200"]["valid_count"] == 0
     assert breadth["sector_breadth"][0]["sample_warning"] == "SMALL_SAMPLE"
-    assert breadth["health_method_version"] == "health-v4.0.0"
+    assert breadth["health_method_version"] == "health-v0.0.0"
 
 
 def test_health_sma200_denominator_only_counts_observed_history():

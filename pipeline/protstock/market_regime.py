@@ -16,7 +16,7 @@ def _pct(items: Sequence[dict], predicate) -> float | None:
     return sum(1 for item in items if predicate(item)) / len(items) * 100 if items else None
 
 
-HEALTH_METHOD_VERSION = "health-v4.0.0"
+HEALTH_METHOD_VERSION = "health-v0.0.0"
 
 
 def _health_components(snapshots: Sequence[dict], advances: int = 0, declines: int = 0) -> dict:

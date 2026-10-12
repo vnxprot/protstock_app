@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "protstock-pipeline"
-version = "4.0.0"
+version = "0.0.0"
 description = "Idempotent EOD data pipeline for Prot Stock"
 requires-python = ">=3.11"
 dependencies = [
@@ -13,7 +13,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=8.3,<9"]
-data = []
+data = ["vnstock==5.0.0"]
 
 [project.scripts]
 protstock = "protstock.cli:main"

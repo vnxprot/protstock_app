@@ -56,7 +56,7 @@ export function SignalFunnelPanel({ date, authenticated, focusSymbol = '' }: { d
       for (let from = 0; ; from += 1000) {
         const { data, error } = await supabase!.from('signal_funnel_assessments')
           .select('monthly_state,stage,setup_kind,setup_date,trigger_date,reasons,symbols!inner(symbol)')
-          .eq('as_of_date', date).eq('version', 'MTF_FUNNEL_SHADOW_V2')
+          .eq('as_of_date', date).eq('version', 'MTF_FUNNEL_SHADOW_V0_0_0')
           .order('symbol_id').range(from, from + 999)
         if (error) throw error
         result.push(...(data ?? []).map((item: any) => ({

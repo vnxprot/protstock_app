@@ -10,6 +10,10 @@ export interface PriceBar {
   low: number
   close: number
   volume: number
+  source?: string
+  price_basis?: string
+  volume_basis?: string
+  volume_adjustment_factor?: number
 }
 
 export interface TechnicalSnapshot {

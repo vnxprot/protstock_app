@@ -6,6 +6,7 @@ import json
 
 
 CALCULATION_VERSION = "OUTCOME_V2_PRICE_FINGERPRINT"
+CANONICAL_CALCULATION_VERSION = "OUTCOME_V0_0_0_CANONICAL"
 RESEARCH_CALCULATION_VERSION = "OUTCOME_V3_KBS_REBASED"
 TRADE_ASSUMPTION_VERSION = "NEXT_OPEN_FEE15BP_TAX10BP_SLIP10BP_V1"
 
@@ -51,6 +52,7 @@ def evaluate_signal_outcome(signal: dict, price_history: Sequence[dict], horizon
         "hit_invalidation": hit_invalidation,
         "status": "VALID",
         "calculation_version": (RESEARCH_CALCULATION_VERSION if price_basis == "KBS_VENDOR_REBASED"
+                                else CANONICAL_CALCULATION_VERSION if price_basis == "CANONICAL_EVENT_REBASED"
                                 else CALCULATION_VERSION),
         "price_basis": price_basis,
         "price_fingerprint": fingerprint,

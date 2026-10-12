@@ -49,8 +49,31 @@ jobs:
           FORCE_RERUN: ${{ inputs.force_rerun == true }}
         run: python .github/scripts/eod_status.py fast-lane
 
-  ingest:
+  sync-actions:
     needs: preflight
+    if: needs.preflight.outputs.action == 'RUN'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: python -m pip install --extra-index-url https://vnstocks.com/api/packages -e ".[data]"
+      - name: Check live universe
+        env:
+          SUPABASE_URL: https://upmqxwktvvguegqeqibn.supabase.co
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: protstock assert-universe data/universe.csv
+      - name: Refresh the corporate-action ledger before price calculations
+        env:
+          SUPABASE_URL: https://upmqxwktvvguegqeqibn.supabase.co
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: protstock sync-corporate-actions --calendar-window-days 45
+
+  ingest:
+    needs: [preflight, sync-actions]
     if: needs.preflight.outputs.action == 'RUN'
     name: Fast ingest ${{ matrix.source }} · ${{ matrix.label }}
     runs-on: ubuntu-latest
@@ -66,7 +89,7 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
-      - run: python -m pip install -e ".[dev,data]"
+      - run: python -m pip install --extra-index-url https://vnstocks.com/api/packages -e ".[dev,data]"
       - run: protstock validate-universe data/universe.csv
       - name: Ingest and analyze assigned Fast Lane shard
         id: ingest
@@ -78,7 +101,7 @@ jobs:
           SYMBOL_MANIFEST: ${{ matrix.symbols }}
           FORCE_RERUN: ${{ inputs.force_rerun == true }}
         run: |
-          args=(--fast-lane --skip-breadth-snapshot --source KBS --symbols "$SYMBOL_MANIFEST" --prepared-dir "$RUNNER_TEMP/analysis")
+          args=(--fast-lane --skip-breadth-snapshot --source AUTO --symbols "$SYMBOL_MANIFEST" --prepared-dir "$RUNNER_TEMP/analysis")
           if [ "$FORCE_RERUN" != 'true' ]; then args+=(--missing-only); fi
           if [ -n "$TRADING_DATE" ]; then args+=(--date "$TRADING_DATE"); fi
           protstock eod "${args[@]}"
@@ -86,7 +109,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: v4-analysis-${{ matrix.shard }}
+          name: v0-analysis-${{ matrix.shard }}
           path: ${{ runner.temp }}/analysis/*.json.gz
           retention-days: 1
           if-no-files-found: ignore
@@ -104,11 +127,11 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
-      - run: python -m pip install -e ".[data]"
+      - run: python -m pip install --extra-index-url https://vnstocks.com/api/packages -e ".[data]"
       - uses: actions/download-artifact@v4
         continue-on-error: true
         with:
-          pattern: v4-analysis-*
+          pattern: v0-analysis-*
           path: ${{ runner.temp }}/analysis
           merge-multiple: true
       - name: Publish market breadth and signals from available same-day snapshots

@@ -4,10 +4,12 @@ from decimal import Decimal
 from protstock.provider_vnstock import VnstockProvider
 
 
-def test_unconfigured_provider_cannot_be_reported_as_an_independent_source():
+def test_provider_accepts_only_named_sources():
     import pytest
-    with pytest.raises(ValueError, match="KBS"):
-        VnstockProvider("VCI")
+    assert VnstockProvider("VCI").source == "VCI"
+    assert VnstockProvider("AUTO").source == "AUTO"
+    with pytest.raises(ValueError, match="AUTO"):
+        VnstockProvider("UNKNOWN")
 
 
 class Response:
@@ -23,7 +25,7 @@ class Response:
 
 def test_kbs_stock_prices_are_stored_in_thousand_vnd(monkeypatch):
     monkeypatch.setattr("protstock.provider_vnstock.httpx.get", lambda *args, **kwargs: Response(27800))
-    bars = VnstockProvider().history("HDB", date(2026, 9, 25), date(2026, 9, 25))
+    bars = VnstockProvider("KBS").history("HDB", date(2026, 9, 25), date(2026, 9, 25))
     assert bars[0].close == Decimal("27.8")
     assert bars[0].open == bars[0].high == bars[0].low == bars[0].close
 
@@ -49,6 +51,6 @@ def test_kbs_request_includes_late_friday_but_filters_future_dates(monkeypatch):
         return BufferedResponse(27800)
 
     monkeypatch.setattr("protstock.provider_vnstock.httpx.get", fake_get)
-    bars = VnstockProvider().history("HDB", date(2026, 9, 15), date(2026, 9, 25))
+    bars = VnstockProvider("KBS").history("HDB", date(2026, 9, 15), date(2026, 9, 25))
     assert seen["edate"] == "27-09-2026"
     assert [bar.trading_date for bar in bars] == [date(2026, 9, 25)]

@@ -43,8 +43,8 @@ export function TodayHealth() {
       const sameDayJobs = (jobs ?? []).filter(candidate => candidate.trading_date === eodDate)
       const [{ data: universe, error: symbolsError }, { data: prices, error: dailyError }, { data: snapshots, error: snapshotsError }, { data: runItems, error: itemsError }] = await Promise.all([
         supabase.from('symbols').select('id,symbol').eq('active', true).order('symbol').limit(1000),
-        eodDate ? supabase.from('daily_prices').select('symbol_id').eq('quality_status','VALID').eq('trading_date', eodDate).limit(1000) : Promise.resolve({ data: [], error: null }),
-        eodDate ? supabase.from('technical_snapshots').select('symbol_id').eq('timeframe', 'D').eq('as_of_date', eodDate).limit(1000) : Promise.resolve({ data: [], error: null }),
+        eodDate ? supabase.from('daily_prices').select('symbol_id').eq('quality_status','VALID').not('data_revision','is',null).eq('trading_date', eodDate).limit(1000) : Promise.resolve({ data: [], error: null }),
+        eodDate ? supabase.from('technical_snapshots').select('symbol_id').eq('timeframe', 'D').eq('algorithm_version','core-rules-v0.0.0').eq('as_of_date', eodDate).limit(1000) : Promise.resolve({ data: [], error: null }),
         sameDayJobs.length ? supabase.from('job_run_items').select('item_key,status,error_code,error_message,warning_codes,job_run_id').in('job_run_id', sameDayJobs.map(item => item.id)).order('created_at', { ascending: false }).limit(1000) : Promise.resolve({ data: [], error: null }),
       ])
       if (symbolsError || dailyError || snapshotsError || itemsError) throw symbolsError || dailyError || snapshotsError || itemsError
@@ -73,7 +73,7 @@ export function TodayHealth() {
   })
   const data = health.data
   return <article className="panel discipline-card today-health-card">
-    <div className="panel-title"><div><h2>Dữ liệu và pipeline v1.0</h2></div><Activity size={23}/></div>
+    <div className="panel-title"><div><h2>Dữ liệu và pipeline v0.0.0</h2></div><Activity size={23}/></div>
     {!supabase ? <p className="muted">Chưa kết nối dữ liệu.</p> : health.isLoading ? <p className="muted">Đang kiểm tra độ phủ dữ liệu…</p> : health.isError ? <p className="negative" role="alert">Không tải được trạng thái dữ liệu. <button className="text-button" onClick={()=>void health.refetch()}>Thử lại</button></p> : <>
       <div className="health-metrics"><span><b>{data?.newestDate && data.activeSymbols > 0 ? `${data.coveredSymbols}/${data.activeSymbols}` : '—'}</b><small>Mã có snapshot phiên {formatDate(data?.newestDate)}</small></span><span><b>{(data?.priceRows ?? 0).toLocaleString('vi-VN')}</b><small>Tổng bản ghi giá</small></span><span><b>{data?.coreActions ?? 0}</b><small>Action · phiên mới nhất</small></span><span><b>{data?.coreWatch ?? 0}</b><small>WATCH · phiên mới nhất</small></span></div>
       <dl className="health-details">

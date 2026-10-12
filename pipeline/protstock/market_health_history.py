@@ -38,7 +38,20 @@ def build_market_health_history(active_symbols: Sequence[dict], price_rows: Sequ
         closes: deque[float] = deque(maxlen=200)
         flow_bars: deque[dict] = deque(maxlen=21)
         prior_close: float | None = None
+        previous_revision: str | None = None
         for row in sorted(rows, key=lambda item: item["trading_date"]):
+            revision = row.get("data_revision")
+            if row.get("quality_status", "VALID") != "VALID" or ("data_revision" in row and not revision):
+                closes.clear()
+                flow_bars.clear()
+                prior_close = None
+                previous_revision = None
+                continue
+            if previous_revision is not None and revision != previous_revision:
+                closes.clear()
+                flow_bars.clear()
+                prior_close = None
+            previous_revision = revision
             close = float(row["close"])
             closes.append(close)
             if row.get("high") is not None and row.get("low") is not None:

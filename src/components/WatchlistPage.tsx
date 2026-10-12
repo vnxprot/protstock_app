@@ -54,9 +54,9 @@ export function WatchlistPage({ authenticated, syncStatus }: { authenticated: bo
   const eod = useQuery({
     queryKey: ['watchlist-eod', date, ids.join(',')], enabled: authenticated && Boolean(supabase) && Boolean(date) && ids.length > 0, staleTime: 60_000, refetchInterval: 60_000,
     queryFn: async () => {
-      const { data, error } = await supabase!.from('daily_prices').select('symbol_id,close,volume,quality_status').eq('trading_date', date).in('symbol_id', ids)
+      const { data, error } = await supabase!.from('daily_prices').select('symbol_id,close,volume,quality_status,data_revision').eq('trading_date', date).in('symbol_id', ids)
       if (error) throw error
-      return new Set((data ?? []).filter(row => Number(row.close) > 0 && Number(row.volume) > 0 && row.quality_status === 'VALID').map(row => Number(row.symbol_id)))
+      return new Set((data ?? []).filter(row => Number(row.close) > 0 && Number(row.volume) > 0 && row.quality_status === 'VALID' && row.data_revision).map(row => Number(row.symbol_id)))
     },
   })
   const signals = useQuery({

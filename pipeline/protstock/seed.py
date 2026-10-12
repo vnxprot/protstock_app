@@ -43,6 +43,13 @@ def seed_universe(path: str | Path) -> dict[str, int | str]:
         ]
         try:
             written = client.upsert("symbols", rows, "symbol")
+            manifest = {item.symbol for item in validation.rows if item.active}
+            for extra in client.active_symbols():
+                if extra["symbol"] not in manifest:
+                    client.deactivate_symbol(extra["symbol"])
+            live = {item["symbol"] for item in client.active_symbols()}
+            if live != manifest:
+                raise RuntimeError(f"Universe does not match manifest: {len(live)}/{len(manifest)} active")
         except httpx.HTTPStatusError as exc:
             raise RuntimeError(f"Universe seed rejected: {exc.response.text[:500]}") from exc
         client.finish_job(job["id"], {
@@ -60,6 +67,21 @@ def seed_universe(path: str | Path) -> dict[str, int | str]:
         raise
     finally:
         client.close()
+
+
+def assert_live_universe(path: str | Path) -> dict[str, int]:
+    validation = load_universe(path)
+    if not validation.is_valid:
+        raise ValueError("Universe manifest is invalid")
+    expected = {row.symbol for row in validation.rows if row.active}
+    client = SupabaseRestClient(Settings.from_env())
+    try:
+        actual = {row["symbol"] for row in client.active_symbols()}
+    finally:
+        client.close()
+    if actual != expected:
+        raise ValueError(f"Live universe differs from manifest: missing={sorted(expected-actual)}, extra={sorted(actual-expected)}")
+    return {"active_symbols": len(actual)}
 
 
 def seed_vnindex_history(

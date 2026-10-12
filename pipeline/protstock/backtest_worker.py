@@ -6,7 +6,7 @@ from typing import Any
 
 from .backtest import BacktestAssumptions, run_backtest
 from .config import Settings
-from .provider_vnstock import KBS_SOURCE_VERSION
+from .price_basis import same_source_window
 from .supabase_rest import SupabaseRestClient
 
 
@@ -39,17 +39,19 @@ def process_backtests(limit: int = 3) -> dict[str, Any]:
             try:
                 client.update_backtest(request["id"], {"status": "RUNNING"}, request["started_at"]) if request.get("started_at") else client.update_backtest(request["id"], {"status": "RUNNING"})
                 symbol = client.symbol_by_id(request["symbol_id"]) if hasattr(client, "symbol_by_id") else {"id": request["symbol_id"]}
-                research_status = client.research_price_status(request["symbol_id"]) if hasattr(client, "research_price_status") else None
-                research_ready = bool(research_status and research_status.get("coverage_status") == "MATCHED"
-                                      and research_status.get("source_version") == KBS_SOURCE_VERSION
-                                      and research_status.get("requested_start_date", "9999-12-31") <= request["date_from"]
-                                      and research_status.get("requested_end_date", "") >= request["date_to"])
-                history = client.research_price_history(request["symbol_id"], 5000) if research_ready else client.price_history(request["symbol_id"], 5000)
-                price_basis = "KBS_VENDOR_REBASED" if research_ready else "STORED_VERIFIED"
+                history = client.price_history(request["symbol_id"], 5000)
+                price_basis = "CANONICAL_EVENT_REBASED"
                 daily = [{**row, "date": row["trading_date"]} for row in history
                          if row["trading_date"] <= request["date_to"]]
                 if not daily:
                     raise ValueError("Không có lịch sử giá trong khoảng đã chọn.")
+                if not same_source_window(daily) or any(row.get("quality_status") != "VALID" for row in daily):
+                    raise ValueError("Chuỗi giá–khối lượng chưa cùng nguồn, cùng revision hoặc chưa được xác minh.")
+                action_reader = getattr(client, "corporate_actions", None)
+                actions = action_reader(request["symbol_id"]) if action_reader else []
+                if any(event.get("ex_date") and request["date_from"] < str(event["ex_date"])[:10] <= history[-1]["trading_date"]
+                       and event.get("verification_status") != "REJECTED" for event in actions):
+                    raise ValueError("Backtest tiền mặt qua sự kiện quyền cần giá giao dịch gốc từng phiên; chuỗi đã điều chỉnh chưa đủ.")
                 start, end = date.fromisoformat(daily[0]["date"]), date.fromisoformat(request["date_to"])
                 breadth_getter = getattr(client, "breadth_history", None)
                 breadth = breadth_getter(start, end) if breadth_getter else []

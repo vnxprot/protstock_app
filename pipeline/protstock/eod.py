@@ -30,6 +30,7 @@ from .momentum_radar import assess_momentum_radar
 from .macd_divergence_zones import assess_macd_zone_divergence
 from .challenger_engine import assess_challenger, assess_challenger_strategies, recovery_status, VERSION as CHALLENGER_VERSION, CODES as CHALLENGER_STRATEGY_CODES
 from .wyckoff import classify_wyckoff_timeframe
+from .price_basis import canonical_price_rows, same_source_window, source_family
 
 # VNINDEX's first session was 28/07/2000. This keeps its benchmark history full
 # through the app's operational planning horizon without expanding symbol fetches.
@@ -46,7 +47,7 @@ MULTI_TIMEFRAME_HISTORY_LIMIT = 2600
 def run_eod(
     trading_date: date,
     *,
-    source: str = "KBS",
+    source: str = "AUTO",
     lookback_days: int = 10,
     benchmark_lookback_days: int = BENCHMARK_LOOKBACK_DAYS,
     symbol_offset: int = 0,
@@ -133,20 +134,37 @@ def run_eod(
         for symbol_row in symbols:
             started = monotonic()
             try:
-                fetched = _fetch_history_with_retry(
-                    provider, symbol_row["symbol"],
-                    trading_date - timedelta(days=lookback_days), trading_date,
-                )
-                price_rows = [{
-                    "symbol_id": symbol_row["id"], "trading_date": bar.trading_date.isoformat(),
-                    "open": float(bar.open), "high": float(bar.high), "low": float(bar.low),
-                    "close": float(bar.close), "volume": bar.volume, "source": bar.source,
-                    "collected_at": bar.collected_at.isoformat(), "quality_status": "VALID",
-                    "price_unit": STOCK_PRICE_UNIT,
-                    "source_version": KBS_SOURCE_VERSION,
-                } for bar in fetched]
-                counts["prices"] += client.upsert("daily_prices", price_rows, "symbol_id,trading_date")
+                stored = _rows_as_of(client.price_history(symbol_row["id"], MULTI_TIMEFRAME_HISTORY_LIMIT), trading_date)
+                events = client.corporate_actions(symbol_row["id"])
+                fetched = _fetch_history_with_retry(provider, symbol_row["symbol"],
+                                                    trading_date - timedelta(days=lookback_days), trading_date)
+                if not fetched or fetched[-1].trading_date != trading_date:
+                    raise ValueError("SOURCE_MISSING_REQUESTED_SESSION")
+                preview = canonical_price_rows(symbol_row["id"], fetched[-1:], events, as_of_date=trading_date)
+                family = source_family(fetched[0].source)
+                needs_full_history = (not stored or not same_source_window(stored)
+                                      or source_family(stored[-1].get("source")) != family
+                                      or stored[-1].get("data_revision") != preview[0]["data_revision"])
+                if needs_full_history:
+                    first_day = (date.fromisoformat(stored[0]["trading_date"]) if stored
+                                 else trading_date - timedelta(days=3650))
+                    fetched = _fetch_history_with_retry(provider, symbol_row["symbol"], first_day, trading_date)
+                    available = {bar.trading_date.isoformat() for bar in fetched}
+                    missing_stored = {row["trading_date"] for row in stored} - available
+                    if missing_stored and source == "AUTO":
+                        fetched = _fetch_history_with_retry(VnstockProvider("KBS"), symbol_row["symbol"], first_day, trading_date)
+                        available = {bar.trading_date.isoformat() for bar in fetched}
+                        missing_stored = {row["trading_date"] for row in stored} - available
+                    if missing_stored or not fetched or fetched[-1].trading_date != trading_date:
+                        raise ValueError(f"SOURCE_HISTORY_COVERAGE_MISMATCH:{len(missing_stored)}")
+                price_rows = canonical_price_rows(symbol_row["id"], fetched, events, as_of_date=trading_date)
+                for offset in range(0, len(price_rows), 100):
+                    counts["prices"] += client.upsert("daily_prices", price_rows[offset:offset + 100], "symbol_id,trading_date")
                 history = _rows_as_of(client.price_history(symbol_row["id"], MULTI_TIMEFRAME_HISTORY_LIMIT), trading_date)
+                if not same_source_window(history):
+                    raise ValueError("MIXED_PRICE_BASIS_IN_CALCULATION_WINDOW")
+                if any(row.get("quality_status") != "VALID" for row in history):
+                    raise ValueError("UNVERIFIED_CORPORATE_ACTION_IN_CALCULATION_WINDOW")
                 analysis_rows = [{**row, "date": row["trading_date"]} for row in history]
                 if analysis_rows:
                     try:
@@ -183,6 +201,7 @@ def run_eod(
                             "close": bar["close"], "volume": bar["volume"],
                             "is_complete": bar["is_complete"],
                             "source_last_date": bar["source_last_date"],
+                            "data_revision": history[-1]["data_revision"],
                         } for bar in aggregated if not fast_lane or bar["source_last_date"] >= (trading_date - timedelta(days=lookback_days)).isoformat()]
                         counts["derived_bars"] += client.upsert(
                             "derived_bars", derived_rows, "symbol_id,timeframe,period_start"
@@ -382,6 +401,14 @@ def rebuild_signals(trading_date: date, *, symbol_offset: int = 0, symbol_limit:
                     client.create_job_item({"job_run_id": job["id"], "symbol_id": symbol_row["id"], "item_key": symbol_row["symbol"], "status": "SKIPPED", "warning_codes": ["STALE_PRICE_DATA"], "rows_written": 0, "duration_ms": int((monotonic() - started) * 1000)})
                     _heartbeat(client, job["id"])
                     continue
+                if not same_source_window(analysis_rows) or any(row.get("quality_status") != "VALID" for row in analysis_rows):
+                    counts["skipped_unverified_basis"] = counts.get("skipped_unverified_basis", 0) + 1
+                    warnings.append(f"{symbol_row['symbol']}: UNVERIFIED_PRICE_VOLUME_BASIS")
+                    for timeframe in ("D", "W", "M"):
+                        client.delete_consolidated_signal(symbol_row["id"], timeframe, trading_date.isoformat())
+                    client.create_job_item({"job_run_id": job["id"], "symbol_id": symbol_row["id"], "item_key": symbol_row["symbol"], "status": "SKIPPED", "warning_codes": ["UNVERIFIED_PRICE_VOLUME_BASIS"], "rows_written": 0, "duration_ms": int((monotonic() - started) * 1000)})
+                    _heartbeat(client, job["id"])
+                    continue
                 try:
                     client.upsert("momentum_radar_assessments", [assess_momentum_radar(
                         symbol_row["id"], analysis_rows,
@@ -412,6 +439,7 @@ def rebuild_signals(trading_date: date, *, symbol_offset: int = 0, symbol_limit:
                         "open": bar["open"], "high": bar["high"], "low": bar["low"],
                         "close": bar["close"], "volume": bar["volume"],
                         "is_complete": bar["is_complete"], "source_last_date": bar["source_last_date"],
+                        "data_revision": analysis_rows[-1]["data_revision"],
                     } for bar in timeframe_rows[timeframe]]
                     counts["derived_bars"] += client.upsert(
                         "derived_bars", derived_rows, "symbol_id,timeframe,period_start"
@@ -635,8 +663,10 @@ def _stored_universe_breadth(client: SupabaseRestClient, trading_date: date) -> 
     symbols = client.active_symbols()
     previous_date_getter = getattr(client, "latest_daily_snapshot_date_before", None)
     previous_date = previous_date_getter(trading_date) if previous_date_getter else None
-    prior_rows = client.daily_snapshots_for_date(previous_date) if previous_date else []
-    current_rows = client.daily_snapshots_for_date(trading_date)
+    prior_rows = [row for row in client.daily_snapshots_for_date(previous_date)
+                  if row.get("algorithm_version", ALGORITHM_VERSION) == ALGORITHM_VERSION] if previous_date else []
+    current_rows = [row for row in client.daily_snapshots_for_date(trading_date)
+                    if row.get("algorithm_version", ALGORITHM_VERSION) == ALGORITHM_VERSION]
     return build_breadth_membership(symbols, prior_rows, current_rows, trading_date.isoformat())
 
 

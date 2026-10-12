@@ -15,7 +15,7 @@ from .divergence import PIVOT_RADIUS
 from .macd_divergence import _macd_series
 
 
-VERSION = "MACD_BULLISH_DIVERGENCE_ZONE_V5"
+VERSION = "MACD_BULLISH_DIVERGENCE_ZONE_V0_0_0"
 MAX_SETUP_AGE = 60
 MAX_ZONE_GAP = 5
 MAX_ZONE_SPREAD = 0.01

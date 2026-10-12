@@ -60,4 +60,4 @@ def test_dynamic_shards_cover_current_and_expanded_universe_without_duplicates(s
     batches = [row["symbols"].split(",") for row in shards]
     assert [len(batch) for batch in batches] == batch_sizes
     assert sorted(name for batch in batches for name in batch) == names
-    assert all(shard["source"] == "KBS" for shard in shards)
+    assert all(shard["source"] == "AUTO" for shard in shards)

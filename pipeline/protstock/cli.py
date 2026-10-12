@@ -16,12 +16,13 @@ from .research_prices import sync_research_prices
 from .macd_replay import run_macd_replay
 from .pattern_archive import archive_pattern_evidence
 from .universe import load_universe
-from .seed import seed_universe, seed_vnindex_history
+from .seed import seed_universe, seed_vnindex_history, assert_live_universe
 from .repair_history import repair_missing_history
 from .history_coverage import audit_history_coverage
 from .exchanges import sync_exchanges
 from .config import vietnam_today
 from .intraday_spikes import run_intraday_spikes
+from .corporate_action_sync import sync_corporate_actions
 
 
 def validate_universe(path: Path) -> int:
@@ -45,6 +46,8 @@ def main() -> None:
     subparsers = parser.add_subparsers(dest="command", required=True)
     validate = subparsers.add_parser("validate-universe")
     validate.add_argument("path", type=Path)
+    live_universe = subparsers.add_parser("assert-universe")
+    live_universe.add_argument("path", type=Path)
     seed = subparsers.add_parser("seed-universe")
     seed.add_argument("path", type=Path)
     seed_vnindex = subparsers.add_parser("seed-vnindex")
@@ -68,7 +71,7 @@ def main() -> None:
     analyze.add_argument("path", type=Path)
     eod = subparsers.add_parser("eod")
     eod.add_argument("--date", dest="trading_date", type=date.fromisoformat, default=vietnam_today())
-    eod.add_argument("--source", default="KBS", choices=("KBS",))
+    eod.add_argument("--source", default="AUTO", choices=("AUTO", "VCI", "KBS"))
     eod.add_argument("--lookback-days", type=int, default=10)
     eod.add_argument("--benchmark-lookback-days", type=int, default=None)
     eod.add_argument("--symbol-offset", type=int, default=0)
@@ -133,9 +136,24 @@ def main() -> None:
     spikes.add_argument("--symbol-limit", type=int)
     spikes.add_argument("--symbols", help="Comma-separated symbols")
     spikes.add_argument("--pause-seconds", type=float, default=0.35)
+    actions = subparsers.add_parser("sync-corporate-actions")
+    actions.add_argument("--symbols", help="Optional comma-separated subset")
+    actions.add_argument("--pause-seconds", type=float, default=6.5)
+    actions.add_argument("--calendar-window-days", type=int, help="Refresh only symbols on the current VCI dividend calendar")
     args = parser.parse_args()
+    if args.command == "sync-corporate-actions":
+        result = sync_corporate_actions(
+            symbols={part.strip().upper() for part in args.symbols.split(",") if part.strip()} if args.symbols else None,
+            pause_seconds=args.pause_seconds,
+            calendar_window_days=args.calendar_window_days,
+        )
+        print(json.dumps(result, ensure_ascii=False))
+        raise SystemExit(1 if result["failed"] else 0)
     if args.command == "validate-universe":
         raise SystemExit(validate_universe(args.path))
+    if args.command == "assert-universe":
+        print(json.dumps(assert_live_universe(args.path), ensure_ascii=False))
+        return
     if args.command == "seed-universe":
         print(json.dumps(seed_universe(args.path), ensure_ascii=False))
         raise SystemExit(0)

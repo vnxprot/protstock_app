@@ -27,9 +27,11 @@ on:
       source:
         description: Supported public EOD source
         required: false
-        default: "KBS"
+        default: "AUTO"
         type: choice
         options:
+          - AUTO
+          - VCI
           - KBS
 
 permissions:
@@ -49,8 +51,18 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
-      - run: python -m pip install -e ".[dev,data]"
+      - run: python -m pip install --extra-index-url https://vnstocks.com/api/packages -e ".[dev,data]"
       - run: protstock validate-universe data/universe.csv
+      - name: Check live universe against 277-symbol manifest
+        env:
+          SUPABASE_URL: https://upmqxwktvvguegqeqibn.supabase.co
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: protstock assert-universe data/universe.csv
+      - name: Synchronize VCI corporate-action candidates
+        env:
+          SUPABASE_URL: https://upmqxwktvvguegqeqibn.supabase.co
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: protstock sync-corporate-actions --calendar-window-days 45
       - name: Run EOD ingestion and analysis
         id: ingest
         continue-on-error: true
@@ -62,7 +74,7 @@ jobs:
           SYMBOL_OFFSET: ${{ inputs.symbol_offset }}
           SYMBOLS: ${{ inputs.symbols }}
           LOOKBACK_DAYS: ${{ inputs.lookback_days || '10' }}
-          SOURCE: ${{ inputs.source || 'KBS' }}
+          SOURCE: ${{ inputs.source || 'AUTO' }}
         run: |
           args=()
           if [ -n "$TRADING_DATE" ]; then args+=(--date "$TRADING_DATE"); fi

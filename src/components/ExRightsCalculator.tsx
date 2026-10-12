@@ -38,8 +38,8 @@ export function ExRightsCalculator({ symbols, selected }: { symbols: SymbolOptio
     enabled: open && Boolean(chosen) && Boolean(supabase),
     queryFn: async () => {
       let query = supabase!.from('daily_prices')
-        .select('trading_date,close,source,price_unit,quality_status')
-        .eq('symbol_id', chosen!.id).eq('quality_status', 'VALID')
+        .select('trading_date,close,source,price_unit,quality_status,data_revision')
+        .eq('symbol_id', chosen!.id).eq('quality_status', 'VALID').not('data_revision', 'is', null)
         .order('trading_date', { ascending: false }).limit(1)
       if (exDate) query = query.lt('trading_date', exDate)
       const { data, error } = await query.maybeSingle()
@@ -48,7 +48,8 @@ export function ExRightsCalculator({ symbols, selected }: { symbols: SymbolOptio
     },
   })
   const priceUnitValid = priceQuery.data?.price_unit === 'THOUSAND_VND_PER_SHARE'
-  const eodPrice = priceUnitValid ? Number(priceQuery.data?.close) * 1000 : null
+  const historicEvent = Boolean(exDate && exDate <= new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }))
+  const eodPrice = priceUnitValid && !historicEvent ? Number(priceQuery.data?.close) * 1000 : null
   const price = useManualPrice ? readNumber(manualPrice) : eodPrice
   const cashValue = cashMode === 'percent' ? readNumber(cash) * 100 : readNumber(cash)
   const stockRate = readNumber(stock) / 100
@@ -60,7 +61,6 @@ export function ExRightsCalculator({ symbols, selected }: { symbols: SymbolOptio
     ? calculateExRights({ price, cash: cashValue, stockRate, rightsRate, rightsPrice: readNumber(rightsPrice), splitRate }) : null
   const rightsException = price != null && rightsRate > 0 && readNumber(rightsPrice) >= (price - cashValue) / (1 + stockRate)
   const stale = exDate && priceQuery.data?.trading_date && new Date(`${exDate}T00:00:00Z`).getTime() - new Date(`${priceQuery.data.trading_date}T00:00:00Z`).getTime() > 7 * 86400000
-  const historicEvent = Boolean(exDate && exDate <= new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }))
 
   const changeCashMode = (next: 'percent' | 'vnd') => {
     if (cash.trim() && Number.isFinite(Number(cash))) setCash(String(next === 'vnd' ? Number(cash) * 100 : Number(cash) / 100))
@@ -83,7 +83,7 @@ export function ExRightsCalculator({ symbols, selected }: { symbols: SymbolOptio
           {!useManualPrice && priceQuery.isError && <p className="ex-rights-alert">Không tải được EOD. Thử lại hoặc nhập giá thủ công.</p>}
           {!useManualPrice && priceQuery.data && !priceUnitValid && <p className="ex-rights-alert">EOD này chưa xác minh đơn vị giá. Hãy nhập giá thủ công sau khi đối chiếu.</p>}
           {stale && !useManualPrice && <p className="ex-rights-alert">EOD cách ngày không hưởng quyền hơn 7 ngày. Hãy kiểm tra mã có bị thiếu phiên giao dịch không.</p>}
-          {historicEvent && <p className="ex-rights-alert">Sự kiện đã qua: nguồn giá lịch sử có thể đã được điều chỉnh theo quyền. Hãy đối chiếu giá đóng cửa gốc trước quyền để tránh tính hai lần.</p>}
+          {historicEvent && <p className="ex-rights-alert">Sự kiện đã qua: hãy nhập giá giao dịch gốc trước quyền. Giá EOD lịch sử đã điều chỉnh không được dùng để tính quyền lần nữa.</p>}
           <div className="ex-rights-section-title"><h3>Quyền nhận và quyền mua</h3><small>Bỏ trống mục không áp dụng</small></div>
           <div className="ex-rights-fields">
             <div className="ex-rights-field"><label htmlFor="ex-rights-cash">Cổ tức tiền mặt</label><div className="ex-rights-input-row"><input id="ex-rights-cash" type="number" inputMode="decimal" min="0" step="any" value={cash} onChange={event => setCash(event.target.value)} placeholder={cashMode === 'percent' ? 'Ví dụ: 10' : 'Ví dụ: 1000'}/><SoftSelect aria-label="Đơn vị cổ tức tiền mặt" value={cashMode} onChange={event => changeCashMode(event.target.value as 'percent' | 'vnd')}><option value="percent">% mệnh giá</option><option value="vnd">đồng/CP</option></SoftSelect></div><small>{cashMode === 'percent' ? '10% mệnh giá = 1.000 đồng/CP' : 'Số tiền trước thuế trên mỗi cổ phiếu'}</small></div>

@@ -49,9 +49,7 @@ def test_seed_vnindex_fetches_and_upserts(monkeypatch) -> None:
     }], "index_id,trading_date")]
 
 
-def test_vci_label_is_rejected_until_real_adapter_exists() -> None:
-    import pytest
+def test_vci_adapter_is_available_for_stocks() -> None:
     from protstock.provider_vnstock import VnstockProvider
 
-    with pytest.raises(ValueError, match="Only the KBS"):
-        VnstockProvider("VCI")
+    assert VnstockProvider("VCI").source == "VCI"

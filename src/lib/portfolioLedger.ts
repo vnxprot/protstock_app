@@ -4,7 +4,7 @@ import { tradeCosts, type CostRate } from './portfolioCosts.ts'
 export type LedgerTransaction = { id: string; symbol_id: string | number; trading_date: string; created_at?: string; action: string; quantity: number; price: number | null; broker_fee_override?: number | null; sell_tax_override?: number | null; symbols?: { symbol: string; sector?: string | null } | null }
 export type CapitalMovement = { id: string; movement_type: string; amount: number; effective_date: string; created_at?: string; note?: string | null }
 export type LedgerPrice = { symbol_id: string | number; trading_date: string; close: number }
-export type LedgerReport = { portfolio: { capital: number; created_at?: string; initial_capital?: number }; initial_capital?: number; transactions: LedgerTransaction[]; capital_movements: CapitalMovement[]; prices: LedgerPrice[] }
+export type LedgerReport = { portfolio: { capital: number; created_at?: string; initial_capital?: number }; initial_capital?: number; transactions: LedgerTransaction[]; capital_movements: CapitalMovement[]; prices: LedgerPrice[]; valuation_blocked_symbols?: number[] }
 export type RealizedSlice = { costBasis: number; pnl: number; returnPct: number; openedAt: string; quantity: number }
 
 const chronological = (a: LedgerTransaction, b: LedgerTransaction) => a.trading_date.localeCompare(b.trading_date) || (a.created_at ?? '').localeCompare(b.created_at ?? '') || a.id.localeCompare(b.id)

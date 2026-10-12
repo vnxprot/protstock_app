@@ -1,11 +1,11 @@
-# Prot Stock · v3.0.1
+# Prot Stock · v0.0.0
 
 Personal PWA for end-of-day analysis of a curated Vietnamese stock universe.
 
 ## Product boundaries
 
-- Single-user, non-commercial application for Prot.
-- The active trading universe is defined in `data/universe.csv`.
+- Permanently personal, single-user, non-commercial application for Prot.
+- The current active trading universe is the 277 symbols in `data/universe.csv`, including TLG. The manifest may change when Prot chooses.
 - End-of-day processing only; no real-time market data.
 - Daily, weekly, and monthly analysis.
 - Deterministic, versioned rules and explainable price-pattern detection.
@@ -13,7 +13,7 @@ Personal PWA for end-of-day analysis of a curated Vietnamese stock universe.
 
 ## Current release
 
-Prot Stock v3.0.1 reorganizes the in-app guide around the system workflow, searchable topics, a classified glossary, data provenance, and the distinction between published signals and shadow research. Champion trade rules are unchanged. See [v3.0.1 release notes](docs/release-v3.0.1.md), [v3.0.0 release notes](docs/release-v3.0.0.md), and [v2.0.2 release notes](docs/release-v2.0.2.md).
+Prot Stock restarts its current release numbering at v0.0.0. Stock OHLCV uses Vnstock generation 5 with VCI as the primary source and KBS as a whole-series fallback. Corporate-action candidates are synchronized separately; share-volume factors are applied only after independent verification of the event and the vendor volume basis. Unverified calculation windows are withheld from new signals. See [v0.0.0 release plan and checklist](docs/release-v0.0.0.md). Historical revision IDs remain available for reproducibility.
 
 ## Historical development
 

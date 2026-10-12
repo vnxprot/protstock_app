@@ -8,21 +8,75 @@ import httpx
 from .models import DailyBar
 
 KBS_SOURCE_VERSION = "KBS_PUBLIC_V2_20260930"
+VCI_SOURCE_VERSION = "VNSTOCK_V5_VCI"
 STOCK_PRICE_UNIT = "THOUSAND_VND_PER_SHARE"
 INDEX_PRICE_UNIT = "INDEX_POINTS"
 
 
 class VnstockProvider:
-    """Free, no-key adapter for KBS's public end-of-day OHLCV endpoint."""
+    """Vnstock v5 VCI equity prices with a labelled KBS fallback.
+
+    A returned history always comes from one provider.  Callers must not append
+    its bars to a persisted history from another provider without rebasing the
+    whole calculation window first.
+    """
 
     API_BASE = "https://kbbuddywts.kbsec.com.vn/iis-server/investment"
 
-    def __init__(self, source: str = "KBS") -> None:
+    def __init__(self, source: str = "AUTO") -> None:
         self.source = source.upper()
-        if self.source != "KBS":
-            raise ValueError("Only the KBS price adapter is implemented; VCI is not a configured fallback")
+        if self.source not in {"AUTO", "VCI", "KBS"}:
+            raise ValueError("source must be AUTO, VCI, or KBS")
 
     def history(self, symbol: str, start: date, end: date) -> list[DailyBar]:
+        if self.source == "KBS" or symbol.upper().endswith("INDEX"):
+            return self._kbs_history(symbol, start, end)
+        if self.source == "VCI":
+            return self._vci_history(symbol, start, end)
+        try:
+            bars = self._vci_history(symbol, start, end)
+            if bars:
+                return bars
+        except Exception as exc:
+            # Only operational source failures may activate the fallback.  A
+            # bad symbol, argument, entitlement or programming error must fail.
+            from vnstock.core.exceptions import NetworkError, ProviderError
+            if not isinstance(exc, (NetworkError, ProviderError)):
+                raise
+        return self._kbs_history(symbol, start, end)
+
+    def _vci_history(self, symbol: str, start: date, end: date) -> list[DailyBar]:
+        from vnstock import Market, __version__ as vnstock_version
+
+        if not str(vnstock_version).startswith("5."):
+            raise RuntimeError("Vnstock generation 5 is required for VCI OHLCV")
+        frame = Market().equity(symbol).ohlcv(
+            start=start.isoformat(), end=end.isoformat(), source="vci", floating=None,
+        )
+        actual_source = str(frame.attrs.get("source") or "").lower()
+        if actual_source != "vci":
+            raise RuntimeError(f"VCI request returned unexpected source: {actual_source or 'unknown'}")
+        collected_at = datetime.now(timezone.utc)
+        result: list[DailyBar] = []
+        for row in frame.itertuples(index=False):
+            timestamp = getattr(row, "time")
+            trading_day = _to_date(timestamp)
+            if not start <= trading_day <= end:
+                continue
+            bar = DailyBar.create(
+                symbol=symbol, trading_date=trading_day,
+                open=getattr(row, "open"), high=getattr(row, "high"),
+                low=getattr(row, "low"), close=getattr(row, "close"),
+                volume=int(getattr(row, "volume")), source=f"VCI_VNSTOCK_{vnstock_version}",
+                collected_at=collected_at,
+            )
+            if bar.validate():
+                raise ValueError(f"Invalid VCI bar for {symbol} on {trading_day}: {bar.validate()}")
+            result.append(bar)
+        by_date = {bar.trading_date: bar for bar in result}
+        return [by_date[day] for day in sorted(by_date)]
+
+    def _kbs_history(self, symbol: str, start: date, end: date) -> list[DailyBar]:
         endpoint = "index" if symbol.upper().endswith("INDEX") else "stocks"
         # KBS stock OHLC is VND/share, while Prot stores stock OHLC in
         # thousand VND/share. Index values are points and must not be scaled.

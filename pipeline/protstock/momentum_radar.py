@@ -14,7 +14,7 @@ from typing import Sequence
 from .signal_funnel import monthly_context
 from .timeframes import aggregate_bars
 
-VERSION = "MOMENTUM_RADAR_V1"
+VERSION = "MOMENTUM_RADAR_V0_0_0"
 
 
 def assess_momentum_radar(

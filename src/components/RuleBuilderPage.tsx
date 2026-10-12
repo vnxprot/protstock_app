@@ -322,7 +322,7 @@ export function RuleBuilderPage({ authenticated }: { authenticated: boolean }) {
         <div className="core-engine-heading">
           <div>
 
-            <h2>Bộ máy tín hiệu v1.0</h2>
+            <h2>Bộ máy tín hiệu v0.0.0</h2>
             <p>
               Mỗi bộ máy là một nguồn đánh giá độc lập. Nút bật/tắt quyết định bộ máy
               nào được chạy; bộ tổng hợp chỉ phân xử kết quả của các bộ máy đang bật.

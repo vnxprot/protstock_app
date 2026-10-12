@@ -5,7 +5,7 @@ import { supabase } from '../lib/supabase'
 import { SoftSelect } from './SoftSelect'
 import './MacdDivergencePanel.css'
 
-const VERSION = 'MACD_BULLISH_DIVERGENCE_ZONE_V5'
+const VERSION = 'MACD_BULLISH_DIVERGENCE_ZONE_V0_0_0'
 type Zone = { start_date: string; end_date: string; price_date: string; price_low: number; macd_date: string; macd_low: number; revisions: { date: string; price_low: number }[] }
 type Evidence = { zones: Zone[]; strength: 'THIN' | 'ROBUST'; price_declines_pct: number[]; macd_rises_pct_points: number[];
   breakout_volume_ratio20?: number | null; trigger_age_sessions?: number | null; pending_lower_low_on?: string | null;
@@ -136,7 +136,7 @@ export function MacdDivergencePanel({ date, authenticated, focusSymbol = '' }: {
   const fresh = rows.filter(row => row.stage === 'CONFIRMED' && row.trigger_date === date).length
   const watching = new Set(rows.filter(row => row.stage === 'WATCH_PIVOT_CONFIRMATION' || row.stage === 'WATCH_PRICE_CONFIRMATION').map(row => row.symbol)).size
   return <article className="panel macd-divergence-panel">
-    <div className="panel-title"><div><h3>Phân kỳ Dương · đường MACD v1.0</h3>
+    <div className="panel-title"><div><h3>Phân kỳ Dương · đường MACD v0.0.0</h3>
       <p className="muted">1 đoạn = 2 vùng đáy · 2 đoạn = 3 vùng · 3 đoạn = 4 vùng. Ưu tiên breakout mới và mã gần ngưỡng giá.</p></div><span>{date}</span></div>
     <div className="macd-zone-summary"><span><b>{fresh}</b> mẫu breakout phiên này</span><span><b>{watching}</b> mã đang theo dõi</span><small>Mỗi mã hiển thị mẫu ưu tiên; chọn “Tất cả đoạn” để xem mọi cấu trúc.</small></div>
     <div className="macd-divergence-tools"><label className="screener-field"><Search size={16}/><input aria-label="Tìm mã phân kỳ MACD" placeholder="Tìm mã…" value={symbol} onChange={event => { setSymbol(event.target.value); setPage(1) }}/></label>

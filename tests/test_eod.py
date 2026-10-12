@@ -237,7 +237,8 @@ def test_final_watchdog_rejects_zero_same_day_snapshots(monkeypatch) -> None:
 def test_eod_evaluates_signals_only_after_same_day_market_snapshot(monkeypatch) -> None:
     day = date(2026, 9, 25)
     events = []
-    row = {"trading_date": day.isoformat(), "open": 10, "high": 11, "low": 9, "close": 10, "volume": 100}
+    row = {"trading_date": day.isoformat(), "open": 10, "high": 11, "low": 9, "close": 10, "volume": 100,
+           "source": "KBS_PUBLIC", "data_revision": "basis-1", "quality_status": "VALID"}
 
     class Client:
         def create_job(self, _payload): return {"id": "job"}
@@ -246,6 +247,7 @@ def test_eod_evaluates_signals_only_after_same_day_market_snapshot(monkeypatch) 
         def market_index(self, _code): return {"id": 1}
         def index_price_history(self, *_args): return [row]
         def price_history(self, *_args): return [row]
+        def corporate_actions(self, *_args): return []
         def consolidated_signal_count(self, *_args): return 0
         def upsert(self, *_args): return 1
         def create_job_item(self, _payload): pass
@@ -363,7 +365,8 @@ def _rebuild_same_session_fixture(monkeypatch, day, prepared, stale_cached=False
     previous = day - timedelta(days=1)
     future = day + timedelta(days=7)
     def bar(on):
-        return {"trading_date": on.isoformat(), "open": 10, "high": 11, "low": 9, "close": 10, "volume": 100}
+        return {"trading_date": on.isoformat(), "open": 10, "high": 11, "low": 9, "close": 10, "volume": 100,
+                "source": "KBS_PUBLIC", "data_revision": "basis-1", "quality_status": "VALID"}
     writes, deleted, items, finished = [], [], [], []
     class Client:
         def create_job(self, _payload): return {"id": "rebuild"}

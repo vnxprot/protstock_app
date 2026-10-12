@@ -10,8 +10,8 @@ from typing import Sequence
 from .indicators import _ema_series
 from .timeframes import aggregate_bars
 
-FUNNEL_VERSION = "MTF_FUNNEL_SHADOW_V2"
-ADAPTIVE_FUNNEL_VERSION = "MTF_ADAPTIVE_CHALLENGER_V3"
+FUNNEL_VERSION = "MTF_FUNNEL_SHADOW_V0_0_0"
+ADAPTIVE_FUNNEL_VERSION = "MTF_ADAPTIVE_CHALLENGER_V0_0_0"
 SETUP_TTL_SESSIONS = 20
 
 

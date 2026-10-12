@@ -78,6 +78,16 @@ class SupabaseRestClient:
     def active_symbols(self) -> list[dict[str, Any]]:
         return self._pages("symbols", {"select": "id,symbol,exchange,sector,listed_from", "active": "eq.true", "order": "symbol.asc"})
 
+    def deactivate_symbol(self, symbol: str) -> None:
+        response = self._client.patch("/symbols", params={"symbol": f"eq.{symbol}"}, json={"active": False})
+        response.raise_for_status()
+
+    def corporate_actions(self, symbol_id: int) -> list[dict[str, Any]]:
+        return self._pages("corporate_actions", {
+            "select": "action_type,ex_date,ratio,cash_amount,verification_status,source,source_url,content_hash,metadata",
+            "symbol_id": f"eq.{symbol_id}", "order": "ex_date.asc",
+        })
+
     def _pages(self, table: str, params: dict, limit: int | None = None) -> list[dict]:
         rows = []
         for offset in range(0, limit or 1_000_000, 1000):
@@ -154,7 +164,7 @@ class SupabaseRestClient:
         for offset in range(0, limit, page_size):
             response = self._get(
                 "/daily_prices",
-                params={"select": "trading_date,open,high,low,close,volume,source,source_version,price_unit,quality_status", "symbol_id": f"eq.{symbol_id}", "order": "trading_date.desc"},
+                params={"select": "trading_date,open,high,low,close,volume,source_volume,volume_adjustment_factor,volume_basis,price_basis,data_revision,source,source_version,price_unit,quality_status", "symbol_id": f"eq.{symbol_id}", "order": "trading_date.desc"},
                 headers={"Range": f"{offset}-{min(offset + page_size, limit) - 1}"},
             )
             response.raise_for_status()
@@ -263,7 +273,7 @@ class SupabaseRestClient:
         for offset in range(0, 1_000_000, 1000):
             response = self._get(
                 "/daily_prices",
-                params=[("select", "symbol_id,trading_date,high,low,close,volume"), ("trading_date", f"gte.{start_date.isoformat()}"), ("trading_date", f"lte.{end_date.isoformat()}"), ("order", "trading_date.asc,symbol_id.asc")],
+                params=[("select", "symbol_id,trading_date,high,low,close,volume,quality_status,data_revision,source"), ("trading_date", f"gte.{start_date.isoformat()}"), ("trading_date", f"lte.{end_date.isoformat()}"), ("order", "trading_date.asc,symbol_id.asc")],
                 headers={"Range": f"{offset}-{offset + 999}"},
             )
             response.raise_for_status()
