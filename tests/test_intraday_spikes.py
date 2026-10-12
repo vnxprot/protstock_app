@@ -33,6 +33,17 @@ def test_no_event_with_insufficient_baseline_or_value():
     assert detect_events(1, "2026-10-09", current, [bars(volume=100)] * 20) == []
 
 
+def test_spike_ratio_uses_comparable_volume_while_value_keeps_raw_trades():
+    history = [[{**item, "cv": item["v"] * 2} for item in bars()] for _ in range(20)]
+    current = [{**item, "cv": item["v"]} for item in bars(rising=True)]
+    for item in current[6:11]:
+        item["v"] = item["cv"] = 6_000
+    events = detect_events(1, "2026-10-09", current, history)
+    assert len(events) == 1
+    assert events[0]["volume_ratio"] == 3
+    assert events[0]["volume"] == sum(item["v"] for item in current if events[0]["start_time"] <= item["t"] <= events[0]["end_time"])
+
+
 def test_parser_keeps_only_requested_trading_minutes():
     payload = {"data_1P": [
         {"t": "2026-10-09 10:02", "o": 20000, "h": 20100, "l": 19900, "c": 20050, "v": 1000},

@@ -58,7 +58,7 @@ export function IntradaySpikeRadar({ date, authenticated, mode }: { date: string
   const [pageSize, setPageSize] = useState(25)
   const [selectedId, setSelectedId] = useState<number | null>(null)
   const latestDay = useQuery({ queryKey: ['intraday-spike-latest-day', date], enabled: authenticated && Boolean(supabase) && Boolean(date) && mode === 'screener',
-    queryFn: async () => { const { data, error } = await supabase!.from('intraday_spike_events').select('trading_date').lte('trading_date', date).order('trading_date', { ascending: false }).limit(1).maybeSingle(); if (error) throw error; return data?.trading_date as string | undefined }, staleTime: 300_000 })
+    queryFn: async () => { const { data, error } = await supabase!.from('intraday_spike_events').select('trading_date').eq('algorithm_version', 'INTRADAY_SPIKE_V0.0.0').lte('trading_date', date).order('trading_date', { ascending: false }).limit(1).maybeSingle(); if (error) throw error; return data?.trading_date as string | undefined }, staleTime: 300_000 })
   useEffect(() => { if (mode === 'screener' && latestDay.data) setExactDate(latestDay.data) }, [mode, latestDay.data])
   const effectiveDate = mode === 'market' ? date : exactDate
   const coverageDate = effectiveDate || latestDay.data || date
@@ -76,7 +76,7 @@ export function IntradaySpikeRadar({ date, authenticated, mode }: { date: string
     }, staleTime: 300_000 })
   const coverage = useQuery({ queryKey: ['intraday-spike-coverage', coverageDate], enabled: authenticated && Boolean(supabase) && Boolean(coverageDate),
     queryFn: async () => {
-      const { data, error } = await supabase!.from('intraday_minute_days').select('symbol_id,coverage_status,bar_count').eq('trading_date', coverageDate).limit(1000)
+      const { data, error } = await supabase!.from('intraday_minute_days').select('symbol_id,coverage_status,bar_count').eq('trading_date', coverageDate).not('data_revision', 'is', null).limit(1000)
       if (error) throw error
       return data ?? []
     }, staleTime: 300_000 })

@@ -13,6 +13,8 @@ def test_repair_history_fetches_and_writes_only_missing_sessions(monkeypatch) ->
         def index_price_dates(self, *_args): return ["2021-01-04", "2021-01-05"]
         def active_symbols(self): return [{"id": 7, "symbol": "AAA"}]
         def symbol_price_dates(self, *_args): return ["2021-01-04"]
+        def price_history(self, *_args): return [{"trading_date": "2021-01-04"}]
+        def corporate_actions(self, *_args): return []
         def upsert(self, table, rows, conflict):
             writes.append((table, list(rows), conflict)); return len(writes[-1][1])
         def close(self): pass
@@ -27,7 +29,7 @@ def test_repair_history_fetches_and_writes_only_missing_sessions(monkeypatch) ->
             if symbol == "VNINDEX":
                 assert (start, end) == (date(2021, 1, 4), date(2021, 1, 5))
                 return bars
-            assert (symbol, start, end) == ("AAA", date(2021, 1, 5), date(2021, 1, 5))
+            assert (symbol, start, end) == ("AAA", date(2021, 1, 4), date(2021, 1, 5))
             return bars
 
     monkeypatch.setattr("protstock.repair_history.Settings.from_env", lambda: object())
@@ -38,9 +40,10 @@ def test_repair_history_fetches_and_writes_only_missing_sessions(monkeypatch) ->
     result = repair_missing_history(date(2021, 1, 4), date(2021, 1, 5), pause_seconds=0)
 
     assert result["vnindex"]["rows_written"] == 0
-    assert result["rows_written"] == 1
+    assert result["rows_written"] == 2
     assert writes[0][0] == "daily_prices"
-    assert writes[0][1][0]["trading_date"] == "2021-01-05"
+    assert [row["trading_date"] for row in writes[0][1]] == ["2021-01-04", "2021-01-05"]
+    assert len({row["data_revision"] for row in writes[0][1]}) == 1
 
 
 def test_full_range_backfills_before_first_observation_without_overwriting(monkeypatch) -> None:
@@ -49,6 +52,8 @@ def test_full_range_backfills_before_first_observation_without_overwriting(monke
     class Client:
         def active_symbols(self): return [{"id": 7, "symbol": "AAA"}]
         def symbol_price_dates(self, *_args): return ["2026-09-28"]
+        def price_history(self, *_args): return [{"trading_date": "2026-09-28"}]
+        def corporate_actions(self, *_args): return []
         def upsert(self, table, rows, conflict):
             writes.extend(rows); return len(rows)
         def close(self): pass
@@ -64,8 +69,8 @@ def test_full_range_backfills_before_first_observation_without_overwriting(monke
     monkeypatch.setattr("protstock.repair_history.VnstockProvider", Provider)
     monkeypatch.setattr("protstock.repair_history.sleep", lambda _seconds: None)
     result = repair_missing_history(date(2021, 1, 1), date(2026, 9, 28), symbols={"AAA"}, pause_seconds=0, full_range=True)
-    assert result["rows_written"] == 1
-    assert [row["trading_date"] for row in writes] == ["2021-01-04"]
+    assert result["rows_written"] == 2
+    assert [row["trading_date"] for row in writes] == ["2021-01-04", "2026-09-28"]
 
 
 def test_full_range_requires_explicit_symbols() -> None:

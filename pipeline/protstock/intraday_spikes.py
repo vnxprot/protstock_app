@@ -11,7 +11,7 @@ import httpx
 from .config import Settings
 from .supabase_rest import SupabaseRestClient
 
-VERSION = "INTRADAY_SPIKE_V1"
+VERSION = "INTRADAY_SPIKE_V0.0.0"
 SOURCE = "KBS_PUBLIC_1P"
 WINDOWS = (1, 3, 5, 15)
 MIN_BASELINE_SESSIONS = 10
@@ -81,7 +81,7 @@ def detect_events(symbol_id: int, trading_date: str, bars: list[dict], history: 
             window = _window(today, start, length)
             if not window:
                 continue
-            volume = sum(int(bar["v"]) for bar in window)
+            volume = sum(int(bar.get("cv", bar["v"])) for bar in window)
             value = sum(float(bar["c"]) * int(bar["v"]) for bar in window)
             if value < MIN_VALUE_VND:
                 continue
@@ -89,7 +89,7 @@ def detect_events(symbol_id: int, trading_date: str, bars: list[dict], history: 
             for earlier in historical:
                 comparable = _window(earlier, start, length)
                 if comparable:
-                    baseline.append(sum(int(bar["v"]) for bar in comparable))
+                    baseline.append(sum(int(bar.get("cv", bar["v"])) for bar in comparable))
             if len(baseline) < MIN_BASELINE_SESSIONS:
                 continue
             typical = median(baseline)
@@ -158,16 +158,22 @@ def run_intraday_spikes(trading_date: date, *, symbol_offset: int = 0, symbol_li
             symbol_id, symbol = int(row["id"]), str(row["symbol"])
             try:
                 stored = db._pages("intraday_minute_days", {
-                    "select": "trading_date,bars,coverage_status", "symbol_id": f"eq.{symbol_id}",
+                    "select": "trading_date,bars,coverage_status,data_revision", "symbol_id": f"eq.{symbol_id}",
                     "trading_date": f"gte.{cutoff.isoformat()}", "order": "trading_date.desc"}, limit=65)
                 prior = [item["bars"] for item in stored if item["trading_date"] < trading_date.isoformat()
-                         and item["coverage_status"] == "COMPLETE"][:30]
+                         and item["coverage_status"] == "COMPLETE" and item.get("data_revision")][:30]
                 start = trading_date if len(prior) >= MIN_BASELINE_SESSIONS else trading_date - timedelta(days=45)
                 fetched = _fetch_kbs_minutes(symbol, start, trading_date)
-                daily = db._get("/daily_prices", params={"select": "trading_date,volume", "symbol_id": f"eq.{symbol_id}",
+                daily = db._get("/daily_prices", params={"select": "trading_date,source_volume,volume_adjustment_factor,quality_status,data_revision", "symbol_id": f"eq.{symbol_id}",
                     "trading_date": f"gte.{start.isoformat()}", "and": f"(trading_date.lte.{trading_date.isoformat()})", "limit": "65"})
                 daily.raise_for_status()
-                daily_volumes = {item["trading_date"]: int(item["volume"]) for item in daily.json()}
+                canonical_days = {item["trading_date"]: item for item in daily.json()
+                                  if item.get("quality_status") == "VALID" and item.get("data_revision")
+                                  and item.get("source_volume") is not None}
+                revisions = {item["data_revision"] for item in canonical_days.values()}
+                if len(revisions) != 1:
+                    raise ValueError("MIXED_OR_MISSING_CANONICAL_INTRADAY_BASELINE")
+                daily_volumes = {day: int(item["source_volume"]) for day, item in canonical_days.items()}
                 rows = []
                 for day, bars in fetched.items():
                     volume = sum(int(bar["v"]) for bar in bars)
@@ -175,7 +181,8 @@ def run_intraday_spikes(trading_date: date, *, symbol_offset: int = 0, symbol_li
                     status = "EMPTY" if not bars else "COMPLETE" if reference and abs(volume - reference) / reference <= 0.2 else "PARTIAL"
                     rows.append({"symbol_id": symbol_id, "trading_date": day, "bars": bars,
                                  "bar_count": len(bars), "minute_volume": volume, "daily_volume": reference,
-                                 "coverage_status": status, "source": SOURCE, "collected_at": datetime.now(timezone.utc).isoformat()})
+                                 "coverage_status": status, "data_revision": canonical_days.get(day, {}).get("data_revision"),
+                                 "source": SOURCE, "collected_at": datetime.now(timezone.utc).isoformat()})
                 if rows:
                     db.upsert("intraday_minute_days", rows, "symbol_id,trading_date")
                 current = next((item for item in rows if item["trading_date"] == trading_date.isoformat()), None)
@@ -184,11 +191,21 @@ def run_intraday_spikes(trading_date: date, *, symbol_offset: int = 0, symbol_li
                 if status != "COMPLETE":
                     counts["coverage_issues"].append({"symbol": symbol, "status": status})
                 if status == "COMPLETE":
-                    previous = [item for item in rows if item["trading_date"] < trading_date.isoformat() and item["coverage_status"] == "COMPLETE"]
+                    previous = [item for item in rows if item["trading_date"] < trading_date.isoformat() and item["coverage_status"] == "COMPLETE"
+                                and item["trading_date"] in canonical_days]
                     previous.extend(item for item in stored if item["trading_date"] < trading_date.isoformat()
-                                    and item["coverage_status"] == "COMPLETE" and item["trading_date"] not in {x["trading_date"] for x in previous})
+                                    and item["coverage_status"] == "COMPLETE"
+                                    and item["trading_date"] in canonical_days
+                                    and item.get("data_revision") == canonical_days[item["trading_date"]]["data_revision"]
+                                    and item["trading_date"] not in {x["trading_date"] for x in previous})
                     previous.sort(key=lambda item: item["trading_date"], reverse=True)
-                    events = detect_events(symbol_id, trading_date.isoformat(), current["bars"], [item["bars"] for item in previous[:30]])
+                    def comparable_bars(day: str, minute_bars: list[dict]) -> list[dict]:
+                        factor = float(canonical_days[day]["volume_adjustment_factor"])
+                        return [{**bar, "cv": round(int(bar["v"]) * factor)} for bar in minute_bars]
+                    events = detect_events(
+                        symbol_id, trading_date.isoformat(), comparable_bars(trading_date.isoformat(), current["bars"]),
+                        [comparable_bars(item["trading_date"], item["bars"]) for item in previous[:30]],
+                    )
                     response = db._client.delete("/intraday_spike_events", params={"symbol_id": f"eq.{symbol_id}",
                         "trading_date": f"eq.{trading_date.isoformat()}", "algorithm_version": f"eq.{VERSION}"})
                     response.raise_for_status()

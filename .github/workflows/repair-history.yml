@@ -42,7 +42,7 @@ jobs:
           python-version: "3.12"
           cache: pip
       - run: python -m pip install --extra-index-url https://vnstocks.com/api/packages -e ".[data]"
-      - name: Fill only missing price sessions
+      - name: Rebase the full calculation window when repairing price sessions
         env:
           SUPABASE_URL: https://upmqxwktvvguegqeqibn.supabase.co
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}

@@ -6,7 +6,8 @@ from typing import Any, Iterable
 
 from .config import Settings
 from .history_coverage import assess_symbol_coverage
-from .provider_vnstock import VnstockProvider, INDEX_PRICE_UNIT, KBS_SOURCE_VERSION, STOCK_PRICE_UNIT
+from .provider_vnstock import VnstockProvider, INDEX_PRICE_UNIT, KBS_SOURCE_VERSION
+from .price_basis import canonical_price_rows
 from .supabase_rest import SupabaseRestClient
 
 
@@ -14,7 +15,7 @@ def repair_missing_history(
     start_date: date,
     end_date: date,
     *,
-    source: str = "KBS",
+    source: str = "AUTO",
     symbol_offset: int = 0,
     symbol_limit: int | None = None,
     symbols: set[str] | None = None,
@@ -38,15 +39,15 @@ def repair_missing_history(
                 counts["symbols"] += 1
                 try:
                     existing = set(client.symbol_price_dates(symbol["id"], start_date, end_date))
-                    bars = _fetch_from_source(symbol["symbol"], start_date, end_date, source)
+                    bars, rows = _canonical_repair_rows(client, symbol, start_date, end_date, source)
                     if not bars:
                         no_source_data.append(symbol["symbol"])
                         continue
                     missing = {bar.trading_date.isoformat() for bar in bars} - existing
                     counts["missing_sessions"] += len(missing)
-                    rows = _price_rows(symbol["id"], bars, missing)
-                    for offset in range(0, len(rows), 250):
-                        counts["rows_written"] += client.upsert("daily_prices", rows[offset:offset + 250], "symbol_id,trading_date")
+                    if missing:
+                        for offset in range(0, len(rows), 100):
+                            counts["rows_written"] += client.upsert("daily_prices", rows[offset:offset + 100], "symbol_id,trading_date")
                     if not missing:
                         counts["already_complete"] += 1
                 except Exception:
@@ -84,11 +85,9 @@ def repair_missing_history(
                     counts["already_complete"] += 1
                     continue
                 counts["missing_sessions"] += len(missing)
-                bars = _fetch_from_source(
-                    symbol["symbol"], min(map(date.fromisoformat, missing)), max(map(date.fromisoformat, missing)), source
-                )
-                rows = _price_rows(symbol["id"], bars, missing)
-                counts["rows_written"] += client.upsert("daily_prices", rows, "symbol_id,trading_date")
+                bars, rows = _canonical_repair_rows(client, symbol, start_date, end_date, source)
+                for offset in range(0, len(rows), 100):
+                    counts["rows_written"] += client.upsert("daily_prices", rows[offset:offset + 100], "symbol_id,trading_date")
                 remaining = len(missing - {row["trading_date"] for row in rows})
                 if remaining:
                     unresolved[symbol["symbol"]] = remaining
@@ -122,17 +121,20 @@ def _index_price_rows(index_id: int, bars: Iterable, missing: set[str]) -> list[
         })
     return rows
 
-def _price_rows(symbol_id: int, bars: Iterable, missing: set[str]) -> list[dict[str, Any]]:
-    rows = []
-    for bar in bars:
-        trading_date = bar.trading_date.isoformat()
-        if trading_date not in missing:
-            continue
-        rows.append({
-            "symbol_id": symbol_id, "trading_date": trading_date,
-            "open": float(bar.open), "high": float(bar.high), "low": float(bar.low), "close": float(bar.close),
-            "volume": bar.volume, "source": bar.source, "collected_at": bar.collected_at.isoformat(), "quality_status": "VALID",
-            "price_unit": STOCK_PRICE_UNIT,
-            "source_version": KBS_SOURCE_VERSION,
-        })
-    return rows
+def _canonical_repair_rows(client: SupabaseRestClient, symbol: dict, start_date: date,
+                           end_date: date, source: str) -> tuple[list, list[dict]]:
+    """Refetch a whole persisted window so a missing session never mixes bases."""
+    stored = [row for row in client.price_history(symbol["id"], 1300)
+              if row["trading_date"] <= end_date.isoformat()]
+    first_day = min(start_date, date.fromisoformat(stored[0]["trading_date"])) if stored else start_date
+    bars = _fetch_from_source(symbol["symbol"], first_day, end_date, source)
+    available = {bar.trading_date.isoformat() for bar in bars}
+    missing_stored = {row["trading_date"] for row in stored if row["trading_date"] >= first_day.isoformat()} - available
+    if missing_stored and source.upper() == "AUTO":
+        bars = _fetch_from_source(symbol["symbol"], first_day, end_date, "KBS")
+        available = {bar.trading_date.isoformat() for bar in bars}
+        missing_stored = {row["trading_date"] for row in stored if row["trading_date"] >= first_day.isoformat()} - available
+    if missing_stored:
+        raise ValueError(f"SOURCE_HISTORY_COVERAGE_MISMATCH:{len(missing_stored)}")
+    rows = canonical_price_rows(symbol["id"], bars, client.corporate_actions(symbol["id"]), as_of_date=end_date)
+    return bars, rows

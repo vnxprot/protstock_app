@@ -46,9 +46,10 @@ Core Pack rule versions begin at v0.0.0.
 - [x] Pass Python, web build, frontend and SQL migration tests locally.
 - [x] Commit and push the code (`417f5b7`).
 - [x] Apply the first four v0.0.0 Supabase migrations.
-- [ ] Apply the TLG verification migration.
+- [x] Apply the TLG verification migration.
 - [x] Assert the live universe matches the 277-symbol manifest.
-- [ ] Sync VCI event candidates and inspect failed symbols and event coverage.
+- [x] Sync VCI event candidates: 277 symbols, 3,652 new events, zero failed symbols.
+- [ ] Review unresolved event classes before claiming complete technical coverage.
 - [ ] Backfill canonical bars in small batches and monitor database size.
 - [ ] Audit source/volume factors; quarantine unresolved event windows.
 - [ ] Publish one complete EOD only after breadth and signal checks.
@@ -59,3 +60,8 @@ The database was 275 MB on 12 October 2026 when read through the linked
 Supabase project. Batch backfills and monitor headroom against the Free plan's
 500 MB database quota. GitHub Actions and Vercel usage must also stay within
 their personal/free limits. No paid service is required by this design.
+
+The initial full ledger import on 13 October 2026 left 921 source-reported
+share events and 214 rights issues without independent verification. These
+events remain visible for audit. Windows crossing them are withheld rather
+than labelled as valid comparable-volume history.

@@ -57,7 +57,7 @@ def main() -> None:
     repair = subparsers.add_parser("repair-history")
     repair.add_argument("--start-date", type=date.fromisoformat, default=date(2021, 1, 1))
     repair.add_argument("--end-date", type=date.fromisoformat, default=vietnam_today())
-    repair.add_argument("--source", default="KBS", choices=("KBS",))
+    repair.add_argument("--source", default="AUTO", choices=("AUTO", "VCI", "KBS"))
     repair.add_argument("--symbol-offset", type=int, default=0)
     repair.add_argument("--symbol-limit", type=int)
     repair.add_argument("--pause-seconds", type=float, default=3.0)
