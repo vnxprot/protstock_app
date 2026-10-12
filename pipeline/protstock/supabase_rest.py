@@ -422,6 +422,19 @@ class SupabaseRestClient:
         response.raise_for_status()
         return len(payload)
 
+    def remove_superseded_rule_outputs(self, symbol_id: int, timeframe: str, as_of_date: str,
+                                       rule_version_ids: list[str], signals: list[dict], evaluations: list[dict]) -> None:
+        """Drop same-day outputs that disappeared after a deterministic rebuild."""
+        if not rule_version_ids:
+            return
+        response = self._request("POST", "/rpc/remove_superseded_rule_outputs", json={
+            "p_symbol_id": symbol_id, "p_timeframe": timeframe, "p_as_of_date": as_of_date,
+            "p_rule_version_ids": rule_version_ids,
+            "p_signal_keys": [f"{row['rule_version_id']}:{row['action']}" for row in signals],
+            "p_evaluation_ids": [row["rule_version_id"] for row in evaluations],
+        })
+        response.raise_for_status()
+
     def upsert_core_engine_signal(self, payload: dict[str, Any]) -> int:
         """Write the one canonical Core Engine decision for a symbol/date/frame.
 

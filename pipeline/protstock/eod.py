@@ -734,10 +734,13 @@ def _write_analysis(
     signal_rows = []
     raw_evaluations = []
     evaluations = []
+    evaluated_rule_ids = []
+    evaluation_date = context.get("evaluation_date", result["as_of_date"])
     for version in active_rules:
         dsl = version["dsl"]
         if timeframe not in dsl.get("timeframes", [dsl.get("timeframe", "D")]):
             continue
+        evaluated_rule_ids.append(version["id"])
         rule = version.get("rules") or {}
         owner = (context.get("portfolios") or {}).get(rule.get("user_id"), {})
         positions = owner.get("positions", [])
@@ -838,6 +841,9 @@ def _write_analysis(
     )
     if evaluations:
         client.upsert("signal_evaluations", evaluations, "rule_version_id,symbol_id,timeframe,as_of_date")
+    cleaner = getattr(client, "remove_superseded_rule_outputs", None)
+    if cleaner is not None:
+        cleaner(symbol_id, timeframe, evaluation_date, evaluated_rule_ids, signal_rows, evaluations)
     if raw_evaluations:
         consolidated = resolve_consolidated_signal(raw_evaluations)
         winners = {item["rule_version_id"] for item in raw_evaluations if item["action"] == consolidated["composite_action"] and not (item.get("evidence") or {}).get("context_only")}

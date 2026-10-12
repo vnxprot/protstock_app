@@ -1,7 +1,29 @@
 import httpx
+import json
 
 from protstock.config import Settings
 from protstock.supabase_rest import SupabaseRestClient
+
+
+def test_rebuild_cleanup_identifies_only_superseded_rule_outputs() -> None:
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(204)
+
+    client = SupabaseRestClient(Settings("https://example.supabase.co", "service"), transport=httpx.MockTransport(handler))
+    try:
+        client.remove_superseded_rule_outputs(7, "D", "2026-10-09", ["vcp-id", "macd-id"],
+                                              [{"rule_version_id": "macd-id", "action": "WATCH"}],
+                                              [{"rule_version_id": "macd-id"}])
+        assert requests[0].url.path == "/rest/v1/rpc/remove_superseded_rule_outputs"
+        payload = json.loads(requests[0].content)
+        assert payload["p_rule_version_ids"] == ["vcp-id", "macd-id"]
+        assert payload["p_signal_keys"] == ["macd-id:WATCH"]
+        assert payload["p_evaluation_ids"] == ["macd-id"]
+    finally:
+        client.close()
 
 
 def test_active_rule_versions_uses_explicit_active_rule_query() -> None:
