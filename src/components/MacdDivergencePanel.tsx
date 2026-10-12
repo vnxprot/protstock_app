@@ -22,12 +22,13 @@ const stages: Record<string, string> = {
 const price = (value: number) => value.toLocaleString('vi-VN', { maximumFractionDigits: 3 })
 function priority(row: Row, date: string) {
   if (row.stage === 'CONFIRMED' && row.trigger_date === date) return 0
-  if (row.stage === 'CONFIRMED') return 1
+  if (row.stage === 'CONFIRMED' && (row.evidence.trigger_age_sessions ?? 999) <= 5) return 1
   if (row.stage === 'WATCH_PIVOT_CONFIRMATION') return 2
   if (row.evidence.pending_lower_low_on) return 3
   if (row.confirmed_on === date) return 4
   if (row.stage === 'WATCH_PRICE_CONFIRMATION') return 5
-  return 6
+  if (row.stage === 'CONFIRMED') return 6
+  return 7
 }
 
 function ZoneHistory({ row, date, open }: { row: Row; date: string; open: boolean }) {
@@ -65,15 +66,15 @@ function ZoneRow({ row, date }: { row: Row; date: string }) {
   const latest = row.stage === 'CONFIRMED' && row.trigger_date === date
   const status = evidence.pending_lower_low_on ? 'Đáy đang cập nhật'
     : latest ? 'Vừa breakout'
-    : row.stage === 'CONFIRMED' ? 'Breakout gần đây'
+    : row.stage === 'CONFIRMED' ? (evidence.trigger_age_sessions ?? 999) <= 5 ? 'Breakout gần đây' : 'Đã breakout'
     : row.stage === 'WATCH_PIVOT_CONFIRMATION' ? 'Ứng viên đáy mới'
     : row.confirmed_on === date ? 'Vừa phát hiện'
     : stages[row.stage] ?? row.stage
   return <details className={latest ? 'macd-zone-fresh' : ''} onToggle={event => setOpen(event.currentTarget.open)}>
     <summary><strong>{row.symbol}</strong><span>{row.swings - 1} đoạn · {row.swings} vùng đáy · đường MACD</span>
       <span>{status}</span><small>{evidence.strength === 'THIN' ? 'Biên mỏng' : 'Biên rõ'}
-        {' · '}{row.stage === 'CONFIRMED' ? 'đã vượt' : 'cách ngưỡng'} {Math.abs(evidence.distance_to_trigger_pct).toFixed(1)}%</small></summary>
-    <p className="macd-zone-levels">Đóng cửa gần nhất <b>{price(evidence.latest_close)}</b> · Vượt <b>{price(row.trigger_price)}</b> để xác nhận giá · Đáy bảo vệ <b>{price(row.invalidation_price)}</b></p>
+        {' · '}{evidence.distance_to_trigger_pct > 0 ? 'hiện thấp hơn ngưỡng' : evidence.distance_to_trigger_pct < 0 ? 'hiện cao hơn ngưỡng' : 'hiện đúng ngưỡng'} {Math.abs(evidence.distance_to_trigger_pct).toFixed(1)}%</small></summary>
+    <p className="macd-zone-levels">Đóng cửa gần nhất <b>{price(evidence.latest_close)}</b> · {row.stage === 'CONFIRMED' ? 'Ngưỡng breakout đã ghi nhận' : 'Ngưỡng chờ breakout'} <b>{price(row.trigger_price)}</b> · Đáy bảo vệ <b>{price(row.invalidation_price)}</b></p>
     {row.stage === 'WATCH_PIVOT_CONFIRMATION' && <p className="macd-zone-note">Đáy giá mới chỉ là ứng viên. Cần đủ hai phiên giao dịch đóng sau đáy để xác nhận pivot; trong thời gian đó không tạo tín hiệu mua từ mẫu này.</p>}
     {evidence.sweep_reversal && <p className="macd-zone-note">Đáy {evidence.sweep_date} là nến quét đáy rút chân: râu dưới {((evidence.lower_wick_ratio ?? 0) * 100).toFixed(0)}% biên nến, đóng cửa ở {((evidence.close_location ?? 0) * 100).toFixed(0)}% biên nến. Giá thấp nhất vẫn là đáy kỹ thuật, nhưng phản ánh cú quét hơn là nhiều phiên tích lũy tại đáy.</p>}
     {row.trigger_date && <p>Giá vượt ngày <b>{row.trigger_date}</b>
@@ -120,7 +121,7 @@ export function MacdDivergencePanel({ date, authenticated, focusSymbol = '' }: {
   const filtered = useMemo(() => {
     const matches = rows.filter(row => row.symbol.includes(symbol.trim().toUpperCase())
       && (stage === 'ALL' || stage === 'FRESH' && (row.stage === 'WATCH_PIVOT_CONFIRMATION' || row.stage === 'WATCH_PRICE_CONFIRMATION' && !row.evidence.pending_lower_low_on && row.confirmed_on === date) || stage === 'ACTIVE' && (row.stage === 'WATCH_PIVOT_CONFIRMATION' || row.stage === 'WATCH_PRICE_CONFIRMATION'
-        || row.stage === 'CONFIRMED' && (row.evidence.trigger_age_sessions ?? 999) <= 5)
+        || row.stage === 'CONFIRMED' && (symbol.trim() !== '' || (row.evidence.trigger_age_sessions ?? 999) <= 5))
         || row.stage === stage)
       && (segments <= 0 || row.swings === segments + 1))
       .sort((a, b) => priority(a, date) - priority(b, date)
