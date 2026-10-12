@@ -2,6 +2,7 @@ from datetime import date
 
 from protstock.models import DailyBar
 from protstock.price_basis import canonical_price_rows, same_source_window
+from protstock.corporate_action_sync import vci_action_rows
 
 
 def bar(day: str, volume: int = 100) -> DailyBar:
@@ -54,3 +55,14 @@ def test_employee_placement_stays_in_ledger_without_blocking_holder_volume():
                                 [placement], as_of_date=date(2025, 9, 12))
     assert all(row["quality_status"] == "VALID" for row in rows)
     assert all(row["volume_adjustment_factor"] == 1 for row in rows)
+
+
+def test_vci_employee_issue_is_classified_without_holder_entitlement():
+    class Frame:
+        def to_dict(self, _orientation):
+            return [{"id": "42", "event_code": "ISS", "event_title_vi": "Phát hành cổ phiếu - Phát hành cho CBCNV tỉ lệ 2.0%",
+                     "exright_date": "2026-05-22", "exercise_ratio": 0.02}]
+
+    rows = vci_action_rows(1, Frame())
+    assert rows[0]["action_type"] == "OTHER"
+    assert rows[0]["metadata"]["entitlement_policy"] == "NO_EXISTING_HOLDER_ENTITLEMENT"

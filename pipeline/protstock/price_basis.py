@@ -92,7 +92,8 @@ def canonical_price_rows(symbol_id: int, bars: Iterable[DailyBar], events: Itera
         adjusted_volume = int((Decimal(bar.volume) * factor).quantize(Decimal(1), rounding=ROUND_HALF_UP))
         event_fingerprint = sorted((item.get("action_type"), str(item.get("ex_date")), str(item.get("ratio")),
                                     str(item.get("cash_amount")), str(item.get("verification_status")),
-                                    str((item.get("metadata") or {}).get("volume_policy"))) for item in actions)
+                                    str((item.get("metadata") or {}).get("volume_policy")),
+                                    str((item.get("metadata") or {}).get("entitlement_policy"))) for item in actions)
         revision = sha256(dumps([family, bar.source, event_fingerprint], sort_keys=True).encode()).hexdigest()
         rows.append({
             "symbol_id": symbol_id, "trading_date": bar.trading_date.isoformat(),

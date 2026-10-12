@@ -4,14 +4,14 @@ on:
   workflow_dispatch:
     inputs:
       start_offset:
-        description: First zero-based alphabetic offset; use 10 after the initial smoke test
+        description: First zero-based alphabetic offset
         required: true
-        default: '10'
+        default: '0'
         type: string
       end_offset:
-        description: Final inclusive zero-based offset; use 276 for the current 277-symbol universe
-        required: true
-        default: '276'
+        description: Final inclusive offset; blank means all active manifest symbols
+        required: false
+        default: ''
         type: string
       lookback_days:
         description: Calendar days of history per batch
@@ -57,6 +57,9 @@ jobs:
           failures=0
           date_args=()
           if [ -n "$TRADING_DATE" ]; then date_args+=(--date "$TRADING_DATE"); fi
+          if [ -z "$END_OFFSET" ]; then
+            END_OFFSET=$(python -c 'from protstock.universe import load_universe; print(sum(row.active for row in load_universe("data/universe.csv").rows)-1)')
+          fi
           for offset in $(seq "$START_OFFSET" 10 "$END_OFFSET"); do
             echo "::group::EOD alphabetic batch offset=$offset"
             protstock eod "${date_args[@]}" --historical --skip-breadth-snapshot --source AUTO --lookback-days "$LOOKBACK_DAYS" --symbol-offset "$offset" --symbol-limit 10
