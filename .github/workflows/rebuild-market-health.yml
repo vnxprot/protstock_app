@@ -9,9 +9,9 @@ on:
         default: '2021-01-01'
         type: string
       end_date:
-        description: Final date to rebuild (YYYY-MM-DD)
-        required: true
-        default: '2026-09-25'
+        description: Final date to rebuild (YYYY-MM-DD); blank uses today in Vietnam
+        required: false
+        default: ''
         type: string
 
 permissions:
@@ -36,4 +36,9 @@ jobs:
         env:
           SUPABASE_URL: https://upmqxwktvvguegqeqibn.supabase.co
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-        run: protstock rebuild-market-health --start-date '${{ inputs.start_date }}' --end-date '${{ inputs.end_date }}'
+          START_DATE: ${{ inputs.start_date }}
+          END_DATE: ${{ inputs.end_date }}
+        run: |
+          args=(--start-date "$START_DATE")
+          if [ -n "$END_DATE" ]; then args+=(--end-date "$END_DATE"); fi
+          protstock rebuild-market-health "${args[@]}"
