@@ -1,7 +1,7 @@
 from datetime import date, timedelta
 from types import SimpleNamespace
 
-from protstock.eod import FAST_LANE_BENCHMARK_FETCH_DAYS, _benchmark_snapshot, _confirmed_week_end, _fetch_history_with_retry, _fetch_requested_session, _load_portfolios, _rows_as_of, finalize_fast_lane, rebuild_signals, resolve_eod_session, run_eod
+from protstock.eod import FAST_LANE_BENCHMARK_FETCH_DAYS, _benchmark_snapshot, _confirmed_week_end, _fetch_history_with_retry, _fetch_requested_session, _initialize_engine_stats, _load_portfolios, _rows_as_of, finalize_fast_lane, rebuild_signals, resolve_eod_session, run_eod
 
 
 class RateLimitedProvider:
@@ -53,6 +53,13 @@ def test_missing_vci_last_session_uses_whole_kbs_window(monkeypatch) -> None:
     rows = _fetch_requested_session(Provider("VCI"), "AUTO", "DVM", start, day)
     assert rows[-1].trading_date == day and rows[-1].source == "KBS_PUBLIC"
     assert calls == [("VCI", "DVM", start, day), ("KBS", "DVM", start, day)]
+
+
+def test_current_core_stats_use_restart_label() -> None:
+    stats = _initialize_engine_stats([{"id": "version", "dsl": {"timeframes": ["D"]},
+                                      "rules": {"id": "rule", "kind": "CORE_PACK",
+                                                "name": "Prot Core Engine v2.0"}}])
+    assert stats["version"]["engine_name"] == "Prot Core Engine · Đa khung v0.0.0"
 
 
 def test_prepared_analysis_rejects_other_session_or_revision(tmp_path) -> None:

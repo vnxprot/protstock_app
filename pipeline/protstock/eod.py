@@ -31,6 +31,7 @@ from .macd_divergence_zones import assess_macd_zone_divergence
 from .challenger_engine import assess_challenger, assess_challenger_strategies, recovery_status, VERSION as CHALLENGER_VERSION, CODES as CHALLENGER_STRATEGY_CODES
 from .wyckoff import classify_wyckoff_timeframe
 from .price_basis import canonical_price_rows, same_source_window, source_family
+from .release_naming import release_core_rule_name
 
 # VNINDEX's first session was 28/07/2000. This keeps its benchmark history full
 # through the app's operational planning horizon without expanding symbol fetches.
@@ -1103,7 +1104,9 @@ def _initialize_engine_stats(active_rules: list[dict]) -> dict[str, dict[str, An
     return {
         _stats_key(version["id"], timeframe): {
             "rule_id": version["rules"]["id"], "rule_version_id": version["id"],
-            "engine_name": version["rules"].get("name") or version["dsl"].get("engine") or "Rule Studio",
+            "engine_name": (release_core_rule_name(version["rules"]["name"])
+                            if version["rules"].get("kind") == "CORE_PACK" and version["rules"].get("name")
+                            else version["rules"].get("name") or version["dsl"].get("engine") or "Rule Studio"),
             "timeframe": timeframe,
             "evaluated_count": 0, "emitted_count": 0, "contributed_count": 0,
         }

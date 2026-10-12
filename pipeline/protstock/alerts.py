@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 import os
-import re
 from datetime import date, timedelta
 
 import httpx
 
 from .config import Settings
 from .supabase_rest import SupabaseRestClient
+from .release_naming import release_core_rule_name
 
 
 def build_telegram_message(signal: dict, trading_date: date) -> str:
@@ -17,13 +17,7 @@ def build_telegram_message(signal: dict, trading_date: date) -> str:
     kind = signal.get("kind") or rule_data.get("kind")
     name = signal.get("rule_name") or rule_data.get("name")
     if kind == "CORE_PACK" and name:
-        engine_names = {
-            "Prot Core Engine v0.0": "Prot Core Engine · Mẫu hình",
-            "Prot Core Engine v1.0": "Prot Core Engine · Nền tảng",
-            "Prot Core Engine v2.0": "Prot Core Engine · Đa khung",
-        }
-        label = engine_names.get(name, re.sub(r"\s+v\d+(?:\.\d+){1,2}$", "", name))
-        rule = f"{label} v1.0"
+        rule = release_core_rule_name(name)
     elif kind == "USER_RULE" and name:
         rule = f"Rule Studio: {name}"
     elif name:
