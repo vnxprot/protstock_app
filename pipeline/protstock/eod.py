@@ -668,7 +668,9 @@ def _stored_universe_breadth(client: SupabaseRestClient, trading_date: date) -> 
                   if row.get("algorithm_version", ALGORITHM_VERSION) == ALGORITHM_VERSION] if previous_date else []
     current_rows = [row for row in client.daily_snapshots_for_date(trading_date)
                     if row.get("algorithm_version", ALGORITHM_VERSION) == ALGORITHM_VERSION]
-    return build_breadth_membership(symbols, prior_rows, current_rows, trading_date.isoformat())
+    price_ids_getter = getattr(client, "daily_price_symbol_ids", None)
+    price_present_ids = price_ids_getter(trading_date) if price_ids_getter else None
+    return build_breadth_membership(symbols, prior_rows, current_rows, trading_date.isoformat(), price_present_ids)
 
 
 def _persist_universe_breadth(client: SupabaseRestClient, trading_date: date, vnindex_trend_state: str) -> dict:

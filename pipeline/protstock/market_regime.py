@@ -146,13 +146,16 @@ def compute_breadth(snapshots: Sequence[dict], prior_by_symbol: dict | None = No
     }
 
 
-def build_breadth_membership(active_symbols: Sequence[dict], prior_snapshots: Sequence[dict], current_snapshots: Sequence[dict], trading_date: str) -> tuple[dict, list[dict]]:
+def build_breadth_membership(active_symbols: Sequence[dict], prior_snapshots: Sequence[dict], current_snapshots: Sequence[dict], trading_date: str,
+                             price_present_ids: set[int] | None = None) -> tuple[dict, list[dict]]:
     """Freeze eligibility from prior completed data and audit today's observation."""
     active_ids = {item["id"] for item in active_symbols}
     prior_valid = {item["symbol_id"] for item in prior_snapshots if item.get("symbol_id") in active_ids and _valid_snapshot(item)}
     current_by_symbol = {item["symbol_id"]: item for item in current_snapshots if item.get("symbol_id") in active_ids}
     current_valid = {symbol_id for symbol_id, item in current_by_symbol.items() if _valid_snapshot(item)}
-    eligible_ids, observed_ids = prior_valid | current_valid, current_valid
+    # A symbol with today's price but no valid technical snapshot is a quality
+    # gap, not an absent listing to remove from the coverage denominator.
+    eligible_ids, observed_ids = prior_valid | current_valid | ((price_present_ids or set()) & active_ids), current_valid
     eligible_count, observed_count = len(eligible_ids), len(observed_ids)
     coverage_ratio = observed_count / eligible_count if eligible_count else None
     coverage_status = "BOOTSTRAP" if not eligible_count else "COMPLETE" if observed_count == eligible_count else "DEGRADED" if coverage_ratio is not None and coverage_ratio >= MIN_BREADTH_COVERAGE_RATIO else "INCOMPLETE"
@@ -163,6 +166,8 @@ def build_breadth_membership(active_symbols: Sequence[dict], prior_snapshots: Se
             status, eligible, observed = "ELIGIBLE", True, True
         elif symbol_id in prior_valid:
             status, eligible, observed = "DATA_MISSING_OR_HALTED", True, False
+        elif symbol_id in eligible_ids:
+            status, eligible, observed = "DATA_QUALITY_BLOCKED", True, False
         elif current is not None:
             status, eligible, observed = "INSUFFICIENT_HISTORY", False, False
         else:

@@ -267,6 +267,14 @@ class SupabaseRestClient:
                 break
         return dates
 
+    def daily_price_symbol_ids(self, trading_date: date) -> set[int]:
+        response = self._get(
+            "/daily_prices",
+            params={"select": "symbol_id", "trading_date": f"eq.{trading_date.isoformat()}", "limit": "1000"},
+        )
+        response.raise_for_status()
+        return {int(row["symbol_id"]) for row in response.json()}
+
     def all_daily_prices(self, start_date: date, end_date: date) -> list[dict[str, Any]]:
         """Read stored OHLCV in pages for point-in-time Market Health rebuilds."""
         rows: list[dict[str, Any]] = []

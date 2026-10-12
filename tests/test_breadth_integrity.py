@@ -100,6 +100,17 @@ def test_long_unavailable_symbol_is_not_a_permanent_breadth_veto():
     assert next(row for row in membership if row["symbol_id"] == 2)["status"] == "NOT_ELIGIBLE"
 
 
+def test_present_price_without_canonical_snapshot_reduces_breadth_coverage():
+    breadth, membership = build_breadth_membership(
+        [{"id": 1}, {"id": 2}], [], snapshots((1, 20, 10)), "2026-10-12",
+        price_present_ids={1, 2},
+    )
+    assert breadth["eligible_count"] == 2
+    assert breadth["observed_count"] == 1
+    assert breadth["coverage_status"] == "INCOMPLETE"
+    assert next(row for row in membership if row["symbol_id"] == 2)["status"] == "DATA_QUALITY_BLOCKED"
+
+
 def test_prior_breadth_repairs_legacy_summary_and_persists_membership():
     client = Client({
         date(2026, 9, 10): snapshots((1, 20, 10), (2, 8, 10)),
