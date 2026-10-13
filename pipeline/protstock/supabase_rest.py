@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
-from datetime import date
+from datetime import date, timedelta
 from time import sleep
 from random import uniform
 from typing import Any
@@ -276,19 +276,27 @@ class SupabaseRestClient:
         return {int(row["symbol_id"]) for row in response.json()}
 
     def all_daily_prices(self, start_date: date, end_date: date) -> list[dict[str, Any]]:
-        """Read stored OHLCV in pages for point-in-time Market Health rebuilds."""
+        """Read OHLCV in month-sized pages to keep database offsets bounded."""
         rows: list[dict[str, Any]] = []
-        for offset in range(0, 1_000_000, 1000):
-            response = self._get(
-                "/daily_prices",
-                params=[("select", "symbol_id,trading_date,high,low,close,volume,volume_basis,volume_adjustment_factor,price_basis,quality_status,data_revision,source"), ("trading_date", f"gte.{start_date.isoformat()}"), ("trading_date", f"lte.{end_date.isoformat()}"), ("order", "trading_date.asc,symbol_id.asc")],
-                headers={"Range": f"{offset}-{offset + 999}"},
-            )
-            response.raise_for_status()
-            page = response.json()
-            rows.extend(page)
-            if len(page) < 1000:
-                break
+        window_start = start_date
+        while window_start <= end_date:
+            next_month = (date(window_start.year + 1, 1, 1) if window_start.month == 12
+                          else date(window_start.year, window_start.month + 1, 1))
+            window_end = min(end_date, next_month - timedelta(days=1))
+            for offset in range(0, 100_000, 1000):
+                response = self._get(
+                    "/daily_prices",
+                    params=[("select", "symbol_id,trading_date,high,low,close,volume,volume_basis,volume_adjustment_factor,price_basis,quality_status,data_revision,source"), ("trading_date", f"gte.{window_start.isoformat()}"), ("trading_date", f"lte.{window_end.isoformat()}"), ("order", "trading_date.asc,symbol_id.asc")],
+                    headers={"Range": f"{offset}-{offset + 999}"},
+                )
+                response.raise_for_status()
+                page = response.json()
+                rows.extend(page)
+                if len(page) < 1000:
+                    break
+            else:
+                raise RuntimeError(f"Daily price pagination exceeded 100,000 rows for {window_start:%Y-%m}")
+            window_start = next_month
         return rows
 
     def index_prices_in_range(self, index_id: int, start_date: date, end_date: date) -> list[dict[str, Any]]:

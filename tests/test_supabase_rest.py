@@ -80,6 +80,29 @@ def test_market_history_pages_benchmark_and_preserves_date_bounds() -> None:
         client.close()
 
 
+def test_market_history_prices_reset_pagination_each_month() -> None:
+    from datetime import date
+
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        month = request.url.params.get_list("trading_date")
+        if month == ["gte.2026-01-30", "lte.2026-01-31"]:
+            return httpx.Response(200, json=[{"trading_date": "2026-01-30"}] *
+                                  (1000 if request.headers["range"] == "0-999" else 1))
+        assert month == ["gte.2026-02-01", "lte.2026-02-02"]
+        return httpx.Response(200, json=[{"trading_date": "2026-02-02"}])
+
+    client = SupabaseRestClient(Settings("https://example.supabase.co", "service"), transport=httpx.MockTransport(handler))
+    try:
+        rows = client.all_daily_prices(date(2026, 1, 30), date(2026, 2, 2))
+        assert len(rows) == 1002
+        assert [request.headers["range"] for request in requests] == ["0-999", "1000-1999", "0-999"]
+    finally:
+        client.close()
+
+
 def test_published_signal_dates_only_include_completed_publications() -> None:
     from datetime import date
 
