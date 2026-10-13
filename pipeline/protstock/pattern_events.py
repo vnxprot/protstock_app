@@ -31,6 +31,8 @@ def double_bottom_first_confirmation(
 
 def annotate_double_bottom_events(bars: Sequence[dict], patterns: list[dict]) -> list[dict]:
     """Keep confirmed structure visible, but mark only its first EOD as new."""
+    if not bars:
+        return patterns
     current_date = str(bars[-1]["date"])
     for pattern in patterns:
         if pattern.get("pattern_type") != "DOUBLE_BOTTOM" or pattern.get("state") != "CONFIRMED":

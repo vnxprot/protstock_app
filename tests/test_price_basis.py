@@ -8,6 +8,7 @@ from protstock.price_basis import (canonical_price_rows, same_source_window,
 from protstock.corporate_action_sync import vci_action_rows
 from protstock.indicators import calculate_indicators
 from protstock.flow import calculate_flow
+from protstock.analysis import analyze_bars
 
 
 def bar(day: str, volume: int = 100) -> DailyBar:
@@ -118,6 +119,18 @@ def test_price_indicators_survive_unverified_event_while_volume_waits_for_20_pri
     assert indicators.sma50 is not None and indicators.macd is not None
     assert indicators.volume_ratio20 is None
     assert calculate_flow(recent)["flow_score"] is None
+
+
+def test_price_indicators_survive_a_fully_quarantined_volume_segment():
+    start = date(2026, 1, 1)
+    rows = canonical_price_rows(1, [bar((start + timedelta(days=index)).isoformat())
+                                    for index in range(80)], [], as_of_date=start + timedelta(days=79))
+    rows = [{**row, "date": row["trading_date"]} for row in rows]
+    rows[-1]["volume_basis"] = "MIXED_UNVERIFIED_VOLUME"
+    result = analyze_bars(rows)
+    assert result["indicators"]["sma50"] is not None
+    assert result["patterns"] == [] and result["zones"] == []
+    assert result["indicators"]["flow_score"] is None
     assert calculate_indicators(rows).volume_ratio20 is None  # 20 post-event bars still need one prior bar
     final = canonical_price_rows(1, [*bars, DailyBar.create(
         symbol="TRC", trading_date=start + timedelta(days=80), open=28, high=29,

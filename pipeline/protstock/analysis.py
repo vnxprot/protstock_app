@@ -29,8 +29,8 @@ def analyze_bars(bars: Sequence[dict], position: dict | None = None, weekly_patt
     snapshot_dict = snapshot.to_dict()
     if timeframe == "M":
         snapshot_dict["trend_state"] = monthly_trend(ordered)["trend_state"]
-    patterns = detect_patterns(pattern_bars, snapshot_dict)
-    zones = detect_zones(pattern_bars, fibonacci_context=fibonacci_context)
+    patterns = detect_patterns(pattern_bars, snapshot_dict) if pattern_bars else []
+    zones = detect_zones(pattern_bars, fibonacci_context=fibonacci_context) if pattern_bars else []
     recent_closes = [float(item["close"]) for item in ordered[-20:]]
     snapshot_dict.update({
         "last_volume": float(ordered[-1].get("volume") or 0),
@@ -44,7 +44,7 @@ def analyze_bars(bars: Sequence[dict], position: dict | None = None, weekly_patt
         snapshot_dict["relative_strength_market"] = relative_strength([item[0] for item in aligned], [item[1] for item in aligned]) if aligned else None
     pattern_dicts = _apply_zone_confluence([{**item.to_dict(), "start_date": pattern_bars[item.start_index]["date"]} for item in patterns], zones)
     pattern_dicts = annotate_double_bottom_events(pattern_bars, [enrich_pattern_fibonacci(pattern, fibonacci_context or {}, zones) for pattern in pattern_dicts])
-    classical_patterns = detect_classical_patterns(pattern_bars, snapshot_dict) if include_classical else []
+    classical_patterns = detect_classical_patterns(pattern_bars, snapshot_dict) if include_classical and pattern_bars else []
     multi_timeframe_context = {"weekly_patterns": weekly_patterns or [], "monthly_snapshot": monthly_snapshot or {}} if weekly_patterns is not None or monthly_snapshot is not None else None
     signal, reasons = resolve_signal(pattern_dicts, snapshot_dict, position, market_context=market_context, multi_timeframe_context=multi_timeframe_context, portfolio_positions=portfolio_positions, candidate_sector=candidate_sector, capital=capital)
     reasons = [f"TREND_{snapshot_dict['trend_state']}", *reasons]
