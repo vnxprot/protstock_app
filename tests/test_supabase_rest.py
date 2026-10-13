@@ -103,6 +103,24 @@ def test_market_history_prices_reset_pagination_each_month() -> None:
         client.close()
 
 
+def test_coverage_dates_exclude_a_previous_vendor_revision() -> None:
+    from datetime import date
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.params["symbol_id"] == "eq.7"
+        return httpx.Response(200, json=[
+            {"trading_date": "2026-01-02", "source": "KBS_VNSTOCK_5.0.0", "data_revision": "old", "price_basis": "VENDOR_CORPORATE_ACTION_ADJUSTED", "quality_status": "VALID"},
+            {"trading_date": "2026-01-05", "source": "VCI_VNSTOCK_5.0.0", "data_revision": "new", "price_basis": "VENDOR_CORPORATE_ACTION_ADJUSTED", "quality_status": "VALID"},
+            {"trading_date": "2026-01-06", "source": "VCI_VNSTOCK_5.0.0", "data_revision": "new", "price_basis": "VENDOR_CORPORATE_ACTION_ADJUSTED", "quality_status": "VALID"},
+        ])
+
+    client = SupabaseRestClient(Settings("https://example.supabase.co", "service"), transport=httpx.MockTransport(handler))
+    try:
+        assert client.symbol_coherent_price_dates(7, date(2026, 1, 1), date(2026, 1, 6)) == ["2026-01-05", "2026-01-06"]
+    finally:
+        client.close()
+
+
 def test_published_signal_dates_only_include_completed_publications() -> None:
     from datetime import date
 

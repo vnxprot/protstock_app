@@ -139,6 +139,28 @@ class SupabaseRestClient:
             "daily_prices", [("symbol_id", f"eq.{symbol_id}"), ("trading_date", f"gte.{start_date.isoformat()}"), ("trading_date", f"lte.{end_date.isoformat()}")]
         )
 
+    def symbol_coherent_price_dates(self, symbol_id: int, start_date: date, end_date: date) -> list[str]:
+        """Report only sessions used by the current single-source calculation basis."""
+        from .price_basis import latest_coherent_revision
+
+        rows: list[dict[str, Any]] = []
+        for offset in range(0, 10_000, 1_000):
+            response = self._get(
+                "/daily_prices",
+                params=[("select", "trading_date,source,data_revision,price_basis,quality_status"),
+                        ("symbol_id", f"eq.{symbol_id}"), ("trading_date", f"gte.{start_date.isoformat()}"),
+                        ("trading_date", f"lte.{end_date.isoformat()}"), ("order", "trading_date.asc")],
+                headers={"Range": f"{offset}-{offset + 999}"},
+            )
+            response.raise_for_status()
+            page = response.json()
+            rows.extend(page)
+            if len(page) < 1_000:
+                break
+        else:
+            raise RuntimeError(f"Price coverage pagination exceeded 10,000 rows for symbol {symbol_id}")
+        return [row["trading_date"] for row in latest_coherent_revision(rows)]
+
     def _date_rows(self, table: str, filters: list[tuple[str, str]]) -> list[str]:
         rows: list[dict[str, Any]] = []
         for offset in range(0, 10_000, 1_000):

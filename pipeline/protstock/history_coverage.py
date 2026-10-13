@@ -90,7 +90,7 @@ def audit_history_coverage(start_date: date, end_date: date) -> dict[str, Any]:
         calendar = client.index_price_dates(index["id"], start_date, end_date)
         symbols = client.active_symbols()
         dates_by_symbol = {
-            symbol["id"]: client.symbol_price_dates(symbol["id"], start_date, end_date)
+            symbol["id"]: client.symbol_coherent_price_dates(symbol["id"], start_date, end_date)
             for symbol in symbols
         }
         return {

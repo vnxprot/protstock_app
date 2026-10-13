@@ -32,7 +32,6 @@ jobs:
         env:
           SUPABASE_URL: https://upmqxwktvvguegqeqibn.supabase.co
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-        env:
           START_DATE: ${{ inputs.start_date }}
           END_DATE: ${{ inputs.end_date }}
         run: |
