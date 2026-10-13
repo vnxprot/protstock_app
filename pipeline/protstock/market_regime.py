@@ -164,6 +164,8 @@ def build_breadth_membership(active_symbols: Sequence[dict], prior_snapshots: Se
         current = current_by_symbol.get(symbol_id)
         if symbol_id in current_valid:
             status, eligible, observed = "ELIGIBLE", True, True
+        elif current is not None and current.get("close") is not None and current.get("sma50") is None:
+            status, eligible, observed = "INSUFFICIENT_HISTORY", symbol_id in eligible_ids, False
         elif symbol_id in prior_valid:
             status, eligible, observed = "DATA_MISSING_OR_HALTED", True, False
         elif symbol_id in eligible_ids:
