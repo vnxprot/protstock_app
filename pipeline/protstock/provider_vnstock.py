@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime, timedelta, timezone
+from sys import stderr
 from typing import Any
 
 import httpx
@@ -62,6 +63,7 @@ class VnstockProvider:
             raise RuntimeError(f"VCI request returned unexpected source: {actual_source or 'unknown'}")
         collected_at = datetime.now(timezone.utc)
         result: list[DailyBar] = []
+        invalid: list[tuple[date, list[str]]] = []
         for row in frame.itertuples(index=False):
             timestamp = getattr(row, "time")
             trading_day = _to_date(timestamp)
@@ -74,9 +76,19 @@ class VnstockProvider:
                 volume=int(getattr(row, "volume")), source=f"VCI_VNSTOCK_{vnstock_version}",
                 collected_at=collected_at,
             )
-            if bar.validate():
-                raise ProviderDataError(f"Invalid VCI bar for {symbol} on {trading_day}: {bar.validate()}")
+            problems = bar.validate()
+            if problems:
+                invalid.append((trading_day, problems))
+                continue
             result.append(bar)
+        if invalid:
+            latest_valid = max((bar.trading_date for bar in result), default=None)
+            latest_invalid = max(day for day, _ in invalid)
+            if latest_valid is None or latest_invalid > latest_valid:
+                raise ProviderDataError(f"Invalid latest VCI bar for {symbol} on {latest_invalid}: "
+                                        f"{next(problems for day, problems in invalid if day == latest_invalid)}")
+            print(f"VCI_INVALID_SESSIONS_SKIPPED:{symbol}:"
+                  f"{','.join(day.isoformat() for day, _ in invalid)}", file=stderr)
         by_date = {bar.trading_date: bar for bar in result}
         return [by_date[day] for day in sorted(by_date)]
 

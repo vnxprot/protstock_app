@@ -1,5 +1,7 @@
 from datetime import date
 from decimal import Decimal
+from types import SimpleNamespace
+import sys
 
 from protstock.provider_vnstock import ProviderDataError, VnstockProvider
 
@@ -35,6 +37,35 @@ def test_auto_replaces_whole_invalid_vci_window_with_kbs(monkeypatch):
     monkeypatch.setattr(provider, "_vci_history", lambda *_: (_ for _ in ()).throw(ValueError("bad argument")))
     with pytest.raises(ValueError, match="bad argument"):
         provider.history("MPC", start, end)
+
+
+def test_vci_keeps_valid_history_around_one_invalid_old_session(monkeypatch, capsys):
+    import pytest
+
+    class Frame:
+        attrs = {"source": "vci"}
+        def itertuples(self, index=False):
+            return iter([
+                SimpleNamespace(time="2021-01-21", open=10, high=11, low=9, close=10, volume=100),
+                SimpleNamespace(time="2021-01-22", open=10, high=9, low=8, close=10, volume=100),
+                SimpleNamespace(time="2021-01-25", open=10, high=11, low=9, close=10, volume=100),
+            ])
+    class Market:
+        def equity(self, _symbol): return self
+        def ohlcv(self, **_kwargs): return Frame()
+    monkeypatch.setitem(sys.modules, "vnstock", SimpleNamespace(Market=Market, __version__="5.0.0"))
+    bars = VnstockProvider("VCI").history("MML", date(2021, 1, 21), date(2021, 1, 25))
+    assert [bar.trading_date for bar in bars] == [date(2021, 1, 21), date(2021, 1, 25)]
+    assert "VCI_INVALID_SESSIONS_SKIPPED:MML:2021-01-22" in capsys.readouterr().err
+
+    class LatestInvalidFrame(Frame):
+        def itertuples(self, index=False):
+            return iter(list(Frame().itertuples())[:2])
+    class LatestInvalidMarket(Market):
+        def ohlcv(self, **_kwargs): return LatestInvalidFrame()
+    monkeypatch.setitem(sys.modules, "vnstock", SimpleNamespace(Market=LatestInvalidMarket, __version__="5.0.0"))
+    with pytest.raises(ProviderDataError, match="Invalid latest VCI bar"):
+        VnstockProvider("VCI").history("MML", date(2021, 1, 21), date(2021, 1, 22))
 
 
 class Response:
