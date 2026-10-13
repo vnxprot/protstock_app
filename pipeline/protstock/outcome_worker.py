@@ -5,7 +5,7 @@ from datetime import date, timedelta
 from .config import Settings
 from .outcomes import CANONICAL_CALCULATION_VERSION, evaluate_signal_outcome
 from .analysis import ALGORITHM_VERSION
-from .price_basis import same_source_window
+from .price_basis import same_source_window, latest_coherent_suffix
 from .supabase_rest import SupabaseRestClient
 
 
@@ -27,7 +27,8 @@ def evaluate_pending_outcomes(today: date | None = None) -> dict:
             if signal["symbol_id"] not in histories:
                 rows = [row for row in client.price_history(signal["symbol_id"], 2600)
                         if row["trading_date"] <= cutoff.isoformat()]
-                histories[signal["symbol_id"]] = rows if same_source_window(rows) else []
+                segment = latest_coherent_suffix(rows)
+                histories[signal["symbol_id"]] = segment if same_source_window(segment) else []
             history = histories[signal["symbol_id"]]
             entry = next((row for row in history if row["trading_date"] == signal["as_of_date"]), None)
             if entry is None:

@@ -6,7 +6,7 @@ from typing import Any
 
 from .backtest import BacktestAssumptions, run_backtest
 from .config import Settings
-from .price_basis import same_source_window, with_volume_segments, price_row_usable
+from .price_basis import same_source_window, with_volume_segments, price_row_usable, latest_coherent_suffix
 from .supabase_rest import SupabaseRestClient
 
 
@@ -44,7 +44,7 @@ def process_backtests(limit: int = 3) -> dict[str, Any]:
                 action_reader = getattr(client, "corporate_actions", None)
                 actions = action_reader(request["symbol_id"]) if action_reader else []
                 daily = [{**row, "date": row["trading_date"]} for row in with_volume_segments(
-                    (row for row in history if row["trading_date"] <= request["date_to"]),
+                    latest_coherent_suffix(row for row in history if row["trading_date"] <= request["date_to"]),
                     actions, as_of_date=date.fromisoformat(request["date_to"]))]
                 if not daily:
                     raise ValueError("Không có lịch sử giá trong khoảng đã chọn.")

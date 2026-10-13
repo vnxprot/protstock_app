@@ -30,7 +30,7 @@ from .momentum_radar import assess_momentum_radar
 from .macd_divergence_zones import assess_macd_zone_divergence
 from .challenger_engine import assess_challenger, assess_challenger_strategies, recovery_status, VERSION as CHALLENGER_VERSION, CODES as CHALLENGER_STRATEGY_CODES
 from .wyckoff import classify_wyckoff_timeframe
-from .price_basis import canonical_price_rows, same_source_window, source_family, with_volume_segments, price_row_usable
+from .price_basis import canonical_price_rows, same_source_window, source_family, with_volume_segments, price_row_usable, latest_coherent_suffix
 from .release_naming import release_core_rule_name
 
 # VNINDEX's first session was 28/07/2000. This keeps its benchmark history full
@@ -608,8 +608,8 @@ def _rows_as_of(rows: list[dict[str, Any]], trading_date: date) -> list[dict[str
 
 
 def _stock_rows_as_of(rows: list[dict[str, Any]], trading_date: date) -> list[dict[str, Any]]:
-    return [row for row in _rows_as_of(rows, trading_date)
-            if row["trading_date"] >= HISTORY_START.isoformat()]
+    return latest_coherent_suffix(row for row in _rows_as_of(rows, trading_date)
+                                  if row["trading_date"] >= HISTORY_START.isoformat())
 
 
 def resolve_eod_session(client: SupabaseRestClient, requested: date) -> date:

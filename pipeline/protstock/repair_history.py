@@ -7,7 +7,7 @@ from typing import Any, Iterable
 from .config import Settings
 from .history_coverage import assess_symbol_coverage
 from .provider_vnstock import VnstockProvider, INDEX_PRICE_UNIT, KBS_SOURCE_VERSION
-from .price_basis import canonical_price_rows, same_source_window, source_family
+from .price_basis import canonical_price_rows, same_source_window, source_family, latest_coherent_suffix
 from .supabase_rest import SupabaseRestClient
 
 
@@ -72,7 +72,7 @@ def repair_missing_history(
                     if not missing:
                         counts["already_complete"] += 1
                     coverage = assess_symbol_coverage(symbol, calendar,
-                                                      existing | {bar.trading_date.isoformat() for bar in bars}, start_date)
+                                                      {bar.trading_date.isoformat() for bar in bars}, start_date)
                     remaining = coverage["missing_after_coverage_start_count"]
                     counts["unresolved_sessions"] += remaining
                     counts["pre_listing_sessions"] += coverage["pre_listing_session_count"]
@@ -155,8 +155,8 @@ def _canonical_repair_rows(client: SupabaseRestClient, symbol: dict, start_date:
                            end_date: date, source: str, *, requested_session: bool = False) -> tuple[list, list[dict]]:
     """Refetch a whole persisted window so a missing session never mixes bases."""
     history_limit = max(260, (end_date - start_date).days + 300)
-    stored = [row for row in client.price_history(symbol["id"], history_limit)
-              if start_date.isoformat() <= row["trading_date"] <= end_date.isoformat()]
+    stored = latest_coherent_suffix(row for row in client.price_history(symbol["id"], history_limit)
+                                    if start_date.isoformat() <= row["trading_date"] <= end_date.isoformat())
     first_day = start_date
     bars = _fetch_from_source(symbol["symbol"], first_day, end_date, source)
     available = {bar.trading_date.isoformat() for bar in bars}
