@@ -26,6 +26,7 @@ def repair_missing_history(
     client = SupabaseRestClient(Settings.from_env())
     counts = {"symbols": 0, "already_complete": 0, "missing_sessions": 0, "rows_written": 0, "unresolved_sessions": 0, "pre_listing_sessions": 0, "unclassified_before_first_observation_sessions": 0, "failed": 0}
     unresolved: dict[str, int] = {}
+    failures: dict[str, str] = {}
     try:
         if full_range:
             index = client.market_index("VNINDEX")
@@ -78,11 +79,12 @@ def repair_missing_history(
                     counts["unclassified_before_first_observation_sessions"] += coverage["unclassified_before_first_observation_count"]
                     if remaining:
                         unresolved[symbol["symbol"]] = remaining
-                except Exception:
+                except Exception as exc:
                     counts["failed"] += 1
                     unresolved[symbol["symbol"]] = -1
+                    failures[symbol["symbol"]] = f"{type(exc).__name__}: {str(exc)[:300]}"
                 sleep(pause_seconds)
-            return {"status": "SUCCEEDED" if not counts["failed"] and not no_source_data and not counts["unresolved_sessions"] and not counts["unclassified_before_first_observation_sessions"] else "PARTIAL", "start_date": start_date.isoformat(), "end_date": end_date.isoformat(), **counts, "no_source_data": no_source_data, "unresolved": unresolved}
+            return {"status": "SUCCEEDED" if not counts["failed"] and not no_source_data and not counts["unresolved_sessions"] and not counts["unclassified_before_first_observation_sessions"] else "PARTIAL", "start_date": start_date.isoformat(), "end_date": end_date.isoformat(), **counts, "no_source_data": no_source_data, "unresolved": unresolved, "failures": failures}
         index = client.market_index("VNINDEX")
         existing_index_dates = set(client.index_price_dates(index["id"], start_date, end_date))
         index_bars = _fetch_from_source("VNINDEX", start_date, end_date, source)
