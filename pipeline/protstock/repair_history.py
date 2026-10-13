@@ -201,5 +201,8 @@ def _canonical_repair_rows(client: SupabaseRestClient, symbol: dict, start_date:
                     mismatch_reason = f"OHLC:{prior['trading_date']}"
                     break
         if not consistent:
-            raise ValueError(f"SOURCE_HISTORY_COVERAGE_MISMATCH:{len(missing_stored)}:{mismatch_reason}")
+            stored_source = stored[-1].get("source") if stored else "NONE"
+            fetched_source = rows[-1]["source"] if rows else "NONE"
+            raise ValueError(f"SOURCE_HISTORY_COVERAGE_MISMATCH:{len(missing_stored)}:{mismatch_reason}:"
+                             f"stored={stored_source}:fetched={fetched_source}")
     return bars, rows

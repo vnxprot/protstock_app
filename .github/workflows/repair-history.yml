@@ -23,6 +23,15 @@ on:
         required: false
         default: false
         type: boolean
+      source:
+        description: Data source; AUTO prefers VCI and falls back to KBS on source errors
+        required: false
+        default: AUTO
+        type: choice
+        options:
+          - AUTO
+          - VCI
+          - KBS
 
 permissions:
   contents: read
@@ -50,8 +59,9 @@ jobs:
           END_DATE: ${{ inputs.end_date }}
           SYMBOLS: ${{ inputs.symbols }}
           FULL_RANGE: ${{ inputs.full_range }}
+          SOURCE: ${{ inputs.source }}
         run: |
-          args=(--start-date "$START_DATE")
+          args=(--start-date "$START_DATE" --source "$SOURCE")
           if [ -n "$END_DATE" ]; then args+=(--end-date "$END_DATE"); fi
           if [ -n "$SYMBOLS" ]; then args+=(--symbols "$SYMBOLS"); fi
           if [ "$FULL_RANGE" = "true" ]; then args+=(--full-range); fi
