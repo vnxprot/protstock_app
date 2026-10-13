@@ -172,6 +172,8 @@ def run_eod(
                     if missing_stored:
                         candidate = canonical_price_rows(symbol_row["id"], fetched, events, as_of_date=trading_date)
                         same_family = source_family(stored[-1].get("source")) == source_family(candidate[-1]["source"])
+                        rebase_to_vci = (source_family(stored[-1].get("source")) == "KBS"
+                                         and source_family(candidate[-1]["source"]) == "VCI")
                         changed_revision = stored[-1].get("data_revision") != candidate[-1]["data_revision"]
                         overlap = {row["trading_date"]: row for row in candidate}
                         same_prices = all(
@@ -179,7 +181,7 @@ def run_eod(
                                         rel_tol=0.001, abs_tol=0.01)
                                 for field in ("open", "high", "low", "close"))
                             for old in stored if old["trading_date"] in overlap)
-                        if not same_family or (not changed_revision and not same_prices):
+                        if not (same_family or rebase_to_vci) or (same_family and not changed_revision and not same_prices):
                             raise ValueError(f"SOURCE_HISTORY_COVERAGE_MISMATCH:{len(missing_stored)}")
                 price_rows = canonical_price_rows(symbol_row["id"], fetched, events, as_of_date=trading_date)
                 for offset in range(0, len(price_rows), 100):

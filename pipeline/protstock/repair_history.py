@@ -188,9 +188,16 @@ def _canonical_repair_rows(client: SupabaseRestClient, symbol: dict, start_date:
         revision_changed = same_family and stored[-1].get("data_revision") != rows[-1]["data_revision"]
         # An old revision omitted by the vendor stays stored for audit, but
         # calculations and chart RPCs select only the newly fetched revision.
-        consistent = bool(revision_changed or (same_family and
+        # When a previously selected KBS window becomes available from the
+        # preferred VCI source, replace the calculation revision wholesale.
+        # KBS-only dates remain as audit rows and are reported as gaps; they
+        # must never be spliced into VCI indicator windows.
+        rebase_to_vci = bool(rows and stored and
+                             source_family(stored[-1].get("source")) == "KBS"
+                             and source_family(rows[-1]["source"]) == "VCI")
+        consistent = bool(rebase_to_vci or revision_changed or (same_family and
                           stored[-1].get("data_revision") == rows[-1]["data_revision"]))
-        if consistent and not revision_changed:
+        if consistent and not revision_changed and not rebase_to_vci:
             for prior in stored:
                 updated = current.get(prior["trading_date"])
                 if updated is None:

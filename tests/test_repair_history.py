@@ -119,3 +119,25 @@ def test_repair_retains_missing_stored_vci_session_only_on_same_revision_and_pri
                                          days[0], days[-1], "AUTO")
     assert [bar.trading_date for bar in selected] == [days[0], days[2]]
     assert calls == ["AUTO"]
+
+
+def test_repair_rebases_kbs_to_vci_without_splicing_kbs_only_date(monkeypatch):
+    days = (date(2026, 9, 28), date(2026, 9, 29), date(2026, 9, 30))
+    def bar(day, source):
+        return SimpleNamespace(trading_date=day, open=10, high=11, low=9, close=10,
+                               volume=100, source=source,
+                               collected_at=datetime(2026, 9, 30, tzinfo=timezone.utc))
+    stored = canonical_price_rows(7, [bar(day, "KBS_PUBLIC") for day in days], [], as_of_date=days[-1])
+
+    class Client:
+        def price_history(self, *_args): return stored
+        def corporate_actions(self, *_args): return []
+
+    monkeypatch.setattr("protstock.repair_history._fetch_from_source",
+                        lambda *_args: [bar(days[0], "VCI_VNSTOCK_5.0.0"),
+                                        bar(days[2], "VCI_VNSTOCK_5.0.0")])
+    selected, rows = _canonical_repair_rows(Client(), {"id": 7, "symbol": "AAA"},
+                                            days[0], days[-1], "AUTO")
+    assert [item.trading_date for item in selected] == [days[0], days[2]]
+    assert [row["trading_date"] for row in rows] == [days[0].isoformat(), days[2].isoformat()]
+    assert all(row["source"].startswith("VCI_") for row in rows)
