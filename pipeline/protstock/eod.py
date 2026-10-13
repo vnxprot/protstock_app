@@ -159,7 +159,7 @@ def run_eod(
                     fetched = _fetch_requested_session(provider, source, symbol_row["symbol"], first_day, trading_date)
                     available = {bar.trading_date.isoformat() for bar in fetched}
                     missing_stored = {row["trading_date"] for row in stored} - available
-                    if ((missing_stored or not fetched or fetched[-1].trading_date != trading_date)
+                    if ((not fetched or fetched[-1].trading_date != trading_date)
                             and source == "AUTO" and fetched and source_family(fetched[0].source) == "VCI"):
                         fallback = _fetch_history_with_retry(VnstockProvider("KBS"), symbol_row["symbol"], first_day, trading_date)
                         fallback_dates = {bar.trading_date.isoformat() for bar in fallback}

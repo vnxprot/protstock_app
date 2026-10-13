@@ -107,3 +107,15 @@ def test_repair_retains_missing_stored_vci_session_only_on_same_revision_and_pri
     _, rebased = _canonical_repair_rows(NewRevisionClient(), {"id": 7, "symbol": "AAA"},
                                        days[0], days[-1], "AUTO")
     assert len(rebased) == 2 and rebased[-1]["data_revision"] != stored[-1]["data_revision"]
+
+    # A complete KBS response must not displace usable VCI bars just because
+    # VCI omitted one older session.
+    calls = []
+    def fetch(_symbol, _start, _end, source):
+        calls.append(source)
+        return bars if source == "KBS" else [bars[0], bars[2]]
+    monkeypatch.setattr("protstock.repair_history._fetch_from_source", fetch)
+    selected, _ = _canonical_repair_rows(NewRevisionClient(), {"id": 7, "symbol": "AAA"},
+                                         days[0], days[-1], "AUTO")
+    assert [bar.trading_date for bar in selected] == [days[0], days[2]]
+    assert calls == ["AUTO"]

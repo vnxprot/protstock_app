@@ -168,7 +168,10 @@ def _canonical_repair_rows(client: SupabaseRestClient, symbol: dict, start_date:
     bars = _fetch_from_source(symbol["symbol"], first_day, end_date, source)
     available = {bar.trading_date.isoformat() for bar in bars}
     missing_stored = {row["trading_date"] for row in stored if row["trading_date"] >= first_day.isoformat()} - available
-    if (missing_stored or (requested_session and (not bars or bars[-1].trading_date != end_date))) and source.upper() == "AUTO":
+    # A VCI omission in older history is a coverage gap, not an operational
+    # failure. Switching the entire series to KBS for that gap would replace
+    # otherwise usable VCI history and can reintroduce a mixed vendor window.
+    if requested_session and (not bars or bars[-1].trading_date != end_date) and source.upper() == "AUTO":
         fallback = _fetch_from_source(symbol["symbol"], first_day, end_date, "KBS")
         fallback_dates = {bar.trading_date.isoformat() for bar in fallback}
         fallback_missing = {row["trading_date"] for row in stored} - fallback_dates
