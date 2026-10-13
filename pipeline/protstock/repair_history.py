@@ -181,6 +181,7 @@ def _canonical_repair_rows(client: SupabaseRestClient, symbol: dict, start_date:
     rows = canonical_price_rows(symbol["id"], bars, client.corporate_actions(symbol["id"]), as_of_date=end_date)
     if missing_stored:
         current = {row["trading_date"]: row for row in rows}
+        mismatch_reason = "REVISION_OR_SOURCE"
         consistent = bool(rows and stored and
                           stored[-1].get("data_revision") == rows[-1]["data_revision"] and
                           source_family(stored[-1].get("source")) == source_family(rows[-1]["source"]))
@@ -192,7 +193,8 @@ def _canonical_repair_rows(client: SupabaseRestClient, symbol: dict, start_date:
                 if any(not isclose(float(prior[field]), float(updated[field]), rel_tol=0.001, abs_tol=0.01)
                        for field in ("open", "high", "low", "close")):
                     consistent = False
+                    mismatch_reason = f"OHLC:{prior['trading_date']}"
                     break
         if not consistent:
-            raise ValueError(f"SOURCE_HISTORY_COVERAGE_MISMATCH:{len(missing_stored)}")
+            raise ValueError(f"SOURCE_HISTORY_COVERAGE_MISMATCH:{len(missing_stored)}:{mismatch_reason}")
     return bars, rows
