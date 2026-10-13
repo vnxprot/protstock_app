@@ -3,7 +3,7 @@ import pytest
 
 from protstock.models import DailyBar
 from protstock.price_basis import (canonical_price_rows, same_source_window,
-                                   volume_window_is_comparable, with_volume_segments, latest_coherent_suffix,
+                                   volume_window_is_comparable, with_volume_segments, latest_coherent_revision,
                                    price_row_usable)
 from protstock.corporate_action_sync import vci_action_rows
 from protstock.indicators import calculate_indicators
@@ -75,14 +75,17 @@ def test_mixed_source_or_basis_revision_is_rejected():
     assert not same_source_window([*rows, {**rows[0], "data_revision": "another"}])
 
 
-def test_latest_coherent_suffix_excludes_legacy_kbs_without_mixing_bases():
-    current = canonical_price_rows(1, [bar("2026-09-14"), bar("2026-09-15")], [],
+def test_latest_coherent_revision_excludes_legacy_kbs_without_mixing_bases():
+    current = canonical_price_rows(1, [bar("2026-09-13"), bar("2026-09-15")], [],
                                    as_of_date=date(2026, 9, 15))
     legacy = {**current[0], "trading_date": "2021-01-04", "source": "VNSTOCK_KBS",
               "data_revision": None, "price_basis": "LEGACY_UNVERIFIED"}
-    assert latest_coherent_suffix([legacy, *current]) == current
-    assert latest_coherent_suffix([*current, legacy]) == current
-    assert latest_coherent_suffix([legacy]) == []
+    assert latest_coherent_revision([legacy, *current]) == current
+    assert latest_coherent_revision([*current, legacy]) == current
+    assert latest_coherent_revision([legacy]) == []
+    stale = {**legacy, "trading_date": "2026-09-14", "source": current[0]["source"],
+             "data_revision": "old-revision", "price_basis": current[0]["price_basis"]}
+    assert latest_coherent_revision([current[0], stale, current[1]]) == current
 
 
 def test_cash_event_changes_revision_and_refreshes_whole_price_window():

@@ -3,6 +3,7 @@ from __future__ import annotations
 from calendar import monthrange
 from datetime import date, timedelta
 from time import monotonic, sleep
+from math import isclose
 from typing import Any
 from pathlib import Path
 import gzip
@@ -30,7 +31,7 @@ from .momentum_radar import assess_momentum_radar
 from .macd_divergence_zones import assess_macd_zone_divergence
 from .challenger_engine import assess_challenger, assess_challenger_strategies, recovery_status, VERSION as CHALLENGER_VERSION, CODES as CHALLENGER_STRATEGY_CODES
 from .wyckoff import classify_wyckoff_timeframe
-from .price_basis import canonical_price_rows, same_source_window, source_family, with_volume_segments, price_row_usable, latest_coherent_suffix
+from .price_basis import canonical_price_rows, same_source_window, source_family, with_volume_segments, price_row_usable, latest_coherent_revision
 from .release_naming import release_core_rule_name
 
 # VNINDEX's first session was 28/07/2000. This keeps its benchmark history full
@@ -160,11 +161,26 @@ def run_eod(
                     missing_stored = {row["trading_date"] for row in stored} - available
                     if ((missing_stored or not fetched or fetched[-1].trading_date != trading_date)
                             and source == "AUTO" and fetched and source_family(fetched[0].source) == "VCI"):
-                        fetched = _fetch_history_with_retry(VnstockProvider("KBS"), symbol_row["symbol"], first_day, trading_date)
-                        available = {bar.trading_date.isoformat() for bar in fetched}
-                        missing_stored = {row["trading_date"] for row in stored} - available
-                    if missing_stored or not fetched or fetched[-1].trading_date != trading_date:
+                        fallback = _fetch_history_with_retry(VnstockProvider("KBS"), symbol_row["symbol"], first_day, trading_date)
+                        fallback_dates = {bar.trading_date.isoformat() for bar in fallback}
+                        if fallback and fallback[-1].trading_date == trading_date and not ({row["trading_date"] for row in stored} - fallback_dates):
+                            fetched = fallback
+                            available = fallback_dates
+                            missing_stored = set()
+                    if not fetched or fetched[-1].trading_date != trading_date:
                         raise ValueError(f"SOURCE_HISTORY_COVERAGE_MISMATCH:{len(missing_stored)}")
+                    if missing_stored:
+                        candidate = canonical_price_rows(symbol_row["id"], fetched, events, as_of_date=trading_date)
+                        same_family = source_family(stored[-1].get("source")) == source_family(candidate[-1]["source"])
+                        changed_revision = stored[-1].get("data_revision") != candidate[-1]["data_revision"]
+                        overlap = {row["trading_date"]: row for row in candidate}
+                        same_prices = all(
+                            all(isclose(float(old[field]), float(overlap[old["trading_date"]][field]),
+                                        rel_tol=0.001, abs_tol=0.01)
+                                for field in ("open", "high", "low", "close"))
+                            for old in stored if old["trading_date"] in overlap)
+                        if not same_family or (not changed_revision and not same_prices):
+                            raise ValueError(f"SOURCE_HISTORY_COVERAGE_MISMATCH:{len(missing_stored)}")
                 price_rows = canonical_price_rows(symbol_row["id"], fetched, events, as_of_date=trading_date)
                 for offset in range(0, len(price_rows), 100):
                     counts["prices"] += client.upsert("daily_prices", price_rows[offset:offset + 100], "symbol_id,trading_date")
@@ -608,8 +624,8 @@ def _rows_as_of(rows: list[dict[str, Any]], trading_date: date) -> list[dict[str
 
 
 def _stock_rows_as_of(rows: list[dict[str, Any]], trading_date: date) -> list[dict[str, Any]]:
-    return latest_coherent_suffix(row for row in _rows_as_of(rows, trading_date)
-                                  if row["trading_date"] >= HISTORY_START.isoformat())
+    return latest_coherent_revision(row for row in _rows_as_of(rows, trading_date)
+                                    if row["trading_date"] >= HISTORY_START.isoformat())
 
 
 def resolve_eod_session(client: SupabaseRestClient, requested: date) -> date:

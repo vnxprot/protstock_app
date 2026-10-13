@@ -85,7 +85,8 @@ def test_historical_market_health_uses_same_day_index_trend_without_future_bars(
     assert trends[index_rows[48]["trading_date"]] == "UNKNOWN"
     assert trends[index_rows[49]["trading_date"]] == "UP"
     trading_day = index_rows[49]["trading_date"]
-    prices = [{"symbol_id": 1, "trading_date": trading_day, "close": 10, "volume": 100}]
+    prices = [{"symbol_id": 1, "trading_date": trading_day, "close": 10, "volume": 100,
+               "source": "VCI_VNSTOCK_5.0.0", "data_revision": "basis-1", "price_basis": "VENDOR_CORPORATE_ACTION_ADJUSTED"}]
     history = build_market_health_history([{"id": 1}], prices, date.fromisoformat(trading_day), date.fromisoformat(trading_day), index_rows=index_rows)
     assert history[0]["vnindex_trend_state"] == "UP"
 
@@ -177,7 +178,8 @@ def test_historical_sector_flow_has_no_future_price_leakage():
     from datetime import timedelta
 
     first = date(2026, 7, 1)
-    prices = [{"symbol_id": 1, "trading_date": (first + timedelta(days=i)).isoformat(), "high": 105 + i, "low": 95 + i, "close": 100 + i, "volume": 100 + i} for i in range(65)]
+    prices = [{"symbol_id": 1, "trading_date": (first + timedelta(days=i)).isoformat(), "high": 105 + i, "low": 95 + i, "close": 100 + i, "volume": 100 + i,
+               "source": "VCI_VNSTOCK_5.0.0", "data_revision": "basis-1", "price_basis": "VENDOR_CORPORATE_ACTION_ADJUSTED"} for i in range(65)]
     day = date.fromisoformat(prices[55]["trading_date"])
     symbols = [{"id": 1, "sector": "TEST"}]
     full = build_market_health_history(symbols, prices, day, day)
@@ -191,7 +193,8 @@ def test_historical_breadth_preserves_missing_eligible_symbols():
 
     first = date(2026, 7, 1)
     bars = [
-        {"symbol_id": symbol_id, "trading_date": (first + timedelta(days=i)).isoformat(), "high": 12, "low": 8, "close": 10, "volume": 100}
+        {"symbol_id": symbol_id, "trading_date": (first + timedelta(days=i)).isoformat(), "high": 12, "low": 8, "close": 10, "volume": 100,
+         "source": "VCI_VNSTOCK_5.0.0", "data_revision": "basis-1", "price_basis": "VENDOR_CORPORATE_ACTION_ADJUSTED"}
         for symbol_id in (1, 2) for i in range(60 if symbol_id == 1 else 59)
     ]
     day = first + timedelta(days=59)

@@ -6,7 +6,7 @@ from typing import Sequence
 
 from .flow import calculate_flow
 from .market_regime import MIN_BREADTH_COVERAGE_RATIO, compute_breadth
-from .price_basis import price_row_usable
+from .price_basis import price_row_usable, latest_coherent_revision
 
 
 def _index_trends(index_rows: Sequence[dict]) -> dict[str, str]:
@@ -35,7 +35,8 @@ def build_market_health_history(active_symbols: Sequence[dict], price_rows: Sequ
             by_symbol[row["symbol_id"]].append(row)
     by_day: dict[str, list[dict]] = defaultdict(list)
     prior_valid_dates: dict[int, date] = {}
-    for symbol_id, rows in by_symbol.items():
+    for symbol_id, collected in by_symbol.items():
+        rows = latest_coherent_revision(collected)
         closes: deque[float] = deque(maxlen=200)
         flow_bars: deque[dict] = deque(maxlen=21)
         prior_close: float | None = None

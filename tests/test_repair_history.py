@@ -98,3 +98,12 @@ def test_repair_retains_missing_stored_vci_session_only_on_same_revision_and_pri
     stored[0]["close"] = 12
     with pytest.raises(ValueError, match="SOURCE_HISTORY_COVERAGE_MISMATCH:1"):
         _canonical_repair_rows(Client(), {"id": 7, "symbol": "AAA"}, days[0], days[-1], "AUTO")
+
+    class NewRevisionClient(Client):
+        def corporate_actions(self, *_args):
+            return [{"action_type": "CASH_DIVIDEND", "ex_date": days[-1].isoformat(),
+                     "cash_amount": 100, "verification_status": "SOURCE_REPORTED"}]
+
+    _, rebased = _canonical_repair_rows(NewRevisionClient(), {"id": 7, "symbol": "AAA"},
+                                       days[0], days[-1], "AUTO")
+    assert len(rebased) == 2 and rebased[-1]["data_revision"] != stored[-1]["data_revision"]

@@ -189,8 +189,8 @@ def same_source_window(rows: Iterable[dict]) -> bool:
     return len(families) == 1 and "UNKNOWN" not in families and len(revisions) == 1 and None not in revisions
 
 
-def latest_coherent_suffix(rows: Iterable[dict]) -> list[dict]:
-    """Use the newest contiguous vendor revision; never join it to legacy bars."""
+def latest_coherent_revision(rows: Iterable[dict]) -> list[dict]:
+    """Use only bars matching the newest vendor revision, even across old gaps."""
     ordered = sorted(rows, key=lambda row: str(row.get("trading_date") or row.get("date")))
     if not ordered:
         return []
@@ -200,13 +200,8 @@ def latest_coherent_suffix(rows: Iterable[dict]) -> list[dict]:
     basis = latest.get("price_basis")
     if family == "UNKNOWN" or not revision or basis != "VENDOR_CORPORATE_ACTION_ADJUSTED":
         return []
-    start = len(ordered) - 1
-    while start >= 0:
-        row = ordered[start]
-        if (source_family(row.get("source")) != family
-                or row.get("data_revision") != revision
-                or row.get("price_basis") != basis
-                or not price_row_usable(row)):
-            break
-        start -= 1
-    return ordered[start + 1:]
+    return [row for row in ordered
+            if source_family(row.get("source")) == family
+            and row.get("data_revision") == revision
+            and row.get("price_basis") == basis
+            and price_row_usable(row)]

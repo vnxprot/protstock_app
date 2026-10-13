@@ -8,7 +8,7 @@ from typing import Any, Iterable
 from .config import Settings
 from .history_coverage import assess_symbol_coverage
 from .provider_vnstock import VnstockProvider, INDEX_PRICE_UNIT, KBS_SOURCE_VERSION
-from .price_basis import canonical_price_rows, same_source_window, source_family, latest_coherent_suffix
+from .price_basis import canonical_price_rows, same_source_window, source_family, latest_coherent_revision
 from .supabase_rest import SupabaseRestClient
 
 
@@ -72,7 +72,7 @@ def repair_missing_history(
                         counts["rows_written"] += client.upsert("daily_prices", write_rows[offset:offset + 100], "symbol_id,trading_date")
                     if not missing:
                         counts["already_complete"] += 1
-                    coherent_stored = latest_coherent_suffix(stored)
+                    coherent_stored = latest_coherent_revision(stored)
                     retained_dates = ({row["trading_date"] for row in coherent_stored}
                                       if rows and coherent_stored
                                       and coherent_stored[-1].get("data_revision") == rows[-1]["data_revision"]
@@ -162,8 +162,8 @@ def _canonical_repair_rows(client: SupabaseRestClient, symbol: dict, start_date:
                            end_date: date, source: str, *, requested_session: bool = False) -> tuple[list, list[dict]]:
     """Refetch a whole persisted window so a missing session never mixes bases."""
     history_limit = max(260, (end_date - start_date).days + 300)
-    stored = latest_coherent_suffix(row for row in client.price_history(symbol["id"], history_limit)
-                                    if start_date.isoformat() <= row["trading_date"] <= end_date.isoformat())
+    stored = latest_coherent_revision(row for row in client.price_history(symbol["id"], history_limit)
+                                      if start_date.isoformat() <= row["trading_date"] <= end_date.isoformat())
     first_day = start_date
     bars = _fetch_from_source(symbol["symbol"], first_day, end_date, source)
     available = {bar.trading_date.isoformat() for bar in bars}
@@ -172,9 +172,7 @@ def _canonical_repair_rows(client: SupabaseRestClient, symbol: dict, start_date:
         fallback = _fetch_from_source(symbol["symbol"], first_day, end_date, "KBS")
         fallback_dates = {bar.trading_date.isoformat() for bar in fallback}
         fallback_missing = {row["trading_date"] for row in stored} - fallback_dates
-        if fallback and (not requested_session or fallback[-1].trading_date == end_date) and (
-                len(fallback_missing) < len(missing_stored)
-                or (requested_session and (not bars or bars[-1].trading_date != end_date))):
+        if fallback and not fallback_missing and (not requested_session or fallback[-1].trading_date == end_date):
             bars = fallback
         available = {bar.trading_date.isoformat() for bar in bars}
         missing_stored = {row["trading_date"] for row in stored if row["trading_date"] >= first_day.isoformat()} - available
@@ -182,10 +180,14 @@ def _canonical_repair_rows(client: SupabaseRestClient, symbol: dict, start_date:
     if missing_stored:
         current = {row["trading_date"]: row for row in rows}
         mismatch_reason = "REVISION_OR_SOURCE"
-        consistent = bool(rows and stored and
-                          stored[-1].get("data_revision") == rows[-1]["data_revision"] and
-                          source_family(stored[-1].get("source")) == source_family(rows[-1]["source"]))
-        if consistent:
+        same_family = bool(rows and stored and
+                           source_family(stored[-1].get("source")) == source_family(rows[-1]["source"]))
+        revision_changed = same_family and stored[-1].get("data_revision") != rows[-1]["data_revision"]
+        # An old revision omitted by the vendor stays stored for audit, but
+        # calculations and chart RPCs select only the newly fetched revision.
+        consistent = bool(revision_changed or (same_family and
+                          stored[-1].get("data_revision") == rows[-1]["data_revision"]))
+        if consistent and not revision_changed:
             for prior in stored:
                 updated = current.get(prior["trading_date"])
                 if updated is None:
