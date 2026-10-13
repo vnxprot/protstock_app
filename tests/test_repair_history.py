@@ -1,7 +1,8 @@
 from datetime import date, datetime, timezone
 from types import SimpleNamespace
 
-from protstock.repair_history import repair_missing_history
+from protstock.repair_history import repair_missing_history, _canonical_repair_rows
+from protstock.price_basis import canonical_price_rows
 import pytest
 
 
@@ -75,3 +76,25 @@ def test_full_range_backfills_before_first_observation_without_overwriting(monke
     result = repair_missing_history(date(2021, 1, 1), date(2026, 9, 28), symbols={"AAA"}, pause_seconds=0, full_range=True)
     assert result["rows_written"] == 2
     assert [row["trading_date"] for row in writes] == ["2021-01-04", "2026-09-28"]
+
+
+def test_repair_retains_missing_stored_vci_session_only_on_same_revision_and_prices(monkeypatch):
+    days = (date(2026, 9, 28), date(2026, 9, 29), date(2026, 9, 30))
+    bars = [SimpleNamespace(trading_date=day, open=10, high=11, low=9, close=10,
+                            volume=100, source="VCI_VNSTOCK_5.0.0",
+                            collected_at=datetime(2026, 9, 30, tzinfo=timezone.utc)) for day in days]
+    stored = canonical_price_rows(7, bars, [], as_of_date=days[-1])
+
+    class Client:
+        def price_history(self, *_args): return stored
+        def corporate_actions(self, *_args): return []
+
+    monkeypatch.setattr("protstock.repair_history._fetch_from_source",
+                        lambda _symbol, _start, _end, source: [] if source == "KBS" else [bars[0], bars[2]])
+    fetched, rows = _canonical_repair_rows(Client(), {"id": 7, "symbol": "AAA"}, days[0], days[-1], "AUTO")
+    assert [bar.trading_date for bar in fetched] == [days[0], days[2]]
+    assert len(rows) == 2
+
+    stored[0]["close"] = 12
+    with pytest.raises(ValueError, match="SOURCE_HISTORY_COVERAGE_MISMATCH:1"):
+        _canonical_repair_rows(Client(), {"id": 7, "symbol": "AAA"}, days[0], days[-1], "AUTO")

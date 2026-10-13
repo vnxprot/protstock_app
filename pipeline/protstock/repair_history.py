@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date
+from math import isclose
 from time import sleep
 from typing import Any, Iterable
 
@@ -71,8 +72,14 @@ def repair_missing_history(
                         counts["rows_written"] += client.upsert("daily_prices", write_rows[offset:offset + 100], "symbol_id,trading_date")
                     if not missing:
                         counts["already_complete"] += 1
+                    coherent_stored = latest_coherent_suffix(stored)
+                    retained_dates = ({row["trading_date"] for row in coherent_stored}
+                                      if rows and coherent_stored
+                                      and coherent_stored[-1].get("data_revision") == rows[-1]["data_revision"]
+                                      and source_family(coherent_stored[-1].get("source")) == source_family(rows[-1]["source"])
+                                      else set())
                     coverage = assess_symbol_coverage(symbol, calendar,
-                                                      {bar.trading_date.isoformat() for bar in bars}, start_date)
+                                                      retained_dates | {bar.trading_date.isoformat() for bar in bars}, start_date)
                     remaining = coverage["missing_after_coverage_start_count"]
                     counts["unresolved_sessions"] += remaining
                     counts["pre_listing_sessions"] += coverage["pre_listing_session_count"]
@@ -163,11 +170,29 @@ def _canonical_repair_rows(client: SupabaseRestClient, symbol: dict, start_date:
     missing_stored = {row["trading_date"] for row in stored if row["trading_date"] >= first_day.isoformat()} - available
     if (missing_stored or (requested_session and (not bars or bars[-1].trading_date != end_date))) and source.upper() == "AUTO":
         fallback = _fetch_from_source(symbol["symbol"], first_day, end_date, "KBS")
-        if fallback and (not requested_session or fallback[-1].trading_date == end_date):
+        fallback_dates = {bar.trading_date.isoformat() for bar in fallback}
+        fallback_missing = {row["trading_date"] for row in stored} - fallback_dates
+        if fallback and (not requested_session or fallback[-1].trading_date == end_date) and (
+                len(fallback_missing) < len(missing_stored)
+                or (requested_session and (not bars or bars[-1].trading_date != end_date))):
             bars = fallback
         available = {bar.trading_date.isoformat() for bar in bars}
         missing_stored = {row["trading_date"] for row in stored if row["trading_date"] >= first_day.isoformat()} - available
-    if missing_stored:
-        raise ValueError(f"SOURCE_HISTORY_COVERAGE_MISMATCH:{len(missing_stored)}")
     rows = canonical_price_rows(symbol["id"], bars, client.corporate_actions(symbol["id"]), as_of_date=end_date)
+    if missing_stored:
+        current = {row["trading_date"]: row for row in rows}
+        consistent = bool(rows and stored and
+                          stored[-1].get("data_revision") == rows[-1]["data_revision"] and
+                          source_family(stored[-1].get("source")) == source_family(rows[-1]["source"]))
+        if consistent:
+            for prior in stored:
+                updated = current.get(prior["trading_date"])
+                if updated is None:
+                    continue
+                if any(not isclose(float(prior[field]), float(updated[field]), rel_tol=0.001, abs_tol=0.01)
+                       for field in ("open", "high", "low", "close")):
+                    consistent = False
+                    break
+        if not consistent:
+            raise ValueError(f"SOURCE_HISTORY_COVERAGE_MISMATCH:{len(missing_stored)}")
     return bars, rows
