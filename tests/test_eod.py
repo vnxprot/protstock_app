@@ -264,7 +264,7 @@ def test_eod_evaluates_signals_only_after_same_day_market_snapshot(monkeypatch) 
     day = date(2026, 9, 25)
     events = []
     row = {"trading_date": day.isoformat(), "open": 10, "high": 11, "low": 9, "close": 10, "volume": 100,
-           "source": "KBS_PUBLIC", "data_revision": "basis-1", "quality_status": "VALID"}
+           "source": "KBS_PUBLIC", "data_revision": "basis-1", "quality_status": "VALID", "price_basis": "VENDOR_CORPORATE_ACTION_ADJUSTED"}
 
     class Client:
         def create_job(self, _payload): return {"id": "job"}
@@ -349,7 +349,7 @@ def test_current_portfolio_is_available_for_latest_session_after_weekend() -> No
 
     class Client:
         def portfolio_context(self, _owner): return {"capital": 10_000_000, "positions": [position.copy()]}
-        def price_history(self, *_args): return [{"trading_date": "2026-09-25", "close": 12}]
+        def price_history(self, *_args): return [{"trading_date": "2026-09-25", "close": 12, "source": "VCI_VNSTOCK_5.0.0", "data_revision": "basis-1", "price_basis": "VENDOR_CORPORATE_ACTION_ADJUSTED"}]
 
     versions = [{"rules": {"user_id": "owner"}}]
     live = _load_portfolios(Client(), versions, date(2026, 9, 25))
@@ -392,7 +392,7 @@ def _rebuild_same_session_fixture(monkeypatch, day, prepared, stale_cached=False
     future = day + timedelta(days=7)
     def bar(on):
         return {"trading_date": on.isoformat(), "open": 10, "high": 11, "low": 9, "close": 10, "volume": 100,
-                "source": "KBS_PUBLIC", "data_revision": "basis-1", "quality_status": "VALID"}
+                "source": "KBS_PUBLIC", "data_revision": "basis-1", "quality_status": "VALID", "price_basis": "VENDOR_CORPORATE_ACTION_ADJUSTED"}
     writes, deleted, items, finished = [], [], [], []
     class Client:
         def create_job(self, _payload): return {"id": "rebuild"}

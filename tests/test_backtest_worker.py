@@ -16,7 +16,7 @@ def test_worker_keeps_warmup_and_uses_frozen_rule_snapshot_and_lease(monkeypatch
         def queued_backtests(self, _limit): return [request()]
         def price_history(self, *_args):
             return [{"trading_date": "2026-01-0" + str(i), "open": 20, "high": 21, "low": 19, "close": 20, "volume": 1000,
-                     "source": "VCI_VNSTOCK_5.0.0", "data_revision": "basis-1", "quality_status": "VALID"} for i in range(1, 5)]
+                     "source": "VCI_VNSTOCK_5.0.0", "data_revision": "basis-1", "quality_status": "VALID", "price_basis": "VENDOR_CORPORATE_ACTION_ADJUSTED"} for i in range(1, 5)]
         def breadth_history(self, start, end):
             assert start == date(2026, 1, 1) and end == date(2026, 1, 3)
             return []
@@ -80,7 +80,7 @@ def test_worker_refuses_to_execute_a_different_pinned_algorithm(monkeypatch):
         def queued_backtests(self, _limit): return [{**request(), "algorithm_version": "core-rules-v3.0.0"}]
         def price_history(self, *_args):
             return [{"trading_date": "2026-01-0" + str(i), "open": 20, "high": 21, "low": 19, "close": 20, "volume": 1000,
-                     "source": "VCI_VNSTOCK_5.0.0", "data_revision": "basis-1", "quality_status": "VALID"} for i in range(1, 4)]
+                     "source": "VCI_VNSTOCK_5.0.0", "data_revision": "basis-1", "quality_status": "VALID", "price_basis": "VENDOR_CORPORATE_ACTION_ADJUSTED"} for i in range(1, 4)]
         def update_backtest(self, run_id, payload, lease=None): updates.append(payload)
         def replace_backtest_trades(self, *args): replacements.append(args)
         def close(self): pass
@@ -101,7 +101,7 @@ def test_worker_uses_canonical_prices_and_keeps_exchange_context(monkeypatch):
         def price_history(self, *_args):
             return [{"trading_date": "2026-01-0" + str(i), "open": 20, "high": 21, "low": 19, "close": 20,
                      "volume": 1000, "price_unit": STOCK_PRICE_UNIT, "source": "VCI_VNSTOCK_5.0.0",
-                     "data_revision": "basis-1", "quality_status": "VALID"} for i in range(1, 4)]
+                     "data_revision": "basis-1", "quality_status": "VALID", "price_basis": "VENDOR_CORPORATE_ACTION_ADJUSTED"} for i in range(1, 4)]
         def closed_trading_sessions(self, exchange, *_args):
             assert exchange == "HNX"
             return set()
@@ -129,7 +129,7 @@ def test_research_sync_cannot_override_canonical_backtest(monkeypatch):
         def price_history(self, *_args):
             stored_calls.append(True)
             return [{"trading_date": "2026-01-0" + str(i), "open": 20, "high": 21, "low": 19, "close": 20, "volume": 1000,
-                     "source": "KBS_PUBLIC", "data_revision": "basis-1", "quality_status": "VALID"} for i in range(1, 4)]
+                     "source": "KBS_PUBLIC", "data_revision": "basis-1", "quality_status": "VALID", "price_basis": "VENDOR_CORPORATE_ACTION_ADJUSTED"} for i in range(1, 4)]
         def update_backtest(self, run_id, payload, lease=None): updates.append(payload)
         def replace_backtest_trades(self, *_args): pass
         def close(self): pass

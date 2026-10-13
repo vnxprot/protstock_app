@@ -7,7 +7,7 @@ from protstock.analysis import ALGORITHM_VERSION
 
 
 def history():
-    return [{"trading_date": (date(2026,1,1)+timedelta(days=i)).isoformat(),"open":100+i,"close":100+i,"low":99+i,"source_version":KBS_SOURCE_VERSION,"source":"KBS_PUBLIC","data_revision":"basis-1","quality_status":"VALID"} for i in range(25)]
+    return [{"trading_date": (date(2026,1,1)+timedelta(days=i)).isoformat(),"open":100+i,"close":100+i,"low":99+i,"source_version":KBS_SOURCE_VERSION,"source":"KBS_PUBLIC","data_revision":"basis-1","quality_status":"VALID","price_basis":"VENDOR_CORPORATE_ACTION_ADJUSTED"} for i in range(25)]
 
 
 def test_worker_scores_five_sessions_without_waiting_for_twenty(monkeypatch):
