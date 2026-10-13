@@ -119,6 +119,12 @@ def test_price_indicators_survive_unverified_event_while_volume_waits_for_20_pri
     assert indicators.sma50 is not None and indicators.macd is not None
     assert indicators.volume_ratio20 is None
     assert calculate_flow(recent)["flow_score"] is None
+    assert calculate_indicators(rows).volume_ratio20 is None  # 20 post-event bars still need one prior bar
+    final = canonical_price_rows(1, [*bars, DailyBar.create(
+        symbol="TRC", trading_date=start + timedelta(days=80), open=28, high=29,
+        low=27, close=28, volume=180, source="VCI_VNSTOCK_5.0.0")],
+        [event], as_of_date=start + timedelta(days=80))
+    assert calculate_indicators(final).volume_ratio20 is not None
 
 
 def test_price_indicators_survive_a_fully_quarantined_volume_segment():
@@ -131,12 +137,6 @@ def test_price_indicators_survive_a_fully_quarantined_volume_segment():
     assert result["indicators"]["sma50"] is not None
     assert result["patterns"] == [] and result["zones"] == []
     assert result["indicators"]["flow_score"] is None
-    assert calculate_indicators(rows).volume_ratio20 is None  # 20 post-event bars still need one prior bar
-    final = canonical_price_rows(1, [*bars, DailyBar.create(
-        symbol="TRC", trading_date=start + timedelta(days=80), open=28, high=29,
-        low=27, close=28, volume=180, source="VCI_VNSTOCK_5.0.0")],
-        [event], as_of_date=start + timedelta(days=80))
-    assert calculate_indicators(final).volume_ratio20 is not None
 
 
 def test_vci_employee_issue_is_classified_without_holder_entitlement():
