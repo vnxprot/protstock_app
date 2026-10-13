@@ -16,7 +16,7 @@ on:
       lookback_days:
         description: Calendar days of history per batch
         required: true
-        default: '900'
+        default: '2200'
         type: string
       trading_date:
         description: Optional as-of trading date (YYYY-MM-DD)

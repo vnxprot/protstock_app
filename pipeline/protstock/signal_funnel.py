@@ -9,6 +9,7 @@ from typing import Sequence
 
 from .indicators import _ema_series
 from .timeframes import aggregate_bars
+from .price_basis import volume_window_is_comparable
 
 FUNNEL_VERSION = "MTF_FUNNEL_SHADOW_V0_0_0"
 ADAPTIVE_FUNNEL_VERSION = "MTF_ADAPTIVE_CHALLENGER_V0_0_0"
@@ -55,7 +56,8 @@ def _weekly_candidates(closed_weeks: Sequence[dict], adaptive: bool = False) -> 
     for i in range(20, len(closed_weeks)):
         bar = closed_weeks[i]
         prior = closed_weeks[i - 13:i]
-        volume_average = mean(float(item["volume"]) for item in prior)
+        volume_average = (mean(float(item["volume"]) for item in prior)
+                          if volume_window_is_comparable([*prior, bar]) else 0)
         if not volume_average:
             continue
         breakout_level = max(float(item["high"]) for item in prior)
@@ -130,7 +132,8 @@ def assess_funnel(symbol_id: int, daily_bars: Sequence[dict], *,
             volume_window = daily[max(0, i - 20):i]
             if len(volume_window) < 20:
                 continue
-            average_volume = mean(float(item["volume"]) for item in volume_window)
+            average_volume = (mean(float(item["volume"]) for item in volume_window)
+                              if volume_window_is_comparable([*volume_window, bar]) else 0)
             range_rebound = adaptive and setup["kind"] == "WEEKLY_RANGE_SUPPORT"
             trigger = (float(previous["high"]) if range_rebound else setup["trigger"])
             if (average_volume and float(bar["close"]) > trigger

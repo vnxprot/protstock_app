@@ -20,6 +20,7 @@ from .provider_vnstock import STOCK_PRICE_UNIT
 from .signal_policy import apply_signal_policy, STOCK_PRICE_TO_VND
 from .timeframes import aggregate_bars
 from .wyckoff import classify_wyckoff_timeframe
+from .price_basis import price_row_usable
 
 
 @dataclass(frozen=True)
@@ -159,7 +160,7 @@ def run_backtest(bars: Sequence[dict], rule: dict[str, Any], assumptions: Backte
     for row in ordered:
         if any(not isfinite(float(row[key])) or float(row[key]) <= 0 for key in ("open", "high", "low", "close")):
             raise ValueError("invalid OHLC")
-        if row.get("quality_status", "VALID") != "VALID":
+        if not price_row_usable(row):
             raise ValueError("Dữ liệu giá đang cách ly; xác minh lịch sử trước khi kiểm thử.")
         if row.get("price_unit") is not None and row["price_unit"] != STOCK_PRICE_UNIT:
             raise ValueError("Đơn vị giá chưa được xác minh là nghìn đồng/cổ phiếu.")

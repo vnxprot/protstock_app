@@ -6,7 +6,7 @@ from typing import Any
 
 from .backtest import BacktestAssumptions, run_backtest
 from .config import Settings
-from .price_basis import same_source_window
+from .price_basis import same_source_window, with_volume_segments, price_row_usable
 from .supabase_rest import SupabaseRestClient
 
 
@@ -41,14 +41,15 @@ def process_backtests(limit: int = 3) -> dict[str, Any]:
                 symbol = client.symbol_by_id(request["symbol_id"]) if hasattr(client, "symbol_by_id") else {"id": request["symbol_id"]}
                 history = client.price_history(request["symbol_id"], 5000)
                 price_basis = "CANONICAL_EVENT_REBASED"
-                daily = [{**row, "date": row["trading_date"]} for row in history
-                         if row["trading_date"] <= request["date_to"]]
-                if not daily:
-                    raise ValueError("Không có lịch sử giá trong khoảng đã chọn.")
-                if not same_source_window(daily) or any(row.get("quality_status") != "VALID" for row in daily):
-                    raise ValueError("Chuỗi giá–khối lượng chưa cùng nguồn, cùng revision hoặc chưa được xác minh.")
                 action_reader = getattr(client, "corporate_actions", None)
                 actions = action_reader(request["symbol_id"]) if action_reader else []
+                daily = [{**row, "date": row["trading_date"]} for row in with_volume_segments(
+                    (row for row in history if row["trading_date"] <= request["date_to"]),
+                    actions, as_of_date=date.fromisoformat(request["date_to"]))]
+                if not daily:
+                    raise ValueError("Không có lịch sử giá trong khoảng đã chọn.")
+                if not same_source_window(daily) or any(not price_row_usable(row) for row in daily):
+                    raise ValueError("Chuỗi giá–khối lượng chưa cùng nguồn, cùng revision hoặc chưa được xác minh.")
                 if any(event.get("ex_date") and request["date_from"] < str(event["ex_date"])[:10] <= history[-1]["trading_date"]
                        and event.get("verification_status") != "REJECTED" for event in actions):
                     raise ValueError("Backtest tiền mặt qua sự kiện quyền cần giá giao dịch gốc từng phiên; chuỗi đã điều chỉnh chưa đủ.")

@@ -1,8 +1,7 @@
-"""One share basis for historical technical prices and comparable volume.
+"""Vendor price provenance and honest volume comparability boundaries.
 
-Vnstock v5 returns corporate-action-adjusted stock OHLC, but its OHLCV
-response does not disclose the factors applied to either field.  Events are
-kept separately and share-volume rebasing is restricted to verified events.
+VCI/KBS OHLCV is accepted as reported. An event without a proven vendor
+volume policy separates volume windows; it never invalidates price history.
 """
 
 from __future__ import annotations
@@ -74,6 +73,74 @@ def volume_factor_for_day(day: date, events: Iterable[dict]) -> Decimal:
     return factor
 
 
+def volume_window_is_comparable(rows: Iterable[dict]) -> bool:
+    """A volume ratio/flow window may not cross an unresolved share event."""
+    segments = set()
+    for row in rows:
+        segment = _volume_segment(row)
+        if segment is None:
+            return False
+        segments.add(segment)
+    return len(segments) <= 1
+
+
+def comparable_volume_suffix(rows: Iterable[dict]) -> list[dict]:
+    """Keep the latest contiguous volume segment for volume based research."""
+    ordered = list(rows)
+    if not ordered:
+        return []
+    segment = _volume_segment(ordered[-1])
+    if segment is None:
+        return []
+    for start in range(len(ordered) - 1, -1, -1):
+        if _volume_segment(ordered[start]) != segment:
+            return ordered[start + 1:]
+    return ordered
+
+
+def _volume_segment(row: dict) -> str | None:
+    basis = str(row.get("volume_basis") or "VENDOR_REPORTED")
+    if basis.startswith("MIXED_UNVERIFIED_VOLUME"):
+        return None
+    if basis.startswith("UNVERIFIED_SHARE_EVENT") or basis == "LEGACY_UNVERIFIED":
+        return basis
+    return "VERIFIED_OR_VENDOR_REPORTED"
+
+
+def with_volume_segments(rows: Iterable[dict], events: Iterable[dict], *, as_of_date: date) -> list[dict]:
+    """Date the volume boundaries of stored v0.0.0 bars without rewriting them."""
+    actions = [event for event in events if event.get("ex_date")
+               and date.fromisoformat(str(event["ex_date"])[:10]) <= as_of_date]
+    share_events = distinct_share_events(actions)
+    output = []
+    for row in rows:
+        if row.get("price_basis") not in {None, "VENDOR_CORPORATE_ACTION_ADJUSTED"}:
+            output.append(dict(row))
+            continue
+        day = date.fromisoformat(str(row.get("trading_date") or row.get("date"))[:10])
+        pending = [item for item in share_events if not factor_is_verified(item)
+                   and day < date.fromisoformat(str(item["ex_date"])[:10])]
+        pending.extend(item for item in actions if item.get("action_type") in {"RIGHTS_ISSUE", "OTHER"}
+                       and item.get("verification_status") != "REJECTED"
+                       and (item.get("metadata") or {}).get("entitlement_policy") != "NO_EXISTING_HOLDER_ENTITLEMENT"
+                       and day < date.fromisoformat(str(item["ex_date"])[:10]))
+        boundary = min((str(item["ex_date"])[:10] for item in pending), default=None)
+        basis = (f"UNVERIFIED_SHARE_EVENT:{boundary}" if boundary else
+                 "VERIFIED_SHARE_REBASED" if float(row.get("volume_adjustment_factor") or 1) != 1 else
+                 "VENDOR_REPORTED")
+        output.append({**row, "volume_basis": basis})
+    return output
+
+
+def price_row_usable(row: dict) -> bool:
+    status = row.get("quality_status", "VALID")
+    return status == "VALID" or (
+        status == "WARNING"
+        and row.get("price_basis") == "VENDOR_CORPORATE_ACTION_ADJUSTED"
+        and bool(row.get("data_revision"))
+    )
+
+
 def canonical_price_rows(symbol_id: int, bars: Iterable[DailyBar], events: Iterable[dict],
                          *, as_of_date: date) -> list[dict]:
     """Build canonical EOD rows without claiming that vendor price factors are known."""
@@ -92,7 +159,7 @@ def canonical_price_rows(symbol_id: int, bars: Iterable[DailyBar], events: Itera
                        and item.get("verification_status") != "REJECTED"
                        and (item.get("metadata") or {}).get("entitlement_policy") != "NO_EXISTING_HOLDER_ENTITLEMENT"
                        and bar.trading_date < date.fromisoformat(str(item["ex_date"])[:10]))
-        provisional = bool(pending)
+        boundary = min((str(item["ex_date"])[:10] for item in pending), default=None)
         adjusted_volume = int((Decimal(bar.volume) * factor).quantize(Decimal(1), rounding=ROUND_HALF_UP))
         event_fingerprint = sorted((item.get("action_type"), str(item.get("ex_date")), str(item.get("ratio")),
                                     str(item.get("cash_amount")), str(item.get("verification_status")),
@@ -104,12 +171,12 @@ def canonical_price_rows(symbol_id: int, bars: Iterable[DailyBar], events: Itera
             "open": float(bar.open), "high": float(bar.high), "low": float(bar.low), "close": float(bar.close),
             "volume": adjusted_volume, "source_volume": bar.volume,
             "volume_adjustment_factor": float(factor),
-            "volume_basis": ("UNVERIFIED_SHARE_EVENT" if provisional else
+            "volume_basis": (f"UNVERIFIED_SHARE_EVENT:{boundary}" if boundary else
                              "VERIFIED_SHARE_REBASED" if factor != 1 else "VENDOR_REPORTED"),
             "price_basis": "VENDOR_CORPORATE_ACTION_ADJUSTED",
             "source": bar.source, "source_version": VCI_SOURCE_VERSION if family == "VCI" else KBS_SOURCE_VERSION,
             "price_unit": STOCK_PRICE_UNIT, "collected_at": bar.collected_at.isoformat(),
-            "quality_status": "WARNING" if provisional else "VALID", "data_revision": revision,
+            "quality_status": "VALID", "data_revision": revision,
         })
     return rows
 

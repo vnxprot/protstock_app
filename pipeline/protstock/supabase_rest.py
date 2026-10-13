@@ -281,7 +281,7 @@ class SupabaseRestClient:
         for offset in range(0, 1_000_000, 1000):
             response = self._get(
                 "/daily_prices",
-                params=[("select", "symbol_id,trading_date,high,low,close,volume,quality_status,data_revision,source"), ("trading_date", f"gte.{start_date.isoformat()}"), ("trading_date", f"lte.{end_date.isoformat()}"), ("order", "trading_date.asc,symbol_id.asc")],
+                params=[("select", "symbol_id,trading_date,high,low,close,volume,volume_basis,volume_adjustment_factor,price_basis,quality_status,data_revision,source"), ("trading_date", f"gte.{start_date.isoformat()}"), ("trading_date", f"lte.{end_date.isoformat()}"), ("order", "trading_date.asc,symbol_id.asc")],
                 headers={"Range": f"{offset}-{offset + 999}"},
             )
             response.raise_for_status()

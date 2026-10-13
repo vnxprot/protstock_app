@@ -4,6 +4,8 @@ from dataclasses import dataclass, asdict
 from math import sqrt
 from typing import Sequence
 
+from .price_basis import volume_window_is_comparable
+
 
 def _sma(values: Sequence[float], length: int) -> float | None:
     if len(values) < length:
@@ -107,7 +109,8 @@ def calculate_indicators(bars: Sequence[dict]) -> IndicatorSnapshot:
     if sma20 is not None and sma50 is not None:
         trend = "UP" if closes[-1] > sma20 > sma50 else "DOWN" if closes[-1] < sma20 < sma50 else "SIDEWAYS"
     # The evaluated bar must not raise its own volume benchmark.
-    volume_avg = _sma(volumes[:-1], 20)
+    volume_avg = (_sma(volumes[:-1], 20)
+                  if len(bars) >= 21 and volume_window_is_comparable(bars[-21:]) else None)
     return IndicatorSnapshot(
         close=closes[-1], sma20=sma20, sma50=sma50, sma200=sma200,
         ema10=_ema_series(closes, 10)[-1], ema20=_ema_series(closes, 20)[-1], ema50=_ema_series(closes, 50)[-1],

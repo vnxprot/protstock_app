@@ -3,6 +3,8 @@ from __future__ import annotations
 
 from typing import Sequence
 
+from .price_basis import volume_window_is_comparable
+
 
 def _signed_money_volume(bar: dict) -> float:
     high, low, close = float(bar["high"]), float(bar["low"]), float(bar["close"])
@@ -14,7 +16,7 @@ def _signed_money_volume(bar: dict) -> float:
 def calculate_flow(bars: Sequence[dict]) -> dict[str, float | str | None]:
     """Return a 20-closed-bar score and an explainable last-bar colour."""
     bars = [bar for bar in bars if bar.get("is_complete") is not False]
-    if len(bars) < 20:
+    if len(bars) < 21 or not volume_window_is_comparable(bars[-21:]):
         return {"flow_score": None, "flow_state": "UNKNOWN", "cmf20": None, "obv_slope20": None, "flow_volume_ratio20": None, "flow_clv": None}
     window = list(bars[-20:])
     total_volume = sum(float(bar.get("volume") or 0) for bar in window)

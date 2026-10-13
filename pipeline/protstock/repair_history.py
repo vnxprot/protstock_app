@@ -7,7 +7,7 @@ from typing import Any, Iterable
 from .config import Settings
 from .history_coverage import assess_symbol_coverage
 from .provider_vnstock import VnstockProvider, INDEX_PRICE_UNIT, KBS_SOURCE_VERSION
-from .price_basis import canonical_price_rows
+from .price_basis import canonical_price_rows, same_source_window, source_family
 from .supabase_rest import SupabaseRestClient
 
 
@@ -23,15 +23,27 @@ def repair_missing_history(
     full_range: bool = False,
 ) -> dict[str, Any]:
     """Fill only missing daily sessions using VNINDEX as the trading calendar."""
-    if full_range and not symbols:
-        raise ValueError("Full-range backfill requires an explicit symbol list")
     client = SupabaseRestClient(Settings.from_env())
     counts = {"symbols": 0, "already_complete": 0, "missing_sessions": 0, "rows_written": 0, "unresolved_sessions": 0, "pre_listing_sessions": 0, "unclassified_before_first_observation_sessions": 0, "failed": 0}
     unresolved: dict[str, int] = {}
     try:
         if full_range:
-            selected = [row for row in client.active_symbols() if row["symbol"] in symbols]
-            unknown = symbols - {row["symbol"] for row in selected}
+            index = client.market_index("VNINDEX")
+            calendar = set(client.index_price_dates(index["id"], start_date, end_date))
+            index_bars = _fetch_from_source("VNINDEX", start_date, end_date, source)
+            source_calendar = {bar.trading_date.isoformat() for bar in index_bars}
+            missing_index_dates = source_calendar - calendar
+            index_rows = _index_price_rows(index["id"], index_bars, missing_index_dates)
+            if index_rows:
+                client.upsert("market_index_prices", index_rows, "index_id,trading_date")
+            calendar |= source_calendar
+            if not calendar:
+                raise RuntimeError("VNINDEX calendar is empty for the requested date range")
+            selected = [row for row in client.active_symbols() if symbols is None or row["symbol"] in symbols]
+            selected = selected[symbol_offset:]
+            if symbol_limit is not None:
+                selected = selected[:symbol_limit]
+            unknown = (symbols or set()) - {row["symbol"] for row in client.active_symbols()}
             if unknown:
                 raise ValueError(f"Unknown or inactive symbols: {', '.join(sorted(unknown))}")
             no_source_data: list[str] = []
@@ -39,22 +51,38 @@ def repair_missing_history(
                 counts["symbols"] += 1
                 try:
                     existing = set(client.symbol_price_dates(symbol["id"], start_date, end_date))
-                    bars, rows = _canonical_repair_rows(client, symbol, start_date, end_date, source)
+                    bars, rows = _canonical_repair_rows(client, symbol, start_date, end_date, source,
+                                                         requested_session=end_date.isoformat() in calendar)
                     if not bars:
                         no_source_data.append(symbol["symbol"])
                         continue
                     missing = {bar.trading_date.isoformat() for bar in bars} - existing
                     counts["missing_sessions"] += len(missing)
-                    if missing:
-                        for offset in range(0, len(rows), 100):
-                            counts["rows_written"] += client.upsert("daily_prices", rows[offset:offset + 100], "symbol_id,trading_date")
+                    stored = [row for row in client.price_history(symbol["id"],
+                              max(260, (end_date - start_date).days + 300))
+                              if start_date.isoformat() <= row["trading_date"] <= end_date.isoformat()]
+                    rebase = bool(stored) and (
+                        not same_source_window(stored)
+                        or stored[-1].get("data_revision") != rows[-1]["data_revision"]
+                        or source_family(stored[-1].get("source")) != source_family(rows[-1]["source"]))
+                    write_rows = rows if rebase else [row for row in rows if row["trading_date"] in missing]
+                    for offset in range(0, len(write_rows), 100):
+                        counts["rows_written"] += client.upsert("daily_prices", write_rows[offset:offset + 100], "symbol_id,trading_date")
                     if not missing:
                         counts["already_complete"] += 1
+                    coverage = assess_symbol_coverage(symbol, calendar,
+                                                      existing | {bar.trading_date.isoformat() for bar in bars}, start_date)
+                    remaining = coverage["missing_after_coverage_start_count"]
+                    counts["unresolved_sessions"] += remaining
+                    counts["pre_listing_sessions"] += coverage["pre_listing_session_count"]
+                    counts["unclassified_before_first_observation_sessions"] += coverage["unclassified_before_first_observation_count"]
+                    if remaining:
+                        unresolved[symbol["symbol"]] = remaining
                 except Exception:
                     counts["failed"] += 1
                     unresolved[symbol["symbol"]] = -1
                 sleep(pause_seconds)
-            return {"status": "SUCCEEDED" if not counts["failed"] and not no_source_data else "PARTIAL", "start_date": start_date.isoformat(), "end_date": end_date.isoformat(), **counts, "no_source_data": no_source_data, "failed_symbols": sorted(unresolved)}
+            return {"status": "SUCCEEDED" if not counts["failed"] and not no_source_data and not counts["unresolved_sessions"] and not counts["unclassified_before_first_observation_sessions"] else "PARTIAL", "start_date": start_date.isoformat(), "end_date": end_date.isoformat(), **counts, "no_source_data": no_source_data, "unresolved": unresolved}
         index = client.market_index("VNINDEX")
         existing_index_dates = set(client.index_price_dates(index["id"], start_date, end_date))
         index_bars = _fetch_from_source("VNINDEX", start_date, end_date, source)
@@ -122,16 +150,19 @@ def _index_price_rows(index_id: int, bars: Iterable, missing: set[str]) -> list[
     return rows
 
 def _canonical_repair_rows(client: SupabaseRestClient, symbol: dict, start_date: date,
-                           end_date: date, source: str) -> tuple[list, list[dict]]:
+                           end_date: date, source: str, *, requested_session: bool = False) -> tuple[list, list[dict]]:
     """Refetch a whole persisted window so a missing session never mixes bases."""
-    stored = [row for row in client.price_history(symbol["id"], 1300)
-              if row["trading_date"] <= end_date.isoformat()]
-    first_day = min(start_date, date.fromisoformat(stored[0]["trading_date"])) if stored else start_date
+    history_limit = max(260, (end_date - start_date).days + 300)
+    stored = [row for row in client.price_history(symbol["id"], history_limit)
+              if start_date.isoformat() <= row["trading_date"] <= end_date.isoformat()]
+    first_day = start_date
     bars = _fetch_from_source(symbol["symbol"], first_day, end_date, source)
     available = {bar.trading_date.isoformat() for bar in bars}
     missing_stored = {row["trading_date"] for row in stored if row["trading_date"] >= first_day.isoformat()} - available
-    if missing_stored and source.upper() == "AUTO":
-        bars = _fetch_from_source(symbol["symbol"], first_day, end_date, "KBS")
+    if (missing_stored or (requested_session and (not bars or bars[-1].trading_date != end_date))) and source.upper() == "AUTO":
+        fallback = _fetch_from_source(symbol["symbol"], first_day, end_date, "KBS")
+        if fallback and (not requested_session or fallback[-1].trading_date == end_date):
+            bars = fallback
         available = {bar.trading_date.isoformat() for bar in bars}
         missing_stored = {row["trading_date"] for row in stored if row["trading_date"] >= first_day.isoformat()} - available
     if missing_stored:

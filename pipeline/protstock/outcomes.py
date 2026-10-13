@@ -4,6 +4,8 @@ from typing import Sequence
 from hashlib import sha256
 import json
 
+from .price_basis import price_row_usable
+
 
 CALCULATION_VERSION = "OUTCOME_V2_PRICE_FINGERPRINT"
 CANONICAL_CALCULATION_VERSION = "OUTCOME_V0_0_0_CANONICAL"
@@ -22,7 +24,7 @@ def evaluate_signal_outcome(signal: dict, price_history: Sequence[dict], horizon
     if entry_bar is None or len(future) < horizon_days:
         return None
     window = [entry_bar, *future]
-    if any(row.get("quality_status", "VALID") != "VALID" or float(row["close"]) <= 0 for row in window):
+    if any(not price_row_usable(row) or float(row["close"]) <= 0 for row in window):
         return None
     for left, right in zip(window, window[1:]):
         ratio = float(right["close"]) / float(left["close"])

@@ -9,9 +9,9 @@ on:
         default: "2021-01-01"
         type: string
       end_date:
-        description: Last session to verify
-        required: true
-        default: "2026-09-24"
+        description: Last session to verify; blank uses the current date
+        required: false
+        default: ""
         type: string
       symbols:
         description: Comma-separated symbols; leave blank to repair the full universe
@@ -19,7 +19,7 @@ on:
         default: ""
         type: string
       full_range:
-        description: Fetch all available historical bars for the explicitly listed symbols only
+        description: Fetch the complete window for the full universe or listed symbols
         required: false
         default: false
         type: boolean
@@ -51,7 +51,8 @@ jobs:
           SYMBOLS: ${{ inputs.symbols }}
           FULL_RANGE: ${{ inputs.full_range }}
         run: |
-          args=(--start-date "$START_DATE" --end-date "$END_DATE")
+          args=(--start-date "$START_DATE")
+          if [ -n "$END_DATE" ]; then args+=(--end-date "$END_DATE"); fi
           if [ -n "$SYMBOLS" ]; then args+=(--symbols "$SYMBOLS"); fi
           if [ "$FULL_RANGE" = "true" ]; then args+=(--full-range); fi
           protstock repair-history "${args[@]}"

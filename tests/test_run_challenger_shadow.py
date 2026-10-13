@@ -15,7 +15,7 @@ def test_shadow_runner_reads_prices_and_only_invokes_isolated_writer(monkeypatch
             return [{"id": 1, "symbol": "AAA", "exchange": "HOSE"}]
 
         def price_history(self, symbol_id, limit):
-            assert (symbol_id, limit) == (1, 900)
+            assert symbol_id == 1 and limit > 1300
             return [{"trading_date": "2026-10-02", "open": 10, "high": 11, "low": 9,
                      "close": 10, "volume": 1_000_000, "quality_status": "LEGACY_UNVERIFIED", "price_unit": STOCK_PRICE_UNIT},
                     {"trading_date": "2026-10-05", "open": 10, "high": 11, "low": 9,

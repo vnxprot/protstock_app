@@ -6,13 +6,14 @@ import argparse
 from datetime import date
 
 from .config import Settings
-from .eod import _write_challenger_shadow
+from .eod import _write_challenger_shadow, _history_limit
 from .challenger_engine import recovery_status
 from .indicators import calculate_indicators
 from .period_signals import monthly_trend
 from .provider_vnstock import STOCK_PRICE_UNIT
 from .supabase_rest import SupabaseRestClient
 from .timeframes import aggregate_bars
+from .price_basis import with_volume_segments, price_row_usable
 
 
 def run_shadow_session(client: SupabaseRestClient, trading_date: str | None = None) -> dict:
@@ -23,10 +24,11 @@ def run_shadow_session(client: SupabaseRestClient, trading_date: str | None = No
         raise ValueError("No completed market breadth snapshot is available")
     breadth = breadth_rows[0]
     day = breadth["trading_date"]
+    history_limit = _history_limit(date.fromisoformat(day))
     index_bars = []
     if hasattr(client, "market_index") and hasattr(client, "index_price_history"):
         index = client.market_index("VNINDEX")
-        index_bars = [{**row, "date": row["trading_date"]} for row in client.index_price_history(index["id"], 900)
+        index_bars = [{**row, "date": row["trading_date"]} for row in client.index_price_history(index["id"], history_limit)
                       if row["trading_date"] <= day]
     index_snapshot = (calculate_indicators(index_bars).to_dict() if index_bars and index_bars[-1]["date"] == day
                       else {"trend_state": breadth.get("vnindex_trend_state", "UNKNOWN")})
@@ -36,10 +38,13 @@ def run_shadow_session(client: SupabaseRestClient, trading_date: str | None = No
     skipped = []
     symbols = client.active_symbols()
     for symbol in symbols:
-        history = client.price_history(symbol["id"], 900)
-        rows = [{**row, "date": row["trading_date"]} for row in history if row["trading_date"] <= day]
+        history = client.price_history(symbol["id"], history_limit)
+        events = getattr(client, "corporate_actions", lambda _id: [])(symbol["id"])
+        rows = [{**row, "date": row["trading_date"]} for row in with_volume_segments(
+            (row for row in history if row["trading_date"] <= day), events,
+            as_of_date=date.fromisoformat(day))]
         if (not rows or rows[-1]["date"] != day
-                or rows[-1].get("quality_status") != "VALID"
+                or not price_row_usable(rows[-1])
                 or rows[-1].get("price_unit") != STOCK_PRICE_UNIT):
             skipped.append(symbol["symbol"])
             continue

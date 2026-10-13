@@ -30,7 +30,7 @@ from .momentum_radar import assess_momentum_radar
 from .macd_divergence_zones import assess_macd_zone_divergence
 from .challenger_engine import assess_challenger, assess_challenger_strategies, recovery_status, VERSION as CHALLENGER_VERSION, CODES as CHALLENGER_STRATEGY_CODES
 from .wyckoff import classify_wyckoff_timeframe
-from .price_basis import canonical_price_rows, same_source_window, source_family
+from .price_basis import canonical_price_rows, same_source_window, source_family, with_volume_segments, price_row_usable
 from .release_naming import release_core_rule_name
 
 # VNINDEX's first session was 28/07/2000. This keeps its benchmark history full
@@ -40,10 +40,16 @@ BENCHMARK_LOOKBACK_DAYS = (date(2050, 1, 1) - VNINDEX_HISTORY_START).days
 # Daily Fast Lane reuses the locally stored 260-session benchmark window. It only
 # asks the upstream source for a small overlap to capture the newly closed session.
 FAST_LANE_BENCHMARK_FETCH_DAYS = 14
-# Daily, weekly and monthly analysis must share enough stored bars for SMA50 on monthly bars.
-# 1,300 sessions preserve more than 50 complete monthly bars for SMA50 while
-# avoiding irrelevant older, unverified events in today's calculation window.
-MULTI_TIMEFRAME_HISTORY_LIMIT = 1300
+# Read every stored session from the 2021 programme (plus indicator warm-up).
+# The REST client stops paging at the actual end; this bound follows calendar
+# time and cannot silently clip a six-year history at 1,300 trading sessions.
+HISTORY_START = date(2021, 1, 1)
+
+
+def _history_limit(as_of_date: date) -> int:
+    # price_history pages newest first, including sessions after a historical
+    # rebuild date; read enough to reach 2021 before applying the cutoff.
+    return max(260, (max(as_of_date, date.today()) - HISTORY_START).days + 300)
 
 
 def run_eod(
@@ -98,7 +104,7 @@ def run_eod(
                 "source_version": KBS_SOURCE_VERSION,
             } for bar in index_bars]
             client.upsert("market_index_prices", index_rows, "index_id,trading_date")
-            benchmark_history = client.index_price_history(index["id"], MULTI_TIMEFRAME_HISTORY_LIMIT)
+            benchmark_history = client.index_price_history(index["id"], _history_limit(trading_date))
             benchmark_daily = [
                 {**row, "date": row["trading_date"]}
                 for row in _rows_as_of(benchmark_history, trading_date)
@@ -116,7 +122,7 @@ def run_eod(
                     "source_version": KBS_SOURCE_VERSION,
                 } for bar in index_bars]
                 client.upsert("market_index_prices", index_rows, "index_id,trading_date")
-                benchmark_history = client.index_price_history(index["id"], MULTI_TIMEFRAME_HISTORY_LIMIT)
+                benchmark_history = client.index_price_history(index["id"], _history_limit(trading_date))
                 benchmark_daily = [{**row, "date": row["trading_date"]} for row in _rows_as_of(benchmark_history, trading_date)]
         except Exception as exc:
             warnings.append(f"VNINDEX: {type(exc).__name__}")
@@ -136,7 +142,7 @@ def run_eod(
         for symbol_row in symbols:
             started = monotonic()
             try:
-                stored = _rows_as_of(client.price_history(symbol_row["id"], MULTI_TIMEFRAME_HISTORY_LIMIT), trading_date)
+                stored = _stock_rows_as_of(client.price_history(symbol_row["id"], _history_limit(trading_date)), trading_date)
                 events = client.corporate_actions(symbol_row["id"])
                 fetched = _fetch_requested_session(provider, source, symbol_row["symbol"],
                                                    trading_date - timedelta(days=lookback_days), trading_date)
@@ -148,8 +154,7 @@ def run_eod(
                                       or source_family(stored[-1].get("source")) != family
                                       or stored[-1].get("data_revision") != preview[0]["data_revision"])
                 if needs_full_history:
-                    first_day = (date.fromisoformat(stored[0]["trading_date"]) if stored
-                                 else trading_date - timedelta(days=3650))
+                    first_day = date.fromisoformat(stored[0]["trading_date"]) if stored else HISTORY_START
                     fetched = _fetch_requested_session(provider, source, symbol_row["symbol"], first_day, trading_date)
                     available = {bar.trading_date.isoformat() for bar in fetched}
                     missing_stored = {row["trading_date"] for row in stored} - available
@@ -163,11 +168,13 @@ def run_eod(
                 price_rows = canonical_price_rows(symbol_row["id"], fetched, events, as_of_date=trading_date)
                 for offset in range(0, len(price_rows), 100):
                     counts["prices"] += client.upsert("daily_prices", price_rows[offset:offset + 100], "symbol_id,trading_date")
-                history = _rows_as_of(client.price_history(symbol_row["id"], MULTI_TIMEFRAME_HISTORY_LIMIT), trading_date)
+                history = with_volume_segments(
+                    _stock_rows_as_of(client.price_history(symbol_row["id"], _history_limit(trading_date)), trading_date),
+                    events, as_of_date=trading_date)
                 if not same_source_window(history):
                     raise ValueError("MIXED_PRICE_BASIS_IN_CALCULATION_WINDOW")
-                if any(row.get("quality_status") != "VALID" for row in history):
-                    raise ValueError("UNVERIFIED_CORPORATE_ACTION_IN_CALCULATION_WINDOW")
+                if any(not price_row_usable(row) for row in history):
+                    raise ValueError("INVALID_PRICE_BAR_IN_CALCULATION_WINDOW")
                 analysis_rows = [{**row, "date": row["trading_date"]} for row in history]
                 if analysis_rows:
                     try:
@@ -298,7 +305,7 @@ def finalize_fast_lane(trading_date: date, *, allow_partial: bool = False, prepa
         if not covered:
             raise RuntimeError(f"No same-day snapshots for {trading_date}; Market Health and signals cannot be evaluated")
         index = client.market_index("VNINDEX")
-        benchmark = _rows_as_of(client.index_price_history(index["id"], MULTI_TIMEFRAME_HISTORY_LIMIT), trading_date)
+        benchmark = _rows_as_of(client.index_price_history(index["id"], _history_limit(trading_date)), trading_date)
         if not benchmark or benchmark[-1]["trading_date"] != trading_date.isoformat():
             raise RuntimeError(f"VNINDEX EOD is unavailable for {trading_date}; Fast Lane was not published")
         vnindex_snapshot = _benchmark_snapshot(benchmark, trading_date)
@@ -348,7 +355,7 @@ def rebuild_signals(trading_date: date, *, symbol_offset: int = 0, symbol_limit:
         counts["engine_stats"] = _initialize_engine_stats(active_rules)
         pending_signals = []
         index = client.market_index("VNINDEX")
-        benchmark_history = client.index_price_history(index["id"], MULTI_TIMEFRAME_HISTORY_LIMIT)
+        benchmark_history = client.index_price_history(index["id"], _history_limit(trading_date))
         benchmark_daily = [{**row, "date": row["trading_date"]} for row in _rows_as_of(benchmark_history, trading_date)]
         if not benchmark_daily or benchmark_daily[-1]["date"] != trading_date.isoformat():
             raise RuntimeError(f"VNINDEX EOD is unavailable for {trading_date}; signals were not published")
@@ -393,7 +400,10 @@ def rebuild_signals(trading_date: date, *, symbol_offset: int = 0, symbol_limit:
                     client.create_job_item({"job_run_id": job["id"], "symbol_id": symbol_row["id"], "item_key": symbol_row["symbol"], "status": "SUCCEEDED", "rows_written": 0, "duration_ms": int((monotonic() - started) * 1000)})
                     _heartbeat(client, job["id"])
                     continue
-                analysis_rows = [{**row, "date": row["trading_date"]} for row in _rows_as_of(client.price_history(symbol_row["id"], MULTI_TIMEFRAME_HISTORY_LIMIT), trading_date)]
+                stored_rows = _stock_rows_as_of(client.price_history(symbol_row["id"], _history_limit(trading_date)), trading_date)
+                analysis_rows = [{**row, "date": row["trading_date"]} for row in with_volume_segments(
+                    stored_rows, getattr(client, "corporate_actions", lambda _id: [])(symbol_row["id"]),
+                    as_of_date=trading_date)]
                 if not analysis_rows or analysis_rows[-1]["date"] != trading_date.isoformat():
                     # Every rebuild, including historical runs, requires prices
                     # on its requested session; stale bars cannot count as covered.
@@ -404,7 +414,7 @@ def rebuild_signals(trading_date: date, *, symbol_offset: int = 0, symbol_limit:
                     client.create_job_item({"job_run_id": job["id"], "symbol_id": symbol_row["id"], "item_key": symbol_row["symbol"], "status": "SKIPPED", "warning_codes": ["STALE_PRICE_DATA"], "rows_written": 0, "duration_ms": int((monotonic() - started) * 1000)})
                     _heartbeat(client, job["id"])
                     continue
-                if not same_source_window(analysis_rows) or any(row.get("quality_status") != "VALID" for row in analysis_rows):
+                if not same_source_window(analysis_rows) or any(not price_row_usable(row) for row in analysis_rows):
                     counts["skipped_unverified_basis"] = counts.get("skipped_unverified_basis", 0) + 1
                     warnings.append(f"{symbol_row['symbol']}: UNVERIFIED_PRICE_VOLUME_BASIS")
                     for timeframe in ("D", "W", "M"):
@@ -541,6 +551,12 @@ def rebuild_market_health(start_date: date, end_date: date) -> dict[str, Any]:
     try:
         symbols = client.active_symbols()
         rows = client.all_daily_prices(start_date - timedelta(days=365), end_date)
+        by_symbol: dict[int, list[dict]] = {}
+        for row in rows:
+            by_symbol.setdefault(row["symbol_id"], []).append(row)
+        rows = [segmented for symbol_id, history in by_symbol.items()
+                for segmented in with_volume_segments(history, client.corporate_actions(symbol_id),
+                                                      as_of_date=end_date)]
         index = client.market_index("VNINDEX")
         index_rows = client.index_prices_in_range(index["id"], start_date - timedelta(days=100), end_date)
         snapshots = build_market_health_history(symbols, rows, start_date, end_date, index_rows=index_rows)
@@ -589,6 +605,11 @@ def _rows_as_of(rows: list[dict[str, Any]], trading_date: date) -> list[dict[str
     """Keep only bars known at the requested EOD cutoff (ISO dates sort chronologically)."""
     cutoff = trading_date.isoformat()
     return [row for row in rows if row["trading_date"] <= cutoff]
+
+
+def _stock_rows_as_of(rows: list[dict[str, Any]], trading_date: date) -> list[dict[str, Any]]:
+    return [row for row in _rows_as_of(rows, trading_date)
+            if row["trading_date"] >= HISTORY_START.isoformat()]
 
 
 def resolve_eod_session(client: SupabaseRestClient, requested: date) -> date:
@@ -991,7 +1012,7 @@ def _write_challenger_shadow(client, pending_signals: list, market_context: dict
                 if signal_index is None or signal_index + 3 != len(rows) - 1:
                     continue
                 entry_rows = rows[signal_index + 1:signal_index + 4]
-                if any(row.get("quality_status", "VALID") != "VALID" for row in entry_rows):
+                if any(not price_row_usable(row) for row in entry_rows):
                     continue
                 entry = float(entry_rows[0]["open"]) * 1.001
                 exit_net = float(entry_rows[2]["close"]) * (1 - .0015 - .001)
@@ -1013,7 +1034,7 @@ def _write_challenger_shadow(client, pending_signals: list, market_context: dict
                 if signal_index is None or signal_index + 3 != len(rows) - 1:
                     continue
                 entry_rows = rows[signal_index + 1:signal_index + 4]
-                if any(row.get("quality_status", "VALID") != "VALID" for row in entry_rows):
+                if any(not price_row_usable(row) for row in entry_rows):
                     continue
                 entry = float(entry_rows[0]["open"]) * 1.001
                 exit_net = float(entry_rows[2]["close"]) * (1 - .0015 - .001)
@@ -1062,7 +1083,7 @@ def _load_portfolios(client, active_rules: list[dict], trading_date: date, *, hi
                 continue
             item["valued_positions"] = []
             for position in item["positions"]:
-                rows = _rows_as_of(client.price_history(position["symbol_id"], MULTI_TIMEFRAME_HISTORY_LIMIT), trading_date)
+                rows = _stock_rows_as_of(client.price_history(position["symbol_id"], _history_limit(trading_date)), trading_date)
                 if not rows or (trading_date - date.fromisoformat(rows[-1]["trading_date"])).days > 7:
                     item["error"] = "POSITION_PRICE_UNAVAILABLE"
                 price = float(rows[-1]["close"]) * STOCK_PRICE_TO_VND if rows else float(position["average_cost"])

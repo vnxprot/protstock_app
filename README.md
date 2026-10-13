@@ -13,7 +13,7 @@ Personal PWA for end-of-day analysis of a curated Vietnamese stock universe.
 
 ## Current release
 
-Prot Stock restarts its current release numbering at v0.0.0. Stock OHLCV uses Vnstock generation 5 with VCI as the primary source and KBS as a whole-series fallback. Corporate-action candidates are synchronized separately; share-volume factors are applied only after independent verification of the event and the vendor volume basis. Unverified calculation windows are withheld from new signals. See [v0.0.0 release plan and checklist](docs/release-v0.0.0.md). Historical revision IDs remain available for reproducibility.
+Prot Stock restarts its current release numbering at v0.0.0. Stock OHLCV uses Vnstock generation 5 with VCI as the primary source and KBS as a whole-series fallback. The full historical programme starts on 1 January 2021. Vendor prices are accepted with source provenance; unresolved share events separate volume-comparison windows instead of hiding price indicators or entire symbols. A share-volume factor is applied only when the event and the vendor's pre-event volume policy are known. See [v0.0.0 release plan and checklist](docs/release-v0.0.0.md). Historical revision IDs remain available for reproducibility.
 
 ## Historical development
 

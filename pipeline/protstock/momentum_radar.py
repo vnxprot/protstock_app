@@ -13,6 +13,7 @@ from typing import Sequence
 
 from .signal_funnel import monthly_context
 from .timeframes import aggregate_bars
+from .price_basis import volume_window_is_comparable
 
 VERSION = "MOMENTUM_RADAR_V0_0_0"
 
@@ -55,7 +56,8 @@ def assess_momentum_radar(
         close = float(bar["close"])
         previous = daily[index - 1] if index else None
         prior20 = daily[index - 20:index] if index >= 20 else []
-        average20 = mean(float(item["volume"]) for item in prior20) if prior20 else 0
+        average20 = (mean(float(item["volume"]) for item in prior20)
+                     if len(prior20) == 20 and volume_window_is_comparable([*prior20, bar]) else 0)
         volume_ratio = float(bar["volume"]) / average20 if average20 else None
         daily_return = close / float(previous["close"]) - 1 if previous else None
         spread = float(bar["high"]) - float(bar["low"])
@@ -121,7 +123,8 @@ def assess_momentum_radar(
         if (event["breakout_date"] and current_week and current_week["is_complete"]
                 and current_week["source_last_date"] == today and len(last13) == 13
                 and close > event["breakout_level"]):
-            average13 = mean(float(row["volume"]) for row in last13)
+            average13 = (mean(float(row["volume"]) for row in last13)
+                         if volume_window_is_comparable([*last13, current_week]) else 0)
             if average13 and float(current_week["volume"]) >= 1.3 * average13:
                 if event["weekly_confirmed_date"] is None:
                     event["weekly_confirmed_date"] = today

@@ -13,6 +13,7 @@ from typing import Sequence
 
 from .divergence import PIVOT_RADIUS
 from .macd_divergence import _macd_series
+from .price_basis import volume_window_is_comparable
 
 
 VERSION = "MACD_BULLISH_DIVERGENCE_ZONE_V0_0_0"
@@ -90,6 +91,8 @@ def _zones(bars: Sequence[dict], macd: list[float | None]) -> list[dict]:
 
 
 def _breakout_volume(bars: Sequence[dict], index: int) -> float | None:
+    if index < 20 or not volume_window_is_comparable(bars[index - 20:index + 1]):
+        return None
     prior = [float(bar.get("volume") or 0) for bar in bars[max(0, index - 20):index]]
     average = sum(prior) / len(prior) if len(prior) == 20 else 0
     return round(float(bars[index].get("volume") or 0) / average, 3) if average else None

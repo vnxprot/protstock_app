@@ -4,6 +4,8 @@ from calendar import monthrange
 from datetime import date, timedelta
 from typing import Sequence
 
+from .price_basis import volume_window_is_comparable
+
 
 def aggregate_bars(bars: Sequence[dict], timeframe: str, confirmed_week_end: date | None = None, confirmed_month_end: date | None = None) -> list[dict]:
     """Aggregate sorted daily OHLCV bars into point-in-time weekly/monthly bars."""
@@ -42,6 +44,9 @@ def aggregate_bars(bars: Sequence[dict], timeframe: str, confirmed_week_end: dat
             "low": min(float(row["low"]) for row in rows),
             "close": float(rows[-1]["close"]),
             "volume": sum(int(row.get("volume", 0)) for row in rows),
+            "volume_basis": (str(rows[-1].get("volume_basis") or "VENDOR_REPORTED")
+                             if volume_window_is_comparable(rows)
+                             else f"MIXED_UNVERIFIED_VOLUME:{period_start.isoformat()}"),
             "source_last_date": source_last_date.isoformat(),
             "is_complete": (last_period_start is not None and period_start < last_period_start)
             or (timeframe == "W" and confirmed_week_end == source_last_date)

@@ -6,6 +6,7 @@ from typing import Sequence
 
 from .flow import calculate_flow
 from .market_regime import MIN_BREADTH_COVERAGE_RATIO, compute_breadth
+from .price_basis import price_row_usable
 
 
 def _index_trends(index_rows: Sequence[dict]) -> dict[str, str]:
@@ -41,7 +42,7 @@ def build_market_health_history(active_symbols: Sequence[dict], price_rows: Sequ
         previous_revision: str | None = None
         for row in sorted(rows, key=lambda item: item["trading_date"]):
             revision = row.get("data_revision")
-            if row.get("quality_status", "VALID") != "VALID" or ("data_revision" in row and not revision):
+            if not price_row_usable(row) or ("data_revision" in row and not revision):
                 closes.clear()
                 flow_bars.clear()
                 prior_close = None

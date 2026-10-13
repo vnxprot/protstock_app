@@ -9,9 +9,9 @@ on:
         default: "2021-01-01"
         type: string
       end_date:
-        description: Last session to audit
-        required: true
-        default: "2026-09-11"
+        description: Last session to audit; blank uses the current date
+        required: false
+        default: ""
         type: string
 
 permissions:
@@ -32,16 +32,18 @@ jobs:
         env:
           SUPABASE_URL: https://upmqxwktvvguegqeqibn.supabase.co
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-        run: >-
-          protstock history-coverage
-          --start-date "${{ inputs.start_date }}"
-          --end-date "${{ inputs.end_date }}"
-          > history-coverage.json
+        env:
+          START_DATE: ${{ inputs.start_date }}
+          END_DATE: ${{ inputs.end_date }}
+        run: |
+          args=(--start-date "$START_DATE")
+          if [ -n "$END_DATE" ]; then args+=(--end-date "$END_DATE"); fi
+          protstock history-coverage "${args[@]}" > history-coverage.json
       - name: Publish concise summary
         run: |
           python -c "import json; r=json.load(open('history-coverage.json', encoding='utf-8')); print('## Historical data coverage'); print(); print(f\"- VNINDEX: {r['vnindex']['first_session']} -> {r['vnindex']['last_session']} ({r['vnindex']['sessions']} sessions)\"); print(f\"- Symbols: {r['symbols']}; complete after coverage start: {r['complete_after_coverage_start']}\"); print(f\"- Repairable gaps: {r['repairable_missing_sessions']} across {r['symbols_with_repairable_gaps']} symbols\"); print(f\"- Before first observed bar, listing date unknown: {r['unclassified_before_first_observation_sessions']} sessions\")" >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4
         with:
-          name: history-coverage-${{ inputs.start_date }}-to-${{ inputs.end_date }}
+          name: history-coverage-${{ inputs.start_date }}-to-current
           path: history-coverage.json
           retention-days: 30

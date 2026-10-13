@@ -20,7 +20,7 @@ on:
         required: false
         type: string
       lookback_days:
-        description: Calendar days to fetch (10 daily, 900 initial backfill)
+        description: Calendar days to fetch (10 daily; full backfill starts in 2021)
         required: false
         default: "10"
         type: string

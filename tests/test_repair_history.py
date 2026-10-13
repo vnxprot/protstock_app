@@ -50,6 +50,8 @@ def test_full_range_backfills_before_first_observation_without_overwriting(monke
     writes = []
 
     class Client:
+        def market_index(self, _code): return {"id": 1}
+        def index_price_dates(self, *_args): return ["2021-01-04", "2026-09-28"]
         def active_symbols(self): return [{"id": 7, "symbol": "AAA"}]
         def symbol_price_dates(self, *_args): return ["2026-09-28"]
         def price_history(self, *_args): return [{"trading_date": "2026-09-28"}]
@@ -61,6 +63,8 @@ def test_full_range_backfills_before_first_observation_without_overwriting(monke
     class Provider:
         def __init__(self, _source): pass
         def history(self, symbol, start, end):
+            if symbol == "VNINDEX":
+                return [SimpleNamespace(trading_date=day, open=1, high=2, low=1, close=2, volume=10, source="KBS", collected_at=datetime(2026, 9, 28, tzinfo=timezone.utc)) for day in (date(2021, 1, 4), date(2026, 9, 28))]
             assert (symbol, start, end) == ("AAA", date(2021, 1, 1), date(2026, 9, 28))
             return [SimpleNamespace(trading_date=day, open=1, high=2, low=1, close=2, volume=10, source="KBS", collected_at=datetime(2026, 9, 28, tzinfo=timezone.utc)) for day in (date(2021, 1, 4), date(2026, 9, 28))]
 
@@ -71,8 +75,3 @@ def test_full_range_backfills_before_first_observation_without_overwriting(monke
     result = repair_missing_history(date(2021, 1, 1), date(2026, 9, 28), symbols={"AAA"}, pause_seconds=0, full_range=True)
     assert result["rows_written"] == 2
     assert [row["trading_date"] for row in writes] == ["2021-01-04", "2026-09-28"]
-
-
-def test_full_range_requires_explicit_symbols() -> None:
-    with pytest.raises(ValueError, match="explicit symbol list"):
-        repair_missing_history(date(2021, 1, 1), date(2026, 9, 28), full_range=True)
