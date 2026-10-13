@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime, timedelta, timezone
-from sys import stderr
+import sys
 from typing import Any
 
 import httpx
@@ -88,7 +88,7 @@ class VnstockProvider:
                 raise ProviderDataError(f"Invalid latest VCI bar for {symbol} on {latest_invalid}: "
                                         f"{next(problems for day, problems in invalid if day == latest_invalid)}")
             print(f"VCI_INVALID_SESSIONS_SKIPPED:{symbol}:"
-                  f"{','.join(day.isoformat() for day, _ in invalid)}", file=stderr)
+                  f"{','.join(day.isoformat() for day, _ in invalid)}", file=sys.stderr)
         by_date = {bar.trading_date: bar for bar in result}
         return [by_date[day] for day in sorted(by_date)]
 
