@@ -105,7 +105,10 @@ def run_eod(
         benchmark_history: list[dict] = []
         try:
             index = client.market_index("VNINDEX")
-            benchmark_fetch_days = FAST_LANE_BENCHMARK_FETCH_DAYS if fast_lane else benchmark_lookback_days
+            # The stored 2021+ benchmark is the calculation window. Refresh
+            # only the newest sessions on routine EOD batches; a new database
+            # or a vendor switch is filled from 2021 below.
+            benchmark_fetch_days = FAST_LANE_BENCHMARK_FETCH_DAYS
             index_bars = _fetch_requested_session(provider, source, "VNINDEX", trading_date - timedelta(days=benchmark_fetch_days), trading_date)
             index_rows = [{
                 "index_id": index["id"], "trading_date": bar.trading_date.isoformat(),
@@ -118,10 +121,10 @@ def run_eod(
             client.upsert("market_index_prices", index_rows, "index_id,trading_date")
             benchmark_history = client.index_price_history(index["id"], _history_limit(trading_date))
             benchmark_daily = _coherent_benchmark_rows(benchmark_history, trading_date)
-            # A fresh database has no cached benchmark window. Self-heal once; all
-            # later Fast Lane runs stay incremental.
-            if fast_lane and len(benchmark_daily) < 200:
-                index_bars = _fetch_requested_session(provider, source, "VNINDEX", trading_date - timedelta(days=benchmark_lookback_days), trading_date)
+            # A fresh database or vendor switch has no coherent benchmark
+            # window. Fetch the requested 2021+ history once.
+            if len(benchmark_daily) < 200:
+                index_bars = _fetch_requested_session(provider, source, "VNINDEX", HISTORY_START, trading_date)
                 index_rows = [{
                     "index_id": index["id"], "trading_date": bar.trading_date.isoformat(),
                     "open": float(bar.open), "high": float(bar.high), "low": float(bar.low),

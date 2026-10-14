@@ -145,7 +145,7 @@ def test_rows_as_of_excludes_future_bars() -> None:
     assert _rows_as_of(rows, date(2026, 9, 9)) == rows[:2]
 
 
-def test_benchmark_fetch_uses_independent_lookback(monkeypatch) -> None:
+def test_benchmark_fetch_refreshes_recent_sessions_then_fills_missing_history(monkeypatch) -> None:
     calls = []
 
     class Client:
@@ -167,7 +167,10 @@ def test_benchmark_fetch_uses_independent_lookback(monkeypatch) -> None:
     monkeypatch.setattr("protstock.eod.VnstockProvider", lambda _source: Provider())
     monkeypatch.setattr("protstock.eod.Settings.from_env", lambda: object())
     run_eod(date(2026, 9, 10), lookback_days=10, benchmark_lookback_days=9_999, pause_seconds=0)
-    assert calls == [("VNINDEX", date(2026, 9, 10) - timedelta(days=9_999), date(2026, 9, 10))]
+    assert calls == [
+        ("VNINDEX", date(2026, 9, 10) - timedelta(days=FAST_LANE_BENCHMARK_FETCH_DAYS), date(2026, 9, 10)),
+        ("VNINDEX", date(2021, 1, 1), date(2026, 9, 10)),
+    ]
 
 
 def test_fast_lane_fetches_only_incremental_benchmark_when_cache_is_ready(monkeypatch) -> None:
