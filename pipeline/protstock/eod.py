@@ -280,14 +280,24 @@ def run_eod(
                     "rows_written": len(price_rows), "duration_ms": int((monotonic() - started) * 1000),
                 })
             except Exception as exc:  # a failed symbol must not stop the universe
-                counts["failed"] += 1
-                warnings.append(f"{symbol_row['symbol']}: {type(exc).__name__}")
-                client.create_job_item({
-                    "job_run_id": job["id"], "symbol_id": symbol_row["id"],
-                    "item_key": symbol_row["symbol"], "status": "FAILED",
-                    "error_code": type(exc).__name__, "error_message": str(exc)[:500],
-                    "duration_ms": int((monotonic() - started) * 1000),
-                })
+                if isinstance(exc, ValueError) and str(exc) == "SOURCE_MISSING_REQUESTED_SESSION":
+                    counts["skipped_missing_price"] = counts.get("skipped_missing_price", 0) + 1
+                    warnings.append(f"{symbol_row['symbol']}: SOURCE_MISSING_REQUESTED_SESSION")
+                    client.create_job_item({
+                        "job_run_id": job["id"], "symbol_id": symbol_row["id"],
+                        "item_key": symbol_row["symbol"], "status": "SKIPPED",
+                        "warning_codes": ["SOURCE_MISSING_REQUESTED_SESSION"],
+                        "rows_written": 0, "duration_ms": int((monotonic() - started) * 1000),
+                    })
+                else:
+                    counts["failed"] += 1
+                    warnings.append(f"{symbol_row['symbol']}: {type(exc).__name__}")
+                    client.create_job_item({
+                        "job_run_id": job["id"], "symbol_id": symbol_row["id"],
+                        "item_key": symbol_row["symbol"], "status": "FAILED",
+                        "error_code": type(exc).__name__, "error_message": str(exc)[:500],
+                        "duration_ms": int((monotonic() - started) * 1000),
+                    })
             _heartbeat(client, job["id"])
             sleep(pause_seconds)
         if write_breadth_snapshot and symbols:
@@ -307,7 +317,7 @@ def run_eod(
             _write_challenger_shadow(client, pending_signals, market_context, trading_date, counts, warnings)
         status = "SUCCEEDED" if counts["failed"] == 0 else "PARTIAL"
         if write_breadth_snapshot and symbols:
-            counts["publication_status"] = "COMPLETE" if status == "SUCCEEDED" and breadth["coverage_status"] == "COMPLETE" else "PARTIAL"
+            counts["publication_status"] = "COMPLETE" if status == "SUCCEEDED" and not counts.get("skipped_missing_price") and breadth["coverage_status"] == "COMPLETE" else "PARTIAL"
             counts["covered_symbols"] = breadth["observed_count"]
             counts["expected_symbols"] = breadth["eligible_count"]
         if status == "SUCCEEDED" and write_breadth_snapshot and symbol_offset == 0 and symbol_limit is None and benchmark_daily and benchmark_daily[-1]["date"] == trading_date.isoformat():

@@ -65,7 +65,7 @@ jobs:
             status=$?
             cat batch-result.json
             if [ "$status" -eq 0 ]; then
-              python -c 'import json,sys; result=json.load(open("batch-result.json")); sys.exit(0 if result.get("status") == "SUCCEEDED" and result.get("failed") == 0 else 1)'
+              python -c 'import json,sys; result=json.load(open("batch-result.json")); covered=result.get("symbols", 0)+result.get("skipped_missing_price", 0); sys.exit(0 if result.get("status") == "SUCCEEDED" and result.get("failed") == 0 and covered == result.get("expected_symbols") else 1)'
               status=$?
             fi
             echo "::endgroup::"

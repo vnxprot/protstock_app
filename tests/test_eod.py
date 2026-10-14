@@ -316,6 +316,39 @@ def test_eod_evaluates_signals_only_after_same_day_market_snapshot(monkeypatch) 
     assert events == ["snapshot", "breadth", "signal"]
 
 
+def test_missing_vendor_session_is_skipped_without_inventing_a_price(monkeypatch) -> None:
+    day = date(2026, 10, 13)
+    items = []
+    index_bar = SimpleNamespace(trading_date=day, collected_at=day, source="VCI_VNSTOCK_5.0.0",
+                                open=1000, high=1010, low=990, close=1000, volume=100)
+
+    class Client:
+        def create_job(self, _payload): return {"id": "job"}
+        def active_symbols(self): return [{"id": 1, "symbol": "DVM", "sector": "Test"}]
+        def active_rule_versions(self): return []
+        def market_index(self, _code): return {"id": 1}
+        def index_price_history(self, *_args):
+            return [{"trading_date": day.isoformat(), "open": 1000, "high": 1010,
+                     "low": 990, "close": 1000, "volume": 100, "source": "VCI_VNSTOCK_5.0.0"}]
+        def price_history(self, *_args): return []
+        def upsert(self, *_args): return 1
+        def create_job_item(self, payload): items.append(payload)
+        def finish_job(self, *_args): pass
+        def close(self): pass
+
+    class Provider:
+        def history(self, symbol, *_args): return [index_bar] if symbol == "VNINDEX" else []
+
+    monkeypatch.setattr("protstock.eod.SupabaseRestClient", lambda _settings: Client())
+    monkeypatch.setattr("protstock.eod.VnstockProvider", lambda _source: Provider())
+    monkeypatch.setattr("protstock.eod.Settings.from_env", lambda: object())
+    monkeypatch.setattr("protstock.eod.sleep", lambda _seconds: None)
+    result = run_eod(day, lookback_days=2200, pause_seconds=0, write_breadth_snapshot=False)
+    assert result["status"] == "SUCCEEDED"
+    assert result["symbols"] == 0 and result["skipped_missing_price"] == 1
+    assert items[0]["status"] == "SKIPPED" and items[0]["rows_written"] == 0
+
+
 def test_weekend_rerun_uses_friday_and_recorded_holiday_uses_previous_session() -> None:
     class Client:
         def closed_trading_sessions(self, _exchange, _start, _end): return self.closed
