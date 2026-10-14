@@ -62,11 +62,16 @@ def detect_zones(bars: Sequence[dict], window: int = 2, tolerance: float = 0.018
                 "zone_type": kind, "start_index": offset + min(item[1] for item in cluster),
                 "lower_price": min(prices) * 0.997, "upper_price": max(prices) * 1.003,
                 "touches": len(cluster), "strength": min(100, sum(components.values())),
-                "evidence": {"pivot_prices": prices, "center": center, "tolerance": tolerance, "quality_version": "pivot-volume-reaction-v1", "components": components, "volume_ratio_at_touches": ratio, "reaction_pct": None if reaction is None else reaction * 100, "age_bars": age, "last_touch_date": scoped[last_index]["date"]},
+                "evidence": {"pivot_prices": prices, "center": center, "tolerance": tolerance, "quality_version": "v0.0.0", "components": components, "volume_ratio_at_touches": ratio, "reaction_pct": None if reaction is None else reaction * 100, "age_bars": age, "last_touch_date": scoped[last_index]["date"]},
             }
             matches = matching_fibonacci(center, fibonacci_context or {}, [zone]) if kind == "SUPPORT" else []
             if matches:
                 zone["strength"] = min(100, zone["strength"] + FIB_BONUS_CAP)
                 zone["evidence"].update(fibonacci=matches, fib_bonus=FIB_BONUS_CAP, reasons=["FIB_CONFLUENCE"])
             zones.append(zone)
-    return sorted(zones, key=lambda item: item["strength"], reverse=True)[:6]
+    # Keep the old two-touch confirmation, while reserving visible evidence
+    # for each side of the current price.
+    strongest = lambda kind: sorted((zone for zone in zones if zone["zone_type"] == kind),
+                                    key=lambda item: item["strength"], reverse=True)[:3]
+    return sorted([*strongest("SUPPORT"), *strongest("RESISTANCE")],
+                  key=lambda item: item["strength"], reverse=True)

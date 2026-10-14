@@ -14,7 +14,6 @@ from .signal_policy import average_turnover_vnd, MIN_AVERAGE_TURNOVER_VND
 from .pattern_events import annotate_double_bottom_events
 from .period_signals import monthly_trend
 from .classical_patterns import detect_classical_patterns
-from .price_basis import comparable_volume_suffix
 
 
 ALGORITHM_VERSION = "core-rules-v0.0.0"
@@ -24,7 +23,9 @@ def analyze_bars(bars: Sequence[dict], position: dict | None = None, weekly_patt
     if not bars:
         raise ValueError("bars cannot be empty")
     ordered = sorted(bars, key=lambda item: item["date"])
-    pattern_bars = comparable_volume_suffix(ordered)
+    # Price structures and the original pattern rules use the full vendor
+    # series. Volume-dependent rules check their own comparison windows.
+    pattern_bars = ordered
     snapshot = calculate_indicators(ordered)
     snapshot_dict = snapshot.to_dict()
     if timeframe == "M":

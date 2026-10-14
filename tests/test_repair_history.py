@@ -75,7 +75,8 @@ def test_full_range_backfills_before_first_observation_without_overwriting(monke
     monkeypatch.setattr("protstock.repair_history.sleep", lambda _seconds: None)
     result = repair_missing_history(date(2021, 1, 1), date(2026, 9, 28), symbols={"AAA"}, pause_seconds=0, full_range=True)
     assert result["rows_written"] == 2
-    assert [row["trading_date"] for row in writes] == ["2021-01-04", "2026-09-28"]
+    assert [row["trading_date"] for row in writes if row.get("symbol_id") == 7] == ["2021-01-04", "2026-09-28"]
+    assert [row["trading_date"] for row in writes if row.get("index_id") == 1] == ["2021-01-04", "2026-09-28"]
 
 
 def test_repair_retains_missing_stored_vci_session_only_on_same_revision_and_prices(monkeypatch):
@@ -98,6 +99,7 @@ def test_repair_retains_missing_stored_vci_session_only_on_same_revision_and_pri
     stored[0]["close"] = 12
     with pytest.raises(ValueError, match="SOURCE_HISTORY_COVERAGE_MISMATCH:1"):
         _canonical_repair_rows(Client(), {"id": 7, "symbol": "AAA"}, days[0], days[-1], "AUTO")
+    stored[0]["close"] = 10
 
     class NewRevisionClient(Client):
         def corporate_actions(self, *_args):
@@ -106,7 +108,7 @@ def test_repair_retains_missing_stored_vci_session_only_on_same_revision_and_pri
 
     _, rebased = _canonical_repair_rows(NewRevisionClient(), {"id": 7, "symbol": "AAA"},
                                        days[0], days[-1], "AUTO")
-    assert len(rebased) == 2 and rebased[-1]["data_revision"] != stored[-1]["data_revision"]
+    assert len(rebased) == 2 and rebased[-1]["data_revision"] == stored[-1]["data_revision"]
 
     # A complete KBS response must not displace usable VCI bars just because
     # VCI omitted one older session.

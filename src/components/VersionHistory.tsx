@@ -2,7 +2,7 @@ import './VersionHistory.css'
 
 const releases = [
   { version: '0.0.0', date: '12/10/2026', title: 'Khởi động lại trên cơ sở dữ liệu thống nhất', areas: [
-    { name: 'Nguồn dữ liệu', changes: ['VCI qua Vnstock thế hệ 5 là nguồn cổ phiếu chính; KBS dự phòng theo cả chuỗi.', 'Giữ nguồn, phiên bản nguồn, volume gốc và hệ số volume cho từng phiên; sự kiện chưa xác minh chặn tính toán liên quan.'] },
+    { name: 'Nguồn dữ liệu', changes: ['VCI qua Vnstock thế hệ 5 là nguồn OHLCV EOD chính cho cổ phiếu và VN-Index; KBS dự phòng theo cả chuỗi.', 'Các quy tắc dùng trực tiếp OHLCV của nguồn đã chọn; sự kiện doanh nghiệp không chặn tính toán EOD.'] },
     { name: 'Phạm vi', changes: ['Universe hiện tại gồm 277 mã, có TLG đang hoạt động.', 'Prot Stock là ứng dụng cá nhân, phi thương mại.'] },
     { name: 'Phiên bản', changes: ['Nhãn phát hành hiện hành bắt đầu lại từ v0.0.0. Mã định danh lịch sử được giữ để đối chiếu các kết quả cũ.'] },
   ] },

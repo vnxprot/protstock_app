@@ -19,7 +19,7 @@ class ProviderDataError(ValueError):
 
 
 class VnstockProvider:
-    """Vnstock v5 VCI equity prices with a labelled KBS fallback.
+    """Vnstock v5 VCI EOD prices with a labelled KBS fallback.
 
     A returned history always comes from one provider.  Callers must not append
     its bars to a persisted history from another provider without rebasing the
@@ -34,7 +34,7 @@ class VnstockProvider:
             raise ValueError("source must be AUTO, VCI, or KBS")
 
     def history(self, symbol: str, start: date, end: date) -> list[DailyBar]:
-        if self.source == "KBS" or symbol.upper().endswith("INDEX"):
+        if self.source == "KBS":
             return self._kbs_history(symbol, start, end)
         if self.source == "VCI":
             return self._vci_history(symbol, start, end)
@@ -55,7 +55,8 @@ class VnstockProvider:
 
         if not str(vnstock_version).startswith("5."):
             raise RuntimeError("Vnstock generation 5 is required for VCI OHLCV")
-        frame = Market().equity(symbol).ohlcv(
+        market = Market().index(symbol) if symbol.upper().endswith("INDEX") else Market().equity(symbol)
+        frame = market.ohlcv(
             start=start.isoformat(), end=end.isoformat(), source="vci", floating=None,
         )
         actual_source = str(frame.attrs.get("source") or "").lower()

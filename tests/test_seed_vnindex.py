@@ -8,7 +8,7 @@ def _bar() -> SimpleNamespace:
     return SimpleNamespace(
         trading_date=date(2018, 1, 2), open=1000, high=1010,
         low=995, close=1005, volume=123456,
-        source="VNSTOCK_KBS", collected_at=datetime(2026, 9, 11, tzinfo=timezone.utc),
+        source="KBS_PUBLIC", collected_at=datetime(2026, 9, 11, tzinfo=timezone.utc),
     )
 
 
@@ -44,7 +44,7 @@ def test_seed_vnindex_fetches_and_upserts(monkeypatch) -> None:
     assert writes == [("market_index_prices", [{
         "index_id": 9, "trading_date": "2018-01-02", "open": 1000.0,
         "high": 1010.0, "low": 995.0, "close": 1005.0, "volume": 123456,
-        "source": "VNSTOCK_KBS", "collected_at": "2026-09-11T00:00:00+00:00",
+        "source": "KBS_PUBLIC", "collected_at": "2026-09-11T00:00:00+00:00",
         "price_unit": "INDEX_POINTS", "source_version": "KBS_PUBLIC_V2_20260930",
     }], "index_id,trading_date")]
 

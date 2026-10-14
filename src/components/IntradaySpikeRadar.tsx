@@ -137,7 +137,7 @@ export function IntradaySpikeRadar({ date, authenticated, mode }: { date: string
             <ArrowUpRight size={18} className="spike-chevron"/></button>
           {active && <div className="spike-detail"><div><h3>Diễn biến quanh sự kiện</h3><p>Khối lượng gấp {Number(event.volume_ratio).toFixed(1)} lần mức điển hình của cùng khoảng phút trong {event.baseline_sessions} phiên đủ dữ liệu.</p>
               {minuteDay.isLoading ? <p>Đang tải biểu đồ phút…</p> : minuteDay.data?.bars?.length ? <MiniChart bars={minuteDay.data.bars} event={event}/> : <p>Dữ liệu phút đã hết thời hạn lưu; log sự kiện vẫn còn.</p>}
-              <small>{event.close_hold_pct == null ? 'Giá biến động ít trong cụm giao dịch.' : `Biến động từ đầu sự kiện đến đóng cửa bằng ${Number(event.close_hold_pct).toFixed(0)}% biến động trong sự kiện.`} Nguồn {event.source ?? 'KBS'} · nghiên cứu EOD.</small></div>
+              <small>{event.close_hold_pct == null ? 'Giá biến động ít trong cụm giao dịch.' : `Biến động từ đầu sự kiện đến đóng cửa bằng ${Number(event.close_hold_pct).toFixed(0)}% biến động trong sự kiện.`} Nguồn {event.source ?? 'VCI'} · nghiên cứu EOD.</small></div>
               <a href="#analysis" onClick={() => { const symbol = event.symbol; localStorage.setItem('protstock-symbol', symbol); dispatchEvent(new CustomEvent('protstock:symbol', { detail: symbol })) }}>Xem phân tích mã <ArrowUpRight size={15}/></a></div>}
         </article>
       })}

@@ -7,7 +7,8 @@ from pathlib import Path
 import httpx
 
 from .config import Settings
-from .provider_vnstock import VnstockProvider, INDEX_PRICE_UNIT, KBS_SOURCE_VERSION
+from .provider_vnstock import VnstockProvider, INDEX_PRICE_UNIT, KBS_SOURCE_VERSION, VCI_SOURCE_VERSION
+from .price_basis import source_family
 from .supabase_rest import SupabaseRestClient
 from .universe import load_universe
 
@@ -87,17 +88,17 @@ def assert_live_universe(path: str | Path) -> dict[str, int]:
 def seed_vnindex_history(
     start_date: date,
     end_date: date | None = None,
-    source: str = "KBS",
+    source: str = "AUTO",
 ) -> dict[str, int | str]:
-    """Idempotently backfill VNINDEX OHLCV from the implemented KBS adapter."""
+    """Idempotently backfill VNINDEX OHLCV from VCI, with KBS fallback."""
     end_date = end_date or date.today()
     primary_source = source.upper()
     client = SupabaseRestClient(Settings.from_env())
     try:
         index = client.market_index("VNINDEX")
         provider = VnstockProvider(primary_source)
-        source_used = primary_source
         bars = provider.history("VNINDEX", start_date, end_date)
+        source_used = source_family(bars[0].source) if bars else "NONE"
 
         rows = [{
             "index_id": index["id"],
@@ -110,7 +111,7 @@ def seed_vnindex_history(
             "source": bar.source,
             "collected_at": bar.collected_at.isoformat(),
             "price_unit": INDEX_PRICE_UNIT,
-            "source_version": KBS_SOURCE_VERSION,
+            "source_version": VCI_SOURCE_VERSION if bar.source.startswith("VCI_") else KBS_SOURCE_VERSION,
         } for bar in bars]
         client.upsert("market_index_prices", rows, "index_id,trading_date")
         logger.info("Seeded %s VNINDEX bars from %s", len(rows), source_used)

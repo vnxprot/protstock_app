@@ -33,12 +33,11 @@ def assess_momentum_radar(
             "weekly_confirmed_date": None, "reacceleration_date": None,
             "breakout_level": None, "structural_stop": None,
             "stage": "NO_EVENT", "entry_status": "NO_ENTRY", "reasons": [], "evidence": {}}
-    if any(float(left["close"]) <= 0 or float(right["close"]) / float(left["close"]) <= .5
-           or float(right["close"]) / float(left["close"]) >= 2
+    if any(float(left["close"]) <= 0 or float(right["close"]) / float(left["close"]) <= .1
+           or float(right["close"]) / float(left["close"]) >= 10
            for left, right in zip(daily, daily[1:])):
         return {**base, "stage": "DATA_CHECK", "entry_status": "DATA_CHECK",
-                "reasons": ["PRICE_DISCONTINUITY_UNVERIFIED"]}
-
+                "reasons": ["PRICE_UNIT_DISCONTINUITY"]}
     weeks = aggregate_bars(daily, "W", confirmed_week_end=confirmed_week_end)
     week_positions = {row["period_start"]: position for position, row in enumerate(weeks)}
     months = [row for row in aggregate_bars(daily, "M", confirmed_month_end=confirmed_month_end)

@@ -53,7 +53,7 @@ def main() -> None:
     seed_vnindex = subparsers.add_parser("seed-vnindex")
     seed_vnindex.add_argument("--start-date", type=date.fromisoformat, default=date(2018, 1, 1))
     seed_vnindex.add_argument("--end-date", type=date.fromisoformat, default=vietnam_today())
-    seed_vnindex.add_argument("--source", default="KBS", choices=("KBS",))
+    seed_vnindex.add_argument("--source", default="AUTO", choices=("AUTO", "VCI", "KBS"))
     repair = subparsers.add_parser("repair-history")
     repair.add_argument("--start-date", type=date.fromisoformat, default=date(2021, 1, 1))
     repair.add_argument("--end-date", type=date.fromisoformat, default=vietnam_today())

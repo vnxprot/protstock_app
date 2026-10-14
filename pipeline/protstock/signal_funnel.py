@@ -86,13 +86,14 @@ def assess_funnel(symbol_id: int, daily_bars: Sequence[dict], *,
     if not daily:
         raise ValueError("No daily bars")
     as_of = daily[-1]["date"]
-    if any(float(left["close"]) <= 0 or float(right["close"]) / float(left["close"]) <= 0.5
-           or float(right["close"]) / float(left["close"]) >= 2
+    # A 100x/1000x jump is a unit error, not an ordinary corporate action.
+    if any(float(left["close"]) <= 0 or float(right["close"]) / float(left["close"]) <= 0.1
+           or float(right["close"]) / float(left["close"]) >= 10
            for left, right in zip(daily, daily[1:])):
         return {"symbol_id": symbol_id, "as_of_date": as_of, "version": ADAPTIVE_FUNNEL_VERSION if adaptive else FUNNEL_VERSION,
                 "monthly_state": "UNKNOWN", "stage": "DATA_QUARANTINED", "setup_id": None,
                 "setup_kind": None, "setup_date": None, "trigger_date": None,
-                "reasons": ["PRICE_DISCONTINUITY_UNVERIFIED"], "evidence": {}}
+                "reasons": ["PRICE_UNIT_DISCONTINUITY"], "evidence": {}}
     months = [bar for bar in aggregate_bars(daily, "M", confirmed_month_end=confirmed_month_end) if bar["is_complete"]]
     weeks = [bar for bar in aggregate_bars(daily, "W", confirmed_week_end=confirmed_week_end) if bar["is_complete"]]
     monthly = adaptive_monthly_context(months) if adaptive else monthly_context(months)

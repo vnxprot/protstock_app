@@ -13,7 +13,7 @@ Personal PWA for end-of-day analysis of a curated Vietnamese stock universe.
 
 ## Current release
 
-Prot Stock restarts its current release numbering at v0.0.0. Stock OHLCV uses Vnstock generation 5 with VCI as the primary source and KBS as a whole-series fallback. The full historical programme starts on 1 January 2021. Vendor prices are accepted with source provenance; unresolved share events separate volume-comparison windows instead of hiding price indicators or entire symbols. A share-volume factor is applied only when the event and the vendor's pre-event volume policy are known. See [v0.0.0 release plan and checklist](docs/release-v0.0.0.md). Historical revision IDs remain available for reproducibility.
+Prot Stock restarts its current release numbering at v0.0.0. Stock and VN-Index OHLCV use Vnstock generation 5 with VCI as the primary source and KBS as a whole-series fallback. The full historical programme starts on 1 January 2021. EOD calculations use the selected vendor's reported prices and volume without a separate corporate-action reconciliation gate. Source and data revision remain recorded. See [v0.0.0 release plan and checklist](docs/release-v0.0.0.md). Historical revision IDs remain available for reproducibility.
 
 ## Historical development
 
@@ -53,14 +53,14 @@ See:
 ## Scope limits
 
 - No backup infrastructure is included, as requested.
-- Corporate-action collection is incomplete; unadjusted historical prices can affect backtests.
+- Backtests use the selected vendor's historical price series and the stated execution assumptions.
 - Historical sector statistics use the stored/current sector classification.
 - Market Health and pattern scores are heuristics, not win probabilities. Prot Flow is a price/volume pressure measure, not identified or net investor flows.
 - No new paid service or native app is required. Provider and free hosting limits still apply.
 
 ## Data source
 
-- EOD OHLCV uses KBS's public endpoint. The CLI rejects VCI until a separate adapter exists. New bars record their source, fetch time, price unit, and adapter version; older bars without verified provenance remain labeled as such.
+- EOD OHLCV uses VCI through Vnstock v5 by default. KBS is used when VCI fails, with a whole-series source switch. New bars record their source, fetch time, price unit, and adapter version.
 - The provisional vnstock/VCI fundamentals collector is disabled, and its old rows are hidden from stock analysis. Historical records remain in the database for audit.
 - Monthly context, weekly setup, and daily trigger research runs in a shadow funnel. It does not change live signals while historical outcomes and corporate-action coverage are being validated.
 - Champion–Challenger v2 research uses separate shadow assessments and matured T+2 outcome cohorts. Shadow records never enter Champion signals, alerts, or portfolio transactions. The baseline audit requires verified historical price coverage before its parameters can be treated as measured results.

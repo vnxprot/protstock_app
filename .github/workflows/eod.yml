@@ -58,11 +58,6 @@ jobs:
           SUPABASE_URL: https://upmqxwktvvguegqeqibn.supabase.co
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: protstock assert-universe data/universe.csv
-      - name: Synchronize VCI corporate-action candidates
-        env:
-          SUPABASE_URL: https://upmqxwktvvguegqeqibn.supabase.co
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-        run: protstock sync-corporate-actions --calendar-window-days 45
       - name: Run EOD ingestion and analysis
         id: ingest
         continue-on-error: true

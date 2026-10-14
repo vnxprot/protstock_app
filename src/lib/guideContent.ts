@@ -32,19 +32,19 @@ export const guideTopics: GuideTopic[] = [
     'Nếu cần hành động, ghi luận điểm, điều kiện sai và mức rủi ro. Nhật ký lưu quyết định cùng bằng chứng của thời điểm đó; sau này đối chiếu với kết quả và kiểm thử.'
   ], status: 'Cá nhân', route: 'analysis', routeLabel: 'Mở Phân tích mã' },
   { id: 'data-source', category: 'Dữ liệu', title: 'Nguồn, đơn vị và thời điểm dữ liệu', summary: 'Giá và khối lượng có phiên, nguồn và thời điểm thu thập; không được đọc như báo giá trực tiếp.', details: [
-    'Nguồn giá EOD hiện tại là KBS. Giá cổ phiếu chuẩn trong pipeline được lưu theo nghìn VND/cổ phiếu; giao diện quy đổi và ghi rõ đơn vị khi hiển thị. Vốn, giá vốn và báo cáo danh mục dùng VND.',
+    'OHLCV EOD của cổ phiếu và VN-Index lấy VCI qua Vnstock thế hệ 5 làm nguồn chính; khi VCI lỗi, hệ thống lấy cả chuỗi từ KBS. Hệ thống dùng giá và khối lượng do nguồn đã chọn cung cấp để tính toán. Giá cổ phiếu lưu theo nghìn VND/cổ phiếu; vốn và báo cáo danh mục dùng VND.',
     'D/W/M lần lượt là nến ngày, tuần, tháng. Quyết định từ W/M chỉ dùng kỳ đã đóng. Nến đang hình thành có thể xuất hiện trên biểu đồ nhưng không được coi là xác nhận chính thức.'
-  ], status: 'Công bố', route: 'settings?tab=data', routeLabel: 'Xem trạng thái dữ liệu', aliases: ['KBS', 'OHLCV', 'EOD'] },
+  ], status: 'Công bố', route: 'settings?tab=data', routeLabel: 'Xem trạng thái dữ liệu', aliases: ['VCI', 'KBS', 'OHLCV', 'EOD'] },
   { id: 'data-health', category: 'Dữ liệu', title: 'Độ phủ và trạng thái công bố', summary: 'Một phiên có thể COMPLETE, PARTIAL hoặc chưa được chứng nhận.', details: [
     'Mục Dữ liệu cho biết phiên tín hiệu mới nhất, số mã có snapshot, job EOD và mã còn thiếu. COMPLETE nghĩa là đủ độ phủ theo kiểm tra công bố; PARTIAL báo còn thiếu. Dấu “—” nghĩa là chưa có hoặc chưa tính được, không phải số 0.',
     'Giờ chạy dự kiến không phải cam kết giờ dữ liệu sẵn sàng. Nguồn và hàng đợi xử lý có thể làm chậm; hãy dùng ngày phiên và trạng thái hiển thị thay cho giờ đồng hồ.'
   ], status: 'Công bố', route: 'settings?tab=data', routeLabel: 'Xem mục Dữ liệu', aliases: ['COMPLETE', 'PARTIAL', 'độ trễ'] },
   { id: 'data-limits', category: 'Dữ liệu', title: 'Các giới hạn của dữ liệu lịch sử', summary: 'Sự kiện doanh nghiệp và phân ngành theo thời điểm chưa được bao phủ đầy đủ.', details: [
-    'Chia tách, cổ tức, quyền mua và các thay đổi cơ sở giá có thể ảnh hưởng đồ thị, replay và kiểm thử. Một chuỗi giá đứt gãy chưa xác minh có thể bị cách ly; không coi kết quả nghiên cứu đó là đã kiểm chứng.',
+    'Dữ liệu OHLCV được tính theo đúng chuỗi nguồn VCI hoặc chuỗi KBS dự phòng. Phiên nguồn không cung cấp và lịch sử trước khi niêm yết không được tự tạo thêm. Kết quả kiểm thử dựa trên chuỗi giá nguồn và giả định khớp lệnh.',
     'Thống kê ngành lịch sử hiện có thể dựa trên phân loại ngành đang lưu, không phải lịch sử phân loại đúng từng ngày. Những giới hạn này cần đi cùng bảng kết quả, không ẩn ở cuối tài liệu.'
   ], status: 'Giới hạn', route: 'settings?tab=data', routeLabel: 'Xem mục Dữ liệu', aliases: ['corporate action', 'giá điều chỉnh', 'quarantine'] },
   { id: 'minute-data', category: 'Dữ liệu', title: 'Giao dịch đột biến từ nến phút', summary: 'Radar phân tích cụm khối lượng 1–15 phút sau phiên, không phải bảng giá thời gian thực.', details: [
-    'Sự kiện được so với cùng khoảng phút của các phiên đủ dữ liệu trước đó. Giao diện hiển thị độ phủ nến phút, nguồn và diễn biến giá quan sát được; dữ liệu phút chi tiết có thể hết thời hạn lưu trong khi bản ghi sự kiện còn tồn tại.',
+    'Sau EOD, hệ thống đọc nến phút VCI và so với cùng khoảng phút của các phiên đủ dữ liệu trước đó. Giao diện hiển thị độ phủ nến phút, nguồn và diễn biến giá quan sát được; dữ liệu phút chi tiết có thể hết thời hạn lưu trong khi bản ghi sự kiện còn tồn tại.',
     'Khối lượng bất thường không xác định danh tính người mua/bán hoặc dòng tiền ròng. Phiên có dữ liệu phút thiếu không được chấm sự kiện.'
   ], status: 'Nghiên cứu', route: 'screener?tab=spikes', routeLabel: 'Mở Giao dịch đột biến', aliases: ['intraday', 'spike', 'nến 1 phút'] },
   { id: 'signal-path', category: 'Tín hiệu', title: 'Một tín hiệu được tạo ra thế nào?', summary: 'Mẫu hình và engine tạo ứng viên; cổng dữ liệu, thị trường và rủi ro quyết định nhãn cuối.', details: [
@@ -77,7 +77,8 @@ export const guideTerms: GuideTerm[] = [
   { id:'universe',group:'Dữ liệu',subgroup:'Phạm vi',label:'Universe',meaning:'Danh sách mã đang được hệ thống theo dõi và xử lý.',reading:'Độ phủ EOD được so với các mã đang hoạt động, không phải toàn bộ thị trường.',route:'universe',aliases:['danh sách cổ phiếu'] },
   { id:'eod',group:'Dữ liệu',subgroup:'Thời gian',label:'EOD',meaning:'Dữ liệu sau phiên giao dịch.',reading:'Kiểm tra ngày phiên và thời điểm công bố trước khi đọc tín hiệu.',aliases:['end of day','cuối ngày'] },
   { id:'ohlcv',group:'Dữ liệu',subgroup:'Nguồn & đơn vị',label:'OHLCV',meaning:'Giá mở, cao, thấp, đóng và khối lượng.',reading:'Dữ liệu nền để tính nến, chỉ báo và mẫu hình; mỗi bản ghi gắn ngày và nguồn.',aliases:['giá khối lượng'] },
-  { id:'kbs',group:'Dữ liệu',subgroup:'Nguồn & đơn vị',label:'KBS',meaning:'Nguồn giá hiện dùng cho xử lý EOD và nghiên cứu giá.',reading:'Nguồn dữ liệu không chứng minh mọi sự kiện doanh nghiệp đã được điều chỉnh đầy đủ.' },
+  { id:'vci',group:'Dữ liệu',subgroup:'Nguồn & đơn vị',label:'VCI',meaning:'Nguồn OHLCV EOD chính của cổ phiếu và VN-Index qua Vnstock thế hệ 5.',reading:'Hệ thống dùng nguyên chuỗi giá và khối lượng do VCI cung cấp để chạy các quy tắc.' },
+  { id:'kbs',group:'Dữ liệu',subgroup:'Nguồn & đơn vị',label:'KBS',meaning:'Nguồn OHLCV dự phòng khi VCI không cung cấp được chuỗi cần dùng.',reading:'Khi chuyển nguồn, hệ thống dùng cả chuỗi KBS cho phép tính thay vì ghép từng phiên.' },
   { id:'dwm',group:'Dữ liệu',subgroup:'Thời gian',label:'D / W / M',meaning:'Khung ngày, tuần và tháng.',reading:'Quyết định W/M chỉ dùng kỳ đã đóng; kỳ đang hình thành chỉ để quan sát.',aliases:['đa khung','timeframe'] },
   { id:'coverage',group:'Dữ liệu',subgroup:'Chất lượng',label:'Độ phủ',meaning:'Tỷ lệ mã có dữ liệu đúng phiên và đủ điều kiện tính.',reading:'Đọc cùng mẫu số và ngày phiên; độ phủ thấp làm giảm độ tin cậy của bảng tổng hợp.',aliases:['coverage'] },
   { id:'complete',group:'Dữ liệu',subgroup:'Chất lượng',label:'COMPLETE / PARTIAL',meaning:'Trạng thái công bố đủ hoặc còn thiếu dữ liệu.',reading:'PARTIAL không được hiểu là thị trường không có tín hiệu; có thể có mã chưa xử lý.' },

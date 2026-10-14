@@ -135,4 +135,4 @@ def test_refresh_zones_writes_all_timeframes_from_stored_history_only():
     result = refresh_zones(date(2025, 2, 5), client=Client())
     assert result['symbols'] == 1 and result['failed'] == 0
     assert set(written) == {'D', 'W', 'M'}
-    assert written['D'][0]['evidence']['quality_version'] == 'pivot-volume-reaction-v1'
+    assert written['D'][0]['evidence']['quality_version'] == 'v0.0.0'

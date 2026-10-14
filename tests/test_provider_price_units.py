@@ -88,8 +88,28 @@ def test_kbs_stock_prices_are_stored_in_thousand_vnd(monkeypatch):
 
 def test_kbs_index_remains_in_points(monkeypatch):
     monkeypatch.setattr("protstock.provider_vnstock.httpx.get", lambda *args, **kwargs: Response(1800))
-    bars = VnstockProvider().history("VNINDEX", date(2026, 9, 25), date(2026, 9, 25))
+    bars = VnstockProvider("KBS").history("VNINDEX", date(2026, 9, 25), date(2026, 9, 25))
     assert bars[0].close == Decimal("1800")
+
+
+def test_vci_index_is_requested_before_fallback(monkeypatch):
+    class Frame:
+        attrs = {"source": "vci"}
+        def itertuples(self, index=False):
+            return iter([SimpleNamespace(time="2026-09-25", open=1800, high=1810,
+                                         low=1790, close=1805, volume=1000)])
+    class Market:
+        def index(self, symbol):
+            assert symbol == "VNINDEX"
+            return self
+        def equity(self, symbol):
+            raise AssertionError(f"Unexpected equity request: {symbol}")
+        def ohlcv(self, **kwargs):
+            assert kwargs["source"] == "vci"
+            return Frame()
+    monkeypatch.setitem(sys.modules, "vnstock", SimpleNamespace(Market=Market, __version__="5.0.0"))
+    bars = VnstockProvider().history("VNINDEX", date(2026, 9, 25), date(2026, 9, 25))
+    assert bars[0].source.startswith("VCI_") and bars[0].close == Decimal("1805")
 
 
 def test_kbs_request_includes_late_friday_but_filters_future_dates(monkeypatch):

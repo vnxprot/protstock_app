@@ -1,5 +1,4 @@
 from datetime import date, timedelta
-import pytest
 
 from protstock.models import DailyBar
 from protstock.price_basis import (canonical_price_rows, same_source_window,
@@ -17,29 +16,29 @@ def bar(day: str, volume: int = 100) -> DailyBar:
                            source="VCI_VNSTOCK_5.0.0")
 
 
-def test_verified_event_rebases_volume_once_despite_duplicate_vendor_report():
+def test_vendor_volume_is_preserved_even_when_event_ledger_has_duplicates():
     event = {"action_type": "BONUS", "ex_date": "2026-09-15", "ratio": 3,
              "verification_status": "OFFICIAL", "metadata": {"volume_policy": "UNADJUSTED_PRE_EVENT"}}
     vendor_copy = {**event, "verification_status": "SOURCE_REPORTED", "metadata": {}}
     rows = canonical_price_rows(1, [bar("2026-09-14"), bar("2026-09-15")],
                                 [vendor_copy, event], as_of_date=date(2026, 9, 15))
-    assert [row["volume"] for row in rows] == [400, 100]
+    assert [row["volume"] for row in rows] == [100, 100]
     assert [row["source_volume"] for row in rows] == [100, 100]
     assert rows[0]["quality_status"] == "VALID"
     assert same_source_window(rows)
 
 
-def test_vendor_event_keeps_price_valid_and_separates_volume_windows():
+def test_vendor_event_does_not_separate_volume_windows():
     event = {"action_type": "BONUS", "ex_date": "2026-09-15", "ratio": 3,
              "verification_status": "SOURCE_REPORTED", "metadata": {}}
     rows = canonical_price_rows(1, [bar("2026-09-14"), bar("2026-09-15")],
                                 [event], as_of_date=date(2026, 9, 15))
     assert rows[0]["volume"] == 100 and rows[0]["quality_status"] == "VALID"
     assert rows[1]["volume"] == 100 and rows[1]["quality_status"] == "VALID"
-    assert not volume_window_is_comparable(rows)
+    assert volume_window_is_comparable(rows)
 
 
-def test_stored_warning_prices_remain_usable_and_multiple_events_have_distinct_volume_segments():
+def test_stored_vendor_prices_use_reported_volume_despite_old_event_labels():
     events = [{"action_type": "BONUS", "ex_date": day, "ratio": 0.1,
                "verification_status": "SOURCE_REPORTED", "metadata": {}}
               for day in ("2026-02-01", "2026-03-01")]
@@ -49,12 +48,12 @@ def test_stored_warning_prices_remain_usable_and_multiple_events_have_distinct_v
               for day in ("2026-01-15", "2026-02-15", "2026-03-15")]
     segmented = with_volume_segments(stored, events, as_of_date=date(2026, 3, 15))
     assert all(price_row_usable(row) for row in segmented)
-    assert len({row["volume_basis"] for row in segmented}) == 3
-    assert not volume_window_is_comparable(segmented[:2])
+    assert {row["volume_basis"] for row in segmented} == {"VENDOR_REPORTED"}
+    assert volume_window_is_comparable(segmented[:2])
     assert not price_row_usable({**stored[0], "price_basis": "LEGACY_UNVERIFIED"})
 
 
-def test_conflicting_vendor_ratios_keep_auditable_volume_segments():
+def test_conflicting_event_ratios_do_not_change_vendor_ohlcv():
     first = {"action_type": "STOCK_DIVIDEND", "ex_date": "2026-09-15", "ratio": 0.1,
              "verification_status": "SOURCE_REPORTED", "metadata": {}}
     second = {**first, "ratio": 0.2}
@@ -62,11 +61,11 @@ def test_conflicting_vendor_ratios_keep_auditable_volume_segments():
                                 [first, second], as_of_date=date(2026, 9, 15))
     assert [row["quality_status"] for row in rows] == ["VALID", "VALID"]
     assert [row["volume_adjustment_factor"] for row in rows] == [1, 1]
-    with pytest.raises(ValueError, match="Conflicting verified"):
-        canonical_price_rows(1, [bar("2026-09-14")],
-                             [{**first, "verification_status": "VERIFIED"},
-                              {**second, "verification_status": "VERIFIED"}],
-                             as_of_date=date(2026, 9, 15))
+    confirmed = canonical_price_rows(1, [bar("2026-09-14")],
+                                     [{**first, "verification_status": "VERIFIED"},
+                                      {**second, "verification_status": "VERIFIED"}],
+                                     as_of_date=date(2026, 9, 15))
+    assert confirmed[0]["volume"] == rows[0]["volume"]
 
 
 def test_mixed_source_or_basis_revision_is_rejected():
@@ -88,12 +87,12 @@ def test_latest_coherent_revision_excludes_legacy_kbs_without_mixing_bases():
     assert latest_coherent_revision([current[0], stale, current[1]]) == current
 
 
-def test_cash_event_changes_revision_and_refreshes_whole_price_window():
+def test_cash_event_does_not_change_vendor_price_revision():
     original = canonical_price_rows(1, [bar("2026-09-14")], [], as_of_date=date(2026, 9, 15))
     action = {"action_type": "CASH_DIVIDEND", "ex_date": "2026-09-15",
               "cash_amount": 1000, "verification_status": "SOURCE_REPORTED"}
     revised = canonical_price_rows(1, [bar("2026-09-14")], [action], as_of_date=date(2026, 9, 15))
-    assert revised[0]["data_revision"] != original[0]["data_revision"]
+    assert revised[0]["data_revision"] == original[0]["data_revision"]
     assert revised[0]["volume_adjustment_factor"] == 1
 
 
@@ -107,7 +106,7 @@ def test_employee_placement_stays_in_ledger_without_blocking_holder_volume():
     assert all(row["volume_adjustment_factor"] == 1 for row in rows)
 
 
-def test_price_indicators_survive_unverified_event_while_volume_waits_for_20_prior_bars():
+def test_vendor_volume_indicators_use_full_history_across_reported_events():
     start = date(2026, 1, 1)
     bars = [DailyBar.create(symbol="TRC", trading_date=start + timedelta(days=index),
                             open=20 + index / 10, high=21 + index / 10,
@@ -120,9 +119,9 @@ def test_price_indicators_survive_unverified_event_while_volume_waits_for_20_pri
     recent = rows[:70]
     indicators = calculate_indicators(recent)
     assert indicators.sma50 is not None and indicators.macd is not None
-    assert indicators.volume_ratio20 is None
-    assert calculate_flow(recent)["flow_score"] is None
-    assert calculate_indicators(rows).volume_ratio20 is None  # 20 post-event bars still need one prior bar
+    assert indicators.volume_ratio20 is not None
+    assert calculate_flow(recent)["flow_score"] is not None
+    assert calculate_indicators(rows).volume_ratio20 is not None
     final = canonical_price_rows(1, [*bars, DailyBar.create(
         symbol="TRC", trading_date=start + timedelta(days=80), open=28, high=29,
         low=27, close=28, volume=180, source="VCI_VNSTOCK_5.0.0")],
@@ -138,7 +137,7 @@ def test_price_indicators_survive_a_fully_quarantined_volume_segment():
     rows[-1]["volume_basis"] = "MIXED_UNVERIFIED_VOLUME"
     result = analyze_bars(rows)
     assert result["indicators"]["sma50"] is not None
-    assert result["patterns"] == [] and result["zones"] == []
+    assert result["patterns"]  # Price geometry uses the full series.
     assert result["indicators"]["flow_score"] is None
 
 

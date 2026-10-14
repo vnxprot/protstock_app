@@ -13,11 +13,13 @@ on:
         required: false
         type: string
       source:
-        description: Implemented KBS public price source
+        description: VCI first, KBS as a whole-series fallback
         required: true
-        default: KBS
+        default: AUTO
         type: choice
         options:
+          - AUTO
+          - VCI
           - KBS
 
 permissions:

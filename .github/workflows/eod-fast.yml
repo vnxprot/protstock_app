@@ -49,7 +49,7 @@ jobs:
           FORCE_RERUN: ${{ inputs.force_rerun == true }}
         run: python .github/scripts/eod_status.py fast-lane
 
-  sync-actions:
+  check-universe:
     needs: preflight
     if: needs.preflight.outputs.action == 'RUN'
     runs-on: ubuntu-latest
@@ -66,21 +66,15 @@ jobs:
           SUPABASE_URL: https://upmqxwktvvguegqeqibn.supabase.co
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: protstock assert-universe data/universe.csv
-      - name: Refresh the corporate-action ledger before price calculations
-        env:
-          SUPABASE_URL: https://upmqxwktvvguegqeqibn.supabase.co
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-        run: protstock sync-corporate-actions --calendar-window-days 45
-
   ingest:
-    needs: [preflight, sync-actions]
+    needs: [preflight, check-universe]
     if: needs.preflight.outputs.action == 'RUN'
     name: Fast ingest ${{ matrix.source }} · ${{ matrix.label }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
     strategy:
       fail-fast: false
-      # Only one real upstream adapter exists. Avoid multiplying its rate limit.
+      # Bound public-source requests to stay within the free service limits.
       max-parallel: 1
       matrix: ${{ fromJSON(needs.preflight.outputs.matrix) }}
     steps:

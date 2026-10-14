@@ -10,6 +10,7 @@ from .fibonacci import build_fibonacci_context
 from .supabase_rest import SupabaseRestClient
 from .timeframes import aggregate_bars
 from .zones import detect_zones
+from .analysis import ALGORITHM_VERSION
 
 
 def zone_payloads(symbol_id: int, timeframe: str, rows: list[dict], context: dict) -> list[dict]:
@@ -17,7 +18,7 @@ def zone_payloads(symbol_id: int, timeframe: str, rows: list[dict], context: dic
              "start_date": rows[zone["start_index"]]["date"], "as_of_date": rows[-1]["date"],
              "lower_price": zone["lower_price"], "upper_price": zone["upper_price"],
              "touches": zone["touches"], "strength": zone["strength"], "evidence": zone["evidence"],
-             "algorithm_version": "pivot-volume-reaction-v1", "active": True}
+             "algorithm_version": ALGORITHM_VERSION, "active": True}
             for zone in detect_zones(rows, fibonacci_context=context)]
 
 

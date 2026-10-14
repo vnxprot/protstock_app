@@ -9,10 +9,11 @@ from time import sleep
 import httpx
 
 from .config import Settings
+from .price_basis import source_family
 from .supabase_rest import SupabaseRestClient
 
 VERSION = "INTRADAY_SPIKE_V0.0.0"
-SOURCE = "KBS_PUBLIC_1P"
+SOURCE = "VCI_VNSTOCK_V5_1M"
 WINDOWS = (1, 3, 5, 15)
 MIN_BASELINE_SESSIONS = 10
 MIN_VALUE_VND = 100_000_000
@@ -134,7 +135,32 @@ def detect_events(symbol_id: int, trading_date: str, bars: list[dict], history: 
     return sorted(events, key=lambda event: float(event["volume_ratio"]), reverse=True)[:12]
 
 
+def _fetch_vci_minutes(symbol: str, start: date, end: date) -> dict[str, list[dict]]:
+    """Read VCI minute candles after EOD, retaining the existing spike rules."""
+    from vnstock import Market, __version__ as vnstock_version
+
+    if not str(vnstock_version).startswith("5."):
+        raise RuntimeError("Vnstock generation 5 is required for minute OHLCV")
+    frame = Market().equity(symbol).ohlcv(start=start.isoformat(), end=end.isoformat(),
+                                          interval="1m", source="vci")
+    if str(frame.attrs.get("source") or "").lower() != "vci":
+        raise ValueError("VCI minute request returned another source")
+    records = []
+    for row in frame.itertuples(index=False):
+        timestamp = getattr(row, "time")
+        # Vnstock stock OHLCV uses thousand VND; the existing event value
+        # calculation and minute chart use VND per share.
+        records.append({"t": str(timestamp),
+                        "o": float(getattr(row, "open")) * 1000,
+                        "h": float(getattr(row, "high")) * 1000,
+                        "l": float(getattr(row, "low")) * 1000,
+                        "c": float(getattr(row, "close")) * 1000,
+                        "v": int(getattr(row, "volume"))})
+    return parse_minute_bars({"data": records}, symbol, start, end)
+
+
 def _fetch_kbs_minutes(symbol: str, start: date, end: date) -> dict[str, list[dict]]:
+    """Use KBS minutes only when the selected EOD series is also KBS."""
     response = httpx.get(
         f"https://kbbuddywts.kbsec.com.vn/iis-server/investment/stocks/{symbol}/data_1P",
         params={"sdate": start.strftime("%d-%m-%Y"), "edate": (end + timedelta(days=1)).strftime("%d-%m-%Y")},
@@ -158,16 +184,29 @@ def run_intraday_spikes(trading_date: date, *, symbol_offset: int = 0, symbol_li
             symbol_id, symbol = int(row["id"]), str(row["symbol"])
             try:
                 stored = db._pages("intraday_minute_days", {
-                    "select": "trading_date,bars,coverage_status,data_revision", "symbol_id": f"eq.{symbol_id}",
+                    "select": "trading_date,bars,coverage_status,data_revision,source", "symbol_id": f"eq.{symbol_id}",
                     "trading_date": f"gte.{cutoff.isoformat()}", "order": "trading_date.desc"}, limit=65)
-                prior = [item["bars"] for item in stored if item["trading_date"] < trading_date.isoformat()
-                         and item["coverage_status"] == "COMPLETE" and item.get("data_revision")][:30]
-                start = trading_date if len(prior) >= MIN_BASELINE_SESSIONS else trading_date - timedelta(days=45)
-                fetched = _fetch_kbs_minutes(symbol, start, trading_date)
-                daily = db._get("/daily_prices", params={"select": "trading_date,source_volume,volume_adjustment_factor,quality_status,data_revision", "symbol_id": f"eq.{symbol_id}",
-                    "trading_date": f"gte.{start.isoformat()}", "and": f"(trading_date.lte.{trading_date.isoformat()})", "limit": "65"})
+                daily = db._get("/daily_prices", params=[("select", "trading_date,source,source_volume,quality_status,data_revision"),
+                    ("symbol_id", f"eq.{symbol_id}"), ("trading_date", f"gte.{cutoff.isoformat()}"),
+                    ("trading_date", f"lte.{trading_date.isoformat()}"), ("limit", "65")])
                 daily.raise_for_status()
-                canonical_days = {item["trading_date"]: item for item in daily.json()
+                all_daily = {item["trading_date"]: item for item in daily.json()}
+                current_daily = all_daily.get(trading_date.isoformat())
+                if current_daily is None:
+                    counts["empty"] += 1
+                    counts["coverage_issues"].append({"symbol": symbol, "status": "EMPTY"})
+                    continue
+                family = source_family(current_daily.get("source"))
+                if family not in {"VCI", "KBS"}:
+                    raise ValueError("UNKNOWN_EOD_SOURCE")
+                minute_source = SOURCE if family == "VCI" else "KBS_PUBLIC_1P"
+                prior = [item["bars"] for item in stored if item["trading_date"] < trading_date.isoformat()
+                         and item["coverage_status"] == "COMPLETE" and item.get("data_revision")
+                         and item.get("source") == minute_source][:30]
+                start = trading_date if len(prior) >= MIN_BASELINE_SESSIONS else trading_date - timedelta(days=45)
+                fetched = (_fetch_vci_minutes if family == "VCI" else _fetch_kbs_minutes)(symbol, start, trading_date)
+                canonical_days = {day: item for day, item in all_daily.items()
+                                  if day >= start.isoformat() and source_family(item.get("source")) == family
                                   if item.get("quality_status") == "VALID" and item.get("data_revision")
                                   and item.get("source_volume") is not None}
                 revisions = {item["data_revision"] for item in canonical_days.values()}
@@ -182,7 +221,7 @@ def run_intraday_spikes(trading_date: date, *, symbol_offset: int = 0, symbol_li
                     rows.append({"symbol_id": symbol_id, "trading_date": day, "bars": bars,
                                  "bar_count": len(bars), "minute_volume": volume, "daily_volume": reference,
                                  "coverage_status": status, "data_revision": canonical_days.get(day, {}).get("data_revision"),
-                                 "source": SOURCE, "collected_at": datetime.now(timezone.utc).isoformat()})
+                                 "source": minute_source, "collected_at": datetime.now(timezone.utc).isoformat()})
                 if rows:
                     db.upsert("intraday_minute_days", rows, "symbol_id,trading_date")
                 current = next((item for item in rows if item["trading_date"] == trading_date.isoformat()), None)
@@ -197,15 +236,16 @@ def run_intraday_spikes(trading_date: date, *, symbol_offset: int = 0, symbol_li
                                     and item["coverage_status"] == "COMPLETE"
                                     and item["trading_date"] in canonical_days
                                     and item.get("data_revision") == canonical_days[item["trading_date"]]["data_revision"]
+                                    and item.get("source") == minute_source
                                     and item["trading_date"] not in {x["trading_date"] for x in previous})
                     previous.sort(key=lambda item: item["trading_date"], reverse=True)
                     def comparable_bars(day: str, minute_bars: list[dict]) -> list[dict]:
-                        factor = float(canonical_days[day]["volume_adjustment_factor"])
-                        return [{**bar, "cv": round(int(bar["v"]) * factor)} for bar in minute_bars]
+                        return [{**bar, "cv": int(bar["v"])} for bar in minute_bars]
                     events = detect_events(
                         symbol_id, trading_date.isoformat(), comparable_bars(trading_date.isoformat(), current["bars"]),
                         [comparable_bars(item["trading_date"], item["bars"]) for item in previous[:30]],
                     )
+                    events = [{**event, "source": minute_source} for event in events]
                     response = db._client.delete("/intraday_spike_events", params={"symbol_id": f"eq.{symbol_id}",
                         "trading_date": f"eq.{trading_date.isoformat()}", "algorithm_version": f"eq.{VERSION}"})
                     response.raise_for_status()

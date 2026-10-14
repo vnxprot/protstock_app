@@ -78,6 +78,15 @@ class SupabaseRestClient:
     def active_symbols(self) -> list[dict[str, Any]]:
         return self._pages("symbols", {"select": "id,symbol,exchange,sector,listed_from", "active": "eq.true", "order": "symbol.asc"})
 
+    def active_closed_snapshot_keys(self, trading_date: date, revision: str) -> set[tuple[int, str, str]]:
+        """Find recent closed W/M evidence already published by this release."""
+        rows = self._pages("technical_snapshots", {
+            "select": "symbol_id,timeframe,as_of_date", "timeframe": "in.(W,M)",
+            "algorithm_version": f"eq.{revision}",
+            "as_of_date": f"gte.{(trading_date - timedelta(days=70)).isoformat()}",
+        })
+        return {(int(row["symbol_id"]), row["timeframe"], row["as_of_date"]) for row in rows}
+
     def deactivate_symbol(self, symbol: str) -> None:
         response = self._client.patch("/symbols", params={"symbol": f"eq.{symbol}"}, json={"active": False})
         response.raise_for_status()
@@ -126,7 +135,7 @@ class SupabaseRestClient:
         return rows[0]
 
     def index_price_history(self, index_id: int, limit: int = 260) -> list[dict[str, Any]]:
-        rows = self._pages("market_index_prices", {"select": "trading_date,open,high,low,close,volume", "index_id": f"eq.{index_id}", "order": "trading_date.desc"}, limit)
+        rows = self._pages("market_index_prices", {"select": "trading_date,open,high,low,close,volume,source", "index_id": f"eq.{index_id}", "order": "trading_date.desc"}, limit)
         return list(reversed(rows))
 
     def index_price_dates(self, index_id: int, start_date, end_date) -> list[str]:
@@ -308,7 +317,7 @@ class SupabaseRestClient:
             for offset in range(0, 100_000, 1000):
                 response = self._get(
                     "/daily_prices",
-                    params=[("select", "symbol_id,trading_date,high,low,close,volume,volume_basis,volume_adjustment_factor,price_basis,quality_status,data_revision,source"), ("trading_date", f"gte.{window_start.isoformat()}"), ("trading_date", f"lte.{window_end.isoformat()}"), ("order", "trading_date.asc,symbol_id.asc")],
+                    params=[("select", "symbol_id,trading_date,high,low,close,volume,source_volume,volume_basis,volume_adjustment_factor,price_basis,quality_status,data_revision,source"), ("trading_date", f"gte.{window_start.isoformat()}"), ("trading_date", f"lte.{window_end.isoformat()}"), ("order", "trading_date.asc,symbol_id.asc")],
                     headers={"Range": f"{offset}-{offset + 999}"},
                 )
                 response.raise_for_status()
@@ -327,7 +336,7 @@ class SupabaseRestClient:
         for offset in range(0, 10_000, 1_000):
             response = self._get(
                 "/market_index_prices",
-                params=[("select", "trading_date,close"), ("index_id", f"eq.{index_id}"), ("trading_date", f"gte.{start_date.isoformat()}"), ("trading_date", f"lte.{end_date.isoformat()}"), ("order", "trading_date.asc")],
+                params=[("select", "trading_date,close,source"), ("index_id", f"eq.{index_id}"), ("trading_date", f"gte.{start_date.isoformat()}"), ("trading_date", f"lte.{end_date.isoformat()}"), ("order", "trading_date.asc")],
                 headers={"Range": f"{offset}-{offset + 999}"},
             )
             response.raise_for_status()

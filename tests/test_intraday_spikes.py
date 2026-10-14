@@ -1,6 +1,8 @@
 from datetime import date
+from types import SimpleNamespace
+import sys
 
-from protstock.intraday_spikes import detect_events, parse_minute_bars
+from protstock.intraday_spikes import _fetch_vci_minutes, detect_events, parse_minute_bars
 
 
 def bars(start=600, count=20, volume=1000, rising=False):
@@ -52,3 +54,22 @@ def test_parser_keeps_only_requested_trading_minutes():
     ]}
     result = parse_minute_bars(payload, "VCB", date(2026, 10, 9), date(2026, 10, 9))
     assert [item["t"] for item in result["2026-10-09"]] == ["10:02"]
+
+
+def test_vci_minute_candles_use_vnd_without_changing_volume(monkeypatch):
+    class Frame:
+        attrs = {"source": "vci"}
+        def itertuples(self, index=False):
+            return iter([SimpleNamespace(time="2026-10-09 10:02:00+07:00", open=20,
+                                         high=20.1, low=19.9, close=20.05, volume=1000)])
+    class Market:
+        def equity(self, symbol):
+            assert symbol == "VCB"
+            return self
+        def ohlcv(self, **kwargs):
+            assert kwargs["source"] == "vci" and kwargs["interval"] == "1m"
+            return Frame()
+    monkeypatch.setitem(sys.modules, "vnstock", SimpleNamespace(Market=Market, __version__="5.0.0"))
+    candles = _fetch_vci_minutes("VCB", date(2026, 10, 9), date(2026, 10, 9))
+    assert candles["2026-10-09"][0]["c"] == 20050
+    assert candles["2026-10-09"][0]["v"] == 1000

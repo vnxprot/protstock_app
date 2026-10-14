@@ -7,7 +7,7 @@ from typing import Any, Iterable
 
 from .config import Settings
 from .history_coverage import assess_symbol_coverage
-from .provider_vnstock import VnstockProvider, INDEX_PRICE_UNIT, KBS_SOURCE_VERSION
+from .provider_vnstock import VnstockProvider, INDEX_PRICE_UNIT, KBS_SOURCE_VERSION, VCI_SOURCE_VERSION
 from .price_basis import canonical_price_rows, same_source_window, source_family, latest_coherent_revision
 from .supabase_rest import SupabaseRestClient
 
@@ -35,7 +35,8 @@ def repair_missing_history(
             index_bars = _fetch_from_source("VNINDEX", start_date, end_date, source)
             source_calendar = {bar.trading_date.isoformat() for bar in index_bars}
             missing_index_dates = source_calendar - calendar
-            index_rows = _index_price_rows(index["id"], index_bars, missing_index_dates)
+            # Full-range repair also rebases VN-Index onto the selected vendor.
+            index_rows = _index_price_rows(index["id"], index_bars, source_calendar)
             if index_rows:
                 client.upsert("market_index_prices", index_rows, "index_id,trading_date")
             calendar |= source_calendar
@@ -154,7 +155,7 @@ def _index_price_rows(index_id: int, bars: Iterable, missing: set[str]) -> list[
             "open": float(bar.open), "high": float(bar.high), "low": float(bar.low), "close": float(bar.close),
             "volume": bar.volume, "source": bar.source, "collected_at": bar.collected_at.isoformat(),
             "price_unit": INDEX_PRICE_UNIT,
-            "source_version": KBS_SOURCE_VERSION,
+            "source_version": VCI_SOURCE_VERSION if bar.source.startswith("VCI_") else KBS_SOURCE_VERSION,
         })
     return rows
 

@@ -6,34 +6,25 @@ membership manifest; future changes are allowed by editing and reseeding it.
 
 ## Canonical market-data contract
 
-1. Vnstock generation 5 requests VCI OHLCV for equities. Operational VCI
-   failures, invalid OHLC bars, omitted last sessions or empty histories use KBS.
-   A calculation window has one vendor
-   and one data revision; switching vendor refreshes the whole window.
-2. Each stored bar records vendor/source version, vendor volume, comparable
-   share volume, volume factor, price/volume basis, quality and a revision hash.
-   VCI describes its OHLC as adjusted but does not publish the exact factors
-   used for every event. No `adjustment_factor` is invented for price.
-3. VCI company events are candidates. Share-volume rebasing requires a
-   separately verified entitlement **and** a verified finding that the vendor
-   volume before the event was unadjusted. The VSDC TRC 1:3 bonus event of
-   September 2026 and TLG's two 10:1 stock dividends of November 2024 and
-   December 2025 have verified factors. Duplicate VCI/VSDC descriptions apply
-   once. Employee and private placements carry no existing-holder factor.
-   The daily job checks the market-wide VCI dividend calendar, while a weekly
-   full refresh catches older or revised company disclosures without spending
-   a full-universe job on every trading day.
-4. Historical ingestion and calculations cover available sessions from
+1. Vnstock generation 5 requests VCI OHLCV for equities and VN-Index.
+   Operational VCI failures, invalid OHLC bars, omitted last sessions or empty
+   histories use KBS. A calculation window has one vendor and one data
+   revision; switching vendor refreshes the whole window.
+2. Each stored bar records the vendor, source version, reported OHLCV, price
+   unit, quality and a revision hash. EOD calculations trust the selected
+   vendor's price and volume directly. The pipeline does not invent a price
+   or volume adjustment factor, and corporate-action verification does not
+   block indicators or signals. Corporate actions remain separate from this
+   calculation path for personal portfolio rights and historical audit.
+3. Historical ingestion and calculations cover available sessions from
    1 January 2021 onward, or from the first actual listing/session. The read
-   limit follows calendar time instead of stopping at 1,300 sessions. Vendor
-   price history remains usable without independent event verification.
-   Unresolved share events create dated volume segments: a volume average,
-   ratio, flow or volume-confirmed setup needs a complete comparable segment.
-   Price-only MA, MACD, RSI, ATR, divergence and stops remain available.
+   limit follows calendar time instead of stopping at 1,300 sessions.
+   MA, MACD, RSI, ATR, divergence, stops, volume ratios, Flow, patterns and
+   zones all use the same selected vendor series.
    Missing vendor sessions and insufficient listing history are reported as
    gaps, never synthesized. Historical cash trade backtests spanning later
    rights events still require original tradable prices and entitlements.
-5. The price chart exposes source and basis. The ex-rights calculator requires
+4. The price chart exposes source and basis. The ex-rights calculator requires
    a manually verified original price for past events. Portfolio NAV and
    reports are withheld when a position's rights or cash entitlement has not
    been entered in the portfolio transaction ledger.
@@ -53,19 +44,18 @@ Core Pack rule versions begin at v0.0.0.
 - [x] Apply the TLG and TRC verification migrations.
 - [x] Assert the live universe matches the 277-symbol manifest.
 - [x] Sync VCI event candidates: 277 symbols, 3,652 new events, zero failed symbols.
-- [x] Keep unresolved events as dated volume boundaries without blocking a stock's price indicators.
+- [x] Use vendor OHLCV without independent event-based volume boundaries.
 - [x] Backfill the 277-symbol universe in small batches, then retry only vendor-data errors.
-- [x] Audit TLG/TRC source-volume factors and quarantine unresolved event windows.
+- [x] Keep historic TLG/TRC event records outside the EOD calculation path.
 - [x] Publish and inspect a partial 12 October EOD with the buy gate closed.
 - [ ] Publish a current EOD and report coverage against the 277-symbol manifest.
 - [ ] Backfill and audit every available 2021-to-current session for all 277 symbols.
 - [x] Deploy frontend on Vercel and confirm the live title is `Prot Stock v0.0.0`.
 - [x] Inspect the live data-quality state after the canonical backfill.
 
-The Market Health view separates actual missing prices and short histories
-from volume comparisons that cross an unresolved event. Publication coverage
-is determined by available price sessions and eligible history, with partial
-coverage shown explicitly.
+The Market Health view reports actual missing prices and short histories.
+Publication coverage is determined by available price sessions and eligible
+history, with partial coverage shown explicitly.
 
 The database was 275 MB on 12 October 2026 when read through the linked
 Supabase project. Batch backfills and monitor headroom against the Free plan's
