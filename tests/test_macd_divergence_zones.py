@@ -106,3 +106,25 @@ def test_sweep_low_is_provisional_then_breaks_out_on_pivot_confirmation_day(monk
                  "high": 54.5, "low": 53.0, "close": 54.0, "volume": 100.0})
     context["data_date"] = bars[-1]["date"]
     assert evaluate_macd_bullish_divergence_v4(context)[1] == "WATCH"
+
+
+def test_price_zone_divergence_accepts_sixty_sessions_but_not_sixty_one(monkeypatch) -> None:
+    def line(closes: list[float]) -> tuple[list[float], list[float]]:
+        values = [0.0] * len(closes)
+        values[30] = -4.0
+        values[90] = -3.0
+        values[91] = -3.0
+        return [value * close / 100 for value, close in zip(values, closes)], [0.0] * len(closes)
+
+    monkeypatch.setattr(zone_rule, "_macd_series", line)
+    for separation, expected in ((60, True), (61, False)):
+        rows = [{"date": (date(2026, 1, 1) + timedelta(days=index)).isoformat(),
+                 "open": 30.0, "high": 31.0, "low": 29.0, "close": 30.0, "volume": 100.0}
+                for index in range(95)]
+        rows[30]["low"] = 25.0
+        rows[30 + separation]["low"] = 24.0
+        pairs = [row for row in zone_rule.assess_macd_zone_divergence(7, rows, "HOSE")
+                 if row["swings"] == 2]
+        assert bool(pairs) is expected
+        if expected:
+            assert pairs[0]["evidence"]["zones"][-1]["price_date"] == rows[90]["date"]

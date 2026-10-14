@@ -80,7 +80,7 @@ def early_second_low(bars: Sequence[dict], symbol_id: int) -> dict | None:
     second_low = float(bars[second_index]["low"])
     for pivot in reversed(_pivots(bars[:-2])):
         gap = second_index - pivot
-        if not 5 <= gap <= 45 or line[pivot] is None or line[-1] is None:
+        if not 5 <= gap <= 60 or line[pivot] is None or line[-1] is None:
             continue
         first_low = float(bars[pivot]["low"])
         prior_macd = 100 * float(line[pivot]) / float(bars[pivot]["close"])

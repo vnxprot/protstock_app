@@ -35,6 +35,22 @@ def test_early_macd_uses_current_closed_candle_without_future_pivot(monkeypatch)
     assert early_second_low(rows, 1) is None
 
 
+def test_early_macd_accepts_sixty_sessions_but_not_sixty_one(monkeypatch):
+    rows = bars(102)
+    rows[-1] = {**rows[-1], "open": 9.45, "low": 9.4, "high": 10.0, "close": 9.9}
+    histogram = [-.1] * len(rows)
+    histogram[-1] = .1
+    for pivot, expected in ((41, True), (40, False)):
+        rows[40]["low"] = 9.8
+        rows[41]["low"] = 9.8
+        rows[pivot]["low"] = 9.5
+        line = [-.5] * len(rows)
+        line[pivot], line[-1] = -.8, -.2
+        monkeypatch.setattr("protstock.challenger_research._macd_series", lambda _, line=line: (line, histogram))
+        monkeypatch.setattr("protstock.challenger_research._pivots", lambda _, pivot=pivot: [pivot])
+        assert (early_second_low(rows, 1) is not None) is expected
+
+
 def test_downtrend_only_allows_oversold_early_probe(monkeypatch):
     rows = bars()
     monkeypatch.setattr("protstock.challenger_research.early_second_low", lambda *_: {

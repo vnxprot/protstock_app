@@ -56,6 +56,7 @@ function ZoneHistory({ row, date, open }: { row: Row; date: string; open: boolea
       : history.data?.length ? <ol>{history.data.map(item => <li key={item.as_of_date + item.setup_id}>
         <time>{item.as_of_date}</time><span>{stages[item.stage] ?? item.stage}
           {item.evidence?.zones?.at(-1)?.price_low != null ? ' · đáy ' + price(item.evidence.zones.at(-1).price_low) : ''}
+          {item.stage === 'INVALIDATED' && item.evidence?.invalidated_on ? ' · thủng đáy ' + item.evidence.invalidated_on : ''}
           {item.trigger_date === item.as_of_date ? ' · breakout' : ''}</span>
       </li>)}</ol> : <p>Chưa có phiên phân kỳ trước đó; từ phiên này hệ thống lưu diễn biến hằng ngày.</p>}</div>
 }
@@ -81,6 +82,7 @@ function ZoneRow({ row, date }: { row: Row; date: string }) {
       {evidence.breakout_volume_ratio20 != null ? ' · khối lượng ' + evidence.breakout_volume_ratio20.toFixed(1) + '× trung bình 20 phiên trước' : ''}.
       {row.trigger_date !== date && ' Đây là sự kiện đã qua; rule không phát lệnh mua muộn.'}</p>}
     {evidence.pending_lower_low_on && <p className="macd-zone-note">Đáy mới ngày {evidence.pending_lower_low_on} đang chờ hai phiên đóng để cập nhật vùng; mẫu vẫn được theo dõi, chưa kích hoạt mua.</p>}
+    {row.stage === 'INVALIDATED' && evidence.invalidated_on && <p className="macd-zone-note">Mẫu này bị thủng đáy bảo vệ trong phiên {evidence.invalidated_on}. Ngày lưu đánh giá có thể muộn hơn ngày giá thủng đáy.</p>}
     <div className="macd-zone-chain">{evidence.zones.map((zone, index) => <div key={zone.start_date}>
       <b>Vùng {index + 1}</b><span>{zone.start_date}–{zone.end_date}</span>
       <span>Giá thấp nhất {zone.price_date}: <b>{price(zone.price_low)}</b></span>
@@ -88,7 +90,7 @@ function ZoneRow({ row, date }: { row: Row; date: string }) {
       {index > 0 && <small>Giá giảm {evidence.price_declines_pct[index - 1].toFixed(2)}% · MACD tăng {evidence.macd_rises_pct_points[index - 1].toFixed(3)} điểm %</small>}
       {zone.revisions.length > 1 && <small>Cập nhật đáy: {zone.revisions.map(item => item.date + ' (' + price(item.price_low) + ')').join(' → ')}</small>}
     </div>)}</div>
-    <p className="macd-zone-note">Vùng đáy giá và đáy đường MACD được tìm riêng; ngày có thể lệch nhau. Breakout là lần đầu đóng cửa trên đỉnh giữa hai đáy sau khi pivot được xác nhận, kể cả chính phiên xác nhận; volume cần ≥1,3× trung bình 20 phiên trước để xét mua. Sự kiện giá vẫn được lưu nếu volume thiếu; các bộ lọc rủi ro chung vẫn có thể chặn mua. Histogram không tham gia rule này.</p>
+    <p className="macd-zone-note">Hai đáy giá cách nhau 5–60 phiên. Các pivot chỉ gộp vào một vùng nếu cách tối đa 5 phiên và biên độ đáy trong vùng không quá 1%. Đáy giá và đáy đường MACD được tìm riêng; ngày có thể lệch nhau. Breakout là lần đầu đóng cửa trên đỉnh giữa hai đáy sau khi pivot được xác nhận, kể cả chính phiên xác nhận; volume cần ≥1,3× trung bình 20 phiên trước để xét mua. Sự kiện giá vẫn được lưu nếu volume thiếu; các bộ lọc rủi ro chung vẫn có thể chặn mua. Histogram không tham gia rule này.</p>
     <ZoneHistory row={row} date={date} open={open}/>
   </details>
 }
