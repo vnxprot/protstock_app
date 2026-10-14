@@ -209,18 +209,21 @@ def run_intraday_spikes(trading_date: date, *, symbol_offset: int = 0, symbol_li
                 if family not in {"VCI", "KBS"}:
                     raise ValueError("UNKNOWN_EOD_SOURCE")
                 minute_source = SOURCE if family == "VCI" else "KBS_PUBLIC_1P"
-                prior = [item["bars"] for item in stored if item["trading_date"] < trading_date.isoformat()
-                         and item["coverage_status"] == "COMPLETE" and item.get("data_revision")
+                current_revision = current_daily.get("data_revision")
+                if current_daily.get("quality_status") != "VALID" or not current_revision or current_daily.get("source_volume") is None:
+                    raise ValueError("MISSING_CANONICAL_INTRADAY_SESSION")
+                canonical_days = {day: item for day, item in all_daily.items()
+                                  if source_family(item.get("source")) == family
+                                  and item.get("quality_status") == "VALID"
+                                  and item.get("data_revision") == current_revision
+                                  and item.get("source_volume") is not None}
+                prior = [item for item in stored if item["trading_date"] < trading_date.isoformat()
+                         and item["trading_date"] in canonical_days
+                         and item["coverage_status"] == "COMPLETE"
+                         and item.get("data_revision") == current_revision
                          and item.get("source") == minute_source][:30]
                 start = trading_date if len(prior) >= MIN_BASELINE_SESSIONS else trading_date - timedelta(days=45)
                 fetched = (_fetch_vci_minutes if family == "VCI" else _fetch_kbs_minutes)(symbol, start, trading_date)
-                canonical_days = {day: item for day, item in all_daily.items()
-                                  if day >= start.isoformat() and source_family(item.get("source")) == family
-                                  if item.get("quality_status") == "VALID" and item.get("data_revision")
-                                  and item.get("source_volume") is not None}
-                revisions = {item["data_revision"] for item in canonical_days.values()}
-                if len(revisions) != 1:
-                    raise ValueError("MIXED_OR_MISSING_CANONICAL_INTRADAY_BASELINE")
                 daily_volumes = {day: int(item["source_volume"]) for day, item in canonical_days.items()}
                 rows = []
                 for day, bars in fetched.items():
@@ -241,12 +244,8 @@ def run_intraday_spikes(trading_date: date, *, symbol_offset: int = 0, symbol_li
                 if status == "COMPLETE":
                     previous = [item for item in rows if item["trading_date"] < trading_date.isoformat() and item["coverage_status"] == "COMPLETE"
                                 and item["trading_date"] in canonical_days]
-                    previous.extend(item for item in stored if item["trading_date"] < trading_date.isoformat()
-                                    and item["coverage_status"] == "COMPLETE"
-                                    and item["trading_date"] in canonical_days
-                                    and item.get("data_revision") == canonical_days[item["trading_date"]]["data_revision"]
-                                    and item.get("source") == minute_source
-                                    and item["trading_date"] not in {x["trading_date"] for x in previous})
+                    fetched_dates = {item["trading_date"] for item in previous}
+                    previous.extend(item for item in prior if item["trading_date"] not in fetched_dates)
                     previous.sort(key=lambda item: item["trading_date"], reverse=True)
                     def comparable_bars(day: str, minute_bars: list[dict]) -> list[dict]:
                         return [{**bar, "cv": int(bar["v"])} for bar in minute_bars]

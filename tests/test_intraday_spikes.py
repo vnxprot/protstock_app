@@ -2,7 +2,7 @@ from datetime import date
 from types import SimpleNamespace
 import sys
 
-from protstock.intraday_spikes import _fetch_vci_minutes, detect_events, parse_minute_bars
+from protstock.intraday_spikes import _fetch_vci_minutes, detect_events, parse_minute_bars, run_intraday_spikes
 
 
 def bars(start=600, count=20, volume=1000, rising=False):
@@ -103,3 +103,46 @@ def test_vci_minute_candles_wait_for_free_minute_quota(monkeypatch):
     result = _fetch_vci_minutes("VCB", date(2026, 10, 9), date(2026, 10, 9))
     assert result["2026-10-09"][0]["v"] == 1000
     assert len(calls) == 2 and waits == [65]
+
+
+def test_saved_minute_baseline_is_used_when_only_today_is_fetched(monkeypatch):
+    today = date(2026, 10, 14)
+    old_bars = bars()
+    new_bars = bars(rising=True)
+    new_bars[6]["v"] = 20_000
+    dates = [date.fromordinal(today.toordinal() - offset).isoformat() for offset in range(1, 11)]
+    stored = [{"trading_date": day, "bars": old_bars, "coverage_status": "COMPLETE",
+               "data_revision": "revision-a", "source": "VCI_VNSTOCK_V5_1M"} for day in dates]
+    daily = [{"trading_date": day, "source": "VCI_VNSTOCK_V5", "source_volume": 20_000,
+              "quality_status": "VALID", "data_revision": "revision-a"} for day in dates]
+    daily.append({"trading_date": today.isoformat(), "source": "VCI_VNSTOCK_V5",
+                  "source_volume": 39_000, "quality_status": "VALID", "data_revision": "revision-a"})
+
+    class Response:
+        def __init__(self, value=None): self.value = value
+        def raise_for_status(self): pass
+        def json(self): return self.value
+
+    class Client:
+        def delete(self, *_args, **_kwargs): return Response()
+
+    class Database:
+        def __init__(self, *_args): self._client = Client()
+        def active_symbols(self): return [{"id": 1, "symbol": "VCB"}]
+        def _pages(self, *_args, **_kwargs): return stored
+        def _get(self, *_args, **_kwargs): return Response(daily)
+        def upsert(self, _table, rows, _key): return len(rows)
+        def close(self): pass
+
+    fetches = []
+
+    def fetch(_symbol, start, end):
+        fetches.append((start, end))
+        return {today.isoformat(): new_bars}
+
+    monkeypatch.setattr("protstock.intraday_spikes.SupabaseRestClient", Database)
+    monkeypatch.setattr("protstock.intraday_spikes.Settings.from_env", lambda: None)
+    monkeypatch.setattr("protstock.intraday_spikes._fetch_vci_minutes", fetch)
+    result = run_intraday_spikes(today, pause_seconds=0)
+    assert fetches == [(today, today)]
+    assert result["complete"] == 1 and result["events"] > 0
