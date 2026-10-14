@@ -61,8 +61,13 @@ jobs:
           fi
           for offset in $(seq "$START_OFFSET" 10 "$END_OFFSET"); do
             echo "::group::EOD alphabetic batch offset=$offset"
-            protstock eod "${date_args[@]}" --historical --skip-breadth-snapshot --source AUTO --lookback-days "$LOOKBACK_DAYS" --symbol-offset "$offset" --symbol-limit 10
+            protstock eod "${date_args[@]}" --historical --skip-breadth-snapshot --source AUTO --lookback-days "$LOOKBACK_DAYS" --symbol-offset "$offset" --symbol-limit 10 > batch-result.json
             status=$?
+            cat batch-result.json
+            if [ "$status" -eq 0 ]; then
+              python -c 'import json,sys; result=json.load(open("batch-result.json")); sys.exit(0 if result.get("status") == "SUCCEEDED" and result.get("failed") == 0 else 1)'
+              status=$?
+            fi
             echo "::endgroup::"
             if [ "$status" -ne 0 ]; then
               echo "::error::EOD alphabetic batch offset=$offset failed"
