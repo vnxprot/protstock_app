@@ -4,6 +4,7 @@ from datetime import date
 from typing import Any, Iterable
 
 from .config import Settings
+from .price_basis import source_family
 from .supabase_rest import SupabaseRestClient
 
 
@@ -87,7 +88,10 @@ def audit_history_coverage(start_date: date, end_date: date) -> dict[str, Any]:
     client = SupabaseRestClient(Settings.from_env())
     try:
         index = client.market_index("VNINDEX")
-        calendar = client.index_price_dates(index["id"], start_date, end_date)
+        index_rows = client.index_prices_in_range(index["id"], start_date, end_date)
+        family = source_family(index_rows[-1].get("source")) if index_rows else "UNKNOWN"
+        calendar = [row["trading_date"] for row in index_rows
+                    if source_family(row.get("source")) == family]
         symbols = client.active_symbols()
         dates_by_symbol = {
             symbol["id"]: client.symbol_coherent_price_dates(symbol["id"], start_date, end_date)
