@@ -10,6 +10,7 @@ import httpx
 
 from .config import Settings
 from .price_basis import source_family
+from .provider_vnstock import _is_minute_quota
 from .supabase_rest import SupabaseRestClient
 
 VERSION = "INTRADAY_SPIKE_V0.0.0"
@@ -141,8 +142,16 @@ def _fetch_vci_minutes(symbol: str, start: date, end: date) -> dict[str, list[di
 
     if not str(vnstock_version).startswith("5."):
         raise RuntimeError("Vnstock generation 5 is required for minute OHLCV")
-    frame = Market().equity(symbol).ohlcv(start=start.isoformat(), end=end.isoformat(),
-                                          interval="1m", source="vci")
+    market = Market().equity(symbol)
+    for attempt in range(3):
+        try:
+            frame = market.ohlcv(start=start.isoformat(), end=end.isoformat(),
+                                 interval="1m", source="vci")
+            break
+        except Exception as exc:
+            if not _is_minute_quota(exc) or attempt == 2:
+                raise
+            sleep(65)
     if str(frame.attrs.get("source") or "").lower() != "vci":
         raise ValueError("VCI minute request returned another source")
     records = []
@@ -171,7 +180,7 @@ def _fetch_kbs_minutes(symbol: str, start: date, end: date) -> dict[str, list[di
 
 
 def run_intraday_spikes(trading_date: date, *, symbol_offset: int = 0, symbol_limit: int | None = None,
-                        symbols: set[str] | None = None, pause_seconds: float = 0.35) -> dict:
+                        symbols: set[str] | None = None, pause_seconds: float = 1.2) -> dict:
     db = SupabaseRestClient(Settings.from_env())
     counts = {"symbols": 0, "complete": 0, "partial": 0, "empty": 0, "events": 0,
               "coverage_issues": [], "failed": []}

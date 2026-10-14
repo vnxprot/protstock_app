@@ -73,3 +73,33 @@ def test_vci_minute_candles_use_vnd_without_changing_volume(monkeypatch):
     candles = _fetch_vci_minutes("VCB", date(2026, 10, 9), date(2026, 10, 9))
     assert candles["2026-10-09"][0]["c"] == 20050
     assert candles["2026-10-09"][0]["v"] == 1000
+
+
+def test_vci_minute_candles_wait_for_free_minute_quota(monkeypatch):
+    class EntitlementError(Exception):
+        pass
+
+    calls = []
+    waits = []
+
+    class Frame:
+        attrs = {"source": "vci"}
+
+        def itertuples(self, index=False):
+            return iter([SimpleNamespace(time="2026-10-09 10:02:00+07:00", open=20,
+                                         high=20.1, low=19.9, close=20.05, volume=1000)])
+
+    class Market:
+        def equity(self, _symbol): return self
+
+        def ohlcv(self, **_kwargs):
+            calls.append(1)
+            if len(calls) == 1:
+                raise EntitlementError("The per-minute quota has been reached (60/60 calls)")
+            return Frame()
+
+    monkeypatch.setitem(sys.modules, "vnstock", SimpleNamespace(Market=Market, __version__="5.0.0"))
+    monkeypatch.setattr("protstock.intraday_spikes.sleep", waits.append)
+    result = _fetch_vci_minutes("VCB", date(2026, 10, 9), date(2026, 10, 9))
+    assert result["2026-10-09"][0]["v"] == 1000
+    assert len(calls) == 2 and waits == [65]
