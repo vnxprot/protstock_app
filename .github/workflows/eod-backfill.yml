@@ -54,7 +54,6 @@ jobs:
           TRADING_DATE: ${{ inputs.trading_date }}
         run: |
           set +e
-          failures=0
           date_args=()
           if [ -n "$TRADING_DATE" ]; then date_args+=(--date "$TRADING_DATE"); fi
           if [ -z "$END_OFFSET" ]; then
@@ -65,11 +64,13 @@ jobs:
             protstock eod "${date_args[@]}" --historical --skip-breadth-snapshot --source AUTO --lookback-days "$LOOKBACK_DAYS" --symbol-offset "$offset" --symbol-limit 10
             status=$?
             echo "::endgroup::"
-            if [ "$status" -ne 0 ]; then failures=$((failures + 1)); fi
+            if [ "$status" -ne 0 ]; then
+              echo "::error::EOD alphabetic batch offset=$offset failed"
+              exit "$status"
+            fi
             if [ "$offset" -lt "$END_OFFSET" ]; then sleep 180; fi
           done
-          echo "Completed historical backfill with $failures failed batches."
-          exit "$failures"
+          echo "Completed historical backfill with no failed batches."
       - name: Evaluate signals with the completed same-day market context
         id: rebuild
         env:
