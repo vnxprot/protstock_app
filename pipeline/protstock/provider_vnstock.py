@@ -56,32 +56,38 @@ class VnstockProvider:
         if not str(vnstock_version).startswith("5."):
             raise RuntimeError("Vnstock generation 5 is required for VCI OHLCV")
         market = Market().index(symbol) if symbol.upper().endswith("INDEX") else Market().equity(symbol)
-        frame = market.ohlcv(
-            start=start.isoformat(), end=end.isoformat(), source="vci", floating=None,
-        )
-        actual_source = str(frame.attrs.get("source") or "").lower()
-        if actual_source != "vci":
-            raise RuntimeError(f"VCI request returned unexpected source: {actual_source or 'unknown'}")
         collected_at = datetime.now(timezone.utc)
         result: list[DailyBar] = []
         invalid: list[tuple[date, list[str]]] = []
-        for row in frame.itertuples(index=False):
-            timestamp = getattr(row, "time")
-            trading_day = _to_date(timestamp)
-            if not start <= trading_day <= end:
-                continue
-            bar = DailyBar.create(
-                symbol=symbol, trading_date=trading_day,
-                open=getattr(row, "open"), high=getattr(row, "high"),
-                low=getattr(row, "low"), close=getattr(row, "close"),
-                volume=int(getattr(row, "volume")), source=f"VCI_VNSTOCK_{vnstock_version}",
-                collected_at=collected_at,
+        # VCI can silently cap one OHLCV response at 1,000 sessions. Fetch
+        # calendar-year windows so the requested 2021+ series stays complete.
+        window_start = start
+        while window_start <= end:
+            window_end = min(end, window_start + timedelta(days=364))
+            frame = market.ohlcv(
+                start=window_start.isoformat(), end=window_end.isoformat(), source="vci", floating=None,
             )
-            problems = bar.validate()
-            if problems:
-                invalid.append((trading_day, problems))
-                continue
-            result.append(bar)
+            actual_source = str(frame.attrs.get("source") or "").lower()
+            if actual_source != "vci":
+                raise RuntimeError(f"VCI request returned unexpected source: {actual_source or 'unknown'}")
+            for row in frame.itertuples(index=False):
+                timestamp = getattr(row, "time")
+                trading_day = _to_date(timestamp)
+                if not window_start <= trading_day <= window_end:
+                    continue
+                bar = DailyBar.create(
+                    symbol=symbol, trading_date=trading_day,
+                    open=getattr(row, "open"), high=getattr(row, "high"),
+                    low=getattr(row, "low"), close=getattr(row, "close"),
+                    volume=int(getattr(row, "volume")), source=f"VCI_VNSTOCK_{vnstock_version}",
+                    collected_at=collected_at,
+                )
+                problems = bar.validate()
+                if problems:
+                    invalid.append((trading_day, problems))
+                    continue
+                result.append(bar)
+            window_start = window_end + timedelta(days=1)
         if invalid:
             latest_valid = max((bar.trading_date for bar in result), default=None)
             latest_invalid = max(day for day, _ in invalid)

@@ -112,6 +112,37 @@ def test_vci_index_is_requested_before_fallback(monkeypatch):
     assert bars[0].source.startswith("VCI_") and bars[0].close == Decimal("1805")
 
 
+def test_vci_long_history_is_requested_in_complete_year_windows(monkeypatch):
+    requests = []
+
+    class Frame:
+        attrs = {"source": "vci"}
+
+        def __init__(self, first):
+            self.first = first
+
+        def itertuples(self, index=False):
+            return iter([SimpleNamespace(time=self.first, open=10, high=11,
+                                         low=9, close=10, volume=100)])
+
+    class Market:
+        def equity(self, symbol):
+            assert symbol == "HPG"
+            return self
+
+        def ohlcv(self, **kwargs):
+            requests.append((date.fromisoformat(kwargs["start"]), date.fromisoformat(kwargs["end"])))
+            return Frame(kwargs["start"])
+
+    monkeypatch.setitem(sys.modules, "vnstock", SimpleNamespace(Market=Market, __version__="5.0.0"))
+    bars = VnstockProvider("VCI").history("HPG", date(2021, 1, 1), date(2026, 10, 13))
+    assert len(requests) == len(bars) == 6
+    assert requests[0][0] == date(2021, 1, 1)
+    assert requests[-1][1] == date(2026, 10, 13)
+    assert all(later[0].toordinal() == earlier[1].toordinal() + 1
+               for earlier, later in zip(requests, requests[1:]))
+
+
 def test_kbs_request_includes_late_friday_but_filters_future_dates(monkeypatch):
     seen = {}
 
