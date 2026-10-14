@@ -439,8 +439,7 @@ def rebuild_signals(trading_date: date, *, symbol_offset: int = 0, symbol_limit:
                     continue
                 stored_rows = _stock_rows_as_of(client.price_history(symbol_row["id"], _history_limit(trading_date)), trading_date)
                 analysis_rows = [{**row, "date": row["trading_date"]} for row in with_volume_segments(
-                    stored_rows, getattr(client, "corporate_actions", lambda _id: [])(symbol_row["id"]),
-                    as_of_date=trading_date)]
+                    stored_rows, [], as_of_date=trading_date)]
                 if not analysis_rows or analysis_rows[-1]["date"] != trading_date.isoformat():
                     # Every rebuild, including historical runs, requires prices
                     # on its requested session; stale bars cannot count as covered.
