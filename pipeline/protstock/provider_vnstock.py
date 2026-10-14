@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import date, datetime, timedelta, timezone
 import sys
+from time import sleep
 from typing import Any
 
 import httpx
@@ -16,6 +17,13 @@ INDEX_PRICE_UNIT = "INDEX_POINTS"
 
 class ProviderDataError(ValueError):
     """The vendor returned an OHLCV bar that cannot be used in a price series."""
+
+
+def _is_minute_quota(exc: Exception) -> bool:
+    message = str(exc).lower()
+    return type(exc).__name__ == "EntitlementError" and any(
+        marker in message for marker in ("per-minute quota", "per minute quota", "hạn mức theo phút")
+    )
 
 
 class VnstockProvider:
@@ -46,7 +54,7 @@ class VnstockProvider:
             # Only operational source failures may activate the fallback.  A
             # bad symbol, argument, entitlement or programming error must fail.
             from vnstock.core.exceptions import NetworkError, ProviderError
-            if not isinstance(exc, (NetworkError, ProviderError, ProviderDataError)):
+            if not isinstance(exc, (NetworkError, ProviderError, ProviderDataError)) and not _is_minute_quota(exc):
                 raise
         return self._kbs_history(symbol, start, end)
 
@@ -64,9 +72,18 @@ class VnstockProvider:
         window_start = start
         while window_start <= end:
             window_end = min(end, window_start + timedelta(days=364))
-            frame = market.ohlcv(
-                start=window_start.isoformat(), end=window_end.isoformat(), source="vci", floating=None,
-            )
+            for attempt in range(3):
+                try:
+                    frame = market.ohlcv(
+                        start=window_start.isoformat(), end=window_end.isoformat(), source="vci", floating=None,
+                    )
+                    break
+                except Exception as exc:
+                    if not _is_minute_quota(exc) or attempt == 2:
+                        raise
+                    # Keep already fetched years and wait for the free minute
+                    # allowance to reset before retrying this single window.
+                    sleep(65)
             actual_source = str(frame.attrs.get("source") or "").lower()
             if actual_source != "vci":
                 raise RuntimeError(f"VCI request returned unexpected source: {actual_source or 'unknown'}")

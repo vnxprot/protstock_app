@@ -157,7 +157,7 @@ def run_eod(
                 stored = _stock_rows_as_of(client.price_history(symbol_row["id"], _history_limit(trading_date)), trading_date)
                 # EOD calculations trust the selected vendor's OHLCV directly.
                 events = []
-                requested_start = trading_date - timedelta(days=lookback_days)
+                requested_start = max(HISTORY_START, trading_date - timedelta(days=lookback_days))
                 fetched = _fetch_requested_session(provider, source, symbol_row["symbol"],
                                                    requested_start, trading_date)
                 if not fetched or fetched[-1].trading_date != trading_date:

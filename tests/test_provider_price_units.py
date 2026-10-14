@@ -143,6 +143,39 @@ def test_vci_long_history_is_requested_in_complete_year_windows(monkeypatch):
                for earlier, later in zip(requests, requests[1:]))
 
 
+def test_vci_minute_quota_retries_only_the_interrupted_window(monkeypatch):
+    class EntitlementError(Exception):
+        pass
+
+    calls = []
+    waits = []
+
+    class Frame:
+        attrs = {"source": "vci"}
+
+        def __init__(self, day): self.day = day
+
+        def itertuples(self, index=False):
+            return iter([SimpleNamespace(time=self.day, open=10, high=11,
+                                         low=9, close=10, volume=100)])
+
+    class Market:
+        def equity(self, _symbol): return self
+
+        def ohlcv(self, **kwargs):
+            calls.append(kwargs["start"])
+            if len(calls) == 2:
+                raise EntitlementError("The per-minute quota has been reached (60/60 calls)")
+            return Frame(kwargs["start"])
+
+    monkeypatch.setitem(sys.modules, "vnstock", SimpleNamespace(Market=Market, __version__="5.0.0"))
+    monkeypatch.setattr("protstock.provider_vnstock.sleep", waits.append)
+    bars = VnstockProvider("VCI").history("HPG", date(2021, 1, 1), date(2022, 1, 2))
+    assert len(bars) == 2
+    assert calls == ["2021-01-01", "2022-01-01", "2022-01-01"]
+    assert waits == [65]
+
+
 def test_kbs_request_includes_late_friday_but_filters_future_dates(monkeypatch):
     seen = {}
 
