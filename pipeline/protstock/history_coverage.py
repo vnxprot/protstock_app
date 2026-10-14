@@ -73,8 +73,10 @@ def build_history_coverage(
         "calendar_sessions": len(calendar),
         "symbols": len(rows),
         "complete_after_coverage_start": sum(not row["missing_after_coverage_start_count"] for row in rows),
-        "symbols_with_repairable_gaps": sum(bool(row["missing_after_coverage_start_count"]) for row in rows),
-        "repairable_missing_sessions": sum(row["missing_after_coverage_start_count"] for row in rows),
+        # A calendar gap alone does not prove that the stock traded or that
+        # VCI has a valid candle available to repair it.
+        "symbols_with_calendar_gaps": sum(bool(row["missing_after_coverage_start_count"]) for row in rows),
+        "calendar_gap_sessions": sum(row["missing_after_coverage_start_count"] for row in rows),
         "pre_listing_sessions": sum(row["pre_listing_session_count"] for row in rows),
         "unclassified_before_first_observation_sessions": sum(
             row["unclassified_before_first_observation_count"] for row in rows

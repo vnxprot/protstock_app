@@ -38,6 +38,6 @@ def test_history_coverage_aggregates_repairable_gaps_without_hiding_rows() -> No
         date(2021, 1, 5),
     )
 
-    assert report["symbols_with_repairable_gaps"] == 1
-    assert report["repairable_missing_sessions"] == 1
+    assert report["symbols_with_calendar_gaps"] == 1
+    assert report["calendar_gap_sessions"] == 1
     assert report["rows"][0]["symbol"] == "AAA"

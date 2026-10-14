@@ -40,7 +40,7 @@ jobs:
           protstock history-coverage "${args[@]}" > history-coverage.json
       - name: Publish concise summary
         run: |
-          python -c "import json; r=json.load(open('history-coverage.json', encoding='utf-8')); print('## Historical data coverage'); print(); print(f\"- VNINDEX: {r['vnindex']['first_session']} -> {r['vnindex']['last_session']} ({r['vnindex']['sessions']} sessions)\"); print(f\"- Symbols: {r['symbols']}; complete after coverage start: {r['complete_after_coverage_start']}\"); print(f\"- Repairable gaps: {r['repairable_missing_sessions']} across {r['symbols_with_repairable_gaps']} symbols\"); print(f\"- Before first observed bar, listing date unknown: {r['unclassified_before_first_observation_sessions']} sessions\")" >> "$GITHUB_STEP_SUMMARY"
+          python -c "import json; r=json.load(open('history-coverage.json', encoding='utf-8')); print('## Historical data coverage'); print(); print(f\"- VNINDEX: {r['vnindex']['first_session']} -> {r['vnindex']['last_session']} ({r['vnindex']['sessions']} sessions)\"); print(f\"- Symbols: {r['symbols']}; complete after coverage start: {r['complete_after_coverage_start']}\"); print(f\"- Stock versus index calendar gaps: {r['calendar_gap_sessions']} across {r['symbols_with_calendar_gaps']} symbols (not automatically repairable)\"); print(f\"- Before first observed bar, listing date unknown: {r['unclassified_before_first_observation_sessions']} sessions\")" >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4
         with:
           name: history-coverage-${{ inputs.start_date }}-to-current
