@@ -10,77 +10,54 @@ from typing import Sequence
 from .indicators import _ema_series
 from .timeframes import aggregate_bars
 from .price_basis import volume_window_is_comparable
+from .trend_context import POLICY, monthly_context, weekly_context
 
-FUNNEL_VERSION = "MTF_FUNNEL_SHADOW_V0_0_0"
-ADAPTIVE_FUNNEL_VERSION = "MTF_ADAPTIVE_CHALLENGER_V0_0_0"
-SETUP_TTL_SESSIONS = 20
-
-
-def monthly_context(closed_months: Sequence[dict]) -> dict:
-    """Require persistent structure; a single monthly close cannot flip the regime."""
-    closes = [float(bar["close"]) for bar in closed_months]
-    if len(closes) < 23:
-        return {"state": "UNKNOWN", "reasons": ["MONTHLY_HISTORY_SHORT"]}
-    ema = _ema_series(closes, 10)
-    sma20 = mean(closes[-20:])
-    prior_sma20 = mean(closes[-23:-3])
-    up = (closes[-1] > ema[-1] > sma20 and closes[-2] > ema[-2]
-          and ema[-1] > ema[-4] and sma20 > prior_sma20)
-    down = (closes[-1] < ema[-1] < sma20 and closes[-2] < ema[-2]
-            and ema[-1] < ema[-4] and sma20 < prior_sma20)
-    state = "UP" if up else "DOWN" if down else "SIDEWAYS"
-    return {"state": state, "reasons": [f"MONTHLY_STRUCTURE_{state}"],
-            "ema10": round(ema[-1], 4), "sma20": round(sma20, 4),
-            "ema10_slope_3m": round(ema[-1] / ema[-4] - 1, 6),
-            "sma20_slope_3m": round(sma20 / prior_sma20 - 1, 6)}
+FUNNEL_VERSION = "MTF_FUNNEL_SHADOW_V0_0_0_TREND1"
+ADAPTIVE_FUNNEL_VERSION = "MTF_ADAPTIVE_CHALLENGER_V0_0_0_TREND1"
+SETUP_TTL_SESSIONS = POLICY["setup_ttl_sessions"]
 
 
 def adaptive_monthly_context(closed_months: Sequence[dict]) -> dict:
-    """Use a shorter, explicitly labelled context when 20 closed months do not exist."""
-    if len(closed_months) >= 23:
-        return monthly_context(closed_months)
-    closes = [float(bar["close"]) for bar in closed_months]
-    if len(closes) < 6:
-        return {"state": "UNKNOWN", "reasons": ["MONTHLY_HISTORY_SHORT"]}
-    current = mean(closes[-6:])
-    previous = mean(closes[-7:-1]) if len(closes) >= 7 else current
-    up = closes[-1] > current and closes[-2] > previous and current > previous * 1.02
-    down = closes[-1] < current and closes[-2] < previous and current < previous * .98
-    state = "UP" if up else "DOWN" if down else "SIDEWAYS"
-    return {"state": state, "reasons": [f"MONTHLY_6M_CONTEXT_{state}"],
-            "sma6": round(current, 4), "history_months": len(closes)}
+    """Compatibility adapter; both lanes share the full-history classifier."""
+    return monthly_context(closed_months)
 
 
-def _weekly_candidates(closed_weeks: Sequence[dict], adaptive: bool = False) -> list[dict]:
+def _weekly_candidates(closed_weeks: Sequence[dict], adaptive: bool = False, earliest_date: str | None = None) -> list[dict]:
     candidates = []
+    ema = _ema_series([float(bar["close"]) for bar in closed_weeks], POLICY["weekly_ema"])
     for i in range(20, len(closed_weeks)):
         bar = closed_weeks[i]
+        if earliest_date is not None and str(bar["date"]) < earliest_date:
+            continue
         prior = closed_weeks[i - 13:i]
         volume_average = (mean(float(item["volume"]) for item in prior)
                           if volume_window_is_comparable([*prior, bar]) else 0)
         if not volume_average:
             continue
         breakout_level = max(float(item["high"]) for item in prior)
-        if float(bar["close"]) > breakout_level and float(bar["volume"]) >= 1.3 * volume_average:
+        context = weekly_context(closed_weeks[:i + 1])
+        if float(bar["close"]) > breakout_level and float(bar["volume"]) >= POLICY["volume_multiplier"] * volume_average:
             candidates.append({"kind": "WEEKLY_BREAKOUT_13", "date": bar["date"],
-                               "trigger": breakout_level, "invalidation": min(float(item["low"]) for item in closed_weeks[i - 3:i + 1])})
-        ema20 = _ema_series([float(item["close"]) for item in closed_weeks[:i + 1]], 20)[-1]
-        if float(bar["low"]) <= ema20 < float(bar["close"]) and float(bar["close"]) > float(bar["open"]):
+                               "trigger": breakout_level, "invalidation": min(float(item["low"]) for item in closed_weeks[i - 3:i + 1]),
+                               "context": context})
+        ema20 = ema[i]
+        if context["strengthening"] and float(bar["low"]) <= ema20 < float(bar["close"]) and float(bar["close"]) > float(bar["open"]):
             candidates.append({"kind": "WEEKLY_PULLBACK_EMA20", "date": bar["date"],
                                "trigger": float(bar["high"]), "invalidation": min(float(item["low"]) for item in closed_weeks[i - 3:i + 1])})
         if adaptive:
-            support = min(float(item["low"]) for item in closed_weeks[i - 8:i])
-            if (float(bar["low"]) <= support * 1.02 and float(bar["close"]) > support
+            prior_context = weekly_context(closed_weeks[:i])
+            support = min(float(item["low"]) for item in closed_weeks[i - POLICY["support_weeks"]:i])
+            if (prior_context["range_confirmed"] and float(bar["low"]) <= support * (1 + POLICY["support_tolerance"]) and float(bar["close"]) > support
                     and float(bar["close"]) > float(bar["open"])):
                 candidates.append({"kind": "WEEKLY_RANGE_SUPPORT", "date": bar["date"],
-                                   "trigger": float(bar["high"]), "invalidation": float(bar["low"])})
+                                   "trigger": float(bar["high"]), "invalidation": float(bar["low"]), "context": prior_context})
     return candidates
 
 
 def assess_funnel(symbol_id: int, daily_bars: Sequence[dict], *,
                   confirmed_week_end: date | None = None,
                   confirmed_month_end: date | None = None,
-                  adaptive: bool = False) -> dict:
+                  adaptive: bool = False, monthly_evidence: dict | None = None) -> dict:
     """Evaluate the last session using only closed higher timeframes and known daily bars."""
     daily = sorted(daily_bars, key=lambda bar: bar["date"])
     if not daily:
@@ -96,18 +73,22 @@ def assess_funnel(symbol_id: int, daily_bars: Sequence[dict], *,
                 "reasons": ["PRICE_UNIT_DISCONTINUITY"], "evidence": {}}
     months = [bar for bar in aggregate_bars(daily, "M", confirmed_month_end=confirmed_month_end) if bar["is_complete"]]
     weeks = [bar for bar in aggregate_bars(daily, "W", confirmed_week_end=confirmed_week_end) if bar["is_complete"]]
-    monthly = adaptive_monthly_context(months) if adaptive else monthly_context(months)
+    monthly = monthly_evidence if monthly_evidence is not None else (adaptive_monthly_context(months) if adaptive else monthly_context(months))
     assessment = {"symbol_id": symbol_id, "as_of_date": as_of, "version": ADAPTIVE_FUNNEL_VERSION if adaptive else FUNNEL_VERSION,
                   "monthly_state": monthly["state"], "stage": "MONTHLY_CONTEXT",
                   "setup_id": None, "setup_kind": None, "setup_date": None,
                   "trigger_date": None, "reasons": list(monthly["reasons"]),
-                  "evidence": {"monthly": monthly}}
+                  "evidence": {"monthly": monthly, "weekly_context": weekly_context(weeks)}}
     if monthly["state"] != "UP" and not (adaptive and monthly["state"] == "SIDEWAYS"):
         return assessment
-    candidates = _weekly_candidates(weeks, adaptive=adaptive)
+    candidates = _weekly_candidates(weeks, adaptive=adaptive,
+        earliest_date=str(daily[max(0, len(daily) - SETUP_TTL_SESSIONS - 1)]["date"]))
     latest_ready = None
     triggered = []
     for setup in reversed(candidates):
+        if monthly["state"] == "SIDEWAYS" and (setup["kind"] == "WEEKLY_PULLBACK_EMA20"
+                or setup["kind"] == "WEEKLY_BREAKOUT_13" and not setup.get("context", {}).get("strengthening")):
+            continue
         setup_start = next((i for i, bar in enumerate(daily) if bar["date"] == setup["date"]), None)
         if setup_start is None or len(daily) - setup_start - 1 > SETUP_TTL_SESSIONS:
             continue
@@ -139,7 +120,7 @@ def assess_funnel(symbol_id: int, daily_bars: Sequence[dict], *,
             trigger = (float(previous["high"]) if range_rebound else setup["trigger"])
             if (average_volume and float(bar["close"]) > trigger
                     and float(previous["close"]) <= trigger
-                    and (range_rebound or float(bar["volume"]) >= 1.3 * average_volume)):
+                    and (range_rebound or float(bar["volume"]) >= POLICY["volume_multiplier"] * average_volume)):
                 candidate_assessment["trigger_date"] = bar["date"]
                 candidate_assessment["stage"] = "DAILY_TRIGGER" if bar["date"] == as_of else "TRIGGERED_EARLIER"
                 candidate_assessment["reasons"] = [*monthly["reasons"], "WEEKLY_SETUP_READY", "DAILY_TRIGGER_CONFIRMED"]

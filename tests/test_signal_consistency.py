@@ -227,8 +227,8 @@ def test_rsi_trough_before_price_pivot_prevents_false_ctr_divergence(monkeypatch
     assert evaluate_rsi_macd_confirmation(ctx) == (False, 'WATCH', [])
 
 
-def test_monthly_uses_twenty_closed_months_not_daily_ma50():
-    rows=[{**bar,'close':10+i} for i,bar in enumerate(bars(20))]
+def test_monthly_uses_twenty_three_closed_months_and_shared_persistence():
+    rows=[{**bar,'close':10+i} for i,bar in enumerate(bars(23))]
     assert monthly_trend(rows)['trend_state']=='UP'
     assert monthly_trend(rows[:-1])['trend_state']=='UNKNOWN'
     ctx={'bars':[{**r,'is_complete':True} for r in rows], 'period_event':True,'evaluation_date':'2026-09-01'}
@@ -301,8 +301,8 @@ def test_unclosed_week_never_publishes_from_any_engine(monkeypatch):
 
 
 def test_weekly_pullback_evidence_is_not_mislabeled_as_breakout():
-    rows=[{**bar,'is_complete':True} for bar in bars(21)]
-    rows[-1].update(close=102,open=100,low=99)
+    rows=[{**bar,'is_complete':True,'close':85+i*.5} for i,bar in enumerate(bars(30))]
+    rows[-1].update(close=102,open=100,low=90)
     ctx={'bars':rows,'period_event':True,'evaluation_date':'2026-09-14'}
     assert evaluate_period_signal('W',ctx)[:2]==(True,'WATCH')
     assert ctx['engine_evidence']['pattern_type']=='WEEKLY_PULLBACK_EMA20'

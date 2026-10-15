@@ -76,7 +76,7 @@ export function MomentumRadarPanel({ date, championSignals, championLoading, cha
     for (let from = 0; ; from += 1000) {
       const { data, error } = await supabase!.from('momentum_radar_assessments')
         .select('symbol_id,as_of_date,event_start_date,breakout_date,weekly_confirmed_date,reacceleration_date,breakout_level,structural_stop,stage,entry_status,evidence,symbols!inner(symbol)')
-        .eq('as_of_date', date).eq('version', 'MOMENTUM_RADAR_V0_0_0').order('symbol_id').range(from, from + 999)
+        .eq('as_of_date', date).eq('version', 'MOMENTUM_RADAR_V0_0_0_TREND1').order('symbol_id').range(from, from + 999)
       if (error) throw error
       rows.push(...(data ?? []).map((item: any) => ({ ...item,
         symbol: (Array.isArray(item.symbols) ? item.symbols[0] : item.symbols)?.symbol ?? `#${item.symbol_id}` })))
@@ -89,7 +89,7 @@ export function MomentumRadarPanel({ date, championSignals, championLoading, cha
     for (let from = 0; ; from += 1000) {
       const { data, error } = await supabase!.from('signal_funnel_assessments')
         .select('symbol_id,stage,setup_kind,setup_date,trigger_date')
-        .eq('as_of_date', date).eq('version', 'MTF_FUNNEL_SHADOW_V0_0_0').order('symbol_id').range(from, from + 999)
+        .eq('as_of_date', date).eq('version', 'MTF_FUNNEL_SHADOW_V0_0_0_TREND1').order('symbol_id').range(from, from + 999)
       if (error) throw error
       rows.push(...(data ?? []) as FunnelRow[])
       if ((data ?? []).length < 1000) break
@@ -113,7 +113,7 @@ export function MomentumRadarPanel({ date, championSignals, championLoading, cha
     const rows: AdaptiveRow[] = []
     for (let from = 0; ; from += 1000) {
       const { data, error } = await supabase!.from('challenger_strategy_assessments')
-        .select('symbol_id,action,evidence').eq('trading_date', date).eq('engine_version', 'v0.0.0-challenger')
+        .select('symbol_id,action,evidence').eq('trading_date', date).eq('engine_version', 'v0.0.0-challenger-trend1')
         .eq('strategy_code', 'ADAPTIVE_FUNNEL').order('symbol_id').range(from, from + 999)
       if (error) throw error
       rows.push(...(data ?? []) as AdaptiveRow[])

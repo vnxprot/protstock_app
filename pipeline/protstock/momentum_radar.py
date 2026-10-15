@@ -15,7 +15,7 @@ from .signal_funnel import monthly_context
 from .timeframes import aggregate_bars
 from .price_basis import volume_window_is_comparable
 
-VERSION = "MOMENTUM_RADAR_V0_0_0"
+VERSION = "MOMENTUM_RADAR_V0_0_0_TREND1"
 
 
 def assess_momentum_radar(
@@ -77,7 +77,7 @@ def assess_momentum_radar(
                           "daily_return_pct": round(daily_return * 100, 2) if daily_return is not None else None,
                           "close_location": round(close_location, 3),
                           "prior_5_day_high": round(prior5_high, 4) if prior5_high is not None else None,
-                          "monthly_state": month["state"], "price_basis": "STORED_EOD"}
+                           "monthly_state": month["state"], "monthly": month, "price_basis": "STORED_EOD"}
 
         if event is not None:
             if event["breakout_date"] is None and index - event["last_event_index"] > 10:

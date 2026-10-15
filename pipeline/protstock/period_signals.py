@@ -1,15 +1,11 @@
 """Confirmed higher-timeframe events; never backdate to an unconfirmed pivot."""
 from .indicators import _ema_series
+from .trend_context import monthly_context, weekly_context
 
 
 def monthly_trend(bars: list[dict]) -> dict:
-    closes = [float(row["close"]) for row in bars]
-    if len(closes) < 20:
-        return {"trend_state": "UNKNOWN"}
-    ema10 = _ema_series(closes, 10)[-1]
-    sma20 = sum(closes[-20:]) / 20
-    state = "UP" if closes[-1] > ema10 > sma20 else "DOWN" if closes[-1] < ema10 < sma20 else "SIDEWAYS"
-    return {"trend_state": state, "ema10": ema10, "sma20": sma20}
+    context = monthly_context(bars)
+    return {**context, "trend_state": context["state"]}
 
 
 def evaluate_period_signal(timeframe: str, context: dict) -> tuple[bool, str, list[str]]:
@@ -42,7 +38,7 @@ def evaluate_period_signal(timeframe: str, context: dict) -> tuple[bool, str, li
                 and prior_average > 0 and float(prior_week["volume"]) >= 1.3 * prior_average):
             return False, "WATCH", []
         return True, "PROBE_BUY", ["WEEKLY_BREAKOUT_13_CONFIRMED", "CLOSED_PERIOD_ONLY"]
-    if float(latest["low"]) <= ema20 < close and close > float(latest["open"]):
+    if weekly_context(bars)["strengthening"] and float(latest["low"]) <= ema20 < close and close > float(latest["open"]):
         context["engine_evidence"].update(pattern_type="WEEKLY_PULLBACK_EMA20", trigger_price=ema20, evidence_cluster="WEEKLY_PULLBACK_EMA20")
         return True, "WATCH", ["WEEKLY_PULLBACK_EMA20_SETUP", "CLOSED_PERIOD_ONLY"]
     return False, "WATCH", []

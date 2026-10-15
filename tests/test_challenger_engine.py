@@ -7,10 +7,10 @@ def test_eod_shadow_writes_only_isolated_tables(monkeypatch):
     today = date(2026, 10, 6)
     rows = [{"date": day, "open": 10, "low": 9, "close": 10, "volume": 2_000_000}
             for day in ("2026-10-01", "2026-10-02", "2026-10-05", "2026-10-06")]
-    monkeypatch.setattr("protstock.eod.assess_challenger", lambda *args: {
+    monkeypatch.setattr("protstock.eod.assess_challenger", lambda *args, **kwargs: {
         "symbol_id": 1, "trading_date": today.isoformat(), "engine_version": "v2.0-challenger",
         "action": "WATCH", "reasons": [], "evidence": {"shadow_only": True}})
-    monkeypatch.setattr("protstock.eod.assess_challenger_strategies", lambda *args: [{
+    monkeypatch.setattr("protstock.eod.assess_challenger_strategies", lambda *args, **kwargs: [{
         "symbol_id": 1, "trading_date": today.isoformat(), "engine_version": "v2.0-challenger",
         "strategy_code": code, "action": "WATCH", "reasons": [], "evidence": {"shadow_only": True}}
         for code in ("UPTREND_CORE", "SIDEWAY_RANGE", "ADAPTIVE_FUNNEL", "MACD_EARLY_ZONE", "DOWNTREND_SPRING")])

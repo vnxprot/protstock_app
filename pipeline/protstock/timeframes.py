@@ -9,6 +9,10 @@ from .price_basis import volume_window_is_comparable
 
 def aggregate_bars(bars: Sequence[dict], timeframe: str, confirmed_week_end: date | None = None, confirmed_month_end: date | None = None) -> list[dict]:
     """Aggregate sorted daily OHLCV bars into point-in-time weekly/monthly bars."""
+    if isinstance(confirmed_week_end, str):
+        confirmed_week_end = date.fromisoformat(confirmed_week_end)
+    if isinstance(confirmed_month_end, str):
+        confirmed_month_end = date.fromisoformat(confirmed_month_end)
     if timeframe not in {"W", "M"}:
         raise ValueError("timeframe must be W or M")
     ordered = sorted(bars, key=lambda item: item["date"])

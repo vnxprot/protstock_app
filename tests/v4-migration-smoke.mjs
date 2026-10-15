@@ -145,9 +145,9 @@ try {
  assert.equal(latestReport.transactions.length,2)
  assert.equal(latestReport.prices.length,1); assert.equal(latestReport.prices[0].close,10)
  console.log('PASS: >1000 history/page aggregates, stock bundle and as-of capital')
- const rv = (await db.query(`select rv.* from rule_versions rv join rules r on r.id=rv.rule_id where r.kind='CORE_PACK' and rv.dsl->>'implementation_version'='core-rules-v0.0.0' order by rv.created_at desc limit 1`)).rows[0]
- assert.equal(rv.dsl.implementation_version,'core-rules-v0.0.0')
- assert.equal(Number(await scalar(`select count(*) from rules r join lateral(select dsl from rule_versions where rule_id=r.id order by version desc limit 1) v on true where r.kind='CORE_PACK' and coalesce(v.dsl->>'implementation_version','')<>'core-rules-v0.0.0'`)),0)
+ const rv = (await db.query(`select rv.* from rule_versions rv join rules r on r.id=rv.rule_id where r.kind='CORE_PACK' and rv.dsl->>'implementation_version'='core-rules-v0.0.0-trend1' order by rv.created_at desc limit 1`)).rows[0]
+ assert.equal(rv.dsl.implementation_version,'core-rules-v0.0.0-trend1')
+ assert.equal(Number(await scalar(`select count(*) from rules r join lateral(select dsl from rule_versions where rule_id=r.id order by version desc limit 1) v on true where r.kind='CORE_PACK' and coalesce(v.dsl->>'implementation_version','')<>'core-rules-v0.0.0-trend1'`)),0)
  assert.ok(Number(await scalar(`select count(*) from rule_versions where coalesce(dsl->>'implementation_version','')<>'core-rules-v0.0.0'`))>0)
  assert.equal(await scalar(`select status from rules where name='Prot Core Pack · Phân kỳ Dương MACD'`),'ARCHIVED')
  await reject(`update rule_versions set dsl='{}' where id=$1`,/permission denied|immutable/,[rv.id])

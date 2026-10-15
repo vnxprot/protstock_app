@@ -6,7 +6,7 @@ import argparse
 from datetime import date
 
 from .config import Settings
-from .eod import _write_challenger_shadow, _history_limit
+from .eod import _write_challenger_shadow, _history_limit, _confirmed_week_end, _confirmed_month_end
 from .challenger_engine import recovery_status
 from .indicators import calculate_indicators
 from .period_signals import monthly_trend
@@ -37,6 +37,8 @@ def run_shadow_session(client: SupabaseRestClient, trading_date: str | None = No
     pending = []
     skipped = []
     symbols = client.active_symbols()
+    week_end = _confirmed_week_end(client, date.fromisoformat(day), index_bars)
+    month_end = _confirmed_month_end(client, date.fromisoformat(day), index_bars)
     for symbol in symbols:
         history = client.price_history(symbol["id"], history_limit)
         events = getattr(client, "corporate_actions", lambda _id: [])(symbol["id"])
@@ -48,9 +50,10 @@ def run_shadow_session(client: SupabaseRestClient, trading_date: str | None = No
                 or rows[-1].get("price_unit") != STOCK_PRICE_UNIT):
             skipped.append(symbol["symbol"])
             continue
-        completed_months = [bar for bar in aggregate_bars(rows, "M") if bar["is_complete"]]
+        completed_months = [bar for bar in aggregate_bars(rows, "M", confirmed_month_end=month_end) if bar["is_complete"]]
         context = {"candidate_exchange": symbol.get("exchange"),
-                   "monthly_snapshot": monthly_trend(completed_months)}
+                   "monthly_snapshot": monthly_trend(completed_months),
+                   "confirmed_week_end": week_end, "confirmed_month_end": month_end}
         pending.append((symbol["id"], "D", rows, [], {}, context))
     if not pending:
         raise ValueError("No verified same-day stock prices are available for shadow assessment")

@@ -808,6 +808,11 @@ def _write_analysis(
         counts["snapshots"] += client.upsert(
             "technical_snapshots", [snapshot], "symbol_id,timeframe,as_of_date"
         )
+        monthly = result["indicators"].get("monthly_context") or {}
+        if timeframe == "M" and monthly.get("period_end") and monthly.get("policy_version"):
+            client.upsert("monthly_trend_states", [{"symbol_id": symbol_id, "period_end": monthly["period_end"],
+                          "policy_version": monthly["policy_version"], "trend_state": monthly["state"],
+                          "evidence": monthly}], "symbol_id,period_end,policy_version")
         patterns = [{
             "symbol_id": symbol_id, "timeframe": timeframe,
             "pattern_type": pattern["pattern_type"], "state": pattern["state"],
@@ -1026,11 +1031,16 @@ def _write_challenger_shadow(client, pending_signals: list, market_context: dict
                 symbol_id, rows, market_context, champion.get("composite_action", "WATCH"),
                 champion.get("reasons") or (), stops.get(symbol_id), context.get("candidate_exchange"),
                 (context.get("monthly_snapshot") or {}).get("trend_state"), order_values.get(symbol_id),
-                bases.get(symbol_id)))
+                bases.get(symbol_id), confirmed_week_end=context.get("confirmed_week_end"),
+                confirmed_month_end=context.get("confirmed_month_end"),
+                monthly_evidence=context.get("monthly_snapshot") or None))
             strategy_assessments.extend(assess_challenger_strategies(
                 symbol_id, rows, market_context, context.get("candidate_exchange"),
                 (context.get("monthly_snapshot") or {}).get("trend_state"), order_values.get(symbol_id),
-                champion.get("composite_action", "WATCH")))
+                champion.get("composite_action", "WATCH"),
+                confirmed_week_end=context.get("confirmed_week_end"),
+                confirmed_month_end=context.get("confirmed_month_end"),
+                monthly_evidence=context.get("monthly_snapshot") or None))
         for offset in range(0, len(assessments), 100):
             client.upsert("challenger_signal_assessments", assessments[offset:offset + 100],
                           "symbol_id,trading_date,engine_version")
@@ -1154,7 +1164,7 @@ def _decision_context(daily: list[dict], trading_date: date, portfolios: dict, c
         confirmed_end = confirmed_week_end if tf == "W" else confirmed_month_end
         events[tf] = bool(confirmed_end == trading_date and daily[-1]["date"] == trading_date.isoformat()
                           and completed[tf] and completed[tf][-1]["source_last_date"] == trading_date.isoformat())
-    return {"portfolios": portfolios, "evaluation_date": trading_date.isoformat(), "data_date": daily[-1]["date"], "daily_snapshot": calculate_indicators(daily).to_dict(), "weekly_snapshot": weekly.get("indicators", {}), "weekly_patterns": weekly.get("patterns", []), "weekly_classical_patterns": weekly.get("classical_patterns", []), "monthly_snapshot": monthly_trend(completed["M"]), "period_events": events}
+    return {"confirmed_week_end": confirmed_week_end, "confirmed_month_end": confirmed_month_end, "portfolios": portfolios, "evaluation_date": trading_date.isoformat(), "data_date": daily[-1]["date"], "daily_snapshot": calculate_indicators(daily).to_dict(), "weekly_snapshot": weekly.get("indicators", {}), "weekly_patterns": weekly.get("patterns", []), "weekly_classical_patterns": weekly.get("classical_patterns", []), "monthly_snapshot": monthly_trend(completed["M"]), "period_events": events}
 
 
 def _pattern_evidence_cluster(reasons: list[str]) -> str | None:

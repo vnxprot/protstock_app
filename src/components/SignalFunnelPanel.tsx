@@ -3,6 +3,8 @@ import { useQuery } from '@tanstack/react-query'
 import { Filter, Search, SlidersHorizontal } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { SoftSelect } from './SoftSelect'
+import { MonthlyTrendEvidence, type MonthlyEvidence } from './MonthlyTrendEvidence'
+import { formatMarketPrice } from '../lib/marketUnits'
 import './SignalFunnelPanel.css'
 
 type FunnelRow = {
@@ -13,6 +15,7 @@ type FunnelRow = {
   setup_date: string | null
   trigger_date: string | null
   reasons: string[]
+  evidence?: { monthly?: MonthlyEvidence; weekly?: { trigger?: number; invalidation?: number }; weekly_context?: { range_confirmed?: boolean } }
 }
 
 const setupNames: Record<string, string> = {
@@ -55,8 +58,8 @@ export function SignalFunnelPanel({ date, authenticated, focusSymbol = '' }: { d
       const result: FunnelRow[] = []
       for (let from = 0; ; from += 1000) {
         const { data, error } = await supabase!.from('signal_funnel_assessments')
-          .select('monthly_state,stage,setup_kind,setup_date,trigger_date,reasons,symbols!inner(symbol)')
-          .eq('as_of_date', date).eq('version', 'MTF_FUNNEL_SHADOW_V0_0_0')
+          .select('monthly_state,stage,setup_kind,setup_date,trigger_date,reasons,evidence,symbols!inner(symbol)')
+          .eq('as_of_date', date).eq('version', 'MTF_FUNNEL_SHADOW_V0_0_0_TREND1')
           .order('symbol_id').range(from, from + 999)
         if (error) throw error
         result.push(...(data ?? []).map((item: any) => ({
@@ -67,6 +70,7 @@ export function SignalFunnelPanel({ date, authenticated, focusSymbol = '' }: { d
         setup_date: item.setup_date,
         trigger_date: item.trigger_date,
         reasons: item.reasons ?? [],
+        evidence: item.evidence ?? {},
         })))
         if ((data ?? []).length < 1000) break
       }
@@ -100,7 +104,7 @@ export function SignalFunnelPanel({ date, authenticated, focusSymbol = '' }: { d
           <strong role="cell">{row.symbol}</strong><span role="cell">{row.monthly_state}</span><span role="cell">{stageNames[row.stage] ?? row.stage}</span>
           <span role="cell">{row.setup_kind ? `${setupNames[row.setup_kind] ?? row.setup_kind} · ${row.setup_date}` : '—'}</span>
           <span role="cell">{row.trigger_date ?? '—'}</span><span role="cell" className="signal-funnel-reason"><span>{shortReason(row)}</span><button type="button" aria-expanded={expanded===row.symbol} onClick={()=>setExpanded(value=>value===row.symbol?null:row.symbol)}>{expanded===row.symbol?'Thu gọn':'Chi tiết'}</button></span>
-        </div>{expanded===row.symbol&&<div className="signal-funnel-detail"><strong>{row.symbol} · Điều kiện gốc</strong><span>{row.reasons.join(' · ')||'Chưa có lý do bổ sung'}</span></div>}</div>)}
+        </div>{expanded===row.symbol&&<div className="signal-funnel-detail"><strong>{row.symbol} · Điều kiện gốc</strong><MonthlyTrendEvidence value={row.evidence?.monthly}/>{row.evidence?.weekly && <p>Ngưỡng ngày: {formatMarketPrice(row.evidence.weekly.trigger)} · vô hiệu: {formatMarketPrice(row.evidence.weekly.invalidation)} · setup {row.setup_date}. Hiệu lực tối đa 20 phiên sau setup; Close dưới mức vô hiệu sẽ loại setup.</p>}<small>{row.reasons.join(' · ')}</small></div>}</div>)}
       </div>
       <nav className="screener-pagination" aria-label="Phân trang phễu tháng tuần ngày"><span>Hiển thị <SoftSelect aria-label="Số mã mỗi trang" value={pageSize} onChange={event=>{setPageSize(Number(event.target.value));setPage(1)}}><option value="25">25</option><option value="50">50</option><option value="100">100</option></SoftSelect> / trang · {filtered.length} mã</span><div><button type="button" disabled={current===1} onClick={()=>setPage(1)}>Đầu</button><button type="button" disabled={current===1} onClick={()=>setPage(current-1)}>‹ Trước</button><b>Trang {current}/{pages}</b><button type="button" disabled={current===pages} onClick={()=>setPage(current+1)}>Sau ›</button><button type="button" disabled={current===pages} onClick={()=>setPage(pages)}>Cuối</button></div></nav>
     </>}

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from hashlib import sha256
+from datetime import date
 from statistics import mean
 from typing import Sequence
 
@@ -10,8 +11,10 @@ from .macd_divergence import _macd_series, _pivots
 from .signal_funnel import assess_funnel
 from .signal_policy import average_turnover_vnd, order_participation_rate, MIN_AVERAGE_TURNOVER_VND
 from .wyckoff import classify_wyckoff_timeframe
+from .timeframes import aggregate_bars
+from .trend_context import TREND_VERSION, monthly_context, weekly_context
 
-VERSION = "v0.0.0-challenger"
+VERSION = "v0.0.0-challenger-trend1"
 LONG = {"PROBE_BUY", "EARLY_PROBE"}
 CODES = ("UPTREND_CORE", "SIDEWAY_RANGE", "ADAPTIVE_FUNNEL", "MACD_EARLY_ZONE", "DOWNTREND_SPRING")
 
@@ -179,11 +182,18 @@ def uptrend_setup(bars: Sequence[dict]) -> dict | None:
 def assess_challenger_strategies(symbol_id: int, bars: Sequence[dict], market_context: dict,
                                 exchange: str | None = None, monthly_state: str | None = None,
                                 target_order_value_vnd: float | None = None,
-                                champion_action: str = "WATCH") -> list[dict]:
+                                champion_action: str = "WATCH", *,
+                                confirmed_week_end: date | None = None,
+                                confirmed_month_end: date | None = None,
+                                monthly_evidence: dict | None = None) -> list[dict]:
     ordered = sorted(bars, key=lambda item: item["date"])
     if not ordered:
         raise ValueError("challenger requires completed daily bars")
     regime = market_regime(market_context)
+    months = [bar for bar in aggregate_bars(ordered, "M", confirmed_month_end=confirmed_month_end) if bar["is_complete"]]
+    month = monthly_evidence if monthly_evidence and monthly_evidence.get("policy_version") == TREND_VERSION and "state" in monthly_evidence else monthly_context(months)
+    weeks = [bar for bar in aggregate_bars(ordered, "W", confirmed_week_end=confirmed_week_end) if bar["is_complete"]]
+    week = weekly_context([bar for bar in weeks if str(bar["date"]) < str(ordered[-1]["date"])])
     close = float(ordered[-1]["close"])
     liquidity = {"close": close, "volume_avg20": mean(float(item.get("volume") or 0) for item in ordered[-20:])}
     turnover = average_turnover_vnd(liquidity)
@@ -233,11 +243,15 @@ def assess_challenger_strategies(symbol_id: int, bars: Sequence[dict], market_co
         support = float(spring["support"])
         side = {"kind": "SIDEWAY_SPRING_SUPPORT", "base": support, "stop": support * .99,
                 "target_return_pct_range": [7, 10], "target_is_research_hypothesis": True}
-    result.append(build("SIDEWAY_RANGE", side, regime == "SIDEWAYS",
+    result.append(build("SIDEWAY_RANGE", side, regime == "SIDEWAYS" and month["state"] in {"UP", "SIDEWAYS"} and week["range_confirmed"],
                         side.get("kind") if side else "NO_RANGE_SUPPORT_SETUP",
-                        detail={"wyckoff_event": wyckoff.get("event")}))
+                        detail={"wyckoff_event": wyckoff.get("event"), "monthly_state": month["state"],
+                                "monthly": month, "weekly_context": week}))
+    if side and not (month["state"] in {"UP", "SIDEWAYS"} and week["range_confirmed"]):
+        result[-1]["reasons"].append("MONTHLY_OR_WEEKLY_RANGE_BLOCKED")
 
-    funnel = assess_funnel(symbol_id, ordered, adaptive=True)
+    funnel = assess_funnel(symbol_id, ordered, adaptive=True, confirmed_week_end=confirmed_week_end,
+                           confirmed_month_end=confirmed_month_end, monthly_evidence=month)
     weekly = (funnel.get("evidence") or {}).get("weekly") or {}
     candidate = ({"kind": "ADAPTIVE_DAILY_TRIGGER", "base": weekly.get("trigger"),
                   "stop": weekly.get("invalidation"), "setup_id": funnel.get("setup_id")}
@@ -246,6 +260,8 @@ def assess_challenger_strategies(symbol_id: int, bars: Sequence[dict], market_co
                         f"FUNNEL_{funnel['stage']}", .3 if regime in {"SIDEWAYS", "RECOVERY_FTD"} else 1,
                         {"funnel_stage": funnel["stage"], "monthly_state": funnel["monthly_state"],
                          "weekly_setup": funnel.get("setup_kind"), "setup_id": funnel.get("setup_id"),
+                         "monthly": month, "weekly_context": (funnel.get("evidence") or {}).get("weekly_context", week),
+                         "weekly": weekly,
                          "funnel_reasons": funnel["reasons"]}))
 
     early = early_second_low(ordered, symbol_id)
@@ -270,9 +286,15 @@ def assess_challenger(symbol_id: int, bars: Sequence[dict], market_context: dict
                       champion_action: str = "WATCH", champion_reasons: Sequence[str] = (),
                       invalidation_price: float | None = None, exchange: str | None = None,
                       monthly_state: str | None = None, target_order_value_vnd: float | None = None,
-                      base_price: float | None = None) -> dict:
-    branches = assess_challenger_strategies(symbol_id, bars, market_context, exchange, monthly_state,
-                                             target_order_value_vnd, champion_action)
+                      base_price: float | None = None, *,
+                      confirmed_week_end: date | None = None,
+                      confirmed_month_end: date | None = None,
+                      monthly_evidence: dict | None = None,
+                      strategy_assessments: list[dict] | None = None) -> dict:
+    branches = strategy_assessments if strategy_assessments is not None else assess_challenger_strategies(symbol_id, bars, market_context, exchange, monthly_state,
+                                             target_order_value_vnd, champion_action,
+                                             confirmed_week_end=confirmed_week_end, confirmed_month_end=confirmed_month_end,
+                                             monthly_evidence=monthly_evidence)
     chosen = next((item for item in branches if item["action"] in LONG), None)
     regime = market_regime(market_context)
     return {"symbol_id": symbol_id, "trading_date": max(item["date"] for item in bars),

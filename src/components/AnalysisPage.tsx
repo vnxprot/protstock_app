@@ -9,6 +9,7 @@ import { isWatchActive, loadWatchlist, toggleWatchlistSymbol } from '../lib/watc
 import { MacdPanel } from './MacdPanel'
 import { displaySystemRevision } from '../lib/releaseLabels'
 import { ExRightsCalculator } from './ExRightsCalculator'
+import { MonthlyTrendEvidence } from './MonthlyTrendEvidence'
 
 const patternNames:Record<string,string>={ACCUMULATION_BASE:'Nền tích lũy',FLAT_BASE_BREAKOUT:'Nền phẳng',DOUBLE_BOTTOM:'Hai đáy',DOUBLE_TOP:'Hai đỉnh',ASCENDING_TRIANGLE:'Tam giác tăng',DESCENDING_TRIANGLE:'Tam giác giảm',SYMMETRICAL_TRIANGLE:'Tam giác cân',BULL_FLAG:'Cờ tăng',BULL_PENNANT:'Cờ đuôi nheo tăng',BEAR_FLAG:'Cờ giảm',CUP_HANDLE:'Cốc tay cầm',PULLBACK_CONTINUATION:'Nhịp hồi tiếp diễn'}
 const number=(value:number|null|undefined,digits=2)=>value==null?'—':Number(value).toLocaleString('vi-VN',{maximumFractionDigits:digits})
@@ -21,7 +22,7 @@ function generateExecutiveSummary(snapshot: TechnicalSnapshot | undefined): stri
   if (!snapshot) return 'Đang cập nhật đánh giá tổng hợp sau phiên...'
   const trend = snapshot.trend_state === 'UP' ? 'Xu hướng tăng duy trì tốt'
     : snapshot.trend_state === 'DOWN' ? 'Xu hướng điều chỉnh giảm'
-    : snapshot.trend_state === 'SIDEWAYS' ? 'Trạng thái đi ngang tích lũy'
+    : snapshot.trend_state === 'SIDEWAYS' ? 'Trạng thái trung tính, chưa có hướng đủ rõ'
     : 'Xu hướng chưa rõ ràng'
   const flow = snapshot.cmf20 == null ? 'chưa đủ dữ liệu đánh giá áp lực giá–khối lượng'
     : snapshot.cmf20 > 0.05 ? 'áp lực mua đang chiếm ưu thế'
@@ -98,6 +99,7 @@ export function AnalysisPage({authenticated}:{authenticated:boolean;canJournal?:
       <div className="metric-grid">{[['Đóng cửa',snapshot?.close,false,true],['Thay đổi phiên',changePct,true,false],['ATR 14',snapshot?.atr14,false,true],['Volume / TB20',snapshot?.volume_ratio20,false,false]].map(([label,value,isPct,isPrice])=><article className="metric-card" key={label as string}><span>{label}</span><strong className={isPct&&typeof value==='number'?(value<0?'negative':'positive'):undefined}>{isPct&&typeof value==='number'?`${value>=0?'+':''}${value.toFixed(2)}%`:isPrice?formatMarketPrice(value as number|null):number(value as number|null)}</strong></article>)}</div>
       {formingBar&&<div className="forming-period-note">Nến {timeframe==='W'?'tuần':'tháng'} đến {displayDate(formingBar.trading_date)} đang hình thành trên chart. Chỉ báo, mẫu hình và kết luận bên dưới dùng nến đã đóng đến {displayDate(snapshot?.as_of_date)}.</div>}
       <div className="analysis-evidence"><DecisionCard decision={analysis.data.decision} asOf={snapshot?.as_of_date} timeframe={timeframe}/>
+      {snapshot?.monthly_context && <details className="panel"><summary>Bối cảnh tháng · {snapshot.monthly_context.state} · {snapshot.monthly_context.period_end}</summary><MonthlyTrendEvidence value={snapshot.monthly_context}/></details>}
       <FlowCard snapshot={snapshot} timeframe={timeframe}/><div className="analysis-columns"><PatternPanel patterns={analysis.data.patterns} classical={snapshot?.classical_candidates??[]} asOf={snapshot?.as_of_date} timeframe={timeframe}/>{analysis.data.zones.length?<ZoneMap zones={analysis.data.zones} close={snapshot?.close} trend={snapshot?.trend_state} timeframe={timeframe}/>:<article className="panel zone-panel"><div className="panel-title"><h3>Hỗ trợ · kháng cự</h3></div><p className="muted">Chưa có vùng giá đạt hai lần chạm trong dữ liệu hiện có.</p></article>}</div>
       <details><summary>Luận điểm hệ thống · phương pháp</summary><article className="panel"><ul className="reason-list"><li>Xu hướng D/W/M được đánh giá độc lập.</li><li>Mẫu hình là bằng chứng bổ sung, không tự phát tín hiệu.</li><li>Breakout cần đóng cửa ngoài vùng cản.</li><li>Dữ liệu chỉ dùng từ ngày <code>available_from</code>.</li></ul></article></details></div>
     </>}</section>

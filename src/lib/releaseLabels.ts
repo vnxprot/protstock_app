@@ -19,7 +19,7 @@ export function displayStructureName(name: string): string {
 
 export function displaySystemRevision(revision?: string | null): string {
   if (!revision) return 'Chưa ghi phiên bản'
-  return /^core-rules-v0\.0\.0$|^health-v0\.0\.0$|^MACD_BULLISH_DIVERGENCE_ZONE_V0_0_0$/i.test(revision)
+  return /^core-rules-v0\.0\.0(?:-trend1)?$|^health-v0\.0\.0$|^MACD_BULLISH_DIVERGENCE_ZONE_V0_0_0$/i.test(revision)
     ? STRUCTURE_VERSION
     : revision
 }

@@ -43,31 +43,31 @@ Radar dùng dữ liệu nến phút sau phiên để tìm cụm khối lượng 
 
 Hai tab phễu là **bảng nghiên cứu song song**: tab Champion hiển thị bộ phễu gốc, không phải tín hiệu Champion đã công bố; tab Challenger hiển thị nhánh `ADAPTIVE_FUNNEL`. Cả hai chỉ dùng tuần và tháng đã đóng. Trình tự là **bối cảnh tháng → setup tuần còn hiệu lực → lần vượt ngưỡng mới trên nến ngày → cổng an toàn Challenger (nếu có) → hành động**. Nhãn giai đoạn mô tả tiến độ cấu trúc, không phải lệnh mua hay trạng thái vị thế.
 
-**Bối cảnh tháng.** Bộ gốc cần ít nhất 23 tháng đã đóng. Tháng `UP` khi hai tháng gần nhất đóng trên EMA10 tương ứng, Close tháng mới nhất > EMA10 > SMA20, EMA10 tăng so với ba tháng trước và SMA20 tăng so với bình quân 20 tháng tại thời điểm ba tháng trước. `DOWN` là các bất đẳng thức đảo chiều; còn lại là `SIDEWAYS`. Bộ gốc chỉ tìm setup khi tháng `UP`. Bộ thích ứng dùng cùng quy tắc khi đủ 23 tháng; với 6–22 tháng, dùng SMA6 rút gọn và hai tháng đóng cửa để phân loại. Dưới sáu tháng là `UNKNOWN`. Bộ thích ứng tìm setup khi tháng `UP` hoặc `SIDEWAYS`. Đây là trạng thái **của cổ phiếu theo tháng**, khác `market_regime` của Challenger dựa trên thị trường chung.
+**Quy tắc tháng dùng chung — MONTHLY_TREND_20261015.** Champion, Radar, Phễu, Challenger và backtest đọc cùng tháng đã đóng, cùng chuỗi giá từ 2021 và dựng trạng thái tuần tự. Cần 23 tháng; thiếu là UNKNOWN, không còn nhánh SMA6. SIDEWAYS là trung tính chưa có hướng bền, không tự chứng minh có nền để mua.
 
-**Setup tuần.** Cần ít nhất 21 tuần đã đóng và volume bình quân 13 tuần trước lớn hơn 0 để tạo ứng viên. Các ngưỡng dưới đây chỉ lấy từ dữ liệu đã biết trước hoặc tại tuần setup.
+- Vào UP: Close > EMA10 > SMA20, ít nhất 8/12 Close trên EMA10 tương ứng, độ dốc đạt ngưỡng vào. DOWN đối xứng với ít nhất 8/12 Close dưới EMA10. Close bằng EMA không tính cho bên nào.
+- Độ dốc: hồi quy log của sáu EMA10 gần nhất, quy đổi exp(3 × hệ số dốc) − 1. σ là độ lệch chuẩn mẫu của 12 lợi suất log tháng. Ngưỡng vào = max(2%; 0,25 × σ × √3).
+- Giữ hướng: ít nhất 6/12 tháng đúng phía EMA; EMA10 ≥ SMA20 cho UP (≤ cho DOWN); độ dốc đạt ngưỡng giữ = max(0,5%; 0,10 × σ × √3).
+- Thoát khi mất bất kỳ điều kiện giữ, hai tháng liên tiếp đóng sai phía EMA, hoặc Close cách EMA bất lợi quá max(3%; 0,5 × σ). Hướng ngược đủ điều kiện được ưu tiên; còn lại về SIDEWAYS. Chỉ đổi nhãn theo tháng đóng; tuần/ngày xử lý rủi ro giữa tháng.
+- Cấu hình nguồn duy nhất: `pipeline/protstock/trend_policy.json`. Chi tiết mã hiển thị kỳ đóng, cửa sổ 12/6 tháng, số tháng trên/dưới EMA, độ dốc, ngưỡng và từng phép kiểm.
 
-| Setup | Điều kiện tạo setup | Ngưỡng cho trigger ngày | Mức vô hiệu |
+**Setup tuần.** Bộ gốc cần tháng UP. Bộ thích ứng nhận UP/SIDEWAYS. Cần 21 tuần cho breakout; độ dốc EMA20 bốn tuần cần 24 tuần.
+
+| Setup | Điều kiện | Ngưỡng ngày | Vô hiệu |
 | --- | --- | --- | --- |
-| `WEEKLY_BREAKOUT_13` | Close tuần > đỉnh cao nhất của 13 tuần trước; volume tuần ≥ 1,3× bình quân 13 tuần trước | Đỉnh cao nhất 13 tuần trước | Đáy thấp nhất của tuần setup và ba tuần trước |
-| `WEEKLY_PULLBACK_EMA20` | Low tuần ≤ EMA20 tuần < Close tuần; Close tuần > Open tuần | Đỉnh của tuần setup | Đáy thấp nhất của tuần setup và ba tuần trước |
-| `WEEKLY_RANGE_SUPPORT` (chỉ bộ thích ứng) | Low tuần ≤ 1,02× đáy thấp nhất tám tuần trước; Close tuần > mức hỗ trợ đó và > Open tuần | Đỉnh của **phiên ngày trước**, thay đổi theo phiên xét | Đáy của tuần setup |
+| WEEKLY_BREAKOUT_13 | Close > High cao nhất 13 tuần trước, volume ≥1,3× bình quân 13 tuần. Tháng SIDEWAYS còn cần Close > EMA20, EMA20 tăng ≥1%/4 tuần | High cao nhất 13 tuần trước | Low thấp nhất tuần setup và ba tuần trước |
+| WEEKLY_PULLBACK_EMA20 | Tháng UP; Low ≤ EMA20 < Close; Close > Open; EMA20 tăng ≥1%/4 tuần | High tuần setup | Low thấp nhất bốn tuần |
+| WEEKLY_RANGE_SUPPORT | Chỉ thích ứng; nền 13 tuần trước setup hợp lệ; Low ≤1,02× hỗ trợ tám tuần, Close > hỗ trợ và Open | High ngày trước | Low tuần setup |
 
-Setup có hiệu lực tối đa **20 phiên giao dịch sau tuần setup**. Nếu bất kỳ phiên nào sau setup đóng **dưới** mức vô hiệu thì setup đó bị loại; đóng đúng bằng mức vô hiệu chưa loại. Hệ thống xét setup hợp lệ mới nhất trước. Nếu cùng tuần có nhiều loại, thứ tự xét là `WEEKLY_RANGE_SUPPORT` → `WEEKLY_PULLBACK_EMA20` → `WEEKLY_BREAKOUT_13`; sau khi chọn một setup, hệ thống không ghép thêm trigger của setup khác trong assessment đó.
+Nền tuần hợp lệ: High cao nhất/Low thấp nhất − 1 ≤25%; EMA20 thay đổi bốn tuần trong ±1%; hiệu quả chuyển động Close ≤0,30. Hiệu quả = trị tuyệt đối thay đổi Close đầu-cuối chia tổng trị tuyệt đối các bước Close liên tiếp; giá phẳng có hiệu quả 0. Không dùng nến setup để tự tạo nền tham chiếu của nó.
 
-**Trigger ngày.** Chỉ xét nến ngày sau tuần setup và cần đủ 20 phiên **trước** phiên xét để tính volume bình quân. Một lần kích hoạt đòi hỏi **Close phiên trước ≤ ngưỡng** và **Close phiên xét > ngưỡng**. Với breakout và pullback, volume phiên xét còn phải ≥ 1,3× bình quân 20 phiên trước. Với hồi hỗ trợ tuần, vẫn cần đủ 20 phiên lịch sử nhưng không bắt buộc tỷ lệ volume 1,3×; ngưỡng là High phiên trước. Không có điều kiện RSI, MACD hay bắt buộc Close > Open trong bước trigger ngày này. Ngày của lần vượt đầu tiên trong setup được lưu làm `trigger_date`.
+Setup hết hiệu lực sau 20 phiên giao dịch **sau** ngày setup; một Close sau setup thấp hơn mức vô hiệu sẽ loại setup, bằng mức đó chưa loại. Breakout có thể trigger ngay ngày đóng tuần, hai setup còn lại từ phiên tiếp theo. Cần đủ 20 phiên trước có volume so sánh được; Close trước ≤ ngưỡng, Close hiện tại > ngưỡng. Breakout/pullback cần volume ≥1,3× bình quân 20 phiên trước, hồi hỗ trợ không cần tỷ lệ này. Phễu lưu lần vượt đầu tiên và giữ setup đã kích hoạt còn hiệu lực dù có setup mới chưa kích hoạt.
 
-| Nhãn | Mã giai đoạn | Cách hiểu |
-| --- | --- | --- |
-| Bối cảnh tháng | `MONTHLY_CONTEXT` | Tháng chưa cho phép đi tiếp, hoặc không có setup tuần còn hợp lệ |
-| Setup tuần | `WEEKLY_READY` | Đã chọn setup tuần còn hiệu lực nhưng chưa có lần vượt ngưỡng ngày |
-| Kích hoạt ngày | `DAILY_TRIGGER` | Lần vượt ngưỡng đầu tiên xảy ra đúng phiên đang xem |
-| Kích hoạt trước đó | `TRIGGERED_EARLIER` | Lần vượt đầu tiên đã xảy ra trong phiên trước thuộc cùng setup; không phải trigger mới |
-| Dữ liệu cần kiểm tra | `DATA_QUARANTINED` | Giá đóng cửa không dương hoặc tỷ lệ Close hai phiên liền kề ≤ 0,5 hay ≥ 2; chuỗi giá cần xác minh trước khi diễn giải |
+DAILY_TRIGGER là trigger đúng phiên đang xem, TRIGGERED_EARLIER là trigger cũ; WEEKLY_READY là chờ trigger, MONTHLY_CONTEXT là cổng tháng chặn hoặc chưa có setup hợp lệ. DATA_QUARANTINED là Close không dương hoặc tỷ lệ Close hai ngày ≤0,1 hay ≥10.
 
-Ở nhánh Challenger `ADAPTIVE_FUNNEL`, chỉ `DAILY_TRIGGER` **của phiên đang xem** mới tạo ứng viên `PROBE_BUY`. `TRIGGERED_EARLIER` vẫn là thông tin cấu trúc nhưng không phát ứng viên mua mới. Ứng viên còn có thể thành `WATCH` nếu regime thị trường không cho phép, Champion cùng mã đang `EXIT`/`REDUCE`, thanh khoản bình quân thiếu, giá trị lệnh dự kiến vượt 5% thanh khoản bình quân, thiếu stop, Close dưới stop hoặc xa stop trên 8%. Quy mô nhánh này là 1 lần lệnh chuẩn trong `UPTREND`, 0,3 lần trong `SIDEWAYS`/`RECOVERY_FTD`; `DOWNTREND` và `UNKNOWN` không được mở mua. Tab phễu Champion chỉ hiển thị giai đoạn nghiên cứu, không tự tạo hành động Champion.
+Ở ADAPTIVE_FUNNEL chỉ DAILY_TRIGGER mới tạo ứng viên mua. SIDEWAY_RANGE còn cần tháng UP/SIDEWAYS và nền tuần hợp lệ, bên cạnh regime thị trường SIDEWAYS. Bối cảnh tháng của cổ phiếu khác regime thị trường chung. Cổng thanh khoản, xung đột Champion, tham gia lệnh ≤5% thanh khoản và khoảng cách stop ≤8% tiếp tục áp dụng.
 
-Ở Challenger, chọn nhãn giai đoạn, rồi lọc mã, hành động, regime, trạng thái tháng, setup tuần, lý do, xa stop tối đa. Nút nhãn hiển thị số bản ghi *toàn tab* ở từng giai đoạn; tổng kết quả bên dưới phản ánh **tất cả bộ lọc đang áp dụng**. Phân trang 25/50/100. H1 không nằm trong bộ dữ liệu EOD này.
+**Đợt áp dụng 15/10/2026.** Đọc lại giá đã lưu, cố định manifest 277 mã. Tính lại phiên 15/10 cùng các đầu ra phụ thuộc. Chỉ hồi tính nghiên cứu từ 11/09–15/10; giữ tín hiệu Champion cũ đã công bố. Tính tháng từ lịch sử trước đó để có trạng thái hysteresis đúng. Không tải lại giá, không backtest lợi nhuận, không gửi Telegram. Tác vụ GitHub tự áp migration Supabase, chạy phiên hiện tại rồi chia bốn lô lịch sử; báo cáo được lưu thành artifact để chủ app kiểm tra sau.
 
 ### Phân kỳ Dương · đường MACD
 

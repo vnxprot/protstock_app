@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 import { latestSignalPublication } from '../lib/signalPublication'
+import type { MonthlyEvidence } from '../components/MonthlyTrendEvidence'
 
 export interface PriceBar {
   trading_date: string
@@ -40,6 +41,7 @@ export interface TechnicalSnapshot {
   flow_volume_ratio20: number | null
   flow_clv: number | null
   trend_state: string
+  monthly_context?: MonthlyEvidence
 }
 
 export interface PatternInstance {

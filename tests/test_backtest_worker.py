@@ -6,7 +6,7 @@ from protstock.backtest_worker import process_backtests, _evaluation_contexts
 def request():
     return {"id": "run", "symbol_id": 7, "timeframe": "D", "date_from": "2026-01-02", "date_to": "2026-01-03",
             "started_at": "lease-1", "rule_dsl": {"engine": "core_ladder_v2"},
-            "algorithm_version": "core-rules-v0.0.0", "data_revision": "published-revision",
+            "algorithm_version": "core-rules-v0.0.0-trend1", "data_revision": "published-revision",
             "rule_versions": {"dsl": {"all": [], "action": "WATCH"}}, "assumptions": {"initial_capital": 100_000_000}}
 
 
@@ -32,7 +32,7 @@ def test_worker_keeps_warmup_and_uses_frozen_rule_snapshot_and_lease(monkeypatch
         return {"trades": [], "metrics": {"total_return": 0}, "warnings": ["MARKET_CONTEXT_MISSING"],
                 "evaluation_summary": {"evaluated": 2}, "execution_model": "CLOSE_SIGNAL_NEXT_OPEN",
                 "price_unit": "VND", "source_price_unit": "THOUSAND_VND", "benchmark_metrics": {}, "equity_curve": [],
-                "algorithm_version": "core-rules-v0.0.0", "data_revision": "data-hash"}
+                "algorithm_version": "core-rules-v0.0.0-trend1", "data_revision": "data-hash"}
     monkeypatch.setattr("protstock.backtest_worker.SupabaseRestClient", lambda _settings: Client())
     monkeypatch.setattr("protstock.backtest_worker.Settings.from_env", lambda: object())
     monkeypatch.setattr("protstock.backtest_worker.run_backtest", simulate)
@@ -43,7 +43,7 @@ def test_worker_keeps_warmup_and_uses_frozen_rule_snapshot_and_lease(monkeypatch
     assert rule == request()["rule_dsl"] and kwargs["date_from"] == "2026-01-02"
     assert replacements == [("run", [], "lease-1")]  # Clears any trades left by a prior attempt.
     assert all(update[2] == "lease-1" for update in updates)
-    assert updates[-1][1]["metrics"]["execution_algorithm_version"] == "core-rules-v0.0.0"
+    assert updates[-1][1]["metrics"]["execution_algorithm_version"] == "core-rules-v0.0.0-trend1"
     assert updates[-1][1]["metrics"]["execution_data_revision"] == "data-hash"
     assert updates[-1][1]["metrics"]["warnings"] == ["MARKET_CONTEXT_MISSING"]
 
@@ -114,7 +114,7 @@ def test_worker_uses_canonical_prices_and_keeps_exchange_context(monkeypatch):
         assert context["symbol_id"] == 7 and context["exchange"] == "HNX" and context["sector"] == "TEST"
         return {"trades": [], "metrics": {"total_return": 0}, "warnings": [], "evaluation_summary": {},
                 "execution_model": "CLOSE_SIGNAL_NEXT_OPEN", "price_unit": "VND", "source_price_unit": "THOUSAND_VND",
-                "benchmark_metrics": {}, "equity_curve": [], "algorithm_version": "core-rules-v0.0.0", "data_revision": "research-hash"}
+                "benchmark_metrics": {}, "equity_curve": [], "algorithm_version": "core-rules-v0.0.0-trend1", "data_revision": "research-hash"}
     monkeypatch.setattr("protstock.backtest_worker.SupabaseRestClient", lambda _settings: Client())
     monkeypatch.setattr("protstock.backtest_worker.Settings.from_env", lambda: object())
     monkeypatch.setattr("protstock.backtest_worker.run_backtest", simulate)

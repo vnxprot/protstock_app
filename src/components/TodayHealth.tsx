@@ -44,7 +44,7 @@ export function TodayHealth() {
       const [{ data: universe, error: symbolsError }, { data: prices, error: dailyError }, { data: snapshots, error: snapshotsError }, { data: runItems, error: itemsError }] = await Promise.all([
         supabase.from('symbols').select('id,symbol').eq('active', true).order('symbol').limit(1000),
         eodDate ? supabase.from('daily_prices').select('symbol_id').eq('quality_status','VALID').not('data_revision','is',null).eq('trading_date', eodDate).limit(1000) : Promise.resolve({ data: [], error: null }),
-        eodDate ? supabase.from('technical_snapshots').select('symbol_id').eq('timeframe', 'D').eq('algorithm_version','core-rules-v0.0.0').eq('as_of_date', eodDate).limit(1000) : Promise.resolve({ data: [], error: null }),
+        eodDate ? supabase.from('technical_snapshots').select('symbol_id').eq('timeframe', 'D').eq('algorithm_version','core-rules-v0.0.0-trend1').eq('as_of_date', eodDate).limit(1000) : Promise.resolve({ data: [], error: null }),
         sameDayJobs.length ? supabase.from('job_run_items').select('item_key,status,error_code,error_message,warning_codes,job_run_id').in('job_run_id', sameDayJobs.map(item => item.id)).order('created_at', { ascending: false }).limit(1000) : Promise.resolve({ data: [], error: null }),
       ])
       if (symbolsError || dailyError || snapshotsError || itemsError) throw symbolsError || dailyError || snapshotsError || itemsError

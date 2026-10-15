@@ -20,13 +20,13 @@ import psycopg
 
 PROJECT_URL = "https://upmqxwktvvguegqeqibn.supabase.co"
 BUCKET = "database-archives"
-LIVE_FUNNEL = "MTF_FUNNEL_SHADOW_V0_0_0"
+LIVE_FUNNEL = "MTF_FUNNEL_SHADOW_V0_0_0_TREND1"
 LIVE_MACD = "MACD_BULLISH_DIVERGENCE_ZONE_V0_0_0"
 RESEARCH_RETENTION_DAYS = 400
 ARCHIVES = (
     ("research_price_bars", "public.research_price_bars", "true"),
     ("research_price_sync_status", "public.research_price_sync_status", "true"),
-    ("legacy_funnel", "public.signal_funnel_assessments", "version <> 'MTF_FUNNEL_SHADOW_V0_0_0'"),
+    ("legacy_funnel", "public.signal_funnel_assessments", "version <> 'MTF_FUNNEL_SHADOW_V0_0_0_TREND1'"),
     ("legacy_macd", "public.macd_divergence_assessments", "version <> 'MACD_BULLISH_DIVERGENCE_ZONE_V0_0_0'"),
 )
 

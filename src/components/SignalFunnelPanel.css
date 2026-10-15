@@ -19,6 +19,6 @@
 .signal-funnel-row > :first-child { align-self:stretch; display:flex; align-items:center; margin:-8px 0 -8px -12px; padding-left:12px; }
 .signal-funnel-reason { display:flex; align-items:center; gap:9px; }
 .signal-funnel-reason button { border:0; padding:3px 5px; background:none; color:var(--lime); font:inherit; font-weight:700; cursor:pointer; }
-.signal-funnel-detail { display:flex; gap:10px; padding:9px 14px; min-width:1040px; background:var(--surface-2); border-bottom:1px solid var(--line); font-size:12px; }
+.signal-funnel-detail { display:block; padding:9px 14px; min-width:0; background:var(--surface-2); border-bottom:1px solid var(--line); font-size:12px; }
 .signal-funnel-detail span { overflow-wrap:anywhere; }
 @media(max-width:760px) { .signal-funnel-counts .signal-funnel-filter-toggle { margin-left:0; } .signal-funnel-column-filters .screener-field { width:100%; } }

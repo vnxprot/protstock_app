@@ -16,7 +16,7 @@ from .period_signals import monthly_trend
 from .classical_patterns import detect_classical_patterns
 
 
-ALGORITHM_VERSION = "core-rules-v0.0.0"
+ALGORITHM_VERSION = "core-rules-v0.0.0-trend1"
 
 
 def analyze_bars(bars: Sequence[dict], position: dict | None = None, weekly_patterns: list[dict] | None = None, monthly_snapshot: dict | None = None, benchmark_rows: Sequence[dict] | None = None, market_context: dict | None = None, portfolio_positions: list[dict] | None = None, candidate_sector: str | None = None, capital: float | None = None, fibonacci_context: dict | None = None, timeframe: str = "D", include_classical: bool = True) -> dict:
@@ -29,7 +29,11 @@ def analyze_bars(bars: Sequence[dict], position: dict | None = None, weekly_patt
     snapshot = calculate_indicators(ordered)
     snapshot_dict = snapshot.to_dict()
     if timeframe == "M":
-        snapshot_dict["trend_state"] = monthly_trend(ordered)["trend_state"]
+        monthly = monthly_trend(ordered)
+        snapshot_dict["trend_state"] = monthly["trend_state"]
+        snapshot_dict["monthly_context"] = monthly
+    elif monthly_snapshot:
+        snapshot_dict["monthly_context"] = monthly_snapshot.get("monthly_context") or monthly_snapshot
     patterns = detect_patterns(pattern_bars, snapshot_dict) if pattern_bars else []
     zones = detect_zones(pattern_bars, fibonacci_context=fibonacci_context) if pattern_bars else []
     recent_closes = [float(item["close"]) for item in ordered[-20:]]

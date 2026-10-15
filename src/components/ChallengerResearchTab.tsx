@@ -3,12 +3,14 @@ import { useQuery } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 import { ResearchPagination } from './ResearchPagination'
 import { SoftSelect } from './SoftSelect'
+import { MonthlyTrendEvidence, type MonthlyEvidence } from './MonthlyTrendEvidence'
 import './ChallengerResearchTab.css'
 
 type Code = 'ADAPTIVE_FUNNEL' | 'MACD_EARLY_ZONE' | 'DOWNTREND_SPRING'
 type Evidence = {
   market_regime?: string; price_basis?: string; size_multiplier?: number; funnel_stage?: string
   monthly_state?: string; weekly_setup?: string | null; setup_id?: string | null
+  monthly?: MonthlyEvidence
   stage?: string; oversold?: { rsi14?: number | null; lower_band_breach?: boolean; oversold?: boolean }
   candidate?: Record<string, string | number | boolean | null | number[]>
   distance_to_stop_pct?: number | null; order_participation_rate?: number | null
@@ -59,7 +61,7 @@ export function ChallengerResearchTab({ date, tab, focusSymbol = '' }: { date: s
     for (let from = 0; ; from += 1000) {
       const { data, error } = await supabase!.from('challenger_strategy_assessments')
         .select('symbol_id,strategy_code,action,reasons,base_price,invalidation_price,evidence,symbols!inner(symbol)')
-        .eq('trading_date', date).eq('engine_version', 'v0.0.0-challenger')
+        .eq('trading_date', date).eq('engine_version', 'v0.0.0-challenger-trend1')
         .in('strategy_code', codes).order('symbol_id').range(from, from + 999)
       if (error) throw error
       result.push(...(data ?? []).map((item: any) => ({ ...item,
@@ -114,6 +116,7 @@ export function ChallengerResearchTab({ date, tab, focusSymbol = '' }: { date: s
           {info.order_participation_rate != null && <span>Tham gia lệnh <b>{number(info.order_participation_rate * 100)}%</b></span>}
           <span>Quy mô <b>{number((info.size_multiplier ?? 1) * 100)}% lệnh chuẩn</b></span>
           {info.max_portfolio_exposure_pct_downtrend != null && <span>Trần nghiên cứu downtrend <b>{info.max_portfolio_exposure_pct_downtrend}% NAV</b></span>}</div>
+        {item.strategy_code === 'ADAPTIVE_FUNNEL' && <details><summary>Vì sao có trạng thái tháng này?</summary><MonthlyTrendEvidence value={info.monthly}/></details>}
         <p>{item.reasons.map(reason => reasonNames[reason] ?? reason.replaceAll('_', ' ')).join(' · ')}</p>
         {candidate.target != null && <small>Mục tiêu nghiên cứu: {String(candidate.target)}; chỉ đánh giá sau thời điểm hàng được bán T+2.</small>}
       </section>

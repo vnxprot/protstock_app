@@ -1,0 +1,8 @@
+.monthly-trend-evidence { min-width:0; padding:10px 0; white-space:normal; }
+.monthly-trend-evidence p { margin:6px 0; line-height:1.6; }
+.trend-evidence-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(260px,100%),1fr)); gap:10px; margin:10px 0; }
+.trend-evidence-grid div { min-width:0; }
+.trend-evidence-grid dt,.monthly-trend-evidence small { color:var(--muted); }
+.trend-evidence-grid dd { margin:4px 0; font-weight:600; }
+.trend-evidence-grid ul { margin:6px 0; padding-left:20px; line-height:1.7; }
+.signal-funnel-detail { display:block; min-width:0; white-space:normal; }

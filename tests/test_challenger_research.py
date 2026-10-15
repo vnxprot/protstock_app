@@ -68,7 +68,7 @@ def test_downtrend_only_allows_oversold_early_probe(monkeypatch):
 
 
 def test_sideway_rejects_high_breakout_but_accepts_base_reversal():
-    rows = bars()
+    rows = bars(900)
     rows[-1] = {**rows[-1], "open": 10.1, "close": 10.5, "high": 10.6}
     rejected = assess_challenger_strategies(1, rows, context("SIDEWAYS"))[1]
     assert rejected["action"] == "WATCH"

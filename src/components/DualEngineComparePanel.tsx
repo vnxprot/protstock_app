@@ -57,7 +57,7 @@ export function DualEngineComparePanel({ date, champion, mode }: {
     for (let from = 0; ; from += 1000) {
       const { data, error } = await supabase!.from('challenger_signal_assessments')
         .select('symbol_id,trading_date,action,reasons,distance_to_base_pct,evidence')
-        .eq('trading_date', date).eq('engine_version', 'v0.0.0-challenger').order('symbol_id').range(from, from + 999)
+        .eq('trading_date', date).eq('engine_version', 'v0.0.0-challenger-trend1').order('symbol_id').range(from, from + 999)
       if (error) throw error
       rows.push(...((data ?? []) as ShadowRow[]))
       if ((data ?? []).length < 1000) break
@@ -81,7 +81,7 @@ export function DualEngineComparePanel({ date, champion, mode }: {
     for (let from = 0; ; from += 1000) {
       const { data, error } = await supabase!.from('challenger_strategy_assessments')
         .select('symbol_id,strategy_code,action,reasons,distance_to_base_pct,evidence')
-        .eq('trading_date', date).eq('engine_version', 'v0.0.0-challenger').order('symbol_id').range(from, from + 999)
+        .eq('trading_date', date).eq('engine_version', 'v0.0.0-challenger-trend1').order('symbol_id').range(from, from + 999)
       if (error) throw error
       rows.push(...((data ?? []) as StrategyRow[]))
       if ((data ?? []).length < 1000) break
