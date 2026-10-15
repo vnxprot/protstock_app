@@ -9,7 +9,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "pipeline"))
 from protstock.config import Settings
 from protstock.supabase_rest import SupabaseRestClient
 
-VERSION = "INTRADAY_SPIKE_V0.0.0"
 THRESHOLD = 0.95
 MAX_ATTEMPTS = 3
 
@@ -27,9 +26,16 @@ def write_output(**values):
 
 
 def preflight(client, day):
-    jobs = read(client, "job_runs", {"select": "status,counts,source_revision", "job_type": "eq.DERIVE_BARS",
+    jobs = read(client, "job_runs", {"select": "status,counts,finished_at", "job_type": "eq.DERIVE_BARS",
         "trading_date": f"eq.{day}", "order": "started_at.desc", "limit": "1"})
-    if not jobs or jobs[0]["status"] != "SUCCEEDED" or (jobs[0].get("counts") or {}).get("publication_status") != "COMPLETE":
+    latest = jobs[0] if jobs else {}
+    counts = latest.get("counts") or {}
+    expected = int(counts.get("expected_symbols") or 0)
+    covered = int(counts.get("covered_symbols") or 0)
+    eod_ready = (latest.get("status") == "SUCCEEDED" and latest.get("finished_at")
+                 and counts.get("publication_status") in {"COMPLETE", "PARTIAL"}
+                 and expected > 0 and covered / expected >= THRESHOLD)
+    if not eod_ready:
         write_output(action="WAIT_EOD", trading_date=day, matrix={"include": []})
         return
     session = read(client, "intraday_radar_sessions", {"select": "status,attempt_count", "trading_date": f"eq.{day}", "limit": "1"})
