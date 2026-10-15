@@ -1,17 +1,16 @@
 name: Intraday spike radar EOD
 
 on:
+  workflow_run:
+    workflows: [EOD Fast Lane]
+    types: [completed]
   schedule:
-    # 17:15 Asia/Ho_Chi_Minh, after the existing EOD publication.
-    - cron: "15 10 * * 1-5"
+    # Recovery sweep only; preflight starts work after a complete EOD publication.
+    - cron: "17 9-16 * * 1-5"
   workflow_dispatch:
     inputs:
       trading_date:
         description: Completed trading date (YYYY-MM-DD); blank uses today in Vietnam
-        required: false
-        type: string
-      symbols:
-        description: Optional comma-separated symbols for a focused retry
         required: false
         type: string
 
@@ -23,9 +22,34 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  collect:
+  preflight:
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    outputs:
+      action: ${{ steps.guard.outputs.action }}
+      trading_date: ${{ steps.guard.outputs.trading_date }}
+      matrix: ${{ steps.guard.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install httpx
+      - id: guard
+        env:
+          SUPABASE_URL: https://upmqxwktvvguegqeqibn.supabase.co
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          TRADING_DATE: ${{ inputs.trading_date }}
+        run: python .github/scripts/intraday_radar_schedule.py preflight
+
+  collect:
+    needs: preflight
+    if: needs.preflight.outputs.action == 'RUN'
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix: ${{ fromJSON(needs.preflight.outputs.matrix) }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -33,14 +57,27 @@ jobs:
           python-version: "3.12"
           cache: pip
       - run: python -m pip install --extra-index-url https://vnstocks.com/api/packages -e ".[data]"
-      - name: Collect minute bars and publish spike events
+      - name: Collect minute bars and backfill matching VCI baseline
         env:
           SUPABASE_URL: https://upmqxwktvvguegqeqibn.supabase.co
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          TRADING_DATE: ${{ inputs.trading_date }}
-          SYMBOLS: ${{ inputs.symbols }}
-        run: |
-          args=()
-          if [ -n "$TRADING_DATE" ]; then args+=(--date "$TRADING_DATE"); fi
-          if [ -n "$SYMBOLS" ]; then args+=(--symbols "$SYMBOLS"); fi
-          protstock intraday-spikes "${args[@]}"
+          TRADING_DATE: ${{ needs.preflight.outputs.trading_date }}
+          SYMBOLS: ${{ matrix.symbols }}
+        run: protstock intraday-spikes --date "$TRADING_DATE" --symbols "$SYMBOLS" --pause-seconds 3
+
+  finalize:
+    needs: [preflight, collect]
+    if: always() && needs.preflight.outputs.action == 'RUN'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install httpx
+      - name: Publish only when minute and baseline coverage reach 95 percent
+        env:
+          SUPABASE_URL: https://upmqxwktvvguegqeqibn.supabase.co
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          TRADING_DATE: ${{ needs.preflight.outputs.trading_date }}
+        run: python .github/scripts/intraday_radar_schedule.py finalize

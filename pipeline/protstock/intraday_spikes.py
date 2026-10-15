@@ -191,6 +191,7 @@ def run_intraday_spikes(trading_date: date, *, symbol_offset: int = 0, symbol_li
         for row in selected:
             counts["symbols"] += 1
             symbol_id, symbol = int(row["id"]), str(row["symbol"])
+            symbol_status, baseline_count, minute_source, error = "EMPTY", 0, None, None
             try:
                 stored = db._pages("intraday_minute_days", {
                     "select": "trading_date,bars,coverage_status,data_revision,source", "symbol_id": f"eq.{symbol_id}",
@@ -238,6 +239,7 @@ def run_intraday_spikes(trading_date: date, *, symbol_offset: int = 0, symbol_li
                     db.upsert("intraday_minute_days", rows, "symbol_id,trading_date")
                 current = next((item for item in rows if item["trading_date"] == trading_date.isoformat()), None)
                 status = current["coverage_status"] if current else "EMPTY"
+                symbol_status = status
                 counts[status.lower()] += 1
                 if status != "COMPLETE":
                     counts["coverage_issues"].append({"symbol": symbol, "status": status})
@@ -247,6 +249,11 @@ def run_intraday_spikes(trading_date: date, *, symbol_offset: int = 0, symbol_li
                     fetched_dates = {item["trading_date"] for item in previous}
                     previous.extend(item for item in prior if item["trading_date"] not in fetched_dates)
                     previous.sort(key=lambda item: item["trading_date"], reverse=True)
+                    baseline_count = min(len(previous), 30)
+                    if baseline_count < MIN_BASELINE_SESSIONS:
+                        symbol_status = "BASELINE_SHORT"
+                        counts["coverage_issues"].append({"symbol": symbol, "status": symbol_status,
+                                                          "baseline_sessions": baseline_count})
                     def comparable_bars(day: str, minute_bars: list[dict]) -> list[dict]:
                         return [{**bar, "cv": int(bar["v"])} for bar in minute_bars]
                     events = detect_events(
@@ -260,7 +267,13 @@ def run_intraday_spikes(trading_date: date, *, symbol_offset: int = 0, symbol_li
                     counts["events"] += db.upsert("intraday_spike_events", events,
                                                    "symbol_id,trading_date,start_time,algorithm_version")
             except Exception as exc:
-                counts["failed"].append({"symbol": symbol, "error": str(exc)[:160]})
+                symbol_status, error = "FAILED", str(exc)[:160]
+                counts["failed"].append({"symbol": symbol, "error": error})
+            finally:
+                db.upsert("intraday_radar_symbol_status", [{"trading_date": trading_date.isoformat(),
+                    "symbol_id": symbol_id, "status": symbol_status, "baseline_sessions": baseline_count,
+                    "source": minute_source, "error": error,
+                    "updated_at": datetime.now(timezone.utc).isoformat()}], "trading_date,symbol_id")
             if pause_seconds:
                 sleep(pause_seconds)
         # Retain event history; prune only compact minute-day records.
