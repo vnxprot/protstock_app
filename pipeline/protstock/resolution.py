@@ -6,6 +6,18 @@ from typing import Any
 ACTION_PRIORITY = {"EXIT": 5, "REDUCE": 4, "ADD": 3, "PROBE_BUY": 2, "WATCH": 1}
 CONFLUENCE = {1: (70, "STANDARD"), 2: (90, "HIGH_CONFLUENCE")}
 
+
+def _evidence_cluster(signal: dict[str, Any]) -> str:
+    """One base breakout is one vote even when several engines name it."""
+    evidence = signal.get("evidence") or {}
+    cluster = str(evidence.get("evidence_cluster") or "")
+    reasons = " ".join(str(item) for item in signal.get("reasons") or [])
+    if (cluster.startswith("BASE_BREAKOUT:") or cluster == "ACCUMULATION_BASE"
+            or any(token in reasons for token in ("FLAT_BASE", "CUP_HANDLE", "VCP_DEPTH_CONTRACTING"))):
+        # resolve_consolidated_signal receives one symbol, timeframe and date.
+        return "BASE_BREAKOUT"
+    return cluster or f"engine:{signal.get('engine') or signal.get('rule_name') or 'unknown'}"
+
 def classify_signal_state(action: str, reasons: list[str]) -> str:
     """Presentation metadata only; the v2.2.0 action ladder remains unchanged."""
     if action != "WATCH":
@@ -34,7 +46,7 @@ def resolve_consolidated_signal(raw_signals: list[dict[str, Any]]) -> dict[str, 
     agreeing = [signal for signal in raw_signals if signal.get("action") == action]
     voters = [signal for signal in agreeing if not (signal.get("evidence") or {}).get("context_only")]
     engines = list(dict.fromkeys(str(signal.get("engine") or signal.get("rule_name") or "Unknown engine") for signal in (voters or agreeing)))
-    clusters = {str((signal.get("evidence") or {}).get("evidence_cluster") or f"engine:{signal.get('engine') or signal.get('rule_name') or 'unknown'}") for signal in voters}
+    clusters = {_evidence_cluster(signal) for signal in voters}
     count = max(1, len(clusters))
     score, badge = CONFLUENCE.get(count, (98, "STRONG_ALIGNED"))
     reasons = list(dict.fromkeys(reason for signal in agreeing for reason in (signal.get("reasons") or [])))

@@ -12,6 +12,7 @@ from .macd_divergence import assess_macd_divergence
 from .macd_divergence_zones import (
     MIN_THIN_BREAKOUT_VOLUME, RECENT_BREAKOUT_SESSIONS, assess_macd_zone_divergence,
 )
+from .vcp import detect_vcp
 
 
 CORE_PACK_METADATA = {
@@ -251,22 +252,21 @@ def evaluate_pullback_continuation(context: dict[str, Any]) -> tuple[bool, str, 
 
 
 def evaluate_vcp_breakout_v1(context: dict[str, Any]) -> tuple[bool, str, list[str]]:
-    bars = context.get("bars", [])
-    if len(bars) < 31:
+    if context.get("timeframe", "D") != "D":
         return False, "WATCH", []
-    windows = (bars[-31:-21], bars[-21:-11], bars[-11:-1])
-    depths = [(_high(window) - _low(window)) / _high(window) for window in windows]
-    volumes = [float(item.get("volume") or 0) for item in bars]
-    prior20 = sum(volumes[-21:-1]) / 20
-    breakout_volume = prior20 > 0 and volumes[-1] >= 1.5 * prior20
-    dry_sessions = []
-    for index in range(len(bars) - 4, len(bars) - 1):
-        average = sum(volumes[index - 20:index]) / 20
-        dry_sessions.append(average > 0 and volumes[index] <= 0.6 * average)
-    dry_up = sum(dry_sessions) >= 2
-    breakout = float(bars[-1]["close"]) > max(float(item["high"]) for item in bars[-11:-1])
-    if not (depths[2] < depths[1] < depths[0] and dry_up and breakout and breakout_volume):
+    exchange = str(context.get("candidate_exchange") or "").upper()
+    floor = 5_000_000_000 if exchange in {"UPCOM", "UPCO M"} else 3_000_000_000
+    evidence = detect_vcp(context.get("bars") or [], turnover_floor_vnd=floor)
+    if not evidence:
         return False, "WATCH", []
+    context["engine_evidence"] = {**(context.get("engine_evidence") or {}), **evidence,
+                                  "pattern_type": "VCP_BREAKOUT"}
+    if evidence["state"] == "READY":
+        context["engine_evidence"]["context_only"] = True
+        return True, "WATCH", ["NEAR_TRIGGER_VCP", "VCP_VOLUME_DRY_UP"]
+    if evidence["state"] == "EXPIRED":
+        context["engine_evidence"]["context_only"] = True
+        return True, "WATCH", ["VCP_SETUP_EXPIRED"]
     return True, "PROBE_BUY", ["VCP_DEPTH_CONTRACTING", "VCP_VOLUME_DRY_UP", "VCP_BREAKOUT_VOLUME"]
 
 

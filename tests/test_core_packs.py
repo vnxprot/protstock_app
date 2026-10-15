@@ -19,25 +19,33 @@ def test_pullback_continuation_pack_requires_mtf_touch_low_volume_and_reversal()
     assert evaluate_pullback_continuation_v1(context)[0:2] == (True, "PROBE_BUY")
 
 
-def test_vcp_breakout_pack_detects_contraction_dry_up_and_breakout() -> None:
-    bars = []
-    for index in range(10): bars.append(_bar(index, 90, 100, high=100, low=80))
-    for index in range(10, 20): bars.append(_bar(index, 92, 100, high=100, low=85))
-    for index in range(20, 30): bars.append(_bar(index, 95, 100 if index < 27 else 50, high=100, low=90))
-    bars.append(_bar(30, 102, 200, high=103, low=100))
-    assert evaluate_vcp_breakout_v1({"bars": bars, "snapshot": {"volume_ratio20": 2.0}})[0:2] == (True, "PROBE_BUY")
+def _vcp_bars() -> list[dict]:
+    bars = [_bar(i, 50 + i * .28, 100_000, high=51 + i * .28, low=49 + i * .28) for i in range(180)]
+    bars.extend(_bar(i, 101, 100_000, high=105, low=99) for i in range(180, 219))
+    for index in range(201, 219):
+        bars[index] = _bar(index, 105, 100_000, high=106, low=103)
+    for index, high, low, close in ((180, 110, 103, 106), (185, 100, 85, 94),
+                                    (195, 108, 101, 105), (200, 100, 94, 98),
+                                    (209, 107, 102, 105), (214, 104, 100, 102)):
+        bars[index] = _bar(index, close, 100_000, high=high, low=low)
+    for index in range(215, 219):
+        bars[index] = _bar(index, 105, 50_000, high=106, low=103)
+    bars.append(_bar(219, 108, 150_000, high=109, low=104))
+    return bars
+
+
+def test_vcp_breakout_pack_detects_swing_contractions_and_pivot() -> None:
+    context = {"bars": _vcp_bars(), "timeframe": "D", "candidate_exchange": "HOSE"}
+    assert evaluate_vcp_breakout_v1(context)[0:2] == (True, "PROBE_BUY")
+    assert context["engine_evidence"]["pivot"] == 107
+    assert len(context["engine_evidence"]["contraction_depths"]) == 3
 
 
 def test_vcp_dry_up_needs_two_individual_sessions_even_after_volume_spike() -> None:
-    bars = []
-    for index in range(10): bars.append(_bar(index, 90, 100, high=100, low=80))
-    for index in range(10, 20): bars.append(_bar(index, 92, 100, high=100, low=85))
-    for index in range(20, 30): bars.append(_bar(index, 95, 100, high=100, low=90))
-    bars[22]["volume"] = 500
-    for index, volume in ((27, 50), (28, 85), (29, 100)):
-        bars[index]["volume"] = volume
-    bars.append(_bar(30, 102, 250, high=103, low=100))
-    assert evaluate_vcp_breakout_v1({"bars": bars, "snapshot": {"volume_ratio20": 9}})[0:2] == (False, "WATCH")
+    bars = _vcp_bars()
+    for index in range(215, 219):
+        bars[index]["volume"] = 100_000
+    assert evaluate_vcp_breakout_v1({"bars": bars, "timeframe": "D"})[0:2] == (False, "WATCH")
 
 
 def test_rsi_macd_divergence_pack_does_not_use_current_rsi_for_unconfirmed_pivot() -> None:

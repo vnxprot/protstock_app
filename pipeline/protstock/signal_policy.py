@@ -88,6 +88,12 @@ def apply_signal_policy(action: str, reasons: list[str], context: dict) -> tuple
         lot_size = max(1, int(context.get("lot_size") or 100))
         quantity = min(sizing["quantity"], int(available / (close * STOCK_PRICE_TO_VND))) // lot_size * lot_size
         value = quantity * close * STOCK_PRICE_TO_VND
+        if evidence.get("pattern_type") == "VCP_BREAKOUT":
+            vcp_turnover = float(evidence.get("average_turnover_20_vnd") or 0)
+            participation = value / vcp_turnover if value > 0 and vcp_turnover > 0 else None
+            evidence["order_participation_rate"] = round(participation, 6) if participation is not None else None
+            if participation is not None and participation > .05:
+                blocked.append("VCP_ORDER_PARTICIPATION_LIMIT")
         if context.get("liquidity_advisory"):
             participation = order_participation_rate(value, context.get("daily_snapshot") or snapshot)
             evidence["order_participation_rate"] = round(participation, 6) if participation is not None else None

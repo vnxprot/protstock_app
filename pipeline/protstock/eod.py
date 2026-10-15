@@ -941,8 +941,9 @@ def _write_analysis(
             elif passed and timeframe == "D" and action in {"PROBE_BUY", "ADD"}:
                 reasons = list(dict.fromkeys([*reasons, *relative_strength_context_reasons(engine_context)]))
         evaluation_date = context.get("evaluation_date", result["as_of_date"])
-        if passed or reasons: evaluations.append({"rule_version_id": version["id"], "symbol_id": symbol_id, "timeframe": timeframe, "as_of_date": evaluation_date, "proposed_action": proposed_action, "action": action, "emitted": passed, "reasons": reasons or ["NO_MATCHING_SETUP"], "evidence": engine_context.get("engine_evidence") or {}})
-        if passed:
+        emitted = passed and not (engine_context.get("engine_evidence") or {}).get("context_only")
+        if passed or reasons: evaluations.append({"rule_version_id": version["id"], "symbol_id": symbol_id, "timeframe": timeframe, "as_of_date": evaluation_date, "proposed_action": proposed_action, "action": action, "emitted": emitted, "reasons": reasons or ["NO_MATCHING_SETUP"], "evidence": engine_context.get("engine_evidence") or {}})
+        if emitted:
             if stats is not None:
                 stats["emitted_count"] += 1
             raw_signal = {

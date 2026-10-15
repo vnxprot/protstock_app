@@ -13,6 +13,7 @@ from .signal_policy import average_turnover_vnd, order_participation_rate, MIN_A
 from .wyckoff import classify_wyckoff_timeframe
 from .timeframes import aggregate_bars
 from .trend_context import TREND_VERSION, monthly_context, weekly_context
+from .vcp import detect_vcp
 
 VERSION = "v0.0.0-challenger-trend1"
 LONG = {"PROBE_BUY", "EARLY_PROBE"}
@@ -156,21 +157,19 @@ def panic_spring(bars: Sequence[dict]) -> dict | None:
             "target": "MA20_OR_10_TO_12_PCT", "target_is_research_hypothesis": True}
 
 
-def uptrend_setup(bars: Sequence[dict]) -> dict | None:
+def uptrend_setup(bars: Sequence[dict], exchange: str | None = None) -> dict | None:
     if len(bars) < 51:
         return None
     current, prior = bars[-1], bars[-21:-1]
     close = float(current["close"])
     high20 = max(float(item["high"]) for item in prior)
     average_volume = mean(float(item.get("volume") or 0) for item in prior)
+    vcp = detect_vcp(bars, turnover_floor_vnd=5_000_000_000 if str(exchange or "").upper() == "UPCOM" else 3_000_000_000)
+    if vcp and vcp["state"] == "CONFIRMED":
+        return {"kind": "VCP_BREAKOUT", "base": vcp["pivot"],
+                "stop": vcp["invalidation_price"], "vcp": vcp}
     if close > high20 and average_volume and float(current.get("volume") or 0) >= 1.3 * average_volume:
-        older, middle, recent = bars[-31:-21], bars[-21:-11], bars[-11:-1]
-        ranges = [max(float(item["high"]) for item in window) - min(float(item["low"]) for item in window)
-                  for window in (older, middle, recent)]
-        vcp = (ranges[0] > ranges[1] > ranges[2]
-               and mean(float(item.get("volume") or 0) for item in recent)
-               < mean(float(item.get("volume") or 0) for item in middle))
-        return {"kind": "VCP_BREAKOUT" if vcp else "BREAKOUT_20",
+        return {"kind": "BREAKOUT_20",
                 "base": high20, "stop": min(float(item["low"]) for item in bars[-6:]) * .99}
     ema20 = calculate_indicators(bars).ema20
     if ema20 and float(current["low"]) <= ema20 * 1.01 and close > max(ema20, float(current["open"])):
@@ -213,8 +212,9 @@ def assess_challenger_strategies(symbol_id: int, bars: Sequence[dict], market_co
             action, reasons = "WATCH", [*reasons, "REGIME_BLOCKED"]
         if action in LONG and (turnover < MIN_AVERAGE_TURNOVER_VND or participation is not None and participation > .05):
             action, reasons = "WATCH", [*reasons, "HIGH_PARTICIPATION_RISK" if participation is not None and participation > .05 else "INSUFFICIENT_LIQUIDITY"]
-        distance = (close / stop - 1) * 100 if stop > 0 else None
-        if action in LONG and (distance is None or distance > 8 or distance < 0):
+        is_vcp = candidate.get("kind") == "VCP_BREAKOUT"
+        distance = ((close - stop) / close if is_vcp else close / stop - 1) * 100 if stop > 0 else None
+        if action in LONG and (distance is None or distance > (10 if is_vcp else 8) or distance < (3 if is_vcp else 0)):
             action, reasons = "WATCH", [*reasons, "CHASE_BLOCKED" if distance is not None else "STOP_UNAVAILABLE"]
         return {"symbol_id": symbol_id, "trading_date": ordered[-1]["date"], "engine_version": VERSION,
                 "strategy_code": code, "action": action, "reasons": reasons,
@@ -232,7 +232,7 @@ def assess_challenger_strategies(symbol_id: int, bars: Sequence[dict], market_co
                              "distance_to_stop_pct": round(distance, 3) if distance is not None else None,
                              **(detail or {})}}
 
-    up = uptrend_setup(ordered) if regime in {"UPTREND", "RECOVERY_FTD"} else None
+    up = uptrend_setup(ordered, exchange) if regime in {"UPTREND", "RECOVERY_FTD"} else None
     result = [build("UPTREND_CORE", up, regime in {"UPTREND", "RECOVERY_FTD"}, "NO_UPTREND_SETUP",
                     .3 if regime == "RECOVERY_FTD" else 1,
                     {"recovery": market_context.get("recovery")})]
