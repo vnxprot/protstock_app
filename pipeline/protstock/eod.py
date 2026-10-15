@@ -941,7 +941,9 @@ def _write_analysis(
             elif passed and timeframe == "D" and action in {"PROBE_BUY", "ADD"}:
                 reasons = list(dict.fromkeys([*reasons, *relative_strength_context_reasons(engine_context)]))
         evaluation_date = context.get("evaluation_date", result["as_of_date"])
-        emitted = passed and not (engine_context.get("engine_evidence") or {}).get("context_only")
+        vcp_watch = (dsl.get("engine") == "vcp_breakout_v1" and action == "WATCH"
+                     and (engine_context.get("engine_evidence") or {}).get("state") in {"READY", "EXPIRED"})
+        emitted = passed and not vcp_watch
         if passed or reasons: evaluations.append({"rule_version_id": version["id"], "symbol_id": symbol_id, "timeframe": timeframe, "as_of_date": evaluation_date, "proposed_action": proposed_action, "action": action, "emitted": emitted, "reasons": reasons or ["NO_MATCHING_SETUP"], "evidence": engine_context.get("engine_evidence") or {}})
         if emitted:
             if stats is not None:
