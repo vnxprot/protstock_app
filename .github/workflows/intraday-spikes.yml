@@ -2,7 +2,7 @@ name: Intraday spike radar EOD
 
 on:
   workflow_run:
-    workflows: [EOD Fast Lane]
+    workflows: [EOD Fast Lane, Database migrations]
     types: [completed]
   schedule:
     # Recovery sweep only; preflight starts work after a complete EOD publication.
