@@ -13,7 +13,7 @@
     "test:radar": "node --experimental-strip-types --test tests/radar-overview.test.mjs",
     "test:runtime": "node --experimental-strip-types --test tests/v4-runtime.test.mjs tests/release-labels.test.mjs tests/ex-rights.test.mjs",
     "test:portfolio": "node --experimental-strip-types --test tests/portfolio-ledger.test.mjs",
-    "test:journal": "node --experimental-strip-types --test tests/journal-evidence.test.mjs tests/journal-outbox.test.mjs"
+    "test:journal": "node --experimental-strip-types --test tests/journal-evidence.test.mjs tests/journal-outbox.test.mjs tests/journal-model.test.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.116.0",

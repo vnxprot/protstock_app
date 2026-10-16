@@ -1,3 +1,4 @@
+import { journalGuideTopics } from './journalGuide'
 export type GuideStatus = 'Công bố' | 'Nghiên cứu' | 'Cá nhân' | 'Giới hạn'
 export type GuideTopic = {
   id: string
@@ -74,7 +75,13 @@ export const guideTopics: GuideTopic[] = [
   ], status: 'Giới hạn', route: 'backtest', routeLabel: 'Mở Kiểm thử lịch sử', aliases: ['backtest', 'outcome', 'T+2'] },
 ]
 
+guideTopics.push(...journalGuideTopics)
+
 export const guideTerms: GuideTerm[] = [
+  {id:'journal-cycle',group:'Quyết định',subgroup:'Nhật ký',label:'Vòng giao dịch',meaning:'Chuỗi giao dịch từ không có vị thế đến khi thoát hết, trong cùng danh mục và mã.',reading:'Mua thêm và bán từng phần ở cùng vòng. Mua lại sau khi thoát hết mở vòng mới; vòng đóng là đơn vị tính mẫu giao dịch.',route:'journal',aliases:['round trip','flat to flat']},
+  {id:'journal-expectancy',group:'Quyết định',subgroup:'Nhật ký',label:'Kỳ vọng / vòng',meaning:'Lãi/lỗ ròng trung bình mỗi vòng đã đóng.',reading:'Tổng lãi/lỗ ròng chia số vòng đóng; đọc cùng rủi ro, số mẫu và thời gian nắm giữ.',route:'journal'},
+  {id:'journal-r',group:'Quyết định',subgroup:'Nhật ký',label:'R của vòng giao dịch',meaning:'Lãi/lỗ ròng chia tổng rủi ro vào lệnh đã ghi trước thực hiện.',reading:'Thiếu stop ở bất kỳ lần mua nào hoặc ghi sau thực hiện thì để —. Số mẫu R có thể ít hơn số vòng đóng.',route:'journal'},
+  {id:'journal-wait-skip',group:'Quyết định',subgroup:'Nhật ký',label:'WAIT / SKIP / HOLD',meaning:'Chờ điều kiện / chủ động bỏ qua / tiếp tục giữ vị thế.',reading:'Không tạo giao dịch thật. Có thể đăng ký tiêu chí quan sát giá từ lúc lưu để đánh giá riêng sau 5/10/20 phiên.',route:'journal'},
   { id:'universe',group:'Dữ liệu',subgroup:'Phạm vi',label:'Universe',meaning:'Danh sách mã đang được hệ thống theo dõi và xử lý.',reading:'Độ phủ EOD được so với các mã đang hoạt động, không phải toàn bộ thị trường.',route:'universe',aliases:['danh sách cổ phiếu'] },
   { id:'eod',group:'Dữ liệu',subgroup:'Thời gian',label:'EOD',meaning:'Dữ liệu sau phiên giao dịch.',reading:'Kiểm tra ngày phiên và thời điểm công bố trước khi đọc tín hiệu.',aliases:['end of day','cuối ngày'] },
   { id:'ohlcv',group:'Dữ liệu',subgroup:'Nguồn & đơn vị',label:'OHLCV',meaning:'Giá mở, cao, thấp, đóng và khối lượng.',reading:'Dữ liệu nền để tính nến, chỉ báo và mẫu hình; mỗi bản ghi gắn ngày và nguồn.',aliases:['giá khối lượng'] },

@@ -1,3 +1,4 @@
+import { JournalLink } from './JournalLink'
 import { useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Filter, Search } from 'lucide-react'
@@ -61,7 +62,7 @@ function ZoneHistory({ row, date, open }: { row: Row; date: string; open: boolea
       </li>)}</ol> : <p>Chưa có phiên phân kỳ trước đó; từ phiên này hệ thống lưu diễn biến hằng ngày.</p>}</div>
 }
 
-function ZoneRow({ row, date }: { row: Row; date: string }) {
+function ZoneRow({ row, date, canJournal=false }: { row: Row; date: string; canJournal?:boolean }) {
   const [open, setOpen] = useState(false)
   const evidence = row.evidence
   const latest = row.stage === 'CONFIRMED' && row.trigger_date === date
@@ -91,11 +92,11 @@ function ZoneRow({ row, date }: { row: Row; date: string }) {
       {zone.revisions.length > 1 && <small>Cập nhật đáy: {zone.revisions.map(item => item.date + ' (' + price(item.price_low) + ')').join(' → ')}</small>}
     </div>)}</div>
     <p className="macd-zone-note">Hai đáy giá cách nhau 5–60 phiên. Các pivot chỉ gộp vào một vùng nếu cách tối đa 5 phiên và biên độ đáy trong vùng không quá 1%. Đáy giá và đáy đường MACD được tìm riêng; ngày có thể lệch nhau. Breakout là lần đầu đóng cửa trên đỉnh giữa hai đáy sau khi pivot được xác nhận, kể cả chính phiên xác nhận; volume cần ≥1,3× trung bình 20 phiên trước để xét mua. Sự kiện giá vẫn được lưu nếu volume thiếu; các bộ lọc rủi ro chung vẫn có thể chặn mua. Histogram không tham gia rule này.</p>
-    <ZoneHistory row={row} date={date} open={open}/>
+    <ZoneHistory row={row} date={date} open={open}/>{canJournal&&<JournalLink context={{symbol:row.symbol,source:'MACD',strategy:'Phân kỳ Dương · đường MACD',role:'CHAMPION',date,version:VERSION}}/>}
   </details>
 }
 
-export function MacdDivergencePanel({ date, authenticated, focusSymbol = '' }: { date: string; authenticated: boolean; focusSymbol?: string }) {
+export function MacdDivergencePanel({ date, authenticated, focusSymbol = '', canJournal=false }: { date: string; authenticated: boolean; focusSymbol?: string; canJournal?:boolean }) {
   const [stage, setStage] = useState('ACTIVE')
   const [segments, setSegments] = useState(0)
   const [page, setPage] = useState(1)
@@ -154,7 +155,7 @@ export function MacdDivergencePanel({ date, authenticated, focusSymbol = '' }: {
     {query.isLoading && <p className="muted">Đang tải phân kỳ theo vùng đáy…</p>}
     {query.isError && <p className="muted">Không đọc được dữ liệu phân kỳ.</p>}
     {!query.isLoading && !query.isError && <div className="macd-divergence-list">
-      {filtered.slice((current - 1) * pageSize, current * pageSize).map(row => <ZoneRow key={row.symbol + ':' + row.swings} row={row} date={date}/>)}
+      {filtered.slice((current - 1) * pageSize, current * pageSize).map(row => <ZoneRow canJournal={canJournal} key={row.symbol + ':' + row.swings} row={row} date={date}/>)}
       {!filtered.length && <p className="muted">Chưa có mẫu hình khớp bộ lọc ở phiên này.</p>}
     </div>}
     <nav className="screener-pagination" aria-label="Phân trang phân kỳ MACD"><span>Hiển thị <SoftSelect aria-label="Số mẫu mỗi trang" value={pageSize} onChange={event=>{setPageSize(Number(event.target.value));setPage(1)}}><option value="25">25</option><option value="50">50</option><option value="100">100</option></SoftSelect> / trang · {filtered.length} mã/mẫu</span><div><button type="button" disabled={current===1} onClick={()=>setPage(1)}>Đầu</button><button type="button" disabled={current===1} onClick={()=>setPage(current-1)}>‹ Trước</button><b>Trang {current}/{pages}</b><button type="button" disabled={current===pages} onClick={()=>setPage(current+1)}>Sau ›</button><button type="button" disabled={current===pages} onClick={()=>setPage(pages)}>Cuối</button></div></nav>

@@ -1,3 +1,4 @@
+import { JournalLink } from './JournalLink'
 import { useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
@@ -42,11 +43,11 @@ const stageNames: Record<string, string> = { MONTHLY_CONTEXT: 'Bối cảnh thá
 const stages = ['ALL', ...Object.keys(stageNames)]
 const values = (items: (string | null | undefined)[]) => [...new Set(items.filter((value): value is string => Boolean(value)))].sort()
 
-export function ChallengerResearchTab({ date, tab, focusSymbol = '' }: { date: string; tab: 'funnel' | 'macd'; focusSymbol?: string }) {
-  return tab === 'funnel' ? <ChallengerFunnelTable date={date} focusSymbol={focusSymbol}/> : <ChallengerResearchCards date={date} tab={tab} focusSymbol={focusSymbol}/>
+export function ChallengerResearchTab({ date, tab, focusSymbol = '', canJournal=false }: { date: string; tab: 'funnel' | 'macd'; focusSymbol?: string; canJournal?:boolean }) {
+  return tab === 'funnel' ? <ChallengerFunnelTable canJournal={canJournal} date={date} focusSymbol={focusSymbol}/> : <ChallengerResearchCards canJournal={canJournal} date={date} tab={tab} focusSymbol={focusSymbol}/>
 }
 
-function ChallengerResearchCards({ date, tab, focusSymbol = '' }: { date: string; tab: 'funnel' | 'macd'; focusSymbol?: string }) {
+function ChallengerResearchCards({ date, tab, focusSymbol = '', canJournal=false }: { date: string; tab: 'funnel' | 'macd'; focusSymbol?: string; canJournal?:boolean }) {
   const [search, setSearch] = useState('')
   useEffect(() => { if (focusSymbol) { setSearch(focusSymbol); setPage(1) } }, [focusSymbol])
   const [status, setStatus] = useState('ALL')
@@ -112,7 +113,7 @@ function ChallengerResearchCards({ date, tab, focusSymbol = '' }: { date: string
       const info = item.evidence ?? {}
       const candidate = info.candidate ?? {}
       return <section className="challenger-research-row" key={`${item.symbol_id}-${item.strategy_code}`}>
-        <header><strong>{item.symbol}</strong><span>{names[item.strategy_code]}</span><b className={`action-pill ${item.action.toLowerCase()}`}>{item.action}</b></header>
+        {canJournal&&<JournalLink context={{symbol:item.symbol,source:tab==='funnel'?'FUNNEL':'MACD',strategy:names[item.strategy_code],role:'CHALLENGER',date,version:'v0.0.0-challenger-trend1'}}/>}<header><strong>{item.symbol}</strong><span>{names[item.strategy_code]}</span><b className={`action-pill ${item.action.toLowerCase()}`}>{item.action}</b></header>
         <div className="challenger-research-facts"><span>Regime <b>{info.market_regime ?? '—'}</b></span>
           {item.strategy_code === 'ADAPTIVE_FUNNEL' ? <><span>Tháng <b>{info.monthly_state ?? '—'}</b></span><span>Tuần <b>{info.weekly_setup ?? '—'}</b></span><span>Giai đoạn <b>{info.funnel_stage ? stageNames[info.funnel_stage] ?? info.funnel_stage : '—'}</b></span></>
             : <><span>RSI14 <b>{number(info.oversold?.rsi14)}</b></span><span>Chạm BB dưới <b>{info.oversold?.lower_band_breach ? 'Có' : 'Không'}</b></span>

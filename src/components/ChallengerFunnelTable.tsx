@@ -1,3 +1,4 @@
+import { JournalLink } from './JournalLink'
 import { Fragment, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Search, SlidersHorizontal } from 'lucide-react'
@@ -14,7 +15,7 @@ import './ChallengerFunnelTable.css'
 const dateText = (value?: string | null) => value ? formatDate(value) : '—'
 const actionText = (value: string) => value === 'WATCH' ? 'Theo dõi' : value === 'PROBE_BUY' ? 'Mua thăm dò' : value
 
-export function ChallengerFunnelTable({ date, focusSymbol = '' }: { date: string; focusSymbol?: string }) {
+export function ChallengerFunnelTable({ date, focusSymbol = '', canJournal=false }: { date: string; focusSymbol?: string; canJournal?:boolean }) {
   const [search, setSearch] = useState(focusSymbol)
   const [group, setGroup] = useState<FunnelGroup>('ACTIVE')
   const [filters, setFilters] = useState({ action: '', market_regime: '', monthly_state: '', weekly_setup: '' })
@@ -90,7 +91,7 @@ export function ChallengerFunnelTable({ date, focusSymbol = '' }: { date: string
         </tr><tr id={`funnel-detail-${row.symbol_id}`} hidden={!expanded} className="funnel-detail"><td colSpan={7}>{expanded && <div>
           <h4>{row.symbol} · Chi tiết tín hiệu · {dateText(date)}</h4>
           <div className="challenger-research-facts"><span>Nền <b>{formatMarketPrice(row.base_price)}</b></span><span>Stop <b>{formatMarketPrice(row.invalidation_price)}</b></span><span>Xa stop <b>{info.distance_to_stop_pct == null ? '—' : `${info.distance_to_stop_pct.toLocaleString('vi-VN', { maximumFractionDigits: 2 })}%`}</b></span><span>Thị trường <b>{info.market_regime ?? '—'}</b></span><span>Quy mô <b>{((info.size_multiplier ?? 1) * 100).toLocaleString('vi-VN')}% lệnh chuẩn</b></span></div>
-          <p>{funnelResult(row)}. Mua thăm dò là tín hiệu nghiên cứu, không tự ghi lệnh vào danh mục.</p><MonthlyTrendEvidence value={info.monthly}/>
+          <p>{funnelResult(row)}. Mua thăm dò là tín hiệu nghiên cứu, không tự ghi lệnh vào danh mục.</p><MonthlyTrendEvidence value={info.monthly}/>{canJournal&&<JournalLink context={{symbol:row.symbol,source:'FUNNEL',strategy:'Phễu MTF thích ứng',role:'CHALLENGER',date,version:'v0.0.0-challenger-trend1'}}/>}
           <details><summary>Mã lý do kỹ thuật</summary><p>{[...row.reasons, ...(info.funnel_reasons ?? [])].join(' · ')}</p><small>Setup: {info.setup_id ?? '—'}</small></details>
         </div>}</td></tr></Fragment>
       })}

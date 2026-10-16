@@ -1,3 +1,4 @@
+import { JournalLink } from './JournalLink'
 import { useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { signalReasonSummary } from '../lib/signalExplanation'
@@ -5,7 +6,7 @@ import { filterSignalGroups, groupSignals, signalGroupPage, unsettledLotStates, 
 import { supabase } from '../lib/supabase'
 import { SoftSelect } from './SoftSelect'
 
-type Props = { rows: TriageSignal[]; allRows: TriageSignal[]; latestDate: string; onExplain: (signal: TriageSignal) => void }
+type Props = { canJournal?:boolean; rows: TriageSignal[]; allRows: TriageSignal[]; latestDate: string; onExplain: (signal: TriageSignal) => void }
 
 async function loadPrevious(date: string): Promise<TriageSignal[] | null> {
   const { data: jobs, error: jobError } = await supabase!.from('job_runs')
@@ -39,7 +40,7 @@ async function loadPrevious(date: string): Promise<TriageSignal[] | null> {
 
 const changeLabels = { new: 'Mới xuất hiện', action: 'Đổi tín hiệu', reasons: 'Lý do mới', continued: 'Tiếp diễn', unknown: 'Chưa có phiên đối chiếu' }
 
-export function SignalTriageList({ rows, allRows, latestDate, onExplain }: Props) {
+export function SignalTriageList({ rows, allRows, latestDate, onExplain, canJournal=false }: Props) {
   const [focus, setFocus] = useState<TriageFocus>('all')
   const [holding, setHolding] = useState<TriageHolding>('all')
   const [expandedAll, setExpandedAll] = useState(false)
@@ -156,7 +157,7 @@ export function SignalTriageList({ rows, allRows, latestDate, onExplain }: Props
         <span className="triage-count">{group.signals.length} tín hiệu {open ? '▴' : '▾'}</span></button>
       {open && <div id={`triage-details-${group.symbol_id}`} className="triage-details">{group.signals.map(signal => <div key={signal.signal_id} className="triage-detail-row">
         <b>{signal.timeframe} · {signal.action}</b><span>{signalReasonSummary(signal.reasons)}</span>
-        <button type="button" onClick={() => onExplain(signal)}>Vì sao?</button>
+        <button type="button" onClick={() => onExplain(signal)}>Vì sao?</button>{canJournal&&<JournalLink context={{symbol:signal.symbol,source:'SIGNALS',role:'CHAMPION',date:signal.as_of_date}}/>}
       </div>)}</div>}
     </article>})}
     {!groups.length && <p className="muted">Chưa có tín hiệu khớp bộ lọc.</p>}

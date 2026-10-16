@@ -1,5 +1,5 @@
 export type JournalSignalEvidence = { timeframe: string; action: string; state: string; score: number; reasons: string[] }
-export type JournalEvidenceSnapshot = { as_of_date: string | null; source_revision: string | null; captured_at: string; signals: JournalSignalEvidence[] }
+export type JournalEvidenceSnapshot = { as_of_date: string | null; source_revision: string | null; captured_at: string; signals: JournalSignalEvidence[]; baseline?: {date:string;close:number;revision:string;basis:string}|null; engines?: Array<{name:string;version:string|number;rule_version_id:string;signal:Record<string,unknown>}>; challenger?: Record<string,any>[]; funnel?: Record<string,any>[]; radar?: Record<string,any>[]; macd?: Record<string,any>[] }
 export function journalContext(
   previous: { evidence_snapshot: JournalEvidenceSnapshot | null; thesis_version_id: string | null } | null,
   snapshot: JournalEvidenceSnapshot,

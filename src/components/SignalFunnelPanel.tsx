@@ -1,3 +1,4 @@
+import { JournalLink } from './JournalLink'
 import { useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Filter, Search, SlidersHorizontal } from 'lucide-react'
@@ -42,7 +43,7 @@ const stageNames: Record<string, string> = {
   DATA_QUARANTINED: 'Dữ liệu cần kiểm tra',
 }
 
-export function SignalFunnelPanel({ date, authenticated, focusSymbol = '' }: { date: string; authenticated: boolean; focusSymbol?: string }) {
+export function SignalFunnelPanel({ date, authenticated, focusSymbol = '', canJournal=false }: { date: string; authenticated: boolean; focusSymbol?: string; canJournal?:boolean }) {
   const [stage, setStage] = useState('ALL')
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(25)
@@ -104,7 +105,7 @@ export function SignalFunnelPanel({ date, authenticated, focusSymbol = '' }: { d
           <strong role="cell">{row.symbol}</strong><span role="cell">{row.monthly_state}</span><span role="cell">{stageNames[row.stage] ?? row.stage}</span>
           <span role="cell">{row.setup_kind ? `${setupNames[row.setup_kind] ?? row.setup_kind} · ${row.setup_date}` : '—'}</span>
           <span role="cell">{row.trigger_date ?? '—'}</span><span role="cell" className="signal-funnel-reason"><span>{shortReason(row)}</span><button type="button" aria-expanded={expanded===row.symbol} onClick={()=>setExpanded(value=>value===row.symbol?null:row.symbol)}>{expanded===row.symbol?'Thu gọn':'Chi tiết'}</button></span>
-        </div>{expanded===row.symbol&&<div className="signal-funnel-detail"><strong>{row.symbol} · Điều kiện gốc</strong><MonthlyTrendEvidence value={row.evidence?.monthly}/>{row.evidence?.weekly && <p>Ngưỡng ngày: {formatMarketPrice(row.evidence.weekly.trigger)} · vô hiệu: {formatMarketPrice(row.evidence.weekly.invalidation)} · setup {row.setup_date}. Hiệu lực tối đa 20 phiên sau setup; Close dưới mức vô hiệu sẽ loại setup.</p>}<small>{row.reasons.join(' · ')}</small></div>}</div>)}
+        </div>{expanded===row.symbol&&<div className="signal-funnel-detail"><strong>{row.symbol} · Điều kiện gốc</strong><MonthlyTrendEvidence value={row.evidence?.monthly}/>{row.evidence?.weekly && <p>Ngưỡng ngày: {formatMarketPrice(row.evidence.weekly.trigger)} · vô hiệu: {formatMarketPrice(row.evidence.weekly.invalidation)} · setup {row.setup_date}. Hiệu lực tối đa 20 phiên sau setup; Close dưới mức vô hiệu sẽ loại setup.</p>}<small>{row.reasons.join(' · ')}</small>{canJournal&&<JournalLink context={{symbol:row.symbol,source:'FUNNEL',strategy:'Phễu MTF gốc',role:'CHAMPION',date,version:'MTF_FUNNEL_SHADOW_V0_0_0_TREND1'}}/>}</div>}</div>)}
       </div>
       <nav className="screener-pagination" aria-label="Phân trang phễu tháng tuần ngày"><span>Hiển thị <SoftSelect aria-label="Số mã mỗi trang" value={pageSize} onChange={event=>{setPageSize(Number(event.target.value));setPage(1)}}><option value="25">25</option><option value="50">50</option><option value="100">100</option></SoftSelect> / trang · {filtered.length} mã</span><div><button type="button" disabled={current===1} onClick={()=>setPage(1)}>Đầu</button><button type="button" disabled={current===1} onClick={()=>setPage(current-1)}>‹ Trước</button><b>Trang {current}/{pages}</b><button type="button" disabled={current===pages} onClick={()=>setPage(current+1)}>Sau ›</button><button type="button" disabled={current===pages} onClick={()=>setPage(pages)}>Cuối</button></div></nav>
     </>}

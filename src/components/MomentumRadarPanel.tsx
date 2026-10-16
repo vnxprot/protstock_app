@@ -1,3 +1,4 @@
+import { JournalLink } from './JournalLink'
 import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { ArrowUpRight, ChevronDown, Search } from 'lucide-react'
@@ -59,8 +60,8 @@ function nextStep(row: RadarRow, funnel?: FunnelRow, macd?: MacdRow) {
   return 'Chưa có mốc tiếp theo'
 }
 
-export function MomentumRadarPanel({ date, championSignals, championLoading, championError, onNavigate }: {
-  date: string; championSignals: RadarChampionSignal[]; championLoading: boolean; championError: boolean;
+export function MomentumRadarPanel({ date, championSignals, championLoading, championError, onNavigate, canJournal = false }: {
+  canJournal?: boolean; date: string; championSignals: RadarChampionSignal[]; championLoading: boolean; championError: boolean;
   onNavigate: (target: RadarDestination, symbol: string, engine?: 'champion' | 'challenger') => void
 }) {
   const [search, setSearch] = useState('')
@@ -198,7 +199,7 @@ export function MomentumRadarPanel({ date, championSignals, championLoading, cha
         </div>
         {expanded===row.symbol_id && <div className="radar-detail">
           <div className="radar-detail-top"><div><strong>Diễn biến của {row.symbol}</strong><p>Close {number(row.evidence?.close)} · Biến động ngày {number(row.evidence?.daily_return_pct)}% · Volume {number(row.evidence?.volume_ratio_20)}× TB20</p><p>Breakout {day(row.breakout_date)} tại {number(row.breakout_level)} · Stop cấu trúc {number(row.structural_stop)} · Xác nhận tuần {day(row.weekly_confirmed_date)}</p></div><button type="button" className="secondary-button" onClick={() => onNavigate('analysis', row.symbol)}>Xem biểu đồ <ArrowUpRight size={14}/></button></div>
-          <div className="radar-source-grid"><div><strong>Champion / WATCH</strong><p>{championLoading ? 'Đang tải…' : championError ? 'Chưa tải được' : champion.length ? [...new Set(champion.map(item => `${item.action} · ${item.timeframe}`))].join(' · ') : 'Không có tín hiệu công bố trong phiên'}</p><button type="button" onClick={() => onNavigate('watch', row.symbol, 'champion')}>Mở WATCH <ArrowUpRight size={13}/></button></div>
+          {canJournal&&<JournalLink context={{symbol:row.symbol,source:'RADAR',date}}/>}<div className="radar-source-grid"><div><strong>Champion / WATCH</strong><p>{championLoading ? 'Đang tải…' : championError ? 'Chưa tải được' : champion.length ? [...new Set(champion.map(item => `${item.action} · ${item.timeframe}`))].join(' · ') : 'Không có tín hiệu công bố trong phiên'}</p><button type="button" onClick={() => onNavigate('watch', row.symbol, 'champion')}>Mở WATCH <ArrowUpRight size={13}/></button></div>
             <div><strong>Phễu gốc</strong><p>{funnel.isLoading ? 'Đang tải…' : funnel.isError ? 'Chưa tải được' : !linkedFunnel ? 'Chưa có đánh giá phiên này' : linkedFunnel.setup_kind ? `${setupNames[linkedFunnel.setup_kind] ?? linkedFunnel.setup_kind} · ${linkedFunnel.stage === 'DAILY_TRIGGER' ? 'trigger mới' : linkedFunnel.stage === 'TRIGGERED_EARLIER' ? `trigger ${day(linkedFunnel.trigger_date)}` : 'chờ trigger'}` : 'Chưa có setup tuần trong phiên'}</p><button type="button" onClick={() => onNavigate('funnel', row.symbol, 'champion')}>Mở Phễu <ArrowUpRight size={13}/></button></div>
             <div><strong>Phễu Challenger</strong><p>{adaptive.isError ? 'Chưa tải được' : linkedAdaptive?.evidence?.weekly_setup ? `${setupNames[linkedAdaptive.evidence.weekly_setup] ?? linkedAdaptive.evidence.weekly_setup} · ${linkedAdaptive.action}` : 'Chưa có setup thích ứng trong phiên'}</p><button type="button" onClick={() => onNavigate('funnel', row.symbol, 'challenger')}>Mở Challenger <ArrowUpRight size={13}/></button></div>
             <div><strong>Phân kỳ MACD</strong><p>{macd.isLoading ? 'Đang tải…' : macd.isError ? 'Chưa tải được' : linkedMacd ? `${macdText(linkedMacd)} · ${linkedMacd.swings} vùng đáy` : 'Chưa có mẫu trong phiên'}</p><button type="button" onClick={() => onNavigate('macd', row.symbol, 'champion')}>Mở phân kỳ <ArrowUpRight size={13}/></button></div></div>

@@ -189,6 +189,58 @@ try {
  const secondSymbol=await scalar(`select id from symbols where symbol='BBB'`)
  await reject(`insert into journal_entries(symbol_id,decision_date,decision,rationale,thesis_version_id) values($1,'2026-09-28','HOLD','Observe',$2)`,/journal owner and symbol/,[secondSymbol,v1])
  console.log('PASS: thesis 2 versions, stale-edit conflict and immutable matching journal evidence')
+ // Journal decision workspace: exercise RPC bodies, owner checks and historical rules.
+ const context=await scalar(`select journal_capture_context($1,'2026-09-28',null)`,[symbol])
+ assert.ok(Array.isArray(context.signals));assert.ok(Array.isArray(context.engines));assert.ok(Array.isArray(context.challenger));assert.ok(Array.isArray(context.funnel));assert.ok(Array.isArray(context.radar));assert.ok(Array.isArray(context.macd))
+ const workflow={schema:1,source:'SIGNALS',strategy:'VCP Breakout',version:'1',role:'CHAMPION',status:'PLANNED',subtype:'',adherence:'UNKNOWN',support:['Volume'],checks:[],plan:{stop:9000},emotion:'DISCIPLINED',evaluation:{horizon:5,direction:'UP',threshold:1},evaluation_after:'2000-01-01'}
+ const decision=await scalar(`insert into journal_entries(symbol_id,decision_date,decision,rationale,workflow) values($1,'2026-09-28','BUY','Decision',$2) returning id`,[symbol,workflow])
+ assert.notEqual(await scalar(`select workflow->>'evaluation_after' from journal_entries where id=$1`,[decision]),'2000-01-01')
+ assert.ok(await scalar(`select workflow->>'classified_at' from journal_entries where id=$1`,[decision]))
+ await reject(`update journal_entries set workflow=jsonb_set(workflow,'{strategy}','"Changed"') where id=$1`,/immutable/,[decision])
+ await reject(`update journal_entries set workflow=jsonb_set(workflow,'{evaluation,horizon}','20') where id=$1`,/immutable/,[decision])
+ await reject(`update journal_entries set linked_transaction_id=$2 where id=$1`,/match owner, symbol, action/,[decision,crypto.randomUUID()])
+ await db.query(`update journal_entries set linked_transaction_id=$2 where id=$1`,[decision,trade])
+ assert.equal(await scalar(`select workflow->>'status' from journal_entries where id=$1`,[decision]),'EXECUTED')
+ assert.equal(await scalar(`select linked_cycle_id from journal_entries where id=$1`,[decision]),trade)
+ const duplicate={...workflow,evaluation:null}
+ await reject(`insert into journal_entries(symbol_id,decision_date,decision,rationale,workflow,linked_transaction_id) values($1,'2026-09-28','BUY','Duplicate',$2,$3)`,/unique constraint/,[symbol,duplicate,trade])
+ await db.query(`update journal_entries set lesson='Reviewed',workflow=jsonb_set(workflow,'{adherence}','"FOLLOWED"') where id=$1`,[decision])
+ const legacy=await scalar(`select id from journal_entries where transaction_id=$1`,[trade])
+ await db.query(`update journal_entries set workflow=$2 where id=$1`,[legacy,duplicate])
+ assert.equal(await scalar(`select workflow->>'classification_timing' from journal_entries where id=$1`,[legacy]),'RETROSPECTIVE')
+ assert.ok(Array.isArray(await scalar(`select journal_forward_results()`)))
+ assert.equal(await scalar(`select has_function_privilege('anon','public.journal_forward_results()','EXECUTE')`),false)
+ await db.exec(`reset role;select set_config('request.jwt.claim.sub','${other}',false);set role authenticated;`)
+ assert.equal((await scalar(`select journal_forward_results()`)).length,0)
+ await db.exec(`reset role;select set_config('request.jwt.claim.sub','${owner}',false);set role authenticated;`)
+ console.log('PASS: journal rich evidence, owner-isolated forward results, immutable criteria, unique execution link and retrospective classification')
+ // Simulate an already-captured observation using a controlled historical fixture.
+ // Only fixture setup bypasses the immutable trigger; normal writes above remain guarded.
+ await db.exec(`reset role;
+ insert into symbols(symbol,sector) values('JRN','SMOKE');
+ insert into symbols(symbol,sector) values('VNINDEX','INDEX') on conflict(symbol) do nothing;
+ insert into daily_prices(symbol_id,trading_date,open,high,low,close,volume,source,quality_status,data_revision,price_basis)
+ select s.id,(now() at time zone 'Asia/Ho_Chi_Minh')::date-6+i,10+i*0.2,10+i*0.2,10+i*0.2,10+i*0.2,100,'JOURNAL_FIXTURE','VALID','journal-test','VENDOR_CORPORATE_ACTION_ADJUSTED'
+ from symbols s cross join generate_series(0,5)i where s.symbol in ('JRN','VNINDEX')
+ on conflict(symbol_id,trading_date) do update set quality_status='VALID';
+ set role authenticated;`)
+ const observation=await scalar(`insert into journal_entries(symbol_id,decision_date,decision,rationale,workflow)
+ select id,(now() at time zone 'Asia/Ho_Chi_Minh')::date,'WAIT','Forward fixture',$1 from symbols where symbol='JRN' returning id`,[workflow])
+ assert.equal((await scalar(`select journal_forward_results()`)).find(row=>row.id===observation).state,'PENDING')
+ await db.exec(`reset role;alter table journal_entries disable trigger journal_workflow_guard;`)
+ await db.query(`update journal_entries set workflow=workflow||jsonb_build_object('evaluation_after',(now() at time zone 'Asia/Ho_Chi_Minh')::date-6,
+ 'evaluation_base',jsonb_build_object('date',(now() at time zone 'Asia/Ho_Chi_Minh')::date-6,'close',10000,'revision','journal-test','basis','VENDOR_CORPORATE_ACTION_ADJUSTED')) where id=$1`,[observation])
+ await db.exec(`alter table journal_entries enable trigger journal_workflow_guard;set role authenticated;`)
+ const ready=(await scalar(`select journal_forward_results()`)).find(row=>row.id===observation)
+ assert.equal(ready.state,'READY');assert.equal(ready.sessions,5);assert.equal(ready.success,true);assert.ok(Math.abs(ready.return_pct-10)<0.00001)
+ await db.exec(`reset role;delete from daily_prices where symbol_id=(select id from symbols where symbol='JRN') and trading_date=(now() at time zone 'Asia/Ho_Chi_Minh')::date-3;set role authenticated;`)
+ assert.equal((await scalar(`select journal_forward_results()`)).find(row=>row.id===observation).state,'MISSING_DATA')
+ await db.exec(`reset role;
+ insert into daily_prices(symbol_id,trading_date,open,high,low,close,volume,source,quality_status,data_revision,price_basis)
+ select id,(now() at time zone 'Asia/Ho_Chi_Minh')::date-3,10.6,10.6,10.6,10.6,100,'JOURNAL_FIXTURE','VALID','journal-test','VENDOR_CORPORATE_ACTION_ADJUSTED' from symbols where symbol='JRN';
+ update daily_prices set data_revision='changed-basis' where symbol_id=(select id from symbols where symbol='JRN');set role authenticated;`)
+ assert.equal((await scalar(`select journal_forward_results()`)).find(row=>row.id===observation).state,'BASIS_CHANGED')
+ console.log('PASS: forward observations wait for the full horizon, calculate direction, reject missing sessions and changed price revisions')
  await db.exec(`reset role; update user_profiles set status='SUSPENDED' where user_id='${owner}';set role authenticated;`)
  await reject(`select record_portfolio_capital_movement($1,'DEPOSIT',1000,'2026-09-28')`,/Active admin/,[portfolio])
  await reject(`select update_portfolio_transaction($1,'BUY_NEW',10,10000,9000,null,'2026-09-28')`,/Portfolio not found/,[trade])
