@@ -110,13 +110,7 @@
     align-self:stretch; width:min(480px,calc(100vw - 24px)); height:100%; max-height:100%;
     margin:0; padding:20px; border-radius:var(--radius-xl) 0 0 var(--radius-xl);
   }
-  .app-shell .portfolio-positions-table :is(.table-head,.position-row) {
-    box-sizing:border-box; min-width:1120px; grid-template-columns:repeat(8,minmax(0,1fr));
-    gap:16px; padding:12px 16px;
-  }
-  .app-shell .portfolio-positions-table .table-head>span { text-align:center; }
-  .app-shell .portfolio-positions-table .position-row>* { min-width:0; text-align:left; }
-  .app-shell .portfolio-positions-table .position-row>div { flex-wrap:wrap; justify-content:flex-start; }
+
 }
 @media(max-width:1100px) {
   .app-shell .screener-advanced-filters,.app-shell .transaction-filters { grid-template-columns:repeat(2,minmax(0,1fr)); }

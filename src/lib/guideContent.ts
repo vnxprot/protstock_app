@@ -76,6 +76,12 @@ export const guideTopics: GuideTopic[] = [
 ]
 
 guideTopics.push(...journalGuideTopics)
+guideTopics.push({id:'portfolio-metrics',category:'Quyết định',title:'Danh mục · lãi/lỗ và định giá',summary:'Cách tính lãi/lỗ, NAV bình quân và trạng thái thiếu dữ liệu.',status:'Cá nhân',route:'portfolio',details:[
+  'NAV = tiền mặt theo sổ + giá trị cổ phiếu theo Close hợp lệ. Lãi/lỗ danh mục = NAV − vốn nộp ròng; gồm lãi/lỗ đã bán và chưa bán, đã trừ phí mua, phí bán và thuế theo cấu hình hoặc số thực nhập. Vốn nộp ròng bằng 0 không làm mất phần lợi nhuận còn lại.',
+  'Lãi/lỗ hôm nay = NAV cuối ngày − NAV trước ngày đó − nộp/rút ròng trong ngày. Ngày đầu dùng vốn ban đầu làm dòng vốn mở đầu, nên phí giao dịch vẫn được tính. Ngày nghỉ hoặc chưa có phiên mới dùng Close gần nhất và ghi rõ ngày EOD; không lấy lãi/lỗ phiên cũ làm lãi/lỗ hôm nay.',
+  'NAV bình quân lấy trung bình các mốc đóng cửa phiên có đủ dữ liệu; hiển thị số phiên đủ / tổng số phiên. Khi chưa phát sinh giao dịch, NAV bằng tiền mặt và lãi/lỗ bằng 0. Những ngày thiếu giá hoặc giá lịch sử đã điều chỉnh không cùng cơ sở với giá khớp không được dùng để khẳng định hiệu quả; tỷ suất chỉ hiện khi cả chuỗi định giá đủ.',
+  'Sự kiện quyền cần đối soát chỉ chặn định giá khi danh mục thực sự nắm giữ mã trước ngày không hưởng quyền. Mã đã bán hết trước sự kiện và các đợt phát hành được xác định không dành cho cổ đông hiện hữu không bị chặn. Quyền chưa đối soát, giá thiếu hoặc chậm phiên đều có lý do cụ thể; không tự cộng cổ tức hay cổ phiếu chưa được ghi vào sổ.'
+]})
 
 export const guideTerms: GuideTerm[] = [
   {id:'journal-cycle',group:'Quyết định',subgroup:'Nhật ký',label:'Vòng giao dịch',meaning:'Chuỗi giao dịch từ không có vị thế đến khi thoát hết, trong cùng danh mục và mã.',reading:'Mua thêm và bán từng phần ở cùng vòng. Mua lại sau khi thoát hết mở vòng mới; vòng đóng là đơn vị tính mẫu giao dịch.',route:'journal',aliases:['round trip','flat to flat']},

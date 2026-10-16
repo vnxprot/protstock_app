@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { portfolioTimeline, realizedSlices, openCostBasis } from '../src/lib/portfolioLedger.ts'
+import { portfolioTimeline, portfolioPerformance, realizedSlices, openCostBasis } from '../src/lib/portfolioLedger.ts'
 import { tradeCosts } from '../src/lib/portfolioCosts.ts'
 
 const trade = (id,date,action,quantity,price,symbol_id=1) => ({id,trading_date:date,created_at:date+'T09:00:00Z',action,quantity,price,symbol_id})
@@ -105,4 +105,42 @@ test('portfolio creation uses the Vietnam day even after 17:00 UTC',()=>{
   assert.equal(history.length,1)
   assert.equal(history[0].date,'2026-10-02')
   assert.equal(history[0].nav,100000)
+})
+
+test('all three performance metrics are defined for a cash-only portfolio',()=>{
+ const result=portfolioPerformance(report({as_of_date:'2026-09-03',market_sessions:['2026-09-01','2026-09-02','2026-09-03']}))
+ assert.equal(result.profitLoss,0);assert.equal(result.todayProfitLoss,0);assert.equal(result.averageNetAssets,100000);assert.equal(result.averageSamples,3)
+})
+test('first-day purchase includes fees even without a previous valuation row',()=>{
+ const result=portfolioPerformance(report({as_of_date:'2026-09-01',transactions:[trade('b','2026-09-01','BUY_NEW',10,1000)],prices:[price('2026-09-01',1)],market_sessions:['2026-09-01']}))
+ assert.equal(result.profitLoss,-15);assert.equal(result.todayProfitLoss,-15);assert.equal(result.averageNetAssets,99985)
+})
+test('daily P/L excludes deposits; average NAV uses verified session closes',()=>{
+ const result=portfolioPerformance(report({as_of_date:'2026-09-02',transactions:[{...trade('b','2026-09-01','BUY_NEW',10,1000),broker_fee_override:0}],capital_movements:[{id:'in',movement_type:'DEPOSIT',amount:100000,effective_date:'2026-09-02'}],prices:[price('2026-09-01',1),price('2026-09-02',1.1)],market_sessions:['2026-09-01','2026-09-02']}))
+ assert.equal(result.profitLoss,1000);assert.equal(result.todayProfitLoss,1000);assert.equal(result.averageNetAssets,150500)
+ nearly(result.todayReturnPct,0.5)
+})
+test('weekend valuation carries Friday close without reporting Friday P/L as today',()=>{
+ const result=portfolioPerformance(report({portfolio:{capital:100000,created_at:'2026-10-16T01:00:00Z'},as_of_date:'2026-10-17',transactions:[trade('b','2026-10-16','BUY_NEW',10,1000)],prices:[price('2026-10-16',1.1)],market_sessions:['2026-10-16']}))
+ assert.equal(result.complete,true);assert.equal(result.profitLoss,985);assert.equal(result.todayProfitLoss,0)
+ assert.equal(result.averageSamples,1);assert.equal(result.averageNetAssets,100985)
+})
+test('missing latest session stays unavailable, but verified historical average remains visible',()=>{
+ const result=portfolioPerformance(report({as_of_date:'2026-09-02',transactions:[trade('b','2026-09-01','BUY_NEW',10,1000)],prices:[price('2026-09-01',1)],market_sessions:['2026-09-01','2026-09-02']}))
+ assert.equal(result.profitLoss,null);assert.equal(result.todayProfitLoss,null);assert.equal(result.averageNetAssets,99985)
+ assert.equal(result.averageSamples,1);assert.equal(result.averageTotal,2)
+})
+test('zero remaining contributed capital does not erase realized investment profit',()=>{
+ const result=portfolioPerformance(report({as_of_date:'2026-09-03',transactions:[trade('b','2026-09-01','BUY_NEW',10,1000),trade('s','2026-09-02','SELL_CLOSE',10,1200)],capital_movements:[{id:'out',movement_type:'WITHDRAWAL',amount:100000,effective_date:'2026-09-03'}],prices:[price('2026-09-01',1),price('2026-09-02',1.2)],market_sessions:['2026-09-01','2026-09-02','2026-09-03']}))
+ assert.equal(result.latest.capital,0);assert.equal(result.profitLoss,1955);assert.equal(result.todayProfitLoss,0)
+})
+test('unresolved holder entitlements remain explicit and do not produce invented NAV',()=>{
+ const result=portfolioPerformance(report({as_of_date:'2026-09-02',valuation_issues:[{symbol_id:1,symbol:'AAA',ex_date:'2026-09-02',action_type:'STOCK_DIVIDEND'}],valuation_blocked_symbols:[1],market_sessions:['2026-09-01','2026-09-02']}))
+ assert.equal(result.profitLoss,null);assert.equal(result.todayProfitLoss,null)
+ assert.equal(result.averageSamples,1)
+})
+test('adjusted historical quotes do not invalidate current cash P/L after a full sale',()=>{
+ const result=portfolioPerformance(report({as_of_date:'2026-09-03',transactions:[{...trade('b','2026-09-01','BUY_NEW',10,1000),broker_fee_override:0},{...trade('s','2026-09-02','SELL_CLOSE',10,1100),broker_fee_override:0,sell_tax_override:0}],prices:[{...price('2026-09-01',0.5),valuation_usable:false}],market_sessions:['2026-09-01','2026-09-02','2026-09-03']}))
+ assert.equal(result.profitLoss,1000);assert.equal(result.todayProfitLoss,0);assert.equal(result.returnPct,null)
+ assert.equal(result.averageNetAssets,101000);assert.equal(result.averageSamples,2)
 })
