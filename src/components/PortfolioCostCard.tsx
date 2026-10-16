@@ -37,10 +37,10 @@ export function PortfolioCostCard({ rates, loading, error, onRetry, onSave }: {
     <p className="muted">Mẫu SSI: giao dịch chủ động online dưới 100 triệu đồng/ngày/tài khoản. Nếu tài khoản, kênh đặt lệnh hoặc tổng giao dịch trong ngày của bạn khác, hãy sửa tỷ lệ hoặc nhập phí thực tế trong từng giao dịch.</p>
     <form className="portfolio-cost-form" onSubmit={submit}>
       <DateField label="Ngày hiệu lực" value={date} onChange={setDate}/>
-      <label>Phí mua (%)<input type="number" min="0" max="100" step="0.00001" value={buyFee} onChange={event => setBuyFee(Number(event.target.value))}/></label>
-      <label>Phí bán (%)<input type="number" min="0" max="100" step="0.00001" value={sellFee} onChange={event => setSellFee(Number(event.target.value))}/></label>
-      <label>Thuế TNCN khi bán (%)<input type="number" min="0" max="100" step="0.00001" value={sellTax} onChange={event => setSellTax(Number(event.target.value))}/></label>
-      <button className="secondary-button" disabled={saving || loading}>{saving ? 'Đang lưu…' : 'Lưu mức phí'}</button>
+      <label><span>Phí mua (%)</span><input type="number" min="0" max="100" step="0.00001" value={buyFee} onChange={event => setBuyFee(Number(event.target.value))}/></label>
+      <label><span>Phí bán (%)</span><input type="number" min="0" max="100" step="0.00001" value={sellFee} onChange={event => setSellFee(Number(event.target.value))}/></label>
+      <label><span>Thuế TNCN (%)</span><input type="number" min="0" max="100" step="0.00001" value={sellTax} onChange={event => setSellTax(Number(event.target.value))}/></label>
+      <button className="primary-button" disabled={saving || loading}>{saving ? 'Đang lưu…' : 'Lưu mức phí'}</button>
     </form>
     {message && <p role="status" className={message.startsWith('Chưa') || message.startsWith('Kiểm') ? 'form-error' : 'muted'}>{message}</p>}
     {error && <p className="form-error" role="alert">Không tải được biểu phí đã lưu. <button type="button" onClick={onRetry}>Thử lại</button></p>}

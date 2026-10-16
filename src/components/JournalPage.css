@@ -1,8 +1,6 @@
 /* Use shared Prot Stock buttons, selects, tabs, pills, panels and theme tokens. */
 .journal-toolbar { position:sticky; top:12px; z-index:4; padding:16px; }
 .journal-filter-row { display:flex; flex-wrap:wrap; align-items:end; gap:12px; }
-.journal-filter-row .screener-field { display:grid; gap:6px; flex:1 1 150px; min-width:0; padding:0; border:0; background:none; font:var(--text-label); color:var(--muted); }
-.journal-filter-row .screener-field input { width:100%; min-height:var(--control-md); padding:8px 12px; border:1px solid var(--line); border-radius:var(--control-radius); background:var(--surface-2); color:var(--text); font:inherit; }
 .journal-filter-advanced { margin-top:12px; padding-top:12px; border-top:1px solid var(--line); }
 .journal-summary { display:flex; flex-wrap:wrap; gap:8px 24px; align-items:center; color:var(--muted); font-size:13px; line-height:1.6; }
 .journal-toolbar .journal-summary { padding-top:12px; margin-top:12px; border-top:1px solid var(--line); }
@@ -32,8 +30,6 @@
 .journal-sheet input[type=checkbox] { width:auto; min-height:auto; margin-right:8px; accent-color:var(--lime); }
 .app-shell .journal-sheet input[type=checkbox] { min-height:0; }
 .journal-sheet label:has(>input[type=checkbox]) { display:flex; align-items:center; gap:4px; }
-.journal-sheet .form-sticky-actions { display:flex; align-items:center; justify-content:space-between; gap:12px; }
-.journal-detail-sheet { overflow-y:auto; padding:24px; width:min(780px,100%); max-height:90dvh; }
 .journal-note-detail { padding:16px 0; border-top:1px solid var(--line); overflow-wrap:anywhere; }
 .journal-note-detail>p { white-space:pre-wrap; line-height:1.6; }
 .journal-facts { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; font-size:13px; }
@@ -45,18 +41,12 @@
 .journal-report-drill { border-top:1px solid var(--line); margin-top:16px; padding-top:12px; display:flex; flex-wrap:wrap; gap:8px; }
 .journal-report-drill h3 { flex-basis:100%; }
 .journal-reports .journal-summary { margin:16px 0; }
-@media(min-width:1000px) {
-  .journal-detail-backdrop { justify-content:flex-end; align-items:stretch; }
-  .journal-detail-sheet { height:100%; max-height:100dvh; border-radius:0; }
-}
 @media(max-width:760px) {
   .journal-toolbar { position:static; }
   .journal-filter-row { gap:8px; }
-  .journal-filter-row .screener-field { flex-basis:calc(50% - 8px); }
   .journal-form-grid,.journal-facts { grid-template-columns:1fr; }
   .journal-event { gap:4px; align-items:flex-start; }
   .journal-event-actions { flex-direction:column; padding-top:8px; }
   .journal-event-actions .text-button { font-size:12px; min-height:44px; }
-  .journal-detail-sheet { width:100%; height:100dvh; max-height:100dvh; border-radius:0; padding:18px 16px calc(24px + env(safe-area-inset-bottom)); }
   .journal-menu>summary { min-width:44px; min-height:44px; }
 }

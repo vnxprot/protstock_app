@@ -1,0 +1,145 @@
+/* Shared field geometry. Captions belong to labels, never to nested select spans. */
+.app-shell .aligned-filters {
+  --field-height:var(--control-md);
+  display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; align-items:start;
+}
+.app-shell .aligned-filters>label,
+.app-shell .portfolio-cost-form>label {
+  display:grid; grid-template-rows:18px var(--field-height); gap:6px;
+  min-width:0; margin:0; color:var(--muted); font:500 12px/18px var(--font-ui);
+}
+.app-shell .aligned-filters>label>span:first-child,
+.app-shell .portfolio-cost-form>label>span:first-child {
+  min-width:0; color:var(--muted); font:500 12px/18px var(--font-ui);
+}
+.app-shell .aligned-filters :is(.soft-select,.date-input-wrap) { min-width:0; width:100%; height:var(--field-height); }
+.app-shell .aligned-filters :is(input:not([type=date]),.soft-select-trigger),
+.app-shell .portfolio-cost-form :is(input:not([type=date]),.soft-select-trigger) {
+  box-sizing:border-box; width:100%; min-width:0; height:var(--field-height); min-height:var(--field-height);
+  padding:0 12px; border:1px solid var(--line-bright); border-radius:var(--control-radius);
+  background:var(--surface-2); color:var(--text); font:500 13px/1.4 var(--font-ui); text-align:left;
+}
+.app-shell .aligned-filters .soft-select-trigger>span { overflow:hidden; white-space:nowrap; text-overflow:ellipsis; color:inherit; font:inherit; }
+.app-shell .aligned-filters .date-input-wrap>input,
+.app-shell .portfolio-cost-form .date-input-wrap>input { padding-right:39px; }
+.app-shell .date-calendar input[type=date] { height:24px; min-height:0; width:24px; padding:0; }
+.app-shell .aligned-filters>button {
+  box-sizing:border-box; align-self:start; margin:24px 0 0; height:var(--field-height); min-height:var(--field-height);
+  padding:0 12px; font:500 13px/1.4 var(--font-ui); white-space:nowrap;
+}
+.app-shell .screener-advanced-filters { grid-template-columns:repeat(4,minmax(0,1fr)) auto; }
+.app-shell .transaction-filters { grid-template-columns:repeat(4,minmax(0,1fr)) auto; }
+.app-shell .transaction-filters>label>span:not(:first-child) { font:inherit; }
+
+/* Journal's compact controls use the same wrapper and input as Signals. */
+.app-shell .journal-workspace .journal-filter-row {
+  display:grid; grid-template-columns:minmax(120px,1fr) minmax(170px,1.5fr) minmax(150px,1fr) auto auto;
+  align-items:center; gap:8px;
+}
+.app-shell .journal-toolbar .screener-field {
+  box-sizing:border-box; display:flex; align-items:center; gap:6px;
+  min-width:0; height:var(--control-md); min-height:var(--control-md); margin:0; padding:0 8px;
+  border:1px solid var(--line-bright); border-radius:var(--control-radius);
+  background:var(--surface-2); color:var(--text); font:500 12px/1.4 var(--font-ui);
+}
+.app-shell .journal-toolbar .screener-field input {
+  width:100%; min-width:0; height:100%; min-height:0; padding:0; border:0;
+  border-radius:0; background:transparent; color:inherit; font:inherit; text-align:left;
+}
+.app-shell .journal-toolbar .screener-field .soft-select-trigger {
+  height:38px; min-height:0; padding:0; border:0; background:transparent; color:inherit; font:inherit;
+}
+.app-shell .journal-toolbar .soft-select-trigger>span { overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+.app-shell .journal-filter-row>button {
+  box-sizing:border-box; height:var(--control-md); min-height:var(--control-md); margin:0;
+  border-radius:var(--control-radius); font:500 12px/1.4 var(--font-ui); white-space:nowrap;
+}
+.app-shell .journal-filter-row>.secondary-button { display:inline-flex; gap:6px; align-items:center; justify-content:center; border-color:var(--line-bright); background:var(--surface-2); color:var(--text); }
+.app-shell .journal-filter-advanced { margin-top:12px; padding:12px 0 0; border-top:1px solid var(--line); }
+
+/* Date and journal action occupy separate grid cells. */
+.app-shell .signal-explanation-actions { display:flex; flex-wrap:wrap; align-items:center; gap:6px; min-width:0; }
+.app-shell .signal-explanation-actions button { position:static; flex:0 1 auto; max-width:100%; white-space:normal; }
+.app-shell .screener-table .signal-date { display:block; align-self:center; min-width:0; white-space:nowrap; }
+.app-shell .signal-history-ranges { display:grid; grid-template-columns:repeat(8,minmax(48px,1fr)); gap:8px; margin:12px 0; overflow-x:auto; }
+.app-shell .signal-history-ranges button { min-width:0; width:100%; margin:0; padding-inline:8px; justify-content:center; white-space:nowrap; }
+
+/* Forms scroll as one document. Save actions stay in flow, without negative margins. */
+.app-shell .sheet-backdrop {
+  top:var(--modal-viewport-top,0px); bottom:auto; height:var(--modal-viewport-height,100dvh);
+  min-height:0; overflow:hidden; grid-template-rows:minmax(0,1fr);
+}
+.app-shell .sheet-backdrop :is(.bottom-sheet,.position-sheet) {
+  box-sizing:border-box; min-height:0; align-content:start; grid-auto-rows:max-content;
+  gap:12px; overscroll-behavior:contain; touch-action:pan-y; overflow-y:auto; overflow-x:hidden;
+}
+.app-shell .sheet-backdrop .sheet-title {
+  position:relative; display:flex; align-items:flex-start; justify-content:space-between;
+  gap:12px; min-width:0; margin:0; padding:0;
+}
+.app-shell .sheet-backdrop .sheet-title h2 { flex:1; min-width:0; margin:0; font:var(--text-heading); }
+.app-shell .sheet-backdrop .sheet-title>div { flex:1; min-width:0; }
+.app-shell .sheet-backdrop .sheet-title>.icon-button {
+  position:static; flex:none; align-self:flex-start; display:grid; place-items:center;
+  width:40px; height:40px; min-height:40px; margin:0 0 0 auto; padding:0;
+  border:1px solid var(--line); border-radius:var(--control-radius); background:var(--surface-2); color:var(--muted);
+}
+.app-shell .sheet-backdrop .form-sticky-actions {
+  position:static; inset:auto; z-index:auto; display:flex!important; flex-wrap:wrap;
+  align-items:center; gap:8px; align-self:start; margin:8px 0 0; padding:12px 0 0;
+  border-top:1px solid var(--line); background:transparent; transform:none;
+}
+.app-shell .sheet-backdrop .form-sticky-actions>button { flex:1 1 180px; width:auto; margin:0; }
+.app-shell .sheet-backdrop .form-sticky-actions>a { font:var(--text-caption); }
+.app-shell .journal-sheet .journal-form-grid { gap:10px; margin:8px 0; }
+.app-shell .journal-sheet details>summary { padding:8px 0; }
+.app-shell .journal-sheet p { margin:4px 0; }
+.app-shell .journal-sheet .journal-snapshot-note { padding:10px; gap:4px; }
+.app-shell .journal-sheet .journal-review-picker { gap:6px; }
+.app-shell .journal-sheet .journal-review-picker button { padding:6px 10px; }
+.app-shell :is(.watch-reason-header,.signal-explanation-panel>header) { align-items:flex-start; }
+.app-shell :is(.watch-reason-header,.signal-explanation-panel>header)>button { flex:none; align-self:flex-start; margin-left:auto; }
+
+/* Keep the date field's established 48px height as the cost form's reference. */
+.app-shell .portfolio-cost-form { --field-height:var(--control-lg); grid-template-columns:repeat(4,minmax(0,1fr)) auto; align-items:start; }
+.app-shell .portfolio-cost-form .date-input-wrap { height:var(--field-height); }
+.app-shell .portfolio-cost-form>button { box-sizing:border-box; height:var(--field-height); min-height:var(--field-height); margin:24px 0 0; padding:0 16px; background:var(--lime); color:#07110e; border:1px solid var(--lime); border-radius:var(--control-radius); font:600 13px/1.4 var(--font-ui); }
+
+@media(min-width:761px) {
+  .app-shell .sheet-backdrop .bottom-sheet.position-sheet {
+    align-self:stretch; width:min(480px,calc(100vw - 24px)); height:100%; max-height:100%;
+    margin:0; padding:20px; border-radius:var(--radius-xl) 0 0 var(--radius-xl);
+  }
+  .app-shell .portfolio-positions-table :is(.table-head,.position-row) {
+    box-sizing:border-box; min-width:1120px; grid-template-columns:repeat(8,minmax(0,1fr));
+    gap:16px; padding:12px 16px;
+  }
+  .app-shell .portfolio-positions-table .table-head>span { text-align:center; }
+  .app-shell .portfolio-positions-table .position-row>* { min-width:0; text-align:left; }
+  .app-shell .portfolio-positions-table .position-row>div { flex-wrap:wrap; justify-content:flex-start; }
+}
+@media(max-width:1100px) {
+  .app-shell .screener-advanced-filters,.app-shell .transaction-filters { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .app-shell .aligned-filters>button { margin-top:0; }
+  .app-shell .portfolio-cost-form { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .app-shell .portfolio-cost-form>button { grid-column:1/-1; margin-top:0; }
+}
+@media(max-width:760px) {
+  .app-shell .aligned-filters { grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
+  .app-shell .journal-workspace .journal-filter-row { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .app-shell .journal-filter-row .screener-search { grid-column:1/-1; }
+  .app-shell .journal-toolbar .screener-field,.app-shell .journal-filter-row>button { height:44px; min-height:44px; }
+  .app-shell .journal-filter-row>button { width:100%; }
+  .app-shell .sheet-backdrop .bottom-sheet.position-sheet {
+    align-self:end; width:100%; height:auto; max-height:calc(var(--modal-viewport-height,100dvh) - 12px);
+    padding:12px 16px calc(16px + env(safe-area-inset-bottom)); border-radius:var(--radius-xl) var(--radius-xl) 0 0;
+  }
+  .app-shell .sheet-backdrop .sheet-handle { margin:0 auto 4px; }
+  .app-shell .sheet-backdrop .form-sticky-actions>button { flex-basis:100%; width:100%; }
+  .app-shell .signal-history-ranges { grid-template-columns:repeat(8,minmax(52px,1fr)); }
+  .app-shell .aligned-filters { --field-height:44px; }
+}
+@media(max-width:480px) {
+  .app-shell .portfolio-cost-form { grid-template-columns:1fr; }
+  .app-shell .portfolio-cost-form>button { margin-top:0; }
+}
