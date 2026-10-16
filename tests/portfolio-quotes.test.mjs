@@ -1,16 +1,16 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { quotedNetAssetValue } from '../src/lib/portfolioQuotes.ts'
+import { holdingsNetAssetValue } from '../src/lib/portfolioQuotes.ts'
 
 test('weights include all quoted holdings and cash without depending on entitlement verification',()=>{
-  const holdings=[{quantity:100,marketPrice:42000},{quantity:200,marketPrice:25000}]
-  const nav=quotedNetAssetValue(holdings,800000)
+  const holdings=[{marketValue:4200000},{marketValue:5000000}]
+  const nav=holdingsNetAssetValue(holdings,800000)
   assert.equal(nav,10000000)
-  assert.equal(holdings[0].quantity*holdings[0].marketPrice/nav*100,42)
+  assert.equal(holdings[0].marketValue/nav*100,42)
 })
-test('a missing quote does not normalize remaining holdings or use their cost basis',()=>{
-  assert.equal(quotedNetAssetValue([{quantity:100,marketPrice:null},{quantity:100,marketPrice:20000}],500000),null)
-  assert.equal(quotedNetAssetValue([{quantity:100,marketPrice:0}],500000),null)
-  assert.equal(quotedNetAssetValue([{quantity:100,marketPrice:20000}],null),null)
-  assert.equal(quotedNetAssetValue([],500000),500000)
+test('restores the original denominator including cost fallback position values and cash-only accounts',()=>{
+  // PortfolioPage retains the original quantity * (marketPrice ?? averageCost) formula.
+  assert.equal(holdingsNetAssetValue([{marketValue:100*15000},{marketValue:100*20000}],500000),4000000)
+  assert.equal(holdingsNetAssetValue([],500000),500000)
+  assert.equal(holdingsNetAssetValue([],0),0)
 })
