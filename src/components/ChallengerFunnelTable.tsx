@@ -17,16 +17,21 @@ const actionText = (value: string) => value === 'WATCH' ? 'Theo dõi' : value ==
 export function ChallengerFunnelTable({ date, focusSymbol = '' }: { date: string; focusSymbol?: string }) {
   const [search, setSearch] = useState(focusSymbol)
   const [group, setGroup] = useState<FunnelGroup>('ACTIVE')
-  const [filters, setFilters] = useState({ action: '', market_regime: '', monthly_state: '', weekly_setup: '', distance: '', reason: '' })
+  const [filters, setFilters] = useState({ action: '', market_regime: '', monthly_state: '', weekly_setup: '' })
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(25)
   const [opened, setOpened] = useState<number | null>(null)
   const [advancedOpen, setAdvancedOpen] = useState(false)
-  const selectedRow = useRef<HTMLTableRowElement>(null)
-  // Closing another expanded row changes the selected row's position. Anchor
-  // after React lays out both changes so the browser cannot jump to the footer.
+  const switchAnchor = useRef<{ element: HTMLTableRowElement; top: number } | null>(null)
+  // Switching closes the previous detail. Compensate only for that layout
+  // change, keeping the clicked stock at its existing screen position.
   useLayoutEffect(() => {
-    if (opened !== null) selectedRow.current?.scrollIntoView({ block: 'start', behavior: 'instant' })
+    const anchor = switchAnchor.current
+    switchAnchor.current = null
+    if (anchor?.element.isConnected) {
+      const shift = anchor.element.getBoundingClientRect().top - anchor.top
+      if (Math.abs(shift) > 1) window.scrollBy({ top: shift, behavior: 'instant' })
+    }
   }, [opened])
   useEffect(() => { if (focusSymbol) { setSearch(focusSymbol); setGroup('ALL'); setPage(1) } }, [focusSymbol])
   useEffect(() => { setPage(1); setOpened(null) }, [date])
@@ -50,8 +55,6 @@ export function ChallengerFunnelTable({ date, focusSymbol = '' }: { date: string
     && (!filters.market_regime || row.evidence.market_regime === filters.market_regime)
     && (!filters.monthly_state || row.evidence.monthly_state === filters.monthly_state)
     && (!filters.weekly_setup || row.evidence.weekly_setup === filters.weekly_setup)
-    && (!filters.distance || row.evidence.distance_to_stop_pct != null && row.evidence.distance_to_stop_pct <= Number(filters.distance))
-    && (!filters.reason || [...row.reasons, ...(row.evidence.funnel_reasons ?? []), funnelResult(row)].join(' ').toLocaleLowerCase('vi').includes(filters.reason.trim().toLocaleLowerCase('vi')))
   ).sort(sortFunnelRows)
   const current = Math.min(page, Math.max(1, Math.ceil(rows.length / pageSize)))
   const change = (key: keyof typeof filters, value: string) => { setFilters(previous => ({ ...previous, [key]: value })); setPage(1); setOpened(null) }
@@ -59,17 +62,14 @@ export function ChallengerFunnelTable({ date, focusSymbol = '' }: { date: string
   return <article className="panel challenger-funnel-panel">
     <div className="panel-title"><div><h3>Phễu MTF Challenger · tín hiệu riêng</h3><small>Tháng → setup tuần → kích hoạt ngày</small></div><strong>Phiên đánh giá: {dateText(date)}</strong></div>
     <p className="muted">Ngày kích hoạt là lần xác nhận đầu tiên của setup hiện tại. Tuổi tính bằng số phiên thị trường sau ngày đó; phiên kích hoạt = 0. Tín hiệu EOD, điểm mua giả định sớm nhất là Open phiên sau.</p>
-    <div className="signal-funnel-counts funnel-quick-groups" role="group" aria-label="Nhóm tín hiệu">{(Object.keys(funnelGroups) as FunnelGroup[]).map(key => <button key={key} type="button" aria-pressed={group === key} className={group === key ? 'selected' : ''} onClick={() => { setGroup(key); setPage(1); setOpened(null) }}>{funnelGroups[key]} ({all.filter(row => inFunnelGroup(row, key)).length})</button>)}</div>
-    <div className="screener-filter-toolbar funnel-toolbar">
+    <div className="signal-funnel-counts funnel-quick-groups" role="group" aria-label="Nhóm tín hiệu và bộ lọc">{(Object.keys(funnelGroups) as FunnelGroup[]).map(key => <button key={key} type="button" aria-pressed={group === key} className={group === key ? 'selected' : ''} onClick={() => { setGroup(key); setPage(1); setOpened(null) }}>{funnelGroups[key]} ({all.filter(row => inFunnelGroup(row, key)).length})</button>)}
       <label className="screener-field screener-search"><Search size={15}/><input aria-label="Tìm mã phễu Challenger" value={search} placeholder="Tìm mã…" onChange={event => { setSearch(event.target.value); setPage(1); setOpened(null) }}/></label>
-      <span className="funnel-result-count">{rows.length}/{all.length} mã</span>
-      <button type="button" className={`advanced-toggle${advancedOpen ? ' active' : ''}`} aria-expanded={advancedOpen} aria-controls="challenger-funnel-filters" onClick={() => setAdvancedOpen(value => !value)}><SlidersHorizontal size={15}/> Bộ lọc nâng cao{activeFilters ? ` (${activeFilters})` : ''}</button>
+      <button type="button" className={`signal-funnel-filter-toggle${advancedOpen ? ' selected' : ''}`} aria-expanded={advancedOpen} aria-controls="challenger-funnel-filters" onClick={() => setAdvancedOpen(value => !value)}><SlidersHorizontal size={15}/> Bộ lọc{activeFilters ? ` (${activeFilters})` : ''}</button>
     </div>
+    <p className="funnel-result-count">{rows.length}/{all.length} mã</p>
     {advancedOpen && <div id="challenger-funnel-filters" className="signal-search-advanced funnel-advanced">
       {([['action', 'Hành động'], ['market_regime', 'Thị trường'], ['monthly_state', 'Tháng'], ['weekly_setup', 'Setup tuần']] as const).map(([key, label]) => <label key={key}>{label}<SoftSelect value={filters[key]} onChange={event => change(key, event.target.value)}><option value="">Tất cả</option>{[...new Set(all.map(row => key === 'action' ? row.action : row.evidence[key]).filter((value): value is string => Boolean(value)))].sort().map(value => <option key={value} value={value}>{key === 'weekly_setup' ? setupNames[value] ?? value : key === 'action' ? actionText(value) : value}</option>)}</SoftSelect></label>)}
-      <label>Xa stop tối đa %<input type="number" min="0" step="0.1" value={filters.distance} onChange={event => change('distance', event.target.value)}/></label>
-      <label>Lý do<input value={filters.reason} onChange={event => change('reason', event.target.value)} placeholder="Nội dung hoặc mã lý do…"/></label>
-      <button type="button" className="secondary-button" onClick={() => { setFilters({ action: '', market_regime: '', monthly_state: '', weekly_setup: '', distance: '', reason: '' }); setSearch(''); setPage(1) }}>Xóa bộ lọc</button>
+      <button type="button" className="secondary-button" onClick={() => { setFilters({ action: '', market_regime: '', monthly_state: '', weekly_setup: '' }); setSearch(''); setPage(1); setOpened(null) }}>Xóa bộ lọc</button>
     </div>}
     {query.isLoading && <p>Đang tải phễu Challenger…</p>}
     {query.isError && <p className="form-error" role="alert">Không đọc được phễu Challenger.</p>}
@@ -77,8 +77,12 @@ export function ChallengerFunnelTable({ date, focusSymbol = '' }: { date: string
       {rows.slice((current - 1) * pageSize, current * pageSize).map(row => {
         const info = row.evidence
         const expanded = opened === row.symbol_id
-        return <Fragment key={row.symbol_id}><tr ref={expanded ? selectedRow : undefined} className={`funnel-summary${info.funnel_stage === 'DAILY_TRIGGER' ? ' funnel-fresh' : ''}${expanded ? ' is-expanded' : ''}`}>
-          <td data-label="Mã"><button type="button" className="funnel-symbol" aria-expanded={expanded} aria-controls={`funnel-detail-${row.symbol_id}`} onClick={() => setOpened(expanded ? null : row.symbol_id)}>{row.symbol} {expanded ? '▾' : '▸'}</button></td>
+        return <Fragment key={row.symbol_id}><tr className={`funnel-summary${info.funnel_stage === 'DAILY_TRIGGER' ? ' funnel-fresh' : ''}${expanded ? ' is-expanded' : ''}`}>
+          <td data-label="Mã"><button type="button" className="funnel-symbol" aria-expanded={expanded} aria-controls={`funnel-detail-${row.symbol_id}`} onClick={event => {
+            const element = event.currentTarget.closest('tr')
+            if (opened !== null && !expanded && element) switchAnchor.current = { element, top: element.getBoundingClientRect().top }
+            setOpened(expanded ? null : row.symbol_id)
+          }}>{row.symbol} {expanded ? '▾' : '▸'}</button></td>
           <td data-label="Tháng">{info.monthly_state ?? '—'}</td><td data-label="Giai đoạn">{funnelGroups[info.funnel_stage as FunnelGroup] ?? 'Chưa xác định'}</td>
           <td data-label="Setup tuần · ngày tạo">{setupNames[info.weekly_setup ?? ''] ?? info.weekly_setup ?? '—'}<small>{dateText(setupDate(row))}</small></td>
           <td data-label="Ngày kích hoạt">{dateText(info.trigger_date)}</td><td data-label="Tuổi trigger">{info.trigger_date && info.trigger_age_sessions != null ? `${info.trigger_age_sessions} phiên` : '—'}</td>

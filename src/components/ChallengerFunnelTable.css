@@ -3,19 +3,18 @@
   --funnel-control-height: var(--control-md, 40px);
   overflow-anchor: none;
 }
-.challenger-funnel-panel .funnel-quick-groups { margin: 14px 0; }
-.challenger-funnel-panel .funnel-toolbar { display: flex; align-items: center; gap: 12px; padding: 12px; }
-.challenger-funnel-panel .funnel-toolbar .screener-search { flex: 0 1 240px; width: 240px; }
-.challenger-funnel-panel .funnel-toolbar .screener-field,
-.challenger-funnel-panel .funnel-toolbar .advanced-toggle {
+.challenger-funnel-panel .funnel-quick-groups { margin: 14px 0 8px; align-items: center; }
+.challenger-funnel-panel .funnel-quick-groups .screener-search { flex: 0 1 160px; width: 160px; }
+.challenger-funnel-panel .funnel-quick-groups .screener-field,
+.challenger-funnel-panel .funnel-quick-groups button {
   box-sizing: border-box;
-  height: var(--funnel-control-height);
-  min-height: var(--funnel-control-height) !important;
-  border-radius: var(--control-radius, 12px);
+  height: 36px;
+  min-height: 36px !important;
 }
-.challenger-funnel-panel .funnel-toolbar .screener-field input { height: 100%; min-height: 0; text-align: left; }
-.funnel-result-count { margin-right: auto; color: var(--muted); font-size: 12px; }
-.challenger-funnel-panel .funnel-advanced { grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: end; margin-bottom: 16px; }
+.challenger-funnel-panel .funnel-quick-groups .signal-funnel-filter-toggle { margin-left: 0; }
+.challenger-funnel-panel .funnel-quick-groups .screener-field input { height: 100%; min-height: 0; text-align: left; }
+.funnel-result-count { margin: 0 0 12px; color: var(--muted); font-size: 12px; }
+.challenger-funnel-panel .funnel-advanced { grid-template-columns: repeat(4, minmax(0, 1fr)) auto; align-items: end; margin-bottom: 16px; }
 .funnel-advanced > label { display: grid; gap: 7px; min-width: 0; }
 .challenger-funnel-panel .funnel-advanced :is(input, .soft-select-trigger, .secondary-button) {
   box-sizing: border-box;
@@ -36,7 +35,7 @@
 .funnel-overview th { background: var(--surface-2); color: var(--muted); font-size: 12px; font-weight: 800; }
 .funnel-overview th:first-child { border-radius: 10px 0 0 0; }
 .funnel-overview th:last-child { border-radius: 0 10px 0 0; }
-.funnel-overview tbody > .funnel-summary { background: var(--surface); scroll-margin-top: 88px; }
+.funnel-overview tbody > .funnel-summary { background: var(--surface); }
 /* Each stock has a summary and a detail row, including when details are hidden. */
 .funnel-overview tbody > .funnel-summary:nth-child(4n + 1) { background: color-mix(in srgb, var(--surface-2) 70%, var(--surface)); }
 .funnel-overview tbody > .funnel-summary:is(:hover, .is-expanded) { background: color-mix(in srgb, var(--control-accent) 9%, var(--surface)); }
@@ -66,9 +65,9 @@
   .challenger-funnel-panel .funnel-advanced { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 540px) {
-  .challenger-funnel-panel .funnel-toolbar { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
-  .challenger-funnel-panel .funnel-toolbar .screener-search { width: auto; }
-  .challenger-funnel-panel .funnel-toolbar .advanced-toggle { grid-column: 1 / -1; justify-content: center; }
   .challenger-funnel-panel .funnel-advanced { grid-template-columns: minmax(0, 1fr); }
 }
-@media (max-width: 760px) { .challenger-funnel-panel { --funnel-control-height: 44px; } }
+@media (max-width: 760px) {
+  .challenger-funnel-panel { --funnel-control-height: 44px; }
+  .challenger-funnel-panel .funnel-quick-groups :is(button, .screener-field) { height: 44px; min-height: 44px !important; }
+}
