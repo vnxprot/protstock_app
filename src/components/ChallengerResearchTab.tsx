@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase'
 import { ResearchPagination } from './ResearchPagination'
 import { SoftSelect } from './SoftSelect'
 import { MonthlyTrendEvidence, type MonthlyEvidence } from './MonthlyTrendEvidence'
+import { ChallengerFunnelTable } from './ChallengerFunnelTable'
 import './ChallengerResearchTab.css'
 
 type Code = 'ADAPTIVE_FUNNEL' | 'MACD_EARLY_ZONE' | 'DOWNTREND_SPRING'
@@ -42,6 +43,10 @@ const stages = ['ALL', ...Object.keys(stageNames)]
 const values = (items: (string | null | undefined)[]) => [...new Set(items.filter((value): value is string => Boolean(value)))].sort()
 
 export function ChallengerResearchTab({ date, tab, focusSymbol = '' }: { date: string; tab: 'funnel' | 'macd'; focusSymbol?: string }) {
+  return tab === 'funnel' ? <ChallengerFunnelTable date={date} focusSymbol={focusSymbol}/> : <ChallengerResearchCards date={date} tab={tab} focusSymbol={focusSymbol}/>
+}
+
+function ChallengerResearchCards({ date, tab, focusSymbol = '' }: { date: string; tab: 'funnel' | 'macd'; focusSymbol?: string }) {
   const [search, setSearch] = useState('')
   useEffect(() => { if (focusSymbol) { setSearch(focusSymbol); setPage(1) } }, [focusSymbol])
   const [status, setStatus] = useState('ALL')

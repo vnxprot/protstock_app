@@ -715,7 +715,8 @@ def _same_day_market_context(trading_date: date, breadth: dict, vnindex_snapshot
                              benchmark_daily: list[dict] | None = None) -> dict:
     return {"trading_date": trading_date.isoformat(), "breadth": breadth,
             "vnindex_snapshot": vnindex_snapshot,
-            "recovery": recovery_status(benchmark_daily or [])}
+            "recovery": recovery_status(benchmark_daily or []),
+            "session_dates": [row["date"] for row in (benchmark_daily or [])]}
 
 
 def _fetch_requested_session(provider: VnstockProvider, source: str, symbol: str,

@@ -67,7 +67,8 @@ def refresh_history(client: SupabaseRestClient, start: date, end: date, shard: i
         if start <= day <= end:
             prefix = benchmark[:day_rows[day.isoformat()] + 1]
             market[day.isoformat()] = {"trading_date": day.isoformat(), "breadth": breadth.get(day.isoformat(), {}),
-                                      "vnindex_snapshot": calculate_indicators(prefix).to_dict(), "recovery": recovery_status(prefix)}
+                                      "vnindex_snapshot": calculate_indicators(prefix).to_dict(), "recovery": recovery_status(prefix),
+                                      "session_dates": [row["date"] for row in prefix]}
     counts = {"start": str(start), "end": str(end), "shard": shard, "manifest": 277,
               "symbols": len(symbols), "sessions": 0, "missing": [], "failed": [], "monthly_states": 0}
     first_period = start.replace(day=1) - timedelta(days=1)

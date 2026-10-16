@@ -33,7 +33,8 @@ def run_shadow_session(client: SupabaseRestClient, trading_date: str | None = No
     index_snapshot = (calculate_indicators(index_bars).to_dict() if index_bars and index_bars[-1]["date"] == day
                       else {"trend_state": breadth.get("vnindex_trend_state", "UNKNOWN")})
     market_context = {"trading_date": day, "breadth": breadth,
-                      "vnindex_snapshot": index_snapshot, "recovery": recovery_status(index_bars)}
+                      "vnindex_snapshot": index_snapshot, "recovery": recovery_status(index_bars),
+                      "session_dates": [row["date"] for row in index_bars]}
     pending = []
     skipped = []
     symbols = client.active_symbols()

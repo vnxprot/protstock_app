@@ -1,0 +1,50 @@
+name: Refresh Challenger funnel event dates
+
+on:
+  workflow_dispatch:
+    inputs:
+      end_date:
+        description: Stored EOD cutoff (YYYY-MM-DD); blank uses latest assessment session
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: protstock-eod
+  cancel-in-progress: false
+
+jobs:
+  enrich:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - run: python -m pip install --extra-index-url https://vnstocks.com/api/packages -e '.[data]'
+      - name: Add dates and session age to existing funnel evidence only
+        env:
+          SUPABASE_URL: https://upmqxwktvvguegqeqibn.supabase.co
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          END_DATE: ${{ inputs.end_date }}
+          SHARD: ${{ matrix.shard }}
+        shell: bash
+        run: |
+          args=()
+          if [ -n "$END_DATE" ]; then args+=(--end "$END_DATE"); fi
+          python -m protstock.funnel_dates_refresh --start 2026-09-11 --shard "$SHARD" --shards 4 "${args[@]}"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: funnel-dates-${{ matrix.shard }}
+          path: funnel-dates-*.json
+          retention-days: 14
+          if-no-files-found: ignore

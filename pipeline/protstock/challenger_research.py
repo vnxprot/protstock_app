@@ -9,6 +9,7 @@ from typing import Sequence
 from .indicators import _rsi, calculate_indicators
 from .macd_divergence import _macd_series, _pivots
 from .signal_funnel import assess_funnel
+from .funnel_events import funnel_event_metadata
 from .signal_policy import average_turnover_vnd, order_participation_rate, MIN_AVERAGE_TURNOVER_VND
 from .wyckoff import classify_wyckoff_timeframe
 from .timeframes import aggregate_bars
@@ -262,7 +263,8 @@ def assess_challenger_strategies(symbol_id: int, bars: Sequence[dict], market_co
                          "weekly_setup": funnel.get("setup_kind"), "setup_id": funnel.get("setup_id"),
                          "monthly": month, "weekly_context": (funnel.get("evidence") or {}).get("weekly_context", week),
                          "weekly": weekly,
-                         "funnel_reasons": funnel["reasons"]}))
+                         "funnel_reasons": funnel["reasons"],
+                         **funnel_event_metadata(funnel, market_context.get("session_dates", []))}))
 
     early = early_second_low(ordered, symbol_id)
     oversold = oversold_evidence(ordered)
