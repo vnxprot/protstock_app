@@ -1,4 +1,74 @@
-.challenger-funnel-panel{--border:var(--line);--text-muted:var(--muted);--accent:var(--mint);--accent-soft:color-mix(in srgb,var(--mint) 10%,transparent);--surface-soft:var(--surface)}
-.funnel-quick-groups{display:flex;flex-wrap:wrap;gap:8px;margin:16px 0}.funnel-quick-groups button{border:1px solid var(--border,#d5dce5);border-radius:8px;padding:8px 10px;background:transparent;color:inherit;cursor:pointer}.funnel-quick-groups button.selected{background:var(--accent-soft,#e7f2ef);border-color:var(--accent,#328570)}.funnel-quick-groups b{margin-left:6px}.funnel-toolbar{display:flex;align-items:center;gap:16px;margin:12px 0}.funnel-toolbar label{display:flex;align-items:center;gap:8px}.funnel-toolbar input{max-width:180px}.funnel-advanced{margin:12px 0}.funnel-advanced summary{cursor:pointer;padding:8px 0}.funnel-overview{width:100%;border-collapse:collapse;font-size:13px}.funnel-overview th,.funnel-overview td{padding:12px 8px;text-align:left;border-bottom:1px solid var(--border,#d5dce5);vertical-align:top}.funnel-overview th{font-weight:600}.funnel-overview small{display:block;margin-top:5px;color:var(--text-muted,#687582);line-height:1.45}.funnel-caption{text-align:left;caption-side:bottom;font-size:12px;padding:12px 0;color:var(--text-muted,#687582)}.funnel-symbol{font-weight:700;color:inherit;background:transparent;border:0;cursor:pointer;padding:0;font-size:14px}.funnel-symbol:focus-visible{outline:2px solid var(--accent,#328570);outline-offset:4px}.funnel-fresh{background:var(--accent-soft,#e7f2ef)}.funnel-detail>td{padding:16px;background:var(--surface-soft,#f5f7f9)}.funnel-detail[hidden]{display:none}.funnel-detail details{margin-top:12px}.funnel-detail p{overflow-wrap:anywhere}
-@media(max-width:900px){.funnel-overview thead{display:none}.funnel-overview,.funnel-overview tbody,.funnel-overview tr,.funnel-overview td{display:block}.funnel-overview tr:not(.funnel-detail){border:1px solid var(--border,#d5dce5);border-radius:10px;padding:8px;margin-top:12px}.funnel-overview td{border:0;display:grid;grid-template-columns:minmax(110px,36%) 1fr;padding:6px 8px}.funnel-overview td::before{content:attr(data-label);font-weight:500;color:var(--text-muted,#687582)}.funnel-overview td small{grid-column:2}.funnel-overview .funnel-detail>td{display:block}.funnel-overview .funnel-detail>td::before{content:none}.funnel-detail[hidden]{display:none}.challenger-funnel-panel .panel-title{align-items:flex-start;gap:8px;flex-wrap:wrap}}
-
+.challenger-funnel-panel {
+  --border: var(--line);
+  --funnel-control-height: var(--control-md, 40px);
+  overflow-anchor: none;
+}
+.challenger-funnel-panel .funnel-quick-groups { margin: 14px 0; }
+.challenger-funnel-panel .funnel-toolbar { display: flex; align-items: center; gap: 12px; padding: 12px; }
+.challenger-funnel-panel .funnel-toolbar .screener-search { flex: 0 1 240px; width: 240px; }
+.challenger-funnel-panel .funnel-toolbar .screener-field,
+.challenger-funnel-panel .funnel-toolbar .advanced-toggle {
+  box-sizing: border-box;
+  height: var(--funnel-control-height);
+  min-height: var(--funnel-control-height) !important;
+  border-radius: var(--control-radius, 12px);
+}
+.challenger-funnel-panel .funnel-toolbar .screener-field input { height: 100%; min-height: 0; text-align: left; }
+.funnel-result-count { margin-right: auto; color: var(--muted); font-size: 12px; }
+.challenger-funnel-panel .funnel-advanced { grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: end; margin-bottom: 16px; }
+.funnel-advanced > label { display: grid; gap: 7px; min-width: 0; }
+.challenger-funnel-panel .funnel-advanced :is(input, .soft-select-trigger, .secondary-button) {
+  box-sizing: border-box;
+  width: 100%;
+  height: var(--funnel-control-height);
+  min-height: var(--funnel-control-height) !important;
+  padding: 0 12px;
+  border: 1px solid var(--line-bright);
+  border-radius: var(--control-radius, 12px);
+  background: var(--surface);
+  color: var(--text);
+  font: 500 12px/1.4 var(--font-ui);
+}
+.challenger-funnel-panel .funnel-advanced > .secondary-button { margin-top: 0; align-self: end; }
+.funnel-overview { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13px; }
+.funnel-overview th,
+.funnel-overview td { padding: 12px; text-align: left; border-bottom: 1px solid var(--line); vertical-align: middle; }
+.funnel-overview th { background: var(--surface-2); color: var(--muted); font-size: 12px; font-weight: 800; }
+.funnel-overview th:first-child { border-radius: 10px 0 0 0; }
+.funnel-overview th:last-child { border-radius: 0 10px 0 0; }
+.funnel-overview tbody > .funnel-summary { background: var(--surface); scroll-margin-top: 88px; }
+/* Each stock has a summary and a detail row, including when details are hidden. */
+.funnel-overview tbody > .funnel-summary:nth-child(4n + 1) { background: color-mix(in srgb, var(--surface-2) 70%, var(--surface)); }
+.funnel-overview tbody > .funnel-summary:is(:hover, .is-expanded) { background: color-mix(in srgb, var(--control-accent) 9%, var(--surface)); }
+.funnel-summary > td:first-child { border-left: 3px solid transparent; }
+.funnel-summary:is(:hover, .is-expanded, .funnel-fresh) > td:first-child { border-left-color: var(--lime); }
+.funnel-overview small { display: block; margin-top: 5px; color: var(--muted); font-size: 12px; line-height: 1.45; }
+.funnel-caption { text-align: left; caption-side: bottom; padding: 12px 0; color: var(--muted); font-size: 12px; }
+.funnel-symbol { display: inline-flex; align-items: center; min-height: 32px; padding: 0; border: 0; background: transparent; color: var(--text); font: 700 14px/1.4 var(--font-ui); cursor: pointer; }
+.funnel-symbol:focus-visible { outline: 2px solid var(--control-accent); outline-offset: 4px; }
+.funnel-detail > td { padding: 16px; background: var(--surface-2); border-bottom-color: var(--line-bright); }
+.funnel-detail[hidden] { display: none; }
+.funnel-detail h4 { margin: 0 0 12px; color: var(--text); font-size: 14px; }
+.funnel-detail details { margin-top: 12px; }
+.funnel-detail p { overflow-wrap: anywhere; }
+@media (max-width: 900px) {
+  .funnel-overview thead { display: none; }
+  .funnel-overview, .funnel-overview tbody, .funnel-overview tr, .funnel-overview td { display: block; }
+  .funnel-overview .funnel-summary { margin-top: 12px; padding: 8px; border: 1px solid var(--line-bright); border-radius: 10px; }
+  .funnel-overview td { display: grid; grid-template-columns: minmax(110px, 36%) minmax(0, 1fr); padding: 6px 8px; border: 0; }
+  .funnel-overview td::before { content: attr(data-label); color: var(--muted); font-weight: 500; }
+  .funnel-overview td small { grid-column: 2; }
+  .funnel-overview .funnel-detail > td { display: block; padding: 14px; border: 1px solid var(--line-bright); border-radius: 0 0 10px 10px; }
+  .funnel-overview .funnel-detail > td::before { content: none; }
+  .funnel-overview .funnel-summary.is-expanded { border-radius: 10px 10px 0 0; border-color: var(--control-accent); }
+  .funnel-detail[hidden] { display: none; }
+  .challenger-funnel-panel .panel-title { align-items: flex-start; gap: 8px; flex-wrap: wrap; }
+  .challenger-funnel-panel .funnel-advanced { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 540px) {
+  .challenger-funnel-panel .funnel-toolbar { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
+  .challenger-funnel-panel .funnel-toolbar .screener-search { width: auto; }
+  .challenger-funnel-panel .funnel-toolbar .advanced-toggle { grid-column: 1 / -1; justify-content: center; }
+  .challenger-funnel-panel .funnel-advanced { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 760px) { .challenger-funnel-panel { --funnel-control-height: 44px; } }
