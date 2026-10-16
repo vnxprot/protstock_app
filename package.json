@@ -12,7 +12,7 @@
     "test:signals": "node --experimental-strip-types --test tests/signal-triage.test.mjs tests/challenger-funnel.test.mjs tests/signal-history-range.test.mjs",
     "test:radar": "node --experimental-strip-types --test tests/radar-overview.test.mjs",
     "test:runtime": "node --experimental-strip-types --test tests/v4-runtime.test.mjs tests/release-labels.test.mjs tests/ex-rights.test.mjs",
-    "test:portfolio": "node --experimental-strip-types --test tests/portfolio-ledger.test.mjs",
+    "test:portfolio": "node --experimental-strip-types --test tests/portfolio-ledger.test.mjs tests/portfolio-quotes.test.mjs",
     "test:journal": "node --experimental-strip-types --test tests/journal-evidence.test.mjs tests/journal-outbox.test.mjs tests/journal-model.test.mjs"
   },
   "dependencies": {
