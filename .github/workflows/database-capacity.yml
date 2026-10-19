@@ -12,9 +12,14 @@ on:
         default: archive
         type: choice
         options: [archive, archive-and-clean, rollover]
+      repair_eod_date:
+        description: Dispatch Fast Lane for this date after successful cleanup (YYYY-MM-DD)
+        required: false
+        type: string
 
 permissions:
   contents: read
+  actions: write
 
 concurrency:
   group: protstock-database-capacity
@@ -47,3 +52,9 @@ jobs:
           PY
       - name: Archive, verify, and optionally reclaim capacity
         run: python .github/scripts/database_capacity.py
+      - name: Resume EOD after capacity is reclaimed
+        if: success() && inputs.mode == 'archive-and-clean' && inputs.repair_eod_date != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPAIR_EOD_DATE: ${{ inputs.repair_eod_date }}
+        run: gh workflow run eod-fast.yml --ref "$GITHUB_REF_NAME" -f trading_date="$REPAIR_EOD_DATE" -f skip_alerts=true -f skip_backtests=true

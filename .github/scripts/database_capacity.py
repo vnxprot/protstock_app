@@ -22,12 +22,17 @@ PROJECT_URL = "https://upmqxwktvvguegqeqibn.supabase.co"
 BUCKET = "database-archives"
 LIVE_FUNNEL = "MTF_FUNNEL_SHADOW_V0_0_0_TREND1"
 LIVE_MACD = "MACD_BULLISH_DIVERGENCE_ZONE_V0_0_0"
+LIVE_ZONES = "core-rules-v0.0.0-trend1"
+LIVE_CHALLENGER = "v0.0.0-challenger-trend1"
 RESEARCH_RETENTION_DAYS = 400
 ARCHIVES = (
     ("research_price_bars", "public.research_price_bars", "true"),
     ("research_price_sync_status", "public.research_price_sync_status", "true"),
     ("legacy_funnel", "public.signal_funnel_assessments", "version <> 'MTF_FUNNEL_SHADOW_V0_0_0_TREND1'"),
     ("legacy_macd", "public.macd_divergence_assessments", "version <> 'MACD_BULLISH_DIVERGENCE_ZONE_V0_0_0'"),
+    ("legacy_zones", "public.support_resistance_zones", "algorithm_version <> 'core-rules-v0.0.0-trend1'"),
+    ("legacy_challenger_strategies", "public.challenger_strategy_assessments",
+     "engine_version <> 'v0.0.0-challenger-trend1'"),
 )
 
 
@@ -103,7 +108,8 @@ def main() -> None:
             print(f"Archived and verified {name}: {entry['rows']} rows, {entry['bytes']} compressed bytes")
         manifest = {"run_id": run_id, "project_ref": "upmqxwktvvguegqeqibn", "entries": entries,
                     "research_price_cutoff": cutoff.isoformat(),
-                    "live_versions": {"funnel": LIVE_FUNNEL, "macd": LIVE_MACD}}
+                    "live_versions": {"funnel": LIVE_FUNNEL, "macd": LIVE_MACD,
+                                      "zones": LIVE_ZONES, "challenger": LIVE_CHALLENGER}}
         manifest_path = directory / "manifest.json"
         manifest_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
         upload_verified(storage, directory, f"capacity/{run_id}/manifest.json", manifest_path)
@@ -111,7 +117,7 @@ def main() -> None:
         if mode == "archive":
             return
         # Counts must still match the snapshots just archived. Abort if another job wrote
-        # to any target between export and cleanup. Live V2/V4 rows are never touched.
+        # to any target between export and cleanup. Current release rows are never touched.
         with conn.transaction():
             with conn.cursor() as cursor:
                 for entry in entries:
@@ -122,6 +128,8 @@ def main() -> None:
                 if mode == "archive-and-clean":
                     cursor.execute("delete from public.signal_funnel_assessments where version <> %s", (LIVE_FUNNEL,))
                     cursor.execute("delete from public.macd_divergence_assessments where version <> %s", (LIVE_MACD,))
+                    cursor.execute("delete from public.support_resistance_zones where algorithm_version <> %s", (LIVE_ZONES,))
+                    cursor.execute("delete from public.challenger_strategy_assessments where engine_version <> %s", (LIVE_CHALLENGER,))
                 cursor.execute("""update public.research_price_sync_status s
                     set requested_start_date = greatest(s.requested_start_date, %s),
                         first_date = (select min(r.trading_date) from public.research_price_bars r where r.symbol_id = s.symbol_id),
@@ -134,11 +142,16 @@ def main() -> None:
                             then s.coverage_status else 'INCOMPLETE' end""", (cutoff, cutoff))
         # VACUUM FULL must run outside a transaction and can lock these tables briefly.
         if mode == "archive-and-clean":
-            for table in ("public.research_price_bars", "public.signal_funnel_assessments", "public.macd_divergence_assessments"):
+            for table in ("public.research_price_bars", "public.signal_funnel_assessments",
+                          "public.macd_divergence_assessments", "public.support_resistance_zones",
+                          "public.challenger_strategy_assessments"):
                 conn.execute(f"vacuum full {table}")
         with conn.cursor() as cursor:
             cursor.execute("select pg_database_size(current_database())")
-            print(f"Database size after cleanup: {cursor.fetchone()[0] / 1024 / 1024:.1f} MiB")
+            size_bytes = cursor.fetchone()[0]
+            print(f"Database size after cleanup: {size_bytes / 1024 / 1024:.1f} MiB")
+            if mode == "archive-and-clean" and size_bytes >= 500_000_000:
+                raise RuntimeError("Database remains above the Free 500 MB limit after cleanup; EOD repair was not dispatched")
 
 
 if __name__ == "__main__":

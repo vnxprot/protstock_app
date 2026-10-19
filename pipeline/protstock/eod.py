@@ -103,6 +103,7 @@ def run_eod(
         counts["engine_stats"] = _initialize_engine_stats(active_rules)
         benchmark_daily: list[dict] = []
         benchmark_history: list[dict] = []
+        benchmark_error: Exception | None = None
         try:
             index = client.market_index("VNINDEX")
             # The stored 2021+ benchmark is the calculation window. Refresh
@@ -137,9 +138,14 @@ def run_eod(
                 benchmark_history = client.index_price_history(index["id"], _history_limit(trading_date))
                 benchmark_daily = _coherent_benchmark_rows(benchmark_history, trading_date)
         except Exception as exc:
-            warnings.append(f"VNINDEX: {type(exc).__name__}")
+            benchmark_error = exc
+            warnings.append(f"VNINDEX: {type(exc).__name__}: {str(exc)[:200]}")
         if symbols and (not benchmark_daily or benchmark_daily[-1]["date"] != trading_date.isoformat()):
-            raise RuntimeError(f"VNINDEX EOD is unavailable for {trading_date}; signals were not published")
+            latest = benchmark_daily[-1]["date"] if benchmark_daily else "none"
+            detail = f"; cause={type(benchmark_error).__name__}: {benchmark_error}" if benchmark_error else ""
+            raise RuntimeError(
+                f"VNINDEX EOD is unavailable for {trading_date}; latest stored={latest}{detail}; signals were not published"
+            ) from benchmark_error
         confirmed_week_end = _confirmed_week_end(client, trading_date, benchmark_daily)
         confirmed_month_end = _confirmed_month_end(client, trading_date, benchmark_daily)
         symbols = symbols[symbol_offset:]
@@ -326,7 +332,8 @@ def run_eod(
         client.finish_job(job["id"], {"status": status, "finished_at": _now(), "counts": counts, "warnings": warnings})
         return {"job_id": job["id"], "status": status, **counts}
     except Exception as exc:
-        client.finish_job(job["id"], {"status": "FAILED", "finished_at": _now(), "counts": counts, "error_summary": str(exc)[:500]})
+        client.finish_job(job["id"], {"status": "FAILED", "finished_at": _now(), "counts": counts,
+                                       "warnings": warnings, "error_summary": str(exc)[:500]})
         raise
     finally:
         if prepared_dir is not None:
@@ -721,8 +728,13 @@ def _same_day_market_context(trading_date: date, breadth: dict, vnindex_snapshot
 
 def _fetch_requested_session(provider: VnstockProvider, source: str, symbol: str,
                              start: date, end: date) -> list:
-    """Try KBS for the entire requested window if VCI omits its last session."""
-    fetched = _fetch_history_with_retry(provider, symbol, start, end)
+    """Try KBS when the automatic source fails or omits the requested session."""
+    try:
+        fetched = _fetch_history_with_retry(provider, symbol, start, end)
+    except Exception:
+        if source != "AUTO":
+            raise
+        return _fetch_history_with_retry(VnstockProvider("KBS"), symbol, start, end)
     if (fetched and fetched[-1].trading_date != end and source == "AUTO"
             and source_family(fetched[0].source) == "VCI"):
         return _fetch_history_with_retry(VnstockProvider("KBS"), symbol, start, end)

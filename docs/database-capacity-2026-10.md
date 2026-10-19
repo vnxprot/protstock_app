@@ -23,17 +23,22 @@ most assessment space was in earlier replay versions.
 
 Run the **Archive and reclaim database capacity** workflow first in `archive`
 mode. It creates a private `database-archives` Storage bucket if necessary,
-exports research prices and sync status plus superseded funnel/MACD versions
+exports research prices and sync status plus superseded funnel/MACD, zone, and
+Challenger strategy versions
 as compressed CSV, and downloads each uploaded object to verify its SHA-256.
 Each run has an immutable `capacity/<run-id>-<attempt>/` prefix and a
 `manifest.json` with table predicates, row counts, checksums, and the cutoff.
 
 Run the same workflow in `archive-and-clean` mode to take and verify a fresh
 archive, remove research prices older than 400 days and superseded assessment
-versions, then run `VACUUM FULL` on the three affected tables. This maintenance
+and zone versions, then run `VACUUM FULL` on the affected tables. This maintenance
 briefly locks those tables. The job checks archived row counts again before
 deleting anything. If Storage upload, download verification, or row-count check
 fails, cleanup does not start.
+
+For the 2026-10-19 incident, dispatch `archive-and-clean` with
+`repair_eod_date=2026-10-19`. After the database falls below 500 MB, the
+workflow dispatches Fast Lane with alerts and personal backtests disabled.
 
 Every Sunday after the KBS sync, the workflow runs in `rollover` mode. It
 archives the bars leaving the 400-day window before deleting them. Routine

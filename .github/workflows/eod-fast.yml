@@ -15,6 +15,11 @@ on:
         required: false
         default: false
         type: boolean
+      skip_backtests:
+        description: Repair EOD without processing the personal backtest queue
+        required: false
+        default: false
+        type: boolean
       force_rerun:
         description: Recompute existing data instead of retrying missing symbols
         required: false
@@ -87,7 +92,6 @@ jobs:
       - run: protstock validate-universe data/universe.csv
       - name: Ingest and analyze assigned Fast Lane shard
         id: ingest
-        continue-on-error: true
         env:
           SUPABASE_URL: https://upmqxwktvvguegqeqibn.supabase.co
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
@@ -108,12 +112,12 @@ jobs:
           retention-days: 1
           if-no-files-found: ignore
       - name: Report partial shard
-        if: steps.ingest.outcome == 'failure'
-        run: echo "::warning::This shard was partial or failed; the final alert step remains enabled for stored signals."
+        if: failure() && steps.ingest.outcome == 'failure'
+        run: echo "::error::This EOD shard failed; the workflow must remain failed even if other shards publish partial data."
 
   finalize:
-    needs: [preflight, ingest]
-    if: needs.ingest.result == 'success'
+    needs: [preflight, check-universe, ingest]
+    if: always() && needs.preflight.outputs.action == 'RUN' && needs.check-universe.result == 'success'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -130,7 +134,6 @@ jobs:
           merge-multiple: true
       - name: Publish market breadth and signals from available same-day snapshots
         id: finalize
-        continue-on-error: true
         env:
           SUPABASE_URL: https://upmqxwktvvguegqeqibn.supabase.co
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
@@ -140,17 +143,17 @@ jobs:
           if [ -n "$TRADING_DATE" ]; then args+=(--date "$TRADING_DATE"); fi
           protstock finalize-fast-eod --allow-partial --prepared-dir "$RUNNER_TEMP/analysis" "${args[@]}"
       - name: Process queued personal backtests
-        if: always()
+        if: always() && inputs.skip_backtests != true
         continue-on-error: true
         env:
           SUPABASE_URL: https://upmqxwktvvguegqeqibn.supabase.co
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: protstock backtest-worker --limit 3
       - name: Report publish failure
-        if: steps.finalize.outcome == 'failure'
+        if: failure() && steps.finalize.outcome == 'failure'
         run: echo "::error::Same-day Market Health or signals could not be published; Telegram alerts are withheld."
       - name: Send final concise Telegram EOD alerts
-        if: steps.finalize.outcome == 'success' && inputs.skip_alerts != true
+        if: steps.finalize.outcome == 'success' && needs.ingest.result == 'success' && inputs.skip_alerts != true
         env:
           SUPABASE_URL: https://upmqxwktvvguegqeqibn.supabase.co
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
