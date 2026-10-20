@@ -13,6 +13,9 @@ from .config import Settings
 
 class SupabaseRestClient:
     def __init__(self, settings: Settings, transport: httpx.BaseTransport | None = None) -> None:
+        self._settings = settings
+        self._research_archive = None
+        self._research_archive_cache: dict[int, list[dict]] = {}
         self._client = httpx.Client(
             base_url=f"{settings.supabase_url}/rest/v1",
             headers={
@@ -73,6 +76,8 @@ class SupabaseRestClient:
         return count
 
     def close(self) -> None:
+        if self._research_archive is not None:
+            self._research_archive.close()
         self._client.close()
 
     def active_symbols(self) -> list[dict[str, Any]]:
@@ -220,7 +225,24 @@ class SupabaseRestClient:
             rows.extend(page)
             if len(page) < 1000:
                 break
-        return list(reversed(rows))
+        by_day = {row["trading_date"]: row for row in rows}
+        if symbol_id not in self._research_archive_cache:
+            self._research_archive_cache[symbol_id] = self._archive().read(symbol_id)
+        by_day.update({row["trading_date"]: row for row in self._research_archive_cache[symbol_id]})
+        return sorted(by_day.values(), key=lambda row: row["trading_date"])[-limit:]
+
+    def _archive(self):
+        if self._research_archive is None:
+            from .research_archive import ResearchArchive
+            self._research_archive = ResearchArchive(self._settings.supabase_url, self._settings.service_role_key)
+        return self._research_archive
+
+    def archive_research_prices(self, symbol_id: int, rows: list[dict]) -> None:
+        by_day = {row["trading_date"]: row for row in self.research_price_history(symbol_id, 10000)}
+        by_day.update({row["trading_date"]: row for row in rows})
+        merged = sorted(by_day.values(), key=lambda row: row["trading_date"])
+        self._archive().write(symbol_id, merged)
+        self._research_archive_cache[symbol_id] = merged
 
     def research_price_status(self, symbol_id: int) -> dict[str, Any] | None:
         response = self._get(

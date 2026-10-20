@@ -13,9 +13,12 @@ most assessment space was in earlier replay versions.
 
 - Funnel V2 and MACD Zone V4 assessments stay in Postgres for daily screening
   and the MACD history shown in the app.
-- The last 400 calendar days of KBS research prices stay in Postgres. Signal
-  outcome calculation and recent backtests can use this series. Older backtests
-  use the stored price series and label that price basis explicitly.
+- KBS research prices live in private Storage as immutable compressed per-symbol
+  JSON objects with verified SHA-256 manifests. Research workers transparently
+  read the archive; new syncs update Storage instead of refilling Postgres.
+- Current Challenger WATCH assessments stay online for 180 days. Older WATCH
+  rows are archived unless an outcome references them. Actionable assessments,
+  published signals, user decisions and outcome records remain online.
 - `daily_prices`, published signals, user portfolios, and outcome records are
   not changed by the capacity job.
 
@@ -30,21 +33,25 @@ Each run has an immutable `capacity/<run-id>-<attempt>/` prefix and a
 `manifest.json` with table predicates, row counts, checksums, and the cutoff.
 
 Run the same workflow in `archive-and-clean` mode to take and verify a fresh
-archive, remove research prices older than 400 days and superseded assessment
-and zone versions, then run `VACUUM FULL` on the affected tables. This maintenance
-briefly locks those tables. The job checks archived row counts again before
-deleting anything. If Storage upload, download verification, or row-count check
+archive, install and verify the per-symbol research objects, remove the database
+research cache and expired/superseded assessment and zone versions, then run
+`VACUUM FULL` on the affected tables, including core price and derived tables to
+reclaim update bloat without deleting their bars. This maintenance briefly locks
+those tables and shares the EOD concurrency group. The job checks row counts and
+content fingerprints under table locks before deleting anything.
+If Storage upload, download verification, or fingerprint check
 fails, cleanup does not start.
 
 For the 2026-10-19 incident, dispatch `archive-and-clean` with
 `repair_eod_date=2026-10-19`. After the database falls below 500 MB, the
 workflow dispatches Fast Lane with alerts and personal backtests disabled.
 
-Every Sunday after the KBS sync, the workflow runs in `rollover` mode. It
-archives the bars leaving the 400-day window before deleting them. Routine
-rollover relies on autovacuum to reuse the space; it does not lock tables with
-`VACUUM FULL` each week. The KBS sync only requests the same 400-day window and
-skips bars whose price, volume, quality, and source version have not changed.
+Every Sunday the workflow runs in `rollover` mode. It offloads any research
+cache rows and archives expired Challenger WATCH assessments. Routine rollover
+uses normal VACUUM ANALYZE. Research sync skips unchanged bars and retains vendor
+provenance in Storage. Logs report relation sizes and dead tuple estimates before
+maintenance, the resulting database size, and warnings above the 400 MB operating
+target. Repair is dispatched only below the conservative 500 MB limit.
 
 ## Restore
 
@@ -59,6 +66,4 @@ temporary environment or a deliberately sized paid database.
 
 The manual historical replay workflows default to dry-run. Persisting old
 assessment versions requires an explicit `ALLOW_LEGACY_REPLAY_PERSIST=true`
-maintenance override. Broad research-price writes older than 400 days require
-`ALLOW_FULL_RESEARCH_PRICE_SYNC=true`. These overrides are intentionally absent
-from scheduled workflows.
+maintenance override. Broad research-price syncs now write to Storage.

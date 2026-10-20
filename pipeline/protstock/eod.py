@@ -87,7 +87,6 @@ def run_eod(
     except Exception:
         client.close()
         raise
-    provider = VnstockProvider(source)
     job = client.create_job({
         "job_type": "EOD_INGEST", "trading_date": trading_date.isoformat(),
         "status": "RUNNING", "trigger_type": "MANUAL" if historical else "SCHEDULED",
@@ -106,11 +105,14 @@ def run_eod(
         benchmark_error: Exception | None = None
         try:
             index = client.market_index("VNINDEX")
+            stored_index = client.index_price_history(index["id"], _history_limit(trading_date))
+            index_source = _series_source(source, stored_index)
+            index_provider = VnstockProvider(index_source)
             # The stored 2021+ benchmark is the calculation window. Refresh
             # only the newest sessions on routine EOD batches; a new database
             # or a vendor switch is filled from 2021 below.
             benchmark_fetch_days = FAST_LANE_BENCHMARK_FETCH_DAYS
-            index_bars = _fetch_requested_session(provider, source, "VNINDEX", trading_date - timedelta(days=benchmark_fetch_days), trading_date)
+            index_bars = _fetch_requested_session(index_provider, index_source, "VNINDEX", trading_date - timedelta(days=benchmark_fetch_days), trading_date)
             index_rows = [{
                 "index_id": index["id"], "trading_date": bar.trading_date.isoformat(),
                 "open": float(bar.open), "high": float(bar.high), "low": float(bar.low),
@@ -125,7 +127,7 @@ def run_eod(
             # A fresh database or vendor switch has no coherent benchmark
             # window. Fetch the requested 2021+ history once.
             if len(benchmark_daily) < 200:
-                index_bars = _fetch_requested_session(provider, source, "VNINDEX", HISTORY_START, trading_date)
+                index_bars = _fetch_requested_session(index_provider, index_source, "VNINDEX", HISTORY_START, trading_date)
                 index_rows = [{
                     "index_id": index["id"], "trading_date": bar.trading_date.isoformat(),
                     "open": float(bar.open), "high": float(bar.high), "low": float(bar.low),
@@ -161,34 +163,34 @@ def run_eod(
             started = monotonic()
             try:
                 stored = _stock_rows_as_of(client.price_history(symbol_row["id"], _history_limit(trading_date)), trading_date)
+                symbol_source = _series_source(source, stored)
+                symbol_provider = VnstockProvider(symbol_source)
                 # EOD calculations trust the selected vendor's OHLCV directly.
                 events = []
                 requested_start = max(HISTORY_START, trading_date - timedelta(days=lookback_days))
-                fetched = _fetch_requested_session(provider, source, symbol_row["symbol"],
+                fetched = _fetch_requested_session(symbol_provider, symbol_source, symbol_row["symbol"],
                                                    requested_start, trading_date)
                 if not fetched or fetched[-1].trading_date != trading_date:
                     raise ValueError("SOURCE_MISSING_REQUESTED_SESSION")
                 preview = canonical_price_rows(symbol_row["id"], fetched[-1:], events, as_of_date=trading_date)
                 family = source_family(fetched[0].source)
+                prior_by_day = {row["trading_date"]: row for row in stored}
+                overlap_changed = any(
+                    bar.trading_date.isoformat() in prior_by_day and any(
+                        not isclose(float(prior_by_day[bar.trading_date.isoformat()][field]), float(getattr(bar, field)), rel_tol=0.001, abs_tol=0.01)
+                        for field in ("open", "high", "low", "close")) for bar in fetched)
                 needs_full_history = (not stored or not same_source_window(stored)
                                       or source_family(stored[-1].get("source")) != family
-                                      or stored[-1].get("data_revision") != preview[0]["data_revision"])
+                                      or stored[-1].get("data_revision") != preview[0]["data_revision"]
+                                      or overlap_changed)
                 if needs_full_history:
                     # A release/source switch rebuilds the entire 2021+ basis,
                     # including older rows outside the latest stored revision.
                     first_day = HISTORY_START
                     if requested_start > first_day:
-                        fetched = _fetch_requested_session(provider, source, symbol_row["symbol"], first_day, trading_date)
+                        fetched = _fetch_requested_session(symbol_provider, symbol_source, symbol_row["symbol"], first_day, trading_date)
                     available = {bar.trading_date.isoformat() for bar in fetched}
                     missing_stored = {row["trading_date"] for row in stored} - available
-                    if ((not fetched or fetched[-1].trading_date != trading_date)
-                            and source == "AUTO" and fetched and source_family(fetched[0].source) == "VCI"):
-                        fallback = _fetch_history_with_retry(VnstockProvider("KBS"), symbol_row["symbol"], first_day, trading_date)
-                        fallback_dates = {bar.trading_date.isoformat() for bar in fallback}
-                        if fallback and fallback[-1].trading_date == trading_date and not ({row["trading_date"] for row in stored} - fallback_dates):
-                            fetched = fallback
-                            available = fallback_dates
-                            missing_stored = set()
                     if not fetched or fetched[-1].trading_date != trading_date:
                         raise ValueError(f"SOURCE_HISTORY_COVERAGE_MISMATCH:{len(missing_stored)}")
                     if missing_stored:
@@ -206,11 +208,14 @@ def run_eod(
                         if not (same_family or rebase_to_vci) or (same_family and not changed_revision and not same_prices):
                             raise ValueError(f"SOURCE_HISTORY_COVERAGE_MISMATCH:{len(missing_stored)}")
                 price_rows = canonical_price_rows(symbol_row["id"], fetched, events, as_of_date=trading_date)
-                for offset in range(0, len(price_rows), 100):
-                    counts["prices"] += client.upsert("daily_prices", price_rows[offset:offset + 100], "symbol_id,trading_date")
-                history = with_volume_segments(
-                    _stock_rows_as_of(client.price_history(symbol_row["id"], _history_limit(trading_date)), trading_date),
-                    events, as_of_date=trading_date)
+                changed_rows = [row for row in price_rows if row["trading_date"] not in prior_by_day or any(
+                    row.get(field) != prior_by_day[row["trading_date"]].get(field)
+                    for field in ("open", "high", "low", "close", "volume", "data_revision", "quality_status"))]
+                for offset in range(0, len(changed_rows), 100):
+                    counts["prices"] += client.upsert("daily_prices", changed_rows[offset:offset + 100], "symbol_id,trading_date")
+                merged = {row["trading_date"]: row for row in stored}
+                merged.update({row["trading_date"]: row for row in price_rows})
+                history = with_volume_segments(_stock_rows_as_of(sorted(merged.values(), key=lambda row: row["trading_date"]), trading_date), events, as_of_date=trading_date)
                 if not same_source_window(history):
                     raise ValueError("MIXED_PRICE_BASIS_IN_CALCULATION_WINDOW")
                 if any(not price_row_usable(row) for row in history):
@@ -357,6 +362,18 @@ def finalize_fast_lane(trading_date: date, *, allow_partial: bool = False, prepa
             raise RuntimeError(f"Fast Lane incomplete: {len(covered)}/{len(expected)} daily snapshots")
         if not covered:
             raise RuntimeError(f"No same-day snapshots for {trading_date}; Market Health and signals cannot be evaluated")
+        prepared = load_prepared_analyses(prepared_dir, trading_date) if prepared_dir is not None else None
+        if prepared_dir is not None and not prepared and hasattr(client, "_pages"):
+            published = client._pages("job_runs", {"select": "id,finished_at,counts", "job_type": "eq.DERIVE_BARS",
+                "trading_date": f"eq.{trading_date.isoformat()}", "source_revision": f"eq.{ALGORITHM_VERSION}",
+                "status": "in.(SUCCEEDED,PARTIAL)", "order": "started_at.desc", "limit": "1"})
+            subsequent = client._pages("job_runs", {"select": "id", "job_type": "eq.EOD_INGEST",
+                "trading_date": f"eq.{trading_date.isoformat()}", "counts->>symbols": "gt.0",
+                "finished_at": f"gt.{published[0]['finished_at']}", "limit": "1"}) if published and published[0].get("finished_at") else [None]
+            if published and not subsequent and (published[0].get("counts") or {}).get("covered_symbols") == len(covered):
+                return {"status": "PARTIAL" if missing else "SUCCEEDED", "unchanged": True,
+                    "covered": len(covered), "expected": len(expected),
+                    "missing_symbols": sorted(row["symbol"] for row in active_symbols if row["id"] in missing)}
         index = client.market_index("VNINDEX")
         benchmark = _coherent_benchmark_rows(client.index_price_history(index["id"], _history_limit(trading_date)), trading_date)
         if not benchmark or benchmark[-1]["trading_date"] != trading_date.isoformat():
@@ -365,7 +382,6 @@ def finalize_fast_lane(trading_date: date, *, allow_partial: bool = False, prepa
         breadth = _persist_universe_breadth(client, trading_date, vnindex_snapshot["trend_state"])
     finally:
         client.close()
-    prepared = load_prepared_analyses(prepared_dir, trading_date) if prepared_dir is not None else None
     options = {"prepared_analyses": prepared} if prepared else {}
     rebuilt = rebuild_signals(trading_date, prepared_market_context=_same_day_market_context(trading_date, breadth, vnindex_snapshot, benchmark), **options)
     if rebuilt["status"] != "SUCCEEDED":
@@ -728,17 +744,15 @@ def _same_day_market_context(trading_date: date, breadth: dict, vnindex_snapshot
 
 def _fetch_requested_session(provider: VnstockProvider, source: str, symbol: str,
                              start: date, end: date) -> list:
-    """Try KBS when the automatic source fails or omits the requested session."""
-    try:
-        fetched = _fetch_history_with_retry(provider, symbol, start, end)
-    except Exception:
-        if source != "AUTO":
-            raise
-        return _fetch_history_with_retry(VnstockProvider("KBS"), symbol, start, end)
-    if (fetched and fetched[-1].trading_date != end and source == "AUTO"
-            and source_family(fetched[0].source) == "VCI"):
-        return _fetch_history_with_retry(VnstockProvider("KBS"), symbol, start, end)
-    return fetched
+    """A retry must preserve the selected vendor's price basis."""
+    return _fetch_history_with_retry(provider, symbol, start, end)
+
+
+def _series_source(requested: str, stored: list[dict]) -> str:
+    if requested != "AUTO":
+        return requested
+    family = source_family(stored[-1].get("source")) if stored else "UNKNOWN"
+    return family if family in {"VCI", "KBS"} else "VCI"
 
 
 def _fetch_history_with_retry(provider: VnstockProvider, symbol: str, start: date, end: date) -> list:

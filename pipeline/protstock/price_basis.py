@@ -20,6 +20,20 @@ def source_family(source: str | None) -> str:
     return "UNKNOWN"
 
 
+def vendor_revision(family: str) -> str:
+    """Price identity describes the vendor contract, not its Python client version."""
+    return sha256(dumps([family, "VENDOR_OHLCV_V1"], sort_keys=True).encode()).hexdigest()
+
+
+def normalized_vendor_revision(row: dict) -> str | None:
+    family = source_family(row.get("source"))
+    revision = row.get("data_revision")
+    legacy = sha256(dumps([family, row.get("source"), "VENDOR_OHLCV"], sort_keys=True).encode()).hexdigest()
+    if family != "UNKNOWN" and row.get("price_basis") == "VENDOR_CORPORATE_ACTION_ADJUSTED" and revision in {legacy, vendor_revision(family)}:
+        return vendor_revision(family)
+    return revision
+
+
 def volume_window_is_comparable(rows: Iterable[dict]) -> bool:
     """Confirm that a volume window has one reported-volume basis."""
     segments = set()
@@ -87,7 +101,7 @@ def canonical_price_rows(symbol_id: int, bars: Iterable[DailyBar], events: Itera
         family = source_family(bar.source)
         if family == "UNKNOWN":
             raise ValueError(f"Unknown OHLCV source: {bar.source}")
-        revision = sha256(dumps([family, bar.source, "VENDOR_OHLCV"], sort_keys=True).encode()).hexdigest()
+        revision = vendor_revision(family)
         rows.append({
             "symbol_id": symbol_id, "trading_date": bar.trading_date.isoformat(),
             "open": float(bar.open), "high": float(bar.high), "low": float(bar.low), "close": float(bar.close),
@@ -106,7 +120,7 @@ def same_source_window(rows: Iterable[dict]) -> bool:
     """Reject windows assembled from multiple vendor/basis revisions."""
     rows = list(rows)
     families = {source_family(row.get("source")) for row in rows}
-    revisions = {row.get("data_revision") for row in rows}
+    revisions = {normalized_vendor_revision(row) for row in rows}
     return len(families) == 1 and "UNKNOWN" not in families and len(revisions) == 1 and None not in revisions
 
 
@@ -117,12 +131,12 @@ def latest_coherent_revision(rows: Iterable[dict]) -> list[dict]:
         return []
     latest = ordered[-1]
     family = source_family(latest.get("source"))
-    revision = latest.get("data_revision")
+    revision = normalized_vendor_revision(latest)
     basis = latest.get("price_basis")
     if family == "UNKNOWN" or not revision or basis != "VENDOR_CORPORATE_ACTION_ADJUSTED":
         return []
-    return [row for row in ordered
+    return [{**row, "data_revision": revision} for row in ordered
             if source_family(row.get("source")) == family
-            and row.get("data_revision") == revision
+            and normalized_vendor_revision(row) == revision
             and row.get("price_basis") == basis
             and price_row_usable(row)]

@@ -110,8 +110,15 @@ def test_research_sync_skips_unchanged_bars_but_keeps_vendor_revisions():
 def test_broad_price_sync_and_legacy_replay_cannot_refill_database(monkeypatch):
     monkeypatch.delenv("ALLOW_FULL_RESEARCH_PRICE_SYNC", raising=False)
     monkeypatch.delenv("ALLOW_LEGACY_REPLAY_PERSIST", raising=False)
-    with pytest.raises(ValueError, match="400 days"):
-        sync_research_prices(date(2021, 1, 1), date(2026, 10, 10), apply=True)
+    class Client:
+        def __init__(self, *_args): pass
+        def all_symbols_for_replay(self): return []
+        def close(self): pass
+    monkeypatch.setenv("SUPABASE_URL", "https://example.test")
+    monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", "test")
+    monkeypatch.setattr("protstock.research_prices.SupabaseRestClient", Client)
+    # Broad histories now target private Storage; legacy assessment writes remain guarded.
+    assert sync_research_prices(date(2021, 1, 1), date(2026, 10, 10), apply=True)["symbols"] == 0
     with pytest.raises(ValueError, match="disabled"):
         run_funnel_replay(date(2025, 1, 1), date(2026, 9, 30), apply=True)
     with pytest.raises(ValueError, match="disabled"):

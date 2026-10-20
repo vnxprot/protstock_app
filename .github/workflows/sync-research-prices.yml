@@ -37,7 +37,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: protstock-research-prices
+  group: protstock-eod
   cancel-in-progress: false
 
 jobs:

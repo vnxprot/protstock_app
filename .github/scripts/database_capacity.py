@@ -10,12 +10,16 @@ import gzip
 import hashlib
 import json
 import os
+import sys
 from datetime import date, timedelta
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
 import httpx
 import psycopg
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "pipeline"))
+from protstock.research_archive import ResearchArchive
 
 
 PROJECT_URL = "https://upmqxwktvvguegqeqibn.supabase.co"
@@ -25,6 +29,7 @@ LIVE_MACD = "MACD_BULLISH_DIVERGENCE_ZONE_V0_0_0"
 LIVE_ZONES = "core-rules-v0.0.0-trend1"
 LIVE_CHALLENGER = "v0.0.0-challenger-trend1"
 RESEARCH_RETENTION_DAYS = 400
+ASSESSMENT_RETENTION_DAYS = 180
 ARCHIVES = (
     ("research_price_bars", "public.research_price_bars", "true"),
     ("research_price_sync_status", "public.research_price_sync_status", "true"),
@@ -32,7 +37,9 @@ ARCHIVES = (
     ("legacy_macd", "public.macd_divergence_assessments", "version <> 'MACD_BULLISH_DIVERGENCE_ZONE_V0_0_0'"),
     ("legacy_zones", "public.support_resistance_zones", "algorithm_version <> 'core-rules-v0.0.0-trend1'"),
     ("legacy_challenger_strategies", "public.challenger_strategy_assessments",
-     "engine_version <> 'v0.0.0-challenger-trend1'"),
+     "engine_version <> 'v0.0.0-challenger-trend1' and not exists (select 1 from public.challenger_strategy_tplus_outcomes o where o.symbol_id=t.symbol_id and o.signal_date=t.trading_date and o.engine_version=t.engine_version and o.strategy_code=t.strategy_code)"),
+    ("cold_challenger_strategies", "public.challenger_strategy_assessments",
+     "engine_version = 'v0.0.0-challenger-trend1' and trading_date < date '{assessment_cutoff}' and action='WATCH' and not exists (select 1 from public.challenger_strategy_tplus_outcomes o where o.symbol_id=t.symbol_id and o.signal_date=t.trading_date and o.engine_version=t.engine_version and o.strategy_code=t.strategy_code)"),
 )
 
 
@@ -63,13 +70,13 @@ def ensure_private_bucket(client: httpx.Client) -> None:
 def archive_table(conn: psycopg.Connection, directory: Path, name: str, table: str, predicate: str) -> dict:
     target = directory / f"{name}.csv.gz"
     with conn.cursor() as cursor:
-        cursor.execute(f"select count(*) from {table} where {predicate}")
-        count = cursor.fetchone()[0]
+        cursor.execute(f"select count(*), coalesce(sum(hashtextextended(row_to_json(t)::text,0)::numeric),0)::text from {table} t where {predicate}")
+        count, fingerprint = cursor.fetchone()
         with gzip.open(target, "wb", compresslevel=9) as compressed:
-            with cursor.copy(f"copy (select * from {table} where {predicate}) to stdout with (format csv, header true)") as copy:
+            with cursor.copy(f"copy (select * from {table} t where {predicate}) to stdout with (format csv, header true)") as copy:
                 for block in copy:
                     compressed.write(block)
-    return {"name": name, "table": table, "predicate": predicate, "rows": count,
+    return {"name": name, "table": table, "predicate": predicate, "rows": count, "fingerprint": fingerprint,
             "bytes": target.stat().st_size, "sha256": digest(target), "filename": target.name}
 
 
@@ -95,9 +102,12 @@ def main() -> None:
         # A unique path prevents a failed or partial attempt from overwriting an earlier archive.
         run_id = os.environ["GITHUB_RUN_ID"] + "-" + os.environ.get("GITHUB_RUN_ATTEMPT", "1")
         cutoff = date.today() - timedelta(days=RESEARCH_RETENTION_DAYS)
-        archive_specs = ([("expiring_research_price_bars", "public.research_price_bars",
-                           f"trading_date < date '{cutoff.isoformat()}'")]
-                         if mode == "rollover" else ARCHIVES)
+        assessment_cutoff = date.today() - timedelta(days=ASSESSMENT_RETENTION_DAYS)
+        archive_specs = [(name, table, predicate.format(assessment_cutoff=assessment_cutoff.isoformat()))
+                         for name, table, predicate in ARCHIVES
+                         if mode != "rollover" or name in {"research_price_bars", "research_price_sync_status", "cold_challenger_strategies"}]
+        print("Before maintenance:", conn.execute("""select relname, pg_total_relation_size(relid), n_live_tup, n_dead_tup
+            from pg_stat_user_tables order by pg_total_relation_size(relid) desc limit 8""").fetchall())
         entries = []
         for name, table, predicate in archive_specs:
             entry = archive_table(conn, directory, name, table, predicate)
@@ -116,40 +126,48 @@ def main() -> None:
         print(f"Verified private archive: {BUCKET}/capacity/{run_id}/")
         if mode == "archive":
             return
+        # Install the exact, verified per-symbol objects that research readers use
+        # before removing their PostgreSQL cache. CSV snapshots remain recoverable.
+        research = ResearchArchive(PROJECT_URL, key)
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute("""select symbol_id, jsonb_agg(to_jsonb(t) order by trading_date)
+                    from public.research_price_bars t group by symbol_id""")
+                for symbol_id, rows in cursor.fetchall():
+                    merged = {row["trading_date"]: row for row in research.read(symbol_id)}
+                    merged.update({row["trading_date"]: row for row in rows})
+                    research.write(symbol_id, sorted(merged.values(), key=lambda row: row["trading_date"]))
+        finally:
+            research.close()
         # Counts must still match the snapshots just archived. Abort if another job wrote
         # to any target between export and cleanup. Current release rows are never touched.
         with conn.transaction():
             with conn.cursor() as cursor:
+                for table in sorted({entry["table"] for entry in entries}):
+                    cursor.execute(f"lock table {table} in share row exclusive mode")
                 for entry in entries:
-                    cursor.execute(f"select count(*) from {entry['table']} where {entry['predicate']}")
-                    if cursor.fetchone()[0] != entry["rows"]:
+                    cursor.execute(f"select count(*), coalesce(sum(hashtextextended(row_to_json(t)::text,0)::numeric),0)::text from {entry['table']} t where {entry['predicate']}")
+                    if cursor.fetchone() != (entry["rows"], entry["fingerprint"]):
                         raise RuntimeError(f"Rows changed since archive: {entry['name']}")
-                cursor.execute("delete from public.research_price_bars where trading_date < %s", (cutoff,))
-                if mode == "archive-and-clean":
-                    cursor.execute("delete from public.signal_funnel_assessments where version <> %s", (LIVE_FUNNEL,))
-                    cursor.execute("delete from public.macd_divergence_assessments where version <> %s", (LIVE_MACD,))
-                    cursor.execute("delete from public.support_resistance_zones where algorithm_version <> %s", (LIVE_ZONES,))
-                    cursor.execute("delete from public.challenger_strategy_assessments where engine_version <> %s", (LIVE_CHALLENGER,))
-                cursor.execute("""update public.research_price_sync_status s
-                    set requested_start_date = greatest(s.requested_start_date, %s),
-                        first_date = (select min(r.trading_date) from public.research_price_bars r where r.symbol_id = s.symbol_id),
-                        vendor_bars = (select count(*) from public.research_price_bars r where r.symbol_id = s.symbol_id),
-                        stored_bars = (select count(*) from public.daily_prices d where d.symbol_id = s.symbol_id
-                                       and d.trading_date >= greatest(s.requested_start_date, %s)
-                                       and d.trading_date <= s.requested_end_date),
-                        coverage_status = case when exists
-                            (select 1 from public.research_price_bars r where r.symbol_id = s.symbol_id)
-                            then s.coverage_status else 'INCOMPLETE' end""", (cutoff, cutoff))
+                for entry in entries:
+                    if entry["name"] != "research_price_sync_status":
+                        cursor.execute(f"delete from {entry['table']} t where {entry['predicate']}")
         # VACUUM FULL must run outside a transaction and can lock these tables briefly.
         if mode == "archive-and-clean":
             for table in ("public.research_price_bars", "public.signal_funnel_assessments",
                           "public.macd_divergence_assessments", "public.support_resistance_zones",
-                          "public.challenger_strategy_assessments"):
+                          "public.challenger_strategy_assessments", "public.daily_prices",
+                          "public.derived_bars"):
                 conn.execute(f"vacuum full {table}")
+        else:
+            for table in ("public.research_price_bars", "public.challenger_strategy_assessments"):
+                conn.execute(f"vacuum (analyze) {table}")
         with conn.cursor() as cursor:
             cursor.execute("select pg_database_size(current_database())")
             size_bytes = cursor.fetchone()[0]
             print(f"Database size after cleanup: {size_bytes / 1024 / 1024:.1f} MiB")
+            if size_bytes >= 400_000_000:
+                print("::warning::Database remains above the 400 MB operating target; core price history has been preserved")
             if mode == "archive-and-clean" and size_bytes >= 500_000_000:
                 raise RuntimeError("Database remains above the Free 500 MB limit after cleanup; EOD repair was not dispatched")
 

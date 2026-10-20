@@ -17,7 +17,8 @@ def _fresh_job(job: dict, now: datetime) -> bool:
 
 
 def decide(mode: str, jobs: list[dict], breadth_exists: bool, *, force_rerun: bool = False,
-           coverage_status: str | None = None, now: datetime | None = None, source_revision: str | None = None) -> str:
+           coverage_status: str | None = None, now: datetime | None = None, source_revision: str | None = None,
+           repair_missing: bool = False) -> str:
     now = now or datetime.now(timezone.utc)
     if force_rerun and mode == "fast-lane":
         return "RUN"
@@ -30,7 +31,7 @@ def decide(mode: str, jobs: list[dict], breadth_exists: bool, *, force_rerun: bo
     if complete:
         return "SKIP" if mode == "fast-lane" else "COMPLETE"
     # Two balanced shards per attempt; at most three automatic attempts/session.
-    if sum(job["job_type"] == "EOD_INGEST" for job in jobs) >= 6:
+    if not repair_missing and sum(job["job_type"] == "EOD_INGEST" for job in jobs) >= 6:
         return "SKIP" if mode == "fast-lane" else "RETRY_LIMIT"
     return "RUN" if mode == "fast-lane" else "DISPATCH_FAST_LANE"
 
@@ -45,7 +46,8 @@ def main() -> None:
     mode = sys.argv[1]
     if mode not in {"fast-lane", "watchdog"}:
         raise ValueError(f"Unknown EOD guard mode: {mode}")
-    day = os.environ.get("TRADING_DATE") or datetime.now(timezone(timedelta(hours=7))).date().isoformat()
+    requested_day = os.environ.get("TRADING_DATE") or datetime.now(timezone(timedelta(hours=7))).date().isoformat()
+    day = requested_day
     sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "pipeline"))
     from protstock.config import Settings
     from protstock.supabase_rest import SupabaseRestClient
@@ -58,6 +60,11 @@ def main() -> None:
         symbols = session_client.active_symbols()
     finally:
         session_client.close()
+    if not os.environ.get("TRADING_DATE") and day != requested_day:
+        with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+            output.write(f"action=SKIP\ntrading_date={day}\nmatrix={{\"include\": []}}\n")
+        print(f"Market closed on {requested_day}; no automatic EOD dispatch")
+        return
     key = os.environ["SUPABASE_SERVICE_ROLE_KEY"]
     headers = {"apikey": key, "Authorization": f"Bearer {key}"}
     with httpx.Client(base_url=os.environ["SUPABASE_URL"].rstrip("/") + "/rest/v1", headers=headers, timeout=30) as client:
@@ -72,7 +79,8 @@ def main() -> None:
         breadth_response.raise_for_status()
     breadth = breadth_response.json()
     action = decide(mode, jobs_response.json(), bool(breadth), coverage_status=breadth[0].get("coverage_status") if breadth else None,
-                    source_revision=ALGORITHM_VERSION, force_rerun=os.environ.get("FORCE_RERUN") == "true")
+                    source_revision=ALGORITHM_VERSION, force_rerun=os.environ.get("FORCE_RERUN") == "true",
+                    repair_missing=os.environ.get("REPAIR_MISSING") == "true")
     print(f"EOD {day}: {action}; expected universe: {len(symbols)}")
     with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
         output.write(f"action={action}\ntrading_date={day}\nmatrix={json.dumps({'include': balanced_shards(symbols)}, ensure_ascii=False)}\n")

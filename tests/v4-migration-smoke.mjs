@@ -21,7 +21,8 @@ try {
  grant execute on all functions in schema auth to authenticated,service_role;
  insert into auth.users values('${owner}','prot@protstock.local'),('${other}','other@example.local');`)
  const files = (await readdir('supabase/migrations')).filter(f=>f.endsWith('.sql')).sort()
- const skip = new Set(['20260914110000_eod_watchdog_cron.sql','20260929040000_single_eod_watchdog.sql'])
+ const skip = new Set(['20260914110000_eod_watchdog_cron.sql','20260929040000_single_eod_watchdog.sql',
+  '20261019010000_eod_late_watchdog.sql','20261020010000_eod_schedule_and_capacity.sql'])
  for (const file of files) {
   if(skip.has(file))continue
   // The legacy TRC repair intentionally requires verified pre-existing data.

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from datetime import date
-import os
 from time import sleep
 
 from .config import Settings
@@ -63,9 +62,7 @@ def sync_research_prices(start_date: date, end_date: date, *, symbol_offset: int
                          symbols: set[str] | None = None, apply: bool = False) -> dict:
     if start_date > end_date:
         raise ValueError("start_date must be on or before end_date")
-    if apply and os.environ.get("ALLOW_FULL_RESEARCH_PRICE_SYNC") != "true":
-        if (end_date - start_date).days > 400:
-            raise ValueError("Database research price sync is limited to 400 days; older history is archived outside Postgres")
+    # Applied research history now lives in private Storage, not in the database quota.
     client = SupabaseRestClient(Settings.from_env())
     provider = VnstockProvider("KBS")
     totals = {"symbols": 0, "bars": 0, "changed_bars": 0, "quarantined": 0, "missing": 0,
@@ -96,9 +93,8 @@ def sync_research_prices(start_date: date, end_date: date, *, symbol_offset: int
                                    "INCOMPLETE" if unmatched else "MATCHED")
                 if apply:
                     changed = changed_research_rows(rows, client.research_price_history(item["id"], 2600))
-                    for offset in range(0, len(changed), 100):
-                        client.upsert("research_price_bars", changed[offset:offset + 100],
-                                      "symbol_id,trading_date")
+                    if changed:
+                        client.archive_research_prices(item["id"], rows)
                     totals["changed_bars"] += len(changed)
                     client.upsert("research_price_sync_status", [{
                         "symbol_id": item["id"],

@@ -51,6 +51,9 @@ def test_automatic_retries_are_bounded_and_manual_force_is_explicit():
     assert eod_status.decide("watchdog", jobs, False) == "RETRY_LIMIT"
     assert eod_status.decide("fast-lane", jobs, False) == "SKIP"
     assert eod_status.decide("fast-lane", jobs, False, force_rerun=True) == "RUN"
+    assert eod_status.decide("fast-lane", jobs, False, repair_missing=True) == "RUN"
+    assert eod_status.decide("fast-lane", [{"job_type": "EOD_INGEST", "status": "RUNNING"}], False,
+                             repair_missing=True) == "SKIP"
 
 
 @pytest.mark.parametrize("symbol_count,batch_sizes", [(260,[130,130]), (265,[132,133])])

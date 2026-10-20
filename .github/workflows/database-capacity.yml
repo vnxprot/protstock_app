@@ -22,7 +22,7 @@ permissions:
   actions: write
 
 concurrency:
-  group: protstock-database-capacity
+  group: protstock-eod
   cancel-in-progress: false
 
 jobs:
@@ -57,4 +57,4 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           REPAIR_EOD_DATE: ${{ inputs.repair_eod_date }}
-        run: gh workflow run eod-fast.yml --ref "$GITHUB_REF_NAME" -f trading_date="$REPAIR_EOD_DATE" -f skip_alerts=true -f skip_backtests=true
+        run: gh workflow run eod-fast.yml --ref "$GITHUB_REF_NAME" -f trading_date="$REPAIR_EOD_DATE" -f skip_alerts=true -f skip_backtests=true -f repair_missing=true

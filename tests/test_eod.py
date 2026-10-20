@@ -36,7 +36,7 @@ def test_timeout_retries_same_honest_provider(monkeypatch) -> None:
     assert provider.calls == 3
 
 
-def test_missing_vci_last_session_uses_whole_kbs_window(monkeypatch) -> None:
+def test_missing_vci_last_session_does_not_silently_change_vendor(monkeypatch) -> None:
     day = date(2026, 9, 25)
     start = day - timedelta(days=30)
     calls = []
@@ -51,8 +51,9 @@ def test_missing_vci_last_session_uses_whole_kbs_window(monkeypatch) -> None:
 
     monkeypatch.setattr("protstock.eod.VnstockProvider", Provider)
     rows = _fetch_requested_session(Provider("VCI"), "AUTO", "DVM", start, day)
-    assert rows[-1].trading_date == day and rows[-1].source == "KBS_PUBLIC"
-    assert calls == [("VCI", "DVM", start, day), ("KBS", "DVM", start, day)]
+    assert rows[-1].trading_date == day - timedelta(days=1)
+    assert rows[-1].source == "VCI_VNSTOCK_5.0.0"
+    assert calls == [("VCI", "DVM", start, day)]
 
 
 def test_current_core_stats_use_restart_label() -> None:

@@ -46,17 +46,9 @@ class VnstockProvider:
             return self._kbs_history(symbol, start, end)
         if self.source == "VCI":
             return self._vci_history(symbol, start, end)
-        try:
-            bars = self._vci_history(symbol, start, end)
-            if bars:
-                return bars
-        except Exception as exc:
-            # Only operational source failures may activate the fallback.  A
-            # bad symbol, argument, entitlement or programming error must fail.
-            from vnstock.core.exceptions import NetworkError, ProviderError
-            if not isinstance(exc, (NetworkError, ProviderError, ProviderDataError)) and not _is_minute_quota(exc):
-                raise
-        return self._kbs_history(symbol, start, end)
+        # AUTO selects VCI for a new series. EOD explicitly selects the stored
+        # series' vendor before calling here; errors never silently change it.
+        return self._vci_history(symbol, start, end)
 
     def _vci_history(self, symbol: str, start: date, end: date) -> list[DailyBar]:
         from vnstock import Market, __version__ as vnstock_version

@@ -1,9 +1,7 @@
 name: EOD Watchdog
 
 on:
-  schedule:
-    # 16:15 and 16:45 Vietnam: retry incomplete sessions after the initial lease.
-    - cron: "15,45 9 * * 1-5"
+  # Dispatched once at 15:35 Vietnam by Supabase cron.
   workflow_dispatch:
     inputs:
       trading_date:
@@ -47,4 +45,4 @@ jobs:
         run: |
           args=(--ref main)
           if [ -n "$TRADING_DATE" ]; then args+=(-f "trading_date=$TRADING_DATE"); fi
-          gh workflow run eod-fast.yml --repo "$REPOSITORY" "${args[@]}"
+          gh workflow run eod-fast.yml --repo "$REPOSITORY" "${args[@]}" -f skip_backtests=true

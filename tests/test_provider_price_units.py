@@ -14,7 +14,7 @@ def test_provider_accepts_only_named_sources():
         VnstockProvider("UNKNOWN")
 
 
-def test_auto_replaces_whole_invalid_vci_window_with_kbs(monkeypatch):
+def test_auto_does_not_change_vendor_after_a_vci_failure(monkeypatch):
     import pytest
 
     provider = VnstockProvider("AUTO")
@@ -31,8 +31,9 @@ def test_auto_replaces_whole_invalid_vci_window_with_kbs(monkeypatch):
 
     monkeypatch.setattr(provider, "_vci_history", invalid_vci)
     monkeypatch.setattr(provider, "_kbs_history", kbs_window)
-    assert provider.history("MPC", start, end) == ["complete KBS window"]
-    assert requests == [("VCI", "MPC", start, end), ("KBS", "MPC", start, end)]
+    with pytest.raises(ProviderDataError, match="Invalid VCI bar"):
+        provider.history("MPC", start, end)
+    assert requests == [("VCI", "MPC", start, end)]
 
     monkeypatch.setattr(provider, "_vci_history", lambda *_: (_ for _ in ()).throw(ValueError("bad argument")))
     with pytest.raises(ValueError, match="bad argument"):

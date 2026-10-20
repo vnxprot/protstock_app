@@ -74,6 +74,21 @@ def test_mixed_source_or_basis_revision_is_rejected():
     assert not same_source_window([*rows, {**rows[0], "data_revision": "another"}])
 
 
+def test_sdk_upgrade_keeps_legacy_vci_history_without_accepting_another_basis():
+    from hashlib import sha256
+    from json import dumps
+    old = canonical_price_rows(1, [bar("2026-10-16")], [], as_of_date=date(2026, 10, 19))[0]
+    old["data_revision"] = sha256(dumps(["VCI", old["source"], "VENDOR_OHLCV"], sort_keys=True).encode()).hexdigest()
+    new_bar = DailyBar.create(symbol="TRC", trading_date=date(2026, 10, 19),
+        open=20, high=21, low=19, close=20, volume=100, source="VCI_VNSTOCK_5.1.0")
+    current = canonical_price_rows(1, [new_bar], [], as_of_date=date(2026, 10, 19))[0]
+    combined = latest_coherent_revision([old, current])
+    assert len(combined) == 2
+    assert same_source_window([old, current])
+    assert combined[0]["data_revision"] == combined[1]["data_revision"]
+    assert len(latest_coherent_revision([{**old, "data_revision": "different-adjustment"}, current])) == 1
+
+
 def test_latest_coherent_revision_excludes_legacy_kbs_without_mixing_bases():
     current = canonical_price_rows(1, [bar("2026-09-13"), bar("2026-09-15")], [],
                                    as_of_date=date(2026, 9, 15))
