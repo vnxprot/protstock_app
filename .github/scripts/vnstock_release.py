@@ -13,6 +13,9 @@ from tempfile import TemporaryDirectory
 
 import httpx
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "pipeline"))
+from protstock.vnstock_auth import authenticate, require_ci_key
+
 BASELINE = "5.1.0"
 INDEX = "https://vnstocks.com/api/packages"
 BUCKET = "database-archives"
@@ -80,6 +83,7 @@ def fixtures() -> dict:
 
 def probe(target: str, fixture_path: str) -> None:
     sys.path.insert(0, target)
+    authenticate()
     import vnstock
     from vnstock import Market, __version__
     from math import isclose, isfinite
@@ -176,6 +180,7 @@ def main() -> None:
     if args.mode == "install":
         install(args.version)
         return
+    require_ci_key()
     reference = fixtures()
     if args.mode == "health":
         try:
@@ -195,6 +200,8 @@ def main() -> None:
             chosen = release
             break
         except Exception as exc:
+            if "VNSTOCK_AUTH_FAILED" in str(exc):
+                raise
             print(f"::warning::Approved vnstock {release} is unavailable: {exc}")
     if chosen is None:
         try:

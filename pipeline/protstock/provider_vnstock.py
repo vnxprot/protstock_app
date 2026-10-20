@@ -51,6 +51,8 @@ class VnstockProvider:
         return self._vci_history(symbol, start, end)
 
     def _vci_history(self, symbol: str, start: date, end: date) -> list[DailyBar]:
+        from .vnstock_auth import authenticate
+        authenticate()
         from vnstock import Market, __version__ as vnstock_version
 
         if not str(vnstock_version).startswith("5."):

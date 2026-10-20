@@ -45,7 +45,6 @@ jobs:
       action: ${{ steps.status.outputs.action }}
       matrix: ${{ steps.status.outputs.matrix }}
       trading_date: ${{ steps.status.outputs.trading_date }}
-      vnstock_version: ${{ steps.release.outputs.version }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -60,17 +59,6 @@ jobs:
           FORCE_RERUN: ${{ inputs.force_rerun == true }}
           REPAIR_MISSING: ${{ inputs.repair_missing == true }}
         run: python .github/scripts/eod_status.py fast-lane
-      - name: Select one supported VCI release for both shards
-        id: release
-        if: steps.status.outputs.action == 'RUN'
-        env:
-          SUPABASE_URL: https://upmqxwktvvguegqeqibn.supabase.co
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: |
-          python -m pip install pandas tzdata
-          python .github/scripts/vnstock_release.py select
 
   check-universe:
     needs: preflight
@@ -92,40 +80,44 @@ jobs:
   ingest:
     needs: [preflight, check-universe]
     if: needs.preflight.outputs.action == 'RUN'
-    name: Fast ingest ${{ matrix.source }} · ${{ matrix.label }}
+    name: Fast ingest · 2 parallel lots
+    outputs:
+      source_ready: ${{ steps.release.outcome }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
-    strategy:
-      fail-fast: false
-      # Per-symbol pacing and quota-aware retries still apply in each worker.
-      max-parallel: 2
-      matrix: ${{ fromJSON(needs.preflight.outputs.matrix) }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
           cache: pip
-      - run: python -m pip install -e .
-      - name: Install the same approved release selected by preflight
+      - run: python -m pip install -e . pandas tzdata
+      - name: Select one supported VCI release for both shards
+        id: release
         env:
-          VNSTOCK_VERSION: ${{ needs.preflight.outputs.vnstock_version }}
-        run: python .github/scripts/vnstock_release.py install --version "$VNSTOCK_VERSION"
+          VNSTOCK_API_KEY: ${{ secrets.VNSTOCK_API_KEY }}
+          SUPABASE_URL: https://upmqxwktvvguegqeqibn.supabase.co
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          python .github/scripts/vnstock_release.py select
       - run: protstock validate-universe data/universe.csv
-      - name: Ingest and analyze assigned Fast Lane shard
+      - name: Ingest and analyze two parallel lots
         id: ingest
         env:
           SUPABASE_URL: https://upmqxwktvvguegqeqibn.supabase.co
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           TRADING_DATE: ${{ needs.preflight.outputs.trading_date }}
-          SYMBOL_MANIFEST: ${{ matrix.symbols }}
+          VNSTOCK_API_KEY: ${{ secrets.VNSTOCK_API_KEY }}
+          SHARD_MATRIX: ${{ needs.preflight.outputs.matrix }}
           FORCE_RERUN: ${{ inputs.force_rerun == true }}
-        run: python .github/scripts/eod_shard.py
+        run: python .github/scripts/eod_parallel.py
       - name: Hand off same-run computations
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: v0-analysis-${{ matrix.shard }}
+          name: v0-analysis-parallel
           path: ${{ runner.temp }}/analysis/*.json.gz
           retention-days: 1
           if-no-files-found: ignore
@@ -135,7 +127,7 @@ jobs:
 
   finalize:
     needs: [preflight, check-universe, ingest]
-    if: always() && needs.preflight.outputs.action == 'RUN' && needs.check-universe.result == 'success'
+    if: always() && needs.preflight.outputs.action == 'RUN' && needs.check-universe.result == 'success' && needs.ingest.outputs.source_ready == 'success'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -172,3 +164,21 @@ jobs:
           args=()
           if [ -n "$TRADING_DATE" ]; then args+=(--date "$TRADING_DATE"); fi
           protstock send-eod-alerts "${args[@]}"
+
+  report:
+    needs: [preflight, check-universe, ingest, finalize]
+    if: always() && (needs.preflight.outputs.action == 'RUN' || needs.preflight.result == 'failure')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install httpx
+      - name: Report EOD outcome even when source setup failed
+        env:
+          EOD_RESULTS: ${{ toJSON(needs) }}
+          TRADING_DATE: ${{ needs.preflight.outputs.trading_date || inputs.trading_date }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python .github/scripts/eod_report.py

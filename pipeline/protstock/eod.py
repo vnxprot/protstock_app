@@ -159,7 +159,9 @@ def run_eod(
             complete_ids = {row["symbol_id"] for row in client.daily_snapshots_for_date(trading_date) if row.get("algorithm_version") == ALGORITHM_VERSION}
             symbols = [item for item in symbols if item["id"] not in complete_ids]
         counts["expected_symbols"] = len(symbols)
-        for symbol_row in symbols:
+        print(f"EOD {trading_date}: starting {len(symbols)} missing/selected symbols", file=sys.stderr, flush=True)
+        for symbol_number, symbol_row in enumerate(symbols, 1):
+            print(f"EOD {trading_date}: {symbol_number}/{len(symbols)} {symbol_row['symbol']}", file=sys.stderr, flush=True)
             started = monotonic()
             try:
                 stored = _stock_rows_as_of(client.price_history(symbol_row["id"], _history_limit(trading_date)), trading_date)

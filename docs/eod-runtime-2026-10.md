@@ -10,9 +10,12 @@
   probes real VCI stock/index data and compares stored VCI overlap before approval.
   Approval and health manifests are private Storage objects. Changed health,
   recovery, release or expiry states notify the existing owner Telegram channel.
-- Preflight verifies an approved release, tries approved standby releases, and
+- The ingest runner verifies an approved release, tries approved standby releases, and
   can validate a new candidate if all approved releases have stopped working.
-  Both parallel shards install the exact version selected by preflight. Neither
+  Both parallel lots share that exact release on one runner, avoiding concurrent
+  device registrations on two hosted runners. The official SDK authenticates with
+  the repository `VNSTOCK_API_KEY` secret before any source probe or VCI ingest.
+  Device/account restrictions remain enforced by vnstock. Neither
   a new SDK version nor a VCI outage silently changes the persisted price vendor.
 - AUTO preserves each symbol's existing vendor (VCI for new series). Legacy
   client-version-derived revision hashes are normalized on read. Actual vendor
@@ -32,3 +35,8 @@ Source probes validate the interface and representative data, not every possible
 future vendor correction. A version that changes the checked price basis is held
 for review. If every supported source path fails, the workflow reports failure and
 keeps the latest valid publication rather than manufacturing current-session bars.
+
+- Source-health shares the EOD concurrency group. Every attempted Fast Lane has
+  an independent operational Telegram report, including setup failures; skipping
+  trading alerts during repairs does not disable failure reports. Worker logs
+  show each symbol as it starts. Failed source setup blocks publication.
