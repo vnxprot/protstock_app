@@ -8,7 +8,7 @@ from datetime import date
 
 from .config import Settings
 from .supabase_rest import SupabaseRestClient
-from .provider_vnstock import KBS_SOURCE_VERSION, STOCK_PRICE_UNIT
+from .provider_market import KBS_SOURCE_VERSION, STOCK_PRICE_UNIT
 
 
 def normalize_rows(rows: list[dict]) -> list[dict]:

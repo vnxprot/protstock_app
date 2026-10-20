@@ -33,7 +33,7 @@ export const guideTopics: GuideTopic[] = [
     'Nếu cần hành động, ghi luận điểm, điều kiện sai và mức rủi ro. Nhật ký lưu quyết định cùng bằng chứng của thời điểm đó; sau này đối chiếu với kết quả và kiểm thử.'
   ], status: 'Cá nhân', route: 'analysis', routeLabel: 'Mở Phân tích mã' },
   { id: 'data-source', category: 'Dữ liệu', title: 'Nguồn, đơn vị và thời điểm dữ liệu', summary: 'Giá và khối lượng có phiên, nguồn và thời điểm thu thập; không được đọc như báo giá trực tiếp.', details: [
-    'OHLCV EOD của cổ phiếu và VN-Index lấy VCI qua Vnstock thế hệ 5 làm nguồn chính; khi VCI lỗi, hệ thống lấy cả chuỗi từ KBS. Hệ thống dùng giá và khối lượng do nguồn đã chọn cung cấp để tính toán. Giá cổ phiếu lưu theo nghìn VND/cổ phiếu; vốn và báo cáo danh mục dùng VND.',
+    'OHLCV EOD của cổ phiếu và VN-Index lấy VCI trực tiếp làm nguồn chính; khi VCI lỗi, hệ thống lấy cả chuỗi từ KBS. Hệ thống dùng giá và khối lượng do nguồn đã chọn cung cấp để tính toán. Giá cổ phiếu lưu theo nghìn VND/cổ phiếu; vốn và báo cáo danh mục dùng VND.',
     'D/W/M lần lượt là nến ngày, tuần, tháng. Quyết định từ W/M chỉ dùng kỳ đã đóng. Nến đang hình thành có thể xuất hiện trên biểu đồ nhưng không được coi là xác nhận chính thức.'
   ], status: 'Công bố', route: 'settings?tab=data', routeLabel: 'Xem trạng thái dữ liệu', aliases: ['VCI', 'KBS', 'OHLCV', 'EOD'] },
   { id: 'data-health', category: 'Dữ liệu', title: 'Độ phủ và trạng thái công bố', summary: 'Một phiên có thể COMPLETE, PARTIAL hoặc chưa được chứng nhận.', details: [
@@ -91,7 +91,7 @@ export const guideTerms: GuideTerm[] = [
   { id:'universe',group:'Dữ liệu',subgroup:'Phạm vi',label:'Universe',meaning:'Danh sách mã đang được hệ thống theo dõi và xử lý.',reading:'Độ phủ EOD được so với các mã đang hoạt động, không phải toàn bộ thị trường.',route:'universe',aliases:['danh sách cổ phiếu'] },
   { id:'eod',group:'Dữ liệu',subgroup:'Thời gian',label:'EOD',meaning:'Dữ liệu sau phiên giao dịch.',reading:'Kiểm tra ngày phiên và thời điểm công bố trước khi đọc tín hiệu.',aliases:['end of day','cuối ngày'] },
   { id:'ohlcv',group:'Dữ liệu',subgroup:'Nguồn & đơn vị',label:'OHLCV',meaning:'Giá mở, cao, thấp, đóng và khối lượng.',reading:'Dữ liệu nền để tính nến, chỉ báo và mẫu hình; mỗi bản ghi gắn ngày và nguồn.',aliases:['giá khối lượng'] },
-  { id:'vci',group:'Dữ liệu',subgroup:'Nguồn & đơn vị',label:'VCI',meaning:'Nguồn OHLCV EOD chính của cổ phiếu và VN-Index qua Vnstock thế hệ 5.',reading:'Hệ thống dùng nguyên chuỗi giá và khối lượng do VCI cung cấp để chạy các quy tắc.' },
+  { id:'vci',group:'Dữ liệu',subgroup:'Nguồn & đơn vị',label:'VCI',meaning:'Nguồn OHLCV EOD chính của cổ phiếu và VN-Index trực tiếp.',reading:'Hệ thống dùng nguyên chuỗi giá và khối lượng do VCI cung cấp để chạy các quy tắc.' },
   { id:'kbs',group:'Dữ liệu',subgroup:'Nguồn & đơn vị',label:'KBS',meaning:'Nguồn OHLCV dự phòng khi VCI không cung cấp được chuỗi cần dùng.',reading:'Khi chuyển nguồn, hệ thống dùng cả chuỗi KBS cho phép tính thay vì ghép từng phiên.' },
   { id:'dwm',group:'Dữ liệu',subgroup:'Thời gian',label:'D / W / M',meaning:'Khung ngày, tuần và tháng.',reading:'Quyết định W/M chỉ dùng kỳ đã đóng; kỳ đang hình thành chỉ để quan sát.',aliases:['đa khung','timeframe'] },
   { id:'coverage',group:'Dữ liệu',subgroup:'Chất lượng',label:'Độ phủ',meaning:'Tỷ lệ mã có dữ liệu đúng phiên và đủ điều kiện tính.',reading:'Đọc cùng mẫu số và ngày phiên; độ phủ thấp làm giảm độ tin cậy của bảng tổng hợp.',aliases:['coverage'] },

@@ -16,7 +16,7 @@ from .engines import evaluate_named_engine
 from .fibonacci import build_fibonacci_context
 from .indicators import calculate_indicators
 from .period_signals import monthly_trend, evaluate_period_signal
-from .provider_vnstock import STOCK_PRICE_UNIT
+from .provider_market import STOCK_PRICE_UNIT
 from .signal_policy import apply_signal_policy, STOCK_PRICE_TO_VND
 from .timeframes import aggregate_bars
 from .wyckoff import classify_wyckoff_timeframe

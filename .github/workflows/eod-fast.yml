@@ -25,6 +25,11 @@ on:
         required: false
         default: false
         type: boolean
+      refresh_research:
+        description: Refresh the full direct-source research archive after EOD (no backtest)
+        required: false
+        default: false
+        type: boolean
       repair_missing:
         description: Explicit repair of missing symbols after the automatic retry budget is exhausted
         required: false
@@ -50,7 +55,12 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: python -m pip install httpx
+      - run: python -m pip install -e .
+      - name: Sync locked-universe exchange metadata from direct VCI with KBS fallback
+        env:
+          SUPABASE_URL: https://upmqxwktvvguegqeqibn.supabase.co
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: protstock sync-exchanges
       - id: status
         env:
           SUPABASE_URL: https://upmqxwktvvguegqeqibn.supabase.co
@@ -82,26 +92,26 @@ jobs:
     if: needs.preflight.outputs.action == 'RUN'
     name: Fast ingest · 2 parallel lots
     outputs:
-      source_ready: ${{ steps.release.outcome }}
+      source_ready: ${{ steps.source.outcome }}
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 180
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
           cache: pip
-      - run: python -m pip install -e . pandas tzdata
-      - name: Select one supported VCI release for both shards
-        id: release
+      - run: python -m pip install -e .
+      - name: Check direct public sources and their KBS fallback
+        id: source
         env:
-          VNSTOCK_API_KEY: ${{ secrets.VNSTOCK_API_KEY }}
+          TRADING_DATE: ${{ needs.preflight.outputs.trading_date }}
           SUPABASE_URL: https://upmqxwktvvguegqeqibn.supabase.co
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
-          python .github/scripts/vnstock_release.py select
+          python .github/scripts/market_source_health.py
       - run: protstock validate-universe data/universe.csv
       - name: Ingest and analyze two parallel lots
         id: ingest
@@ -109,7 +119,6 @@ jobs:
           SUPABASE_URL: https://upmqxwktvvguegqeqibn.supabase.co
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           TRADING_DATE: ${{ needs.preflight.outputs.trading_date }}
-          VNSTOCK_API_KEY: ${{ secrets.VNSTOCK_API_KEY }}
           SHARD_MATRIX: ${{ needs.preflight.outputs.matrix }}
           FORCE_RERUN: ${{ inputs.force_rerun == true }}
         run: python .github/scripts/eod_parallel.py
@@ -182,3 +191,52 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: python .github/scripts/eod_report.py
+
+  research-refresh:
+    needs: [preflight, ingest, finalize]
+    if: always() && inputs.refresh_research == true && needs.preflight.outputs.action == 'RUN' && needs.ingest.outputs.source_ready == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install -e .
+      - name: Refresh all universe research history from direct VCI with labelled KBS fallback
+        env:
+          SUPABASE_URL: https://upmqxwktvvguegqeqibn.supabase.co
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          TRADING_DATE: ${{ needs.preflight.outputs.trading_date }}
+        run: python .github/scripts/refresh_direct_research.py
+
+  compact-source-refresh:
+    needs: [research-refresh, finalize]
+    if: always() && inputs.refresh_research == true
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install 'psycopg[binary]>=3.2,<4'
+      - name: Reclaim database space after the source refresh without deleting price rows
+        env:
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: python .github/scripts/compact_market_refresh.py
+
+  refresh-minute-dispatch:
+    needs: [preflight, ingest, finalize, research-refresh, compact-source-refresh]
+    if: always() && inputs.refresh_research == true && needs.preflight.outputs.action == 'RUN' && needs.ingest.outputs.source_ready == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: write
+    steps:
+      - name: Start direct minute coverage refresh for the same historical session
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TRADING_DATE: ${{ needs.preflight.outputs.trading_date }}
+        run: gh workflow run intraday-spikes.yml --ref "$GITHUB_REF_NAME" -f trading_date="$TRADING_DATE" -f force_refresh=true

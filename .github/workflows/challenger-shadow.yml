@@ -25,7 +25,7 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
-      - run: python -m pip install --extra-index-url https://vnstocks.com/api/packages -e ".[dev,data]"
+      - run: python -m pip install -e ".[dev]"
       - name: Run isolated Challenger assessments
         env:
           SUPABASE_URL: https://upmqxwktvvguegqeqibn.supabase.co

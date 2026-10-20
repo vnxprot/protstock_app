@@ -5,7 +5,7 @@ import pytest
 from protstock.macd_divergence import assess_macd_divergence
 from protstock.engines import evaluate_named_engine
 from protstock.macd_replay import _outcome
-from protstock.provider_vnstock import KBS_SOURCE_VERSION
+from protstock.provider_market import KBS_SOURCE_VERSION
 from protstock.research_prices import changed_research_rows, research_price_rows
 from protstock.research_prices import sync_research_prices
 from protstock.funnel_replay import run_funnel_replay

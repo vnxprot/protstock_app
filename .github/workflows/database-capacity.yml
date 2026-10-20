@@ -2,7 +2,7 @@ name: Archive and reclaim database capacity
 
 on:
   schedule:
-    # Archive bars leaving the 400-day window after the weekly KBS sync.
+    # Archive bars leaving the 400-day window after the weekly direct-source sync.
     - cron: '0 2 * * 0'
   workflow_dispatch:
     inputs:

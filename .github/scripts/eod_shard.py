@@ -23,7 +23,7 @@ def main():
             break
         result = run_eod(day, source="AUTO", fast_lane=True, write_breadth_snapshot=False,
             symbol_names=names, prepared_dir=directory,
-            missing_only=attempt > 0 or os.getenv("FORCE_RERUN") != "true")
+            missing_only=attempt == 0 and os.getenv("FORCE_RERUN") != "true")
         print(json.dumps(result, ensure_ascii=False))
         client = SupabaseRestClient(Settings.from_env())
         try:

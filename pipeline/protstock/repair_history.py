@@ -7,7 +7,7 @@ from typing import Any, Iterable
 
 from .config import Settings
 from .history_coverage import assess_symbol_coverage
-from .provider_vnstock import VnstockProvider, INDEX_PRICE_UNIT, KBS_SOURCE_VERSION, VCI_SOURCE_VERSION
+from .provider_market import MarketDataProvider, INDEX_PRICE_UNIT, KBS_SOURCE_VERSION, VCI_SOURCE_VERSION
 from .price_basis import canonical_price_rows, same_source_window, source_family, latest_coherent_revision
 from .supabase_rest import SupabaseRestClient
 
@@ -141,7 +141,7 @@ def repair_missing_history(
 
 
 def _fetch_from_source(symbol: str, start_date: date, end_date: date, source: str):
-    return VnstockProvider(source).history(symbol, start_date, end_date)
+    return MarketDataProvider(source).history(symbol, start_date, end_date)
 
 
 def _index_price_rows(index_id: int, bars: Iterable, missing: set[str]) -> list[dict[str, Any]]:

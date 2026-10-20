@@ -76,7 +76,7 @@ def main() -> None:
     eod.add_argument("--benchmark-lookback-days", type=int, default=None)
     eod.add_argument("--symbol-offset", type=int, default=0)
     eod.add_argument("--symbol-limit", type=int)
-    eod.add_argument("--pause-seconds", type=float, default=6.5)
+    eod.add_argument("--pause-seconds", type=float, default=1.0)
     eod.add_argument("--fast-lane", action="store_true")
     eod.add_argument("--skip-breadth-snapshot", action="store_true")
     eod.add_argument("--historical", action="store_true", help="Do not use today's portfolio for a historical EOD date")
@@ -138,7 +138,7 @@ def main() -> None:
     spikes.add_argument("--pause-seconds", type=float, default=0.35)
     actions = subparsers.add_parser("sync-corporate-actions")
     actions.add_argument("--symbols", help="Optional comma-separated subset")
-    actions.add_argument("--pause-seconds", type=float, default=6.5)
+    actions.add_argument("--pause-seconds", type=float, default=1.0)
     actions.add_argument("--calendar-window-days", type=int, help="Refresh only symbols on the current VCI dividend calendar")
     args = parser.parse_args()
     if args.command == "sync-corporate-actions":

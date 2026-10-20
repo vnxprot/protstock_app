@@ -34,7 +34,7 @@ def test_seed_vnindex_fetches_and_upserts(monkeypatch) -> None:
 
     monkeypatch.setattr("protstock.seed.Settings.from_env", lambda: object())
     monkeypatch.setattr("protstock.seed.SupabaseRestClient", lambda _settings: Client())
-    monkeypatch.setattr("protstock.seed.VnstockProvider", lambda source: Provider())
+    monkeypatch.setattr("protstock.seed.MarketDataProvider", lambda source: Provider())
     result = seed_vnindex_history(date(2018, 1, 1), date(2018, 1, 3))
 
     assert result == {
@@ -50,6 +50,6 @@ def test_seed_vnindex_fetches_and_upserts(monkeypatch) -> None:
 
 
 def test_vci_adapter_is_available_for_stocks() -> None:
-    from protstock.provider_vnstock import VnstockProvider
+    from protstock.provider_market import MarketDataProvider
 
-    assert VnstockProvider("VCI").source == "VCI"
+    assert MarketDataProvider("VCI").source == "VCI"

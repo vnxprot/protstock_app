@@ -40,12 +40,15 @@ def preflight(client, day):
         return
     session = read(client, "intraday_radar_sessions", {"select": "status,attempt_count", "trading_date": f"eq.{day}", "limit": "1"})
     previous = session[0] if session else {}
+    force_refresh = os.getenv("FORCE_REFRESH") == "true"
+    if force_refresh:
+        previous = {}
     if previous.get("status") == "PUBLISHED" or previous.get("attempt_count", 0) >= MAX_ATTEMPTS:
         write_output(action="DONE", trading_date=day, matrix={"include": []})
         return
     symbols = client.active_symbols()
     states = read(client, "intraday_radar_symbol_status", {"select": "symbol_id,status", "trading_date": f"eq.{day}", "limit": "1000"})
-    ready = {int(row["symbol_id"]) for row in states if row["status"] == "COMPLETE"}
+    ready = set() if force_refresh else {int(row["symbol_id"]) for row in states if row["status"] == "COMPLETE"}
     pending = [row["symbol"] for row in symbols if int(row["id"]) not in ready]
     attempt = previous.get("attempt_count", 0) + 1
     client.upsert("intraday_radar_sessions", [{"trading_date": day, "status": "PROCESSING",
@@ -76,6 +79,11 @@ def finalize(client, day):
     if published:
         payload["published_at"] = datetime.now(timezone.utc).isoformat()
     client.upsert("intraday_radar_sessions", [payload], "trading_date")
+    # Matrix collectors never execute the old whole-universe pruning branch.
+    # Reclaim only minute-day cache outside the documented 50-day retention.
+    cutoff = (datetime.fromisoformat(day) - timedelta(days=50)).date().isoformat()
+    response = client._client.delete("/intraday_minute_days", params={"trading_date": f"lt.{cutoff}"})
+    response.raise_for_status()
     print(f"Radar {day}: {payload['status']}; ready {baseline}/{expected}; attempt {sessions[0]['attempt_count']}/{MAX_ATTEMPTS}")
 
 

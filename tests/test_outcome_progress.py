@@ -2,7 +2,7 @@ from datetime import date, timedelta
 
 from protstock.outcome_worker import evaluate_pending_outcomes
 from protstock.outcomes import evaluate_signal_outcome
-from protstock.provider_vnstock import KBS_SOURCE_VERSION
+from protstock.provider_market import KBS_SOURCE_VERSION
 from protstock.analysis import ALGORITHM_VERSION
 
 

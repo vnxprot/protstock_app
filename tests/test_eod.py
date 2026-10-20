@@ -49,7 +49,7 @@ def test_missing_vci_last_session_does_not_silently_change_vendor(monkeypatch) -
             source = "VCI_VNSTOCK_5.0.0" if self.source == "VCI" else "KBS_PUBLIC"
             return [SimpleNamespace(trading_date=bar_day, source=source)]
 
-    monkeypatch.setattr("protstock.eod.VnstockProvider", Provider)
+    monkeypatch.setattr("protstock.eod.MarketDataProvider", Provider)
     rows = _fetch_requested_session(Provider("VCI"), "AUTO", "DVM", start, day)
     assert rows[-1].trading_date == day - timedelta(days=1)
     assert rows[-1].source == "VCI_VNSTOCK_5.0.0"
@@ -165,7 +165,7 @@ def test_benchmark_fetch_refreshes_recent_sessions_then_fills_missing_history(mo
             return []
 
     monkeypatch.setattr("protstock.eod.SupabaseRestClient", lambda _settings: Client())
-    monkeypatch.setattr("protstock.eod.VnstockProvider", lambda _source: Provider())
+    monkeypatch.setattr("protstock.eod.MarketDataProvider", lambda _source: Provider())
     monkeypatch.setattr("protstock.eod.Settings.from_env", lambda: object())
     run_eod(date(2026, 9, 10), lookback_days=10, benchmark_lookback_days=9_999, pause_seconds=0)
     assert calls == [
@@ -193,7 +193,7 @@ def test_fast_lane_fetches_only_incremental_benchmark_when_cache_is_ready(monkey
             return []
 
     monkeypatch.setattr("protstock.eod.SupabaseRestClient", lambda _settings: Client())
-    monkeypatch.setattr("protstock.eod.VnstockProvider", lambda _source: Provider())
+    monkeypatch.setattr("protstock.eod.MarketDataProvider", lambda _source: Provider())
     monkeypatch.setattr("protstock.eod.Settings.from_env", lambda: object())
     run_eod(date(2026, 9, 10), fast_lane=True, pause_seconds=0)
     assert calls == [("VNINDEX", date(2026, 9, 10) - timedelta(days=FAST_LANE_BENCHMARK_FETCH_DAYS), date(2026, 9, 10))]
@@ -301,7 +301,7 @@ def test_eod_evaluates_signals_only_after_same_day_market_snapshot(monkeypatch) 
         return {"coverage_status": "COMPLETE", "observed_count": 1, "eligible_count": 1}
 
     monkeypatch.setattr("protstock.eod.SupabaseRestClient", lambda _settings: Client())
-    monkeypatch.setattr("protstock.eod.VnstockProvider", lambda _source: Provider())
+    monkeypatch.setattr("protstock.eod.MarketDataProvider", lambda _source: Provider())
     monkeypatch.setattr("protstock.eod.Settings.from_env", lambda: object())
     monkeypatch.setattr("protstock.eod.aggregate_bars", lambda *_args: [])
     monkeypatch.setattr("protstock.eod.analyze_bars", lambda rows, **_kwargs: {"as_of_date": rows[-1]["date"], "indicators": {}, "patterns": [], "zones": []})
@@ -341,7 +341,7 @@ def test_missing_vendor_session_is_skipped_without_inventing_a_price(monkeypatch
         def history(self, symbol, *_args): return [index_bar] if symbol == "VNINDEX" else []
 
     monkeypatch.setattr("protstock.eod.SupabaseRestClient", lambda _settings: Client())
-    monkeypatch.setattr("protstock.eod.VnstockProvider", lambda _source: Provider())
+    monkeypatch.setattr("protstock.eod.MarketDataProvider", lambda _source: Provider())
     monkeypatch.setattr("protstock.eod.Settings.from_env", lambda: object())
     monkeypatch.setattr("protstock.eod.sleep", lambda _seconds: None)
     result = run_eod(day, lookback_days=2200, pause_seconds=0, write_breadth_snapshot=False)

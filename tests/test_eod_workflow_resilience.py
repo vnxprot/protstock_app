@@ -17,7 +17,8 @@ def test_fast_lane_keeps_failures_visible_and_uses_two_parallel_workers() -> Non
     assert "id: ingest\n        continue-on-error: true" in standard
     assert "name: Send concise Telegram EOD alerts\n        if: always()" in standard
     assert "python .github/scripts/eod_parallel.py" in fast_lane
-    assert "VNSTOCK_API_KEY: ${{ secrets.VNSTOCK_API_KEY }}" in fast_lane
+    assert "VNSTOCK_API_KEY" not in fast_lane
+    assert "python .github/scripts/market_source_health.py" in fast_lane
     assert "python .github/scripts/eod_report.py" in fast_lane
     assert "id: ingest\n        continue-on-error: true" not in fast_lane
     assert "id: finalize\n        continue-on-error: true" not in fast_lane

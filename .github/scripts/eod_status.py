@@ -18,7 +18,7 @@ def _fresh_job(job: dict, now: datetime) -> bool:
 
 def decide(mode: str, jobs: list[dict], breadth_exists: bool, *, force_rerun: bool = False,
            coverage_status: str | None = None, now: datetime | None = None, source_revision: str | None = None,
-           repair_missing: bool = False) -> str:
+           repair_missing: bool = False, required_source_policy: str | None = None) -> str:
     now = now or datetime.now(timezone.utc)
     if force_rerun and mode == "fast-lane":
         return "RUN"
@@ -27,7 +27,8 @@ def decide(mode: str, jobs: list[dict], breadth_exists: bool, *, force_rerun: bo
     latest = next((job for job in jobs if job["job_type"] == "DERIVE_BARS"), None)
     complete = breadth_exists and coverage_status == "COMPLETE" and latest is not None and latest["status"] == "SUCCEEDED" \
         and (latest.get("counts") or {}).get("publication_status") == "COMPLETE" \
-        and (source_revision is None or latest.get("source_revision") == source_revision)
+        and (source_revision is None or latest.get("source_revision") == source_revision) \
+        and (required_source_policy is None or (latest.get("counts") or {}).get("source_policy") == required_source_policy)
     if complete:
         return "SKIP" if mode == "fast-lane" else "COMPLETE"
     # Two balanced shards per attempt; at most three automatic attempts/session.
@@ -80,7 +81,7 @@ def main() -> None:
     breadth = breadth_response.json()
     action = decide(mode, jobs_response.json(), bool(breadth), coverage_status=breadth[0].get("coverage_status") if breadth else None,
                     source_revision=ALGORITHM_VERSION, force_rerun=os.environ.get("FORCE_RERUN") == "true",
-                    repair_missing=os.environ.get("REPAIR_MISSING") == "true")
+                    repair_missing=os.environ.get("REPAIR_MISSING") == "true", required_source_policy="VCI_DIRECT_PRIMARY_V1")
     print(f"EOD {day}: {action}; expected universe: {len(symbols)}")
     with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
         output.write(f"action={action}\ntrading_date={day}\nmatrix={json.dumps({'include': balanced_shards(symbols)}, ensure_ascii=False)}\n")

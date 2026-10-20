@@ -56,53 +56,13 @@ def test_parser_keeps_only_requested_trading_minutes():
     assert [item["t"] for item in result["2026-10-09"]] == ["10:02"]
 
 
-def test_vci_minute_candles_use_vnd_without_changing_volume(monkeypatch):
-    class Frame:
-        attrs = {"source": "vci"}
-        def itertuples(self, index=False):
-            return iter([SimpleNamespace(time="2026-10-09 10:02:00+07:00", open=20,
-                                         high=20.1, low=19.9, close=20.05, volume=1000)])
-    class Market:
-        def equity(self, symbol):
-            assert symbol == "VCB"
-            return self
-        def ohlcv(self, **kwargs):
-            assert kwargs["source"] == "vci" and kwargs["interval"] == "1m"
-            return Frame()
-    monkeypatch.setitem(sys.modules, "vnstock", SimpleNamespace(Market=Market, __version__="5.0.0"))
+def test_vci_minute_candles_keep_raw_vnd_and_volume(monkeypatch):
+    monkeypatch.setattr("protstock.intraday_spikes.vci_candles", lambda *_args, **_kwargs: [
+        {"t": "2026-10-09T10:02:00+07:00", "o": 20000, "h": 20100,
+         "l": 19900, "c": 20050, "v": 1000}])
     candles = _fetch_vci_minutes("VCB", date(2026, 10, 9), date(2026, 10, 9))
     assert candles["2026-10-09"][0]["c"] == 20050
     assert candles["2026-10-09"][0]["v"] == 1000
-
-
-def test_vci_minute_candles_wait_for_free_minute_quota(monkeypatch):
-    class EntitlementError(Exception):
-        pass
-
-    calls = []
-    waits = []
-
-    class Frame:
-        attrs = {"source": "vci"}
-
-        def itertuples(self, index=False):
-            return iter([SimpleNamespace(time="2026-10-09 10:02:00+07:00", open=20,
-                                         high=20.1, low=19.9, close=20.05, volume=1000)])
-
-    class Market:
-        def equity(self, _symbol): return self
-
-        def ohlcv(self, **_kwargs):
-            calls.append(1)
-            if len(calls) == 1:
-                raise EntitlementError("The per-minute quota has been reached (60/60 calls)")
-            return Frame()
-
-    monkeypatch.setitem(sys.modules, "vnstock", SimpleNamespace(Market=Market, __version__="5.0.0"))
-    monkeypatch.setattr("protstock.intraday_spikes.sleep", waits.append)
-    result = _fetch_vci_minutes("VCB", date(2026, 10, 9), date(2026, 10, 9))
-    assert result["2026-10-09"][0]["v"] == 1000
-    assert len(calls) == 2 and waits == [65]
 
 
 def test_saved_minute_baseline_is_used_when_only_today_is_fetched(monkeypatch):
@@ -112,7 +72,7 @@ def test_saved_minute_baseline_is_used_when_only_today_is_fetched(monkeypatch):
     new_bars[6]["v"] = 20_000
     dates = [date.fromordinal(today.toordinal() - offset).isoformat() for offset in range(1, 11)]
     stored = [{"trading_date": day, "bars": old_bars, "coverage_status": "COMPLETE",
-               "data_revision": "revision-a", "source": "VCI_VNSTOCK_V5_1M"} for day in dates]
+               "data_revision": "revision-a", "source": "VCI_DIRECT_1M"} for day in dates]
     daily = [{"trading_date": day, "source": "VCI_VNSTOCK_V5", "source_volume": 20_000,
               "quality_status": "VALID", "data_revision": "revision-a"} for day in dates]
     daily.append({"trading_date": today.isoformat(), "source": "VCI_VNSTOCK_V5",

@@ -4,37 +4,39 @@ from .config import Settings
 from .supabase_rest import SupabaseRestClient
 
 MANUAL_EXCHANGE_OVERRIDES = {
-    # LTG was removed from the live Vnstock directory after its UPCOM
+    # LTG was removed from the live vendor directory after its UPCOM
     # deregistration; retain the last official board for the locked universe.
     "LTG": "UPCOM",
 }
 
 def sync_exchanges() -> dict[str, int | str]:
-    """Refresh exchange and issuer labels from the public Vnstock directory."""
-    try:
-        from vnstock import Listing
-    except ImportError as exc:  # pragma: no cover
-        raise RuntimeError("Install the data extra: pip install -e '.[data]'") from exc
+    """Use direct VCI membership, with direct KBS for outages or missing tickers."""
+    from .market_sources import directory
+    from .market_http import SourceUnavailable
 
-    directory = Listing().symbols_by_exchange(exchange="HOSE")
-    columns = {str(column).lower(): str(column) for column in directory.columns}
-    required = {"symbol", "exchange"}
-    if not required.issubset(columns):
-        raise ValueError("Vnstock directory did not return symbol/exchange columns")
-    records = directory.to_dict(orient="records")
-    listed = {
-        str(row[columns["symbol"]]).strip().upper(): row
-        for row in records
-        if str(row.get(columns["exchange"], "")).upper() in {"HOSE", "HNX", "UPCOM"}
-    }
+    source_used = "VCI"
+    try:
+        records = directory("VCI")
+    except SourceUnavailable:
+        records = directory("KBS")
+        source_used = "KBS"
+    listed = {row["symbol"]: row for row in records}
     client = SupabaseRestClient(Settings.from_env())
     try:
         symbols = client.active_symbols()
         rows = []
+        missing = {row["symbol"] for row in symbols} - set(listed)
+        if missing and source_used == "VCI":
+            try:
+                for row in directory("KBS"):
+                    if row["symbol"] in missing:
+                        listed[row["symbol"]] = row
+            except SourceUnavailable:
+                pass  # Retain known metadata for absent/deregistered tickers.
         for symbol in symbols:
             ticker = str(symbol["symbol"]).upper()
             listing = listed.get(ticker)
-            exchange = str(listing[columns["exchange"]]).upper() if listing else MANUAL_EXCHANGE_OVERRIDES.get(ticker)
+            exchange = str(listing["exchange"]).upper() if listing else MANUAL_EXCHANGE_OVERRIDES.get(ticker)
             if not exchange:
                 continue
             # PostgREST validates the prospective insert before resolving a
@@ -45,8 +47,10 @@ def sync_exchanges() -> dict[str, int | str]:
                 "active": True,
                 "exchange": exchange,
             }
+            if listing and listing.get("company_name"):
+                payload["company_name"] = listing["company_name"]
             rows.append(payload)
         written = client.upsert("symbols", rows, "symbol")
-        return {"status": "SUCCEEDED", "updated": written, "unmatched": len(symbols) - written}
+        return {"status": "SUCCEEDED", "updated": written, "unmatched": len(symbols) - written, "source": source_used}
     finally:
         client.close()

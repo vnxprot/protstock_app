@@ -1,42 +1,41 @@
-# EOD runtime recovery, 20 October 2026
+# Direct public market data, 20 October 2026
 
-- Supabase dispatches Fast Lane at 15:30 Vietnam on weekdays. GitHub's 15:30
-  schedule is a delayed fallback. The shared `protstock-eod` concurrency group
-  and publication/heartbeat preflight prevent duplicate processing.
-- Exactly one Watchdog is dispatched by Supabase at 15:35. It starts absent or
-  failed work; it leaves active work alone. There are no later Watchdog schedules.
-- A lightweight source-health workflow runs at 08:00, with a GitHub backup.
-  It discovers stable generation 5 releases from the official package index,
-  probes real VCI stock/index data and compares stored VCI overlap before approval.
-  Approval and health manifests are private Storage objects. Changed health,
-  recovery, release or expiry states notify the existing owner Telegram channel.
-- The ingest runner verifies an approved release, tries approved standby releases, and
-  can validate a new candidate if all approved releases have stopped working.
-  Both parallel lots share that exact release on one runner, avoiding concurrent
-  device registrations on two hosted runners. The official SDK authenticates with
-  the repository `VNSTOCK_API_KEY` secret before any source probe or VCI ingest.
-  Device/account restrictions remain enforced by vnstock. Neither
-  a new SDK version nor a VCI outage silently changes the persisted price vendor.
-- AUTO preserves each symbol's existing vendor (VCI for new series). Legacy
-  client-version-derived revision hashes are normalized on read. Actual vendor
-  or adjustment-basis changes still require coherent history validation.
-- Routine ingest writes changed overlap bars only, and reuses merged in-memory
-  history instead of reading the full series twice. Each shard makes at most one
-  additional pass for missing sessions/transient errors; permanent basis errors
-  remain visible. Personal backtests run in their separate queue workflow.
-- Finalize reuses same-run calculations; it skips repeated publication only when
-  no new successful ingest followed the prior publication and coverage is unchanged.
-  Incomplete final coverage produces a failed workflow, with PARTIAL data retained.
-- An explicit `repair_missing=true` bypasses the exhausted automatic attempt budget
-  while keeping missing-only selection and active-job protection. The capacity
-  workflow sets it when dispatching the 19 October repair.
-
-Source probes validate the interface and representative data, not every possible
-future vendor correction. A version that changes the checked price basis is held
-for review. If every supported source path fails, the workflow reports failure and
-keeps the latest valid publication rather than manufacturing current-session bars.
-
-- Source-health shares the EOD concurrency group. Every attempted Fast Lane has
-  an independent operational Telegram report, including setup failures; skipping
-  trading alerts during repairs does not disable failure reports. Worker logs
-  show each symbol as it starts. Failed source setup blocks publication.
+- VCI is the primary direct source for all 277 active manifest symbols, benchmark,
+  daily history, minute bars, metadata and corporate-action candidates. KBS is the
+  direct backup for day/minute/directory availability. No vnstock runtime,
+  package index, API key, device registration, paid data plan or self-hosted PC
+  is used. Vendor access, throttling and future policy changes still apply.
+- GitHub keeps two independent lot processes on one runner. Public HTTP calls
+  are paced to one per second per process, with bounded 429/network retries.
+- Primary dispatch remains 15:30 Vietnam with GitHub's backup schedule. Exactly
+  one Supabase Watchdog remains at 15:35; no later Watchdog schedules are added.
+- The historical filename vnstock-health.yml remains only so the existing
+  Supabase cron URL works. Its job now probes the public VCI/KBS contracts and
+  reports changed health states. There is no SDK-release approval step.
+- AUTO tries VCI each session, regardless of yesterday's vendor. A vendor change,
+  old SDK contract, or corrected overlap triggers full 2021+ window retrieval.
+  The chosen vendor is pinned during that retrieval; cross-vendor partial
+  windows are never spliced together. Invalid latest data can trigger an
+  explicitly labelled KBS fallback; an empty no-trade session is never fabricated.
+- Direct VCI has a new data revision. Legacy bars omitted by a refreshed source
+  remain available for audit but are excluded from current calculations.
+  Index calculations likewise select only the refreshed direct VCI history.
+- VCI raw stock prices are VND/share, normalized to thousand VND for daily prices.
+  Minute storage stays in VND, and benchmark prices stay in index points.
+  Day windows are at most 365 calendar days; minute windows at most two days,
+  with backwards pagination and duplicate/array/symbol integrity checks.
+- Minute baselines keep one minute source. KBS fallback against VCI daily data
+  requires both daily OHLC agreement and the existing volume-coverage check.
+- Direct metadata sync preserves the locked universe and existing sector rules;
+  it updates exchange labels without deactivating absent/deregistered symbols.
+  Corporate-event candidates remain SOURCE_REPORTED, not independently verified.
+- refresh_research=true refreshes all active symbols from 2021 into verified
+  private Storage archives after EOD; old immutable archives remain recoverable.
+  Research readers select one source/version/basis, and no backtest is started.
+- Repairs can force all symbols once. Subsequent bounded retries process their
+  explicit failed-symbol list even when a snapshot from an earlier run exists.
+  Operational Telegram reports remain enabled when signal alerts are suppressed.
+- A one-off refresh finishes with bounded VACUUM FULL on the four rewritten
+  market-data tables to reclaim database space without deleting prices. A busy
+  table fails the maintenance step after a five-second lock timeout rather than
+  blocking application writes indefinitely.

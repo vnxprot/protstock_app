@@ -89,6 +89,15 @@ def test_sdk_upgrade_keeps_legacy_vci_history_without_accepting_another_basis():
     assert len(latest_coherent_revision([{**old, "data_revision": "different-adjustment"}, current])) == 1
 
 
+def test_direct_refresh_does_not_reintroduce_omitted_sdk_rows():
+    old = canonical_price_rows(1, [bar("2026-10-16")], [], as_of_date=date(2026, 10, 19))[0]
+    direct = DailyBar.create(symbol="TRC", trading_date=date(2026, 10, 19),
+        open=20, high=21, low=19, close=20, volume=100, source="VCI_DIRECT")
+    current = canonical_price_rows(1, [direct], [], as_of_date=date(2026, 10, 19))[0]
+    assert not same_source_window([old, current])
+    assert latest_coherent_revision([old, current]) == [current]
+
+
 def test_latest_coherent_revision_excludes_legacy_kbs_without_mixing_bases():
     current = canonical_price_rows(1, [bar("2026-09-13"), bar("2026-09-15")], [],
                                    as_of_date=date(2026, 9, 15))

@@ -16,7 +16,7 @@ from statistics import mean
 from .backtest import BacktestAssumptions
 from .analysis import ALGORITHM_VERSION
 from .config import Settings, vietnam_today
-from .provider_vnstock import KBS_SOURCE_VERSION, STOCK_PRICE_UNIT
+from .provider_market import KBS_SOURCE_VERSION, VCI_SOURCE_VERSION, STOCK_PRICE_UNIT
 from .supabase_rest import SupabaseRestClient
 from .universe import load_universe
 
@@ -46,7 +46,7 @@ def load_from_supabase(end: str | None) -> dict:
             key = str(symbol["id"])
             statuses[key] = client.research_price_status(symbol["id"])
             if (statuses[key] and statuses[key].get("coverage_status") == "MATCHED"
-                    and statuses[key].get("source_version") == KBS_SOURCE_VERSION
+                    and statuses[key].get("source_version") in {KBS_SOURCE_VERSION, VCI_SOURCE_VERSION}
                     and statuses[key].get("requested_start_date", "9999") <= START
                     and statuses[key].get("requested_end_date", "") >= effective_end):
                 bars[key] = client.research_price_history(symbol["id"], 5000)
@@ -81,12 +81,12 @@ def analyze(snapshot: dict, end: str) -> dict:
         key = str(symbol["id"])
         status = (snapshot.get("price_status") or {}).get(key) or {}
         rows = (snapshot.get("bars") or {}).get(key) or []
-        if (not rows or status.get("coverage_status") != "MATCHED" or status.get("source_version") != KBS_SOURCE_VERSION
+        if (not rows or len({row.get("source_version") for row in rows}) != 1 or status.get("coverage_status") != "MATCHED" or status.get("source_version") not in {KBS_SOURCE_VERSION, VCI_SOURCE_VERSION}
                 or status.get("requested_start_date", "9999") > START or status.get("requested_end_date", "") < end
                 or any(row.get("quality_status") != "VALID"
                        or row.get("price_unit") != STOCK_PRICE_UNIT
-                       or row.get("basis") != "KBS_VENDOR_REBASED"
-                       or row.get("source_version") != KBS_SOURCE_VERSION for row in rows)):
+                       or row.get("basis") not in {"KBS_VENDOR_REBASED", "VCI_VENDOR_REBASED"}
+                       or row.get("source_version") not in {KBS_SOURCE_VERSION, VCI_SOURCE_VERSION} for row in rows)):
             skipped[symbol["symbol"]] = "RESEARCH_PRICE_COVERAGE_UNVERIFIED"
             continue
         valid[key] = sorted(rows, key=lambda row: row["trading_date"])

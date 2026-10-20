@@ -20,7 +20,7 @@ from .engines import evaluate_named_engine, relative_strength_context_reasons
 from .indicators import calculate_indicators
 from .market_regime import build_breadth_membership
 from .market_health_history import build_market_health_history
-from .provider_vnstock import VnstockProvider, INDEX_PRICE_UNIT, KBS_SOURCE_VERSION, VCI_SOURCE_VERSION, STOCK_PRICE_UNIT
+from .provider_market import MarketDataProvider, INDEX_PRICE_UNIT, KBS_SOURCE_VERSION, VCI_SOURCE_VERSION, STOCK_PRICE_UNIT
 from .resolution import resolve_consolidated_signal
 from .supabase_rest import SupabaseRestClient
 from .timeframes import aggregate_bars
@@ -59,8 +59,10 @@ def _coherent_benchmark_rows(rows: list[dict], trading_date: date) -> list[dict]
     if not scoped:
         return []
     family = source_family(scoped[-1].get("source"))
+    direct = scoped[-1].get("source") == "VCI_DIRECT"
     return [{**row, "date": row["trading_date"]} for row in scoped
-            if source_family(row.get("source")) == family]
+            if source_family(row.get("source")) == family
+            and (not direct or row.get("source") == "VCI_DIRECT")]
 
 
 def run_eod(
@@ -71,9 +73,8 @@ def run_eod(
     benchmark_lookback_days: int = BENCHMARK_LOOKBACK_DAYS,
     symbol_offset: int = 0,
     symbol_limit: int | None = None,
-    # Shared GitHub Actions egress can consume multiple upstream requests per
-    # symbol. Stay below 10 symbols/minute, comfortably inside guest limits.
-    pause_seconds: float = 6.5,
+    # Public endpoints are paced by market_http; this spaces symbol processing.
+    pause_seconds: float = 1.0,
     fast_lane: bool = False,
     write_breadth_snapshot: bool = True,
     historical: bool = False,
@@ -107,7 +108,7 @@ def run_eod(
             index = client.market_index("VNINDEX")
             stored_index = client.index_price_history(index["id"], _history_limit(trading_date))
             index_source = _series_source(source, stored_index)
-            index_provider = VnstockProvider(index_source)
+            index_provider = MarketDataProvider(index_source)
             # The stored 2021+ benchmark is the calculation window. Refresh
             # only the newest sessions on routine EOD batches; a new database
             # or a vendor switch is filled from 2021 below.
@@ -126,8 +127,12 @@ def run_eod(
             benchmark_daily = _coherent_benchmark_rows(benchmark_history, trading_date)
             # A fresh database or vendor switch has no coherent benchmark
             # window. Fetch the requested 2021+ history once.
-            if len(benchmark_daily) < 200:
-                index_bars = _fetch_requested_session(index_provider, index_source, "VNINDEX", HISTORY_START, trading_date)
+            if (len(benchmark_daily) < 200 or not stored_index
+                    or (index_bars and source_family(stored_index[-1].get("source")) != source_family(index_bars[-1].source))
+                    or _benchmark_overlap_changed(stored_index, index_bars)):
+                selected_index_source = source_family(index_bars[-1].source) if index_bars else index_source
+                index_provider = MarketDataProvider(selected_index_source)
+                index_bars = _fetch_requested_session(index_provider, selected_index_source, "VNINDEX", HISTORY_START, trading_date)
                 index_rows = [{
                     "index_id": index["id"], "trading_date": bar.trading_date.isoformat(),
                     "open": float(bar.open), "high": float(bar.high), "low": float(bar.low),
@@ -158,6 +163,7 @@ def run_eod(
         if missing_only:
             complete_ids = {row["symbol_id"] for row in client.daily_snapshots_for_date(trading_date) if row.get("algorithm_version") == ALGORITHM_VERSION}
             symbols = [item for item in symbols if item["id"] not in complete_ids]
+        counts["source_policy"] = "VCI_DIRECT_PRIMARY_V1"
         counts["expected_symbols"] = len(symbols)
         print(f"EOD {trading_date}: starting {len(symbols)} missing/selected symbols", file=sys.stderr, flush=True)
         for symbol_number, symbol_row in enumerate(symbols, 1):
@@ -166,7 +172,7 @@ def run_eod(
             try:
                 stored = _stock_rows_as_of(client.price_history(symbol_row["id"], _history_limit(trading_date)), trading_date)
                 symbol_source = _series_source(source, stored)
-                symbol_provider = VnstockProvider(symbol_source)
+                symbol_provider = MarketDataProvider(symbol_source)
                 # EOD calculations trust the selected vendor's OHLCV directly.
                 events = []
                 requested_start = max(HISTORY_START, trading_date - timedelta(days=lookback_days))
@@ -184,8 +190,11 @@ def run_eod(
                 needs_full_history = (not stored or not same_source_window(stored)
                                       or source_family(stored[-1].get("source")) != family
                                       or stored[-1].get("data_revision") != preview[0]["data_revision"]
+                                      or (family == "VCI" and stored[-1].get("source_version") != VCI_SOURCE_VERSION)
                                       or overlap_changed)
                 if needs_full_history:
+                    # Pin the selected vendor across the complete rebase, including fallback.
+                    symbol_provider = MarketDataProvider(family)
                     # A release/source switch rebuilds the entire 2021+ basis,
                     # including older rows outside the latest stored revision.
                     first_day = HISTORY_START
@@ -212,10 +221,14 @@ def run_eod(
                 price_rows = canonical_price_rows(symbol_row["id"], fetched, events, as_of_date=trading_date)
                 changed_rows = [row for row in price_rows if row["trading_date"] not in prior_by_day or any(
                     row.get(field) != prior_by_day[row["trading_date"]].get(field)
-                    for field in ("open", "high", "low", "close", "volume", "data_revision", "quality_status"))]
+                    for field in ("open", "high", "low", "close", "volume", "data_revision", "quality_status", "source", "source_version"))]
                 for offset in range(0, len(changed_rows), 100):
                     counts["prices"] += client.upsert("daily_prices", changed_rows[offset:offset + 100], "symbol_id,trading_date")
-                merged = {row["trading_date"]: row for row in stored}
+                merged = ({row["trading_date"]: row for row in stored
+                           if source_family(row.get("source")) == family}
+                          if needs_full_history else {row["trading_date"]: row for row in stored})
+                if needs_full_history:
+                    merged = {}
                 merged.update({row["trading_date"]: row for row in price_rows})
                 history = with_volume_segments(_stock_rows_as_of(sorted(merged.values(), key=lambda row: row["trading_date"]), trading_date), events, as_of_date=trading_date)
                 if not same_source_window(history):
@@ -259,7 +272,7 @@ def run_eod(
                             "is_complete": bar["is_complete"],
                             "source_last_date": bar["source_last_date"],
                             "data_revision": history[-1]["data_revision"],
-                        } for bar in aggregated if not fast_lane or bar["source_last_date"] >= (trading_date - timedelta(days=lookback_days)).isoformat()]
+                        } for bar in aggregated if not fast_lane or needs_full_history or bar["source_last_date"] >= (trading_date - timedelta(days=lookback_days)).isoformat()]
                         counts["derived_bars"] += client.upsert(
                             "derived_bars", derived_rows, "symbol_id,timeframe,period_start"
                         )
@@ -280,7 +293,7 @@ def run_eod(
                             if "period_events" not in context:
                                 context.update(_decision_context(analysis_rows, trading_date, {}, confirmed_week_end, confirmed_month_end, results.get("W")))
                             snapshot_key = (symbol_row["id"], timeframe, scoped_rows[-1]["date"])
-                            if timeframe in {"W", "M"} and not context["period_events"][timeframe] and snapshot_key in closed_snapshot_keys:
+                            if timeframe in {"W", "M"} and not needs_full_history and not context["period_events"][timeframe] and snapshot_key in closed_snapshot_keys:
                                 continue
                             timeframe_context = {**context, "wyckoff_context": classify_wyckoff_timeframe(timeframe, scoped_rows, period_event=context["period_events"].get(timeframe, False))}
                             _write_analysis(client, symbol_row["id"], timeframe, scoped_rows, decision_benchmark[timeframe], active_rules, counts, results[timeframe], timeframe_context, evaluate_signals=False)
@@ -410,7 +423,7 @@ def rebuild_signals(trading_date: date, *, symbol_offset: int = 0, symbol_limit:
         client.close()
         raise
     job = client.create_job({"job_type": "DERIVE_BARS", "trading_date": trading_date.isoformat(), "status": "RUNNING", "trigger_type": "MANUAL", "source_revision": ALGORITHM_VERSION})
-    counts = {"symbols": 0, "derived_bars": 0, "snapshots": 0, "patterns": 0, "zones": 0, "signals": 0, "consolidated_signals": 0, "breadth_snapshots": 0, "failed": 0}
+    counts = {"source_policy": "VCI_DIRECT_PRIMARY_V1", "symbols": 0, "derived_bars": 0, "snapshots": 0, "patterns": 0, "zones": 0, "signals": 0, "consolidated_signals": 0, "breadth_snapshots": 0, "failed": 0}
     warnings: list[str] = []
     try:
         symbols = client.active_symbols()[symbol_offset:]
@@ -730,6 +743,13 @@ def _confirmed_month_end(client: SupabaseRestClient, trading_date: date, benchma
     return trading_date if closed and remaining.issubset(closed("HOSE", trading_date + timedelta(days=1), month_end)) else None
 
 
+def _benchmark_overlap_changed(stored: list[dict], bars: list) -> bool:
+    prior = {row["trading_date"]: row for row in stored}
+    return any(bar.trading_date.isoformat() in prior and any(
+        not isclose(float(prior[bar.trading_date.isoformat()][key]), float(getattr(bar, key)), rel_tol=.001, abs_tol=.01)
+        for key in ("open", "high", "low", "close")) for bar in bars)
+
+
 def _benchmark_snapshot(rows: list[dict], trading_date: date) -> dict:
     if not rows or (rows[-1].get("trading_date") or rows[-1].get("date")) != trading_date.isoformat():
         return {"trend_state": "UNKNOWN"}
@@ -744,7 +764,7 @@ def _same_day_market_context(trading_date: date, breadth: dict, vnindex_snapshot
             "session_dates": [row["date"] for row in (benchmark_daily or [])]}
 
 
-def _fetch_requested_session(provider: VnstockProvider, source: str, symbol: str,
+def _fetch_requested_session(provider: MarketDataProvider, source: str, symbol: str,
                              start: date, end: date) -> list:
     """A retry must preserve the selected vendor's price basis."""
     return _fetch_history_with_retry(provider, symbol, start, end)
@@ -753,11 +773,10 @@ def _fetch_requested_session(provider: VnstockProvider, source: str, symbol: str
 def _series_source(requested: str, stored: list[dict]) -> str:
     if requested != "AUTO":
         return requested
-    family = source_family(stored[-1].get("source")) if stored else "UNKNOWN"
-    return family if family in {"VCI", "KBS"} else "VCI"
+    return "AUTO"  # Every session tries direct VCI first, regardless of the prior vendor.
 
 
-def _fetch_history_with_retry(provider: VnstockProvider, symbol: str, start: date, end: date) -> list:
+def _fetch_history_with_retry(provider: MarketDataProvider, symbol: str, start: date, end: date) -> list:
     """Free upstream rate limits are transient; never burn the remaining universe."""
     for attempt in range(3):
         try:

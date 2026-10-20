@@ -1,4 +1,4 @@
-"""Synchronize a coherent KBS historical research series without rewriting raw bars."""
+"""Synchronize a coherent VCI-first historical research series without rewriting raw bars."""
 
 from __future__ import annotations
 
@@ -6,8 +6,10 @@ from datetime import date
 from time import sleep
 
 from .config import Settings
-from .provider_vnstock import KBS_SOURCE_VERSION, STOCK_PRICE_UNIT, VnstockProvider
+from .provider_market import KBS_SOURCE_VERSION, VCI_SOURCE_VERSION, STOCK_PRICE_UNIT, MarketDataProvider
 from .supabase_rest import SupabaseRestClient
+from .price_basis import source_family
+from .market_sources import VCI_CHART
 
 
 # VSDC notice 199296: one existing TRC share received three bonus shares;
@@ -40,7 +42,8 @@ def research_price_rows(symbol_id: int, symbol: str, bars: list) -> list[dict]:
         if index + 1 < len(ordered):
             following = float(ordered[index + 1].close)
             invalid = invalid or following / right <= 0.5 or following / right >= 2
-        rebase_volume = symbol == "TRC" and bar.trading_date < TRC_BONUS_EX_DATE
+        family = source_family(bar.source)
+        rebase_volume = family == "KBS" and symbol == "TRC" and bar.trading_date < TRC_BONUS_EX_DATE
         result.append({
             "symbol_id": symbol_id, "trading_date": bar.trading_date.isoformat(),
             "open": float(bar.open), "high": float(bar.high), "low": float(bar.low),
@@ -48,9 +51,9 @@ def research_price_rows(symbol_id: int, symbol: str, bars: list) -> list[dict]:
             "volume_basis": "VSDC_BONUS_REBASED" if rebase_volume else "VENDOR_REPORTED",
             "volume_adjustment_factor": 4 if rebase_volume else 1,
             "price_unit": STOCK_PRICE_UNIT,
-            "basis": "KBS_VENDOR_REBASED", "source": "KBS_PUBLIC",
-            "source_version": KBS_SOURCE_VERSION,
-            "source_url": f"{VnstockProvider.API_BASE}/stocks/{symbol}/data_day",
+            "basis": f"{family}_VENDOR_REBASED", "source": bar.source,
+            "source_version": VCI_SOURCE_VERSION if family == "VCI" else KBS_SOURCE_VERSION,
+            "source_url": VCI_CHART if family == "VCI" else f"{MarketDataProvider.API_BASE}/stocks/{symbol}/data_day",
             "collected_at": bar.collected_at.isoformat(),
             "quality_status": "QUARANTINED" if invalid else "VALID",
         })
@@ -64,7 +67,7 @@ def sync_research_prices(start_date: date, end_date: date, *, symbol_offset: int
         raise ValueError("start_date must be on or before end_date")
     # Applied research history now lives in private Storage, not in the database quota.
     client = SupabaseRestClient(Settings.from_env())
-    provider = VnstockProvider("KBS")
+    provider = MarketDataProvider("AUTO")
     totals = {"symbols": 0, "bars": 0, "changed_bars": 0, "quarantined": 0, "missing": 0,
               "matched": 0, "incomplete": 0, "unmatched_stored_dates": 0,
               "failed": [], "mode": "apply" if apply else "dry-run"}
@@ -94,7 +97,7 @@ def sync_research_prices(start_date: date, end_date: date, *, symbol_offset: int
                 if apply:
                     changed = changed_research_rows(rows, client.research_price_history(item["id"], 2600))
                     if changed:
-                        client.archive_research_prices(item["id"], rows)
+                        client.archive_research_prices(item["id"], rows, replace=True)
                     totals["changed_bars"] += len(changed)
                     client.upsert("research_price_sync_status", [{
                         "symbol_id": item["id"],
@@ -104,7 +107,7 @@ def sync_research_prices(start_date: date, end_date: date, *, symbol_offset: int
                         "last_date": rows[-1]["trading_date"], "vendor_bars": len(rows),
                         "stored_bars": len(stored), "unmatched_stored_dates": unmatched,
                         "quarantined_bars": quarantined, "coverage_status": coverage_status,
-                        "source_version": KBS_SOURCE_VERSION,
+                        "source_version": rows[-1]["source_version"],
                     }], "symbol_id")
                 totals["symbols"] += 1
                 totals["bars"] += len(rows)

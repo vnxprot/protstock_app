@@ -34,7 +34,7 @@ on:
         default: false
         type: boolean
       price_basis:
-        description: stored legacy or separately synchronized KBS research series
+        description: stored legacy or separately synchronized direct-source research series
         required: true
         default: stored
         type: choice

@@ -10,11 +10,12 @@ import httpx
 
 from .config import Settings
 from .price_basis import source_family
-from .provider_vnstock import _is_minute_quota
+from .market_sources import vci_candles
+from .market_http import SourceUnavailable, request_json
 from .supabase_rest import SupabaseRestClient
 
 VERSION = "INTRADAY_SPIKE_V0.0.0"
-SOURCE = "VCI_VNSTOCK_V5_1M"
+SOURCE = "VCI_DIRECT_1M"
 WINDOWS = (1, 3, 5, 15)
 MIN_BASELINE_SESSIONS = 10
 MIN_VALUE_VND = 100_000_000
@@ -137,46 +138,17 @@ def detect_events(symbol_id: int, trading_date: str, bars: list[dict], history: 
 
 
 def _fetch_vci_minutes(symbol: str, start: date, end: date) -> dict[str, list[dict]]:
-    """Read VCI minute candles after EOD, retaining the existing spike rules."""
-    from vnstock import Market, __version__ as vnstock_version
-
-    if not str(vnstock_version).startswith("5."):
-        raise RuntimeError("Vnstock generation 5 is required for minute OHLCV")
-    market = Market().equity(symbol)
-    for attempt in range(3):
-        try:
-            frame = market.ohlcv(start=start.isoformat(), end=end.isoformat(),
-                                 interval="1m", source="vci")
-            break
-        except Exception as exc:
-            if not _is_minute_quota(exc) or attempt == 2:
-                raise
-            sleep(65)
-    if str(frame.attrs.get("source") or "").lower() != "vci":
-        raise ValueError("VCI minute request returned another source")
-    records = []
-    for row in frame.itertuples(index=False):
-        timestamp = getattr(row, "time")
-        # Vnstock stock OHLCV uses thousand VND; the existing event value
-        # calculation and minute chart use VND per share.
-        records.append({"t": str(timestamp),
-                        "o": float(getattr(row, "open")) * 1000,
-                        "h": float(getattr(row, "high")) * 1000,
-                        "l": float(getattr(row, "low")) * 1000,
-                        "c": float(getattr(row, "close")) * 1000,
-                        "v": int(getattr(row, "volume"))})
-    return parse_minute_bars({"data": records}, symbol, start, end)
+    """Read public VCI candles directly; the raw endpoint uses VND/share."""
+    return parse_minute_bars({"data": vci_candles(symbol, start, end, minute=True)}, symbol, start, end)
 
 
 def _fetch_kbs_minutes(symbol: str, start: date, end: date) -> dict[str, list[dict]]:
     """Use KBS minutes only when the selected EOD series is also KBS."""
-    response = httpx.get(
+    payload = request_json("GET",
         f"https://kbbuddywts.kbsec.com.vn/iis-server/investment/stocks/{symbol}/data_1P",
         params={"sdate": start.strftime("%d-%m-%Y"), "edate": (end + timedelta(days=1)).strftime("%d-%m-%Y")},
-        headers={"Accept": "application/json", "User-Agent": "ProtStock/1.0"}, timeout=40,
     )
-    response.raise_for_status()
-    return parse_minute_bars(response.json(), symbol, start, end)
+    return parse_minute_bars(payload, symbol, start, end)
 
 
 def run_intraday_spikes(trading_date: date, *, symbol_offset: int = 0, symbol_limit: int | None = None,
@@ -196,7 +168,7 @@ def run_intraday_spikes(trading_date: date, *, symbol_offset: int = 0, symbol_li
                 stored = db._pages("intraday_minute_days", {
                     "select": "trading_date,bars,coverage_status,data_revision,source", "symbol_id": f"eq.{symbol_id}",
                     "trading_date": f"gte.{cutoff.isoformat()}", "order": "trading_date.desc"}, limit=65)
-                daily = db._get("/daily_prices", params=[("select", "trading_date,source,source_volume,quality_status,data_revision"),
+                daily = db._get("/daily_prices", params=[("select", "trading_date,open,high,low,close,source,source_volume,quality_status,data_revision"),
                     ("symbol_id", f"eq.{symbol_id}"), ("trading_date", f"gte.{cutoff.isoformat()}"),
                     ("trading_date", f"lte.{trading_date.isoformat()}"), ("limit", "65")])
                 daily.raise_for_status()
@@ -224,13 +196,27 @@ def run_intraday_spikes(trading_date: date, *, symbol_offset: int = 0, symbol_li
                          and item.get("data_revision") == current_revision
                          and item.get("source") == minute_source][:30]
                 start = trading_date if len(prior) >= MIN_BASELINE_SESSIONS else trading_date - timedelta(days=45)
-                fetched = (_fetch_vci_minutes if family == "VCI" else _fetch_kbs_minutes)(symbol, start, trading_date)
+                try:
+                    fetched = (_fetch_vci_minutes if family == "VCI" else _fetch_kbs_minutes)(symbol, start, trading_date)
+                except SourceUnavailable:
+                    if family != "VCI":
+                        raise
+                    minute_source = "KBS_PUBLIC_1P"
+                    prior = []  # Never combine VCI and KBS minute baselines.
+                    start = trading_date - timedelta(days=45)
+                    fetched = _fetch_kbs_minutes(symbol, start, trading_date)
                 daily_volumes = {day: int(item["source_volume"]) for day, item in canonical_days.items()}
                 rows = []
                 for day, bars in fetched.items():
                     volume = sum(int(bar["v"]) for bar in bars)
                     reference = daily_volumes.get(day)
                     status = "EMPTY" if not bars else "COMPLETE" if reference and abs(volume - reference) / reference <= 0.2 else "PARTIAL"
+                    if family == "VCI" and minute_source == "KBS_PUBLIC_1P" and bars:
+                        daily_row = canonical_days.get(day) or {}
+                        expected = [daily_row.get(key) for key in ("open", "high", "low", "close")]
+                        actual = [bars[0]["o"], max(bar["h"] for bar in bars), min(bar["l"] for bar in bars), bars[-1]["c"]]
+                        if any(value is None for value in expected) or any(abs(value / 1000 - float(old)) > max(.01, abs(float(old)) * .001) for value, old in zip(actual, expected)):
+                            status = "PARTIAL"
                     rows.append({"symbol_id": symbol_id, "trading_date": day, "bars": bars,
                                  "bar_count": len(bars), "minute_volume": volume, "daily_volume": reference,
                                  "coverage_status": status, "data_revision": canonical_days.get(day, {}).get("data_revision"),

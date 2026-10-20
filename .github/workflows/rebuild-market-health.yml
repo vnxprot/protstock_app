@@ -31,7 +31,7 @@ jobs:
         with:
           python-version: '3.12'
           cache: pip
-      - run: python -m pip install --extra-index-url https://vnstocks.com/api/packages -e '.[data]'
+      - run: python -m pip install -e '.'
       - name: Build historical Market Health from stored OHLCV
         env:
           SUPABASE_URL: https://upmqxwktvvguegqeqibn.supabase.co

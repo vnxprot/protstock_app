@@ -1,7 +1,7 @@
 from datetime import date, timedelta
 
 from protstock.audit_champion_baseline import analyze, render_report
-from protstock.provider_vnstock import KBS_SOURCE_VERSION, STOCK_PRICE_UNIT
+from protstock.provider_market import KBS_SOURCE_VERSION, STOCK_PRICE_UNIT
 
 
 def test_incomplete_audit_never_claims_ground_truth():

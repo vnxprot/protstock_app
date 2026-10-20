@@ -10,7 +10,7 @@ from .eod import _write_challenger_shadow, _history_limit, _confirmed_week_end, 
 from .challenger_engine import recovery_status
 from .indicators import calculate_indicators
 from .period_signals import monthly_trend
-from .provider_vnstock import STOCK_PRICE_UNIT
+from .provider_market import STOCK_PRICE_UNIT
 from .supabase_rest import SupabaseRestClient
 from .timeframes import aggregate_bars
 from .price_basis import with_volume_segments, price_row_usable

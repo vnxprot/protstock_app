@@ -1,4 +1,4 @@
-// Vnstock OHLC values are stored in thousand VND. Keep storage untouched and
+// Daily stock OHLC values are stored in thousand VND. Keep storage untouched and
 // convert only at the UI boundary, where portfolio transactions use VND/share.
 export const MARKET_PRICE_TO_VND = 1_000
 

@@ -229,7 +229,12 @@ class SupabaseRestClient:
         if symbol_id not in self._research_archive_cache:
             self._research_archive_cache[symbol_id] = self._archive().read(symbol_id)
         by_day.update({row["trading_date"]: row for row in self._research_archive_cache[symbol_id]})
-        return sorted(by_day.values(), key=lambda row: row["trading_date"])[-limit:]
+        ordered = sorted(by_day.values(), key=lambda row: row["trading_date"])
+        if not ordered:
+            return []
+        latest = ordered[-1]
+        return [row for row in ordered if row.get("source_version") == latest.get("source_version")
+                and row.get("basis") == latest.get("basis")][-limit:]
 
     def _archive(self):
         if self._research_archive is None:
@@ -237,8 +242,8 @@ class SupabaseRestClient:
             self._research_archive = ResearchArchive(self._settings.supabase_url, self._settings.service_role_key)
         return self._research_archive
 
-    def archive_research_prices(self, symbol_id: int, rows: list[dict]) -> None:
-        by_day = {row["trading_date"]: row for row in self.research_price_history(symbol_id, 10000)}
+    def archive_research_prices(self, symbol_id: int, rows: list[dict], *, replace: bool = False) -> None:
+        by_day = {} if replace else {row["trading_date"]: row for row in self.research_price_history(symbol_id, 10000)}
         by_day.update({row["trading_date"]: row for row in rows})
         merged = sorted(by_day.values(), key=lambda row: row["trading_date"])
         self._archive().write(symbol_id, merged)

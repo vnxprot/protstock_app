@@ -93,7 +93,7 @@ def test_worker_refuses_to_execute_a_different_pinned_algorithm(monkeypatch):
     assert not replacements
 
 def test_worker_uses_canonical_prices_and_keeps_exchange_context(monkeypatch):
-    from protstock.provider_vnstock import STOCK_PRICE_UNIT
+    from protstock.provider_market import STOCK_PRICE_UNIT
     updates = []
     class Client:
         def queued_backtests(self, _limit): return [request()]

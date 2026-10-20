@@ -126,7 +126,7 @@ def run_funnel_replay(start_date: date, end_date: date, *, symbol_offset: int = 
                 totals["missing_price_series"] += 1
                 continue
             assessments, outcomes = replay_symbol(symbol["id"], rows, sessions, start_date, end_date,
-                                                  version_suffix="_KBS_REBASED" if price_basis == "research" else "")
+                                                  version_suffix=("_VCI_REBASED" if rows and rows[-1].get("basis") == "VCI_VENDOR_REBASED" else "_KBS_REBASED") if price_basis == "research" else "")
             totals["symbols"] += 1
             totals["assessments"] += len(assessments)
             totals["daily_triggers"] += sum(row["stage"] == "DAILY_TRIGGER" for row in assessments)

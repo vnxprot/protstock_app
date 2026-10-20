@@ -1,4 +1,4 @@
-from protstock.provider_vnstock import STOCK_PRICE_UNIT
+from protstock.provider_market import STOCK_PRICE_UNIT
 from protstock.run_challenger_shadow import run_shadow_session
 
 

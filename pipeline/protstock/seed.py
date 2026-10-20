@@ -7,7 +7,7 @@ from pathlib import Path
 import httpx
 
 from .config import Settings
-from .provider_vnstock import VnstockProvider, INDEX_PRICE_UNIT, KBS_SOURCE_VERSION, VCI_SOURCE_VERSION
+from .provider_market import MarketDataProvider, INDEX_PRICE_UNIT, KBS_SOURCE_VERSION, VCI_SOURCE_VERSION
 from .price_basis import source_family
 from .supabase_rest import SupabaseRestClient
 from .universe import load_universe
@@ -96,7 +96,7 @@ def seed_vnindex_history(
     client = SupabaseRestClient(Settings.from_env())
     try:
         index = client.market_index("VNINDEX")
-        provider = VnstockProvider(primary_source)
+        provider = MarketDataProvider(primary_source)
         bars = provider.history("VNINDEX", start_date, end_date)
         source_used = source_family(bars[0].source) if bars else "NONE"
 

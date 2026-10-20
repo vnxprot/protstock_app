@@ -6,7 +6,7 @@ const release = {
   title: 'Nền tảng Prot Stock',
   areas: [
     { name: 'Dữ liệu', changes: [
-      'VCI qua Vnstock thế hệ 5 là nguồn OHLCV EOD chính cho cổ phiếu và VN-Index; KBS dự phòng theo cả chuỗi.',
+      'VCI trực tiếp là nguồn OHLCV EOD chính cho cổ phiếu và VN-Index; KBS dự phòng theo cả chuỗi.',
       'Giá và khối lượng của nguồn đã chọn được dùng trực tiếp cho mọi phép tính; sự kiện doanh nghiệp không chặn EOD.',
       'Lịch sử dùng dữ liệu có thật từ 01/01/2021 đến phiên gần nhất của từng mã.',
     ] },

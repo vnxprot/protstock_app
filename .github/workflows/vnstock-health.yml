@@ -1,4 +1,4 @@
-name: Vnstock source health
+name: Public market source health
 on:
   schedule:
     # 08:00 Vietnam, independent of EOD dispatch.
@@ -19,12 +19,11 @@ jobs:
         with:
           python-version: '3.12'
           cache: pip
-      - run: python -m pip install -e . pandas tzdata
-      - name: Validate candidate and update the private approved release manifest
+      - run: python -m pip install -e .
+      - name: Validate direct VCI and KBS public data contracts
         env:
-          VNSTOCK_API_KEY: ${{ secrets.VNSTOCK_API_KEY }}
           SUPABASE_URL: https://upmqxwktvvguegqeqibn.supabase.co
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: python .github/scripts/vnstock_release.py health
+        run: python .github/scripts/market_source_health.py --notify

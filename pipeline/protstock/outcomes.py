@@ -10,6 +10,7 @@ from .price_basis import price_row_usable
 CALCULATION_VERSION = "OUTCOME_V2_PRICE_FINGERPRINT"
 CANONICAL_CALCULATION_VERSION = "OUTCOME_V0_0_0_CANONICAL"
 RESEARCH_CALCULATION_VERSION = "OUTCOME_V3_KBS_REBASED"
+VCI_RESEARCH_CALCULATION_VERSION = "OUTCOME_V4_VCI_DIRECT"
 TRADE_ASSUMPTION_VERSION = "NEXT_OPEN_FEE15BP_TAX10BP_SLIP10BP_V1"
 
 
@@ -53,13 +54,14 @@ def evaluate_signal_outcome(signal: dict, price_history: Sequence[dict], horizon
         "max_drawdown_pct": max_drawdown,
         "hit_invalidation": hit_invalidation,
         "status": "VALID",
-        "calculation_version": (RESEARCH_CALCULATION_VERSION if price_basis == "KBS_VENDOR_REBASED"
+        "calculation_version": (VCI_RESEARCH_CALCULATION_VERSION if price_basis == "VCI_VENDOR_REBASED"
+                                else RESEARCH_CALCULATION_VERSION if price_basis == "KBS_VENDOR_REBASED"
                                 else CANONICAL_CALCULATION_VERSION if price_basis == "CANONICAL_EVENT_REBASED"
                                 else CALCULATION_VERSION),
         "price_basis": price_basis,
         "price_fingerprint": fingerprint,
     }
-    if price_basis == "KBS_VENDOR_REBASED":
+    if price_basis in {"KBS_VENDOR_REBASED", "VCI_VENDOR_REBASED"}:
         entry = float(future[0]["open"]) * 1.001
         exit_price = float(future[-1]["close"]) * .999
         trade_peak, trade_drawdown = entry, 0.0

@@ -8,7 +8,7 @@ from json import dumps
 from typing import Iterable
 
 from .models import DailyBar
-from .provider_vnstock import KBS_SOURCE_VERSION, STOCK_PRICE_UNIT, VCI_SOURCE_VERSION
+from .provider_market import KBS_SOURCE_VERSION, STOCK_PRICE_UNIT, VCI_SOURCE_VERSION
 
 
 def source_family(source: str | None) -> str:
@@ -101,7 +101,10 @@ def canonical_price_rows(symbol_id: int, bars: Iterable[DailyBar], events: Itera
         family = source_family(bar.source)
         if family == "UNKNOWN":
             raise ValueError(f"Unknown OHLCV source: {bar.source}")
-        revision = vendor_revision(family)
+        # A direct-source refresh is a complete validated window. Keep omitted
+        # legacy SDK rows for audit without admitting them into that window.
+        revision = (sha256(dumps([family, "DIRECT_PUBLIC_OHLCV_V1"], sort_keys=True).encode()).hexdigest()
+                    if bar.source.startswith("VCI_DIRECT") else vendor_revision(family))
         rows.append({
             "symbol_id": symbol_id, "trading_date": bar.trading_date.isoformat(),
             "open": float(bar.open), "high": float(bar.high), "low": float(bar.low), "close": float(bar.close),

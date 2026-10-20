@@ -10,7 +10,7 @@ def message(results: dict, day: str, link: str) -> str:
     stages = ", ".join(f"{name}={value['result']}" for name, value in results.items())
     source_ready = results.get("ingest", {}).get("outputs", {}).get("source_ready")
     if results.get("ingest", {}).get("result") == "failure" and source_ready != "success":
-        detail = "Lỗi thiết lập/xác thực nguồn; hai lô chưa tải dữ liệu. Kiểm tra bước Select one supported VCI release for both shards."
+        detail = "Lỗi kiểm tra nguồn công khai VCI/KBS; hai lô chưa tải dữ liệu. Xem bước Check direct public sources and their KBS fallback."
     elif all(results.get(name, {}).get("result") == "success" for name in ("preflight", "check-universe", "ingest", "finalize")):
         detail = "Hai lô và bước xuất bản đã hoàn tất."
     else:

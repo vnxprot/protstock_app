@@ -13,7 +13,7 @@ Personal PWA for end-of-day analysis of a curated Vietnamese stock universe.
 
 ## Current release
 
-Prot Stock restarts its current release numbering at v0.0.0. Stock and VN-Index OHLCV use Vnstock generation 5 with VCI as the primary source and KBS as a whole-series fallback. The full historical programme starts on 1 January 2021. EOD calculations use the selected vendor's reported prices and volume without a separate corporate-action reconciliation gate. Source and data revision remain recorded. See [v0.0.0 release plan and checklist](docs/release-v0.0.0.md). Historical revision IDs remain available for reproducibility.
+Prot Stock restarts its current release numbering at v0.0.0. Stock and VN-Index OHLCV use public VCI endpoints directly, with direct KBS as a whole-series fallback. No vnstock SDK, API key or data subscription is required. The full historical programme starts on 1 January 2021. EOD calculations use the selected vendor's reported prices and volume without a separate corporate-action reconciliation gate. Source and data revision remain recorded. See [v0.0.0 release plan and checklist](docs/release-v0.0.0.md). Historical revision IDs remain available for reproducibility.
 
 ## Historical development
 
@@ -60,7 +60,7 @@ See:
 
 ## Data source
 
-- EOD OHLCV uses VCI through Vnstock v5 by default. KBS is used when VCI fails, with a whole-series source switch. New bars record their source, fetch time, price unit, and adapter version.
+- EOD OHLCV uses direct public VCI by default. KBS is used when VCI fails, with a whole-series source switch. New bars record their source, fetch time, price unit, and adapter version.
 - The provisional vnstock/VCI fundamentals collector is disabled, and its old rows are hidden from stock analysis. Historical records remain in the database for audit.
 - Monthly context, weekly setup, and daily trigger research runs in a shadow funnel. It does not change live signals while historical outcomes and corporate-action coverage are being validated.
 - Champion–Challenger v2 research uses separate shadow assessments and matured T+2 outcome cohorts. Shadow records never enter Champion signals, alerts, or portfolio transactions. The baseline audit requires verified historical price coverage before its parameters can be treated as measured results.

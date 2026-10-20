@@ -7,7 +7,7 @@ import os
 
 from .config import Settings
 from .macd_divergence import assess_macd_divergence
-from .provider_vnstock import KBS_SOURCE_VERSION
+from .provider_market import KBS_SOURCE_VERSION, VCI_SOURCE_VERSION
 from .supabase_rest import SupabaseRestClient
 
 
@@ -21,7 +21,7 @@ def _outcome(symbol_id: int, assessment: dict, bars: list[dict], trigger_index: 
     if exit_index >= len(bars):
         return None
     window = bars[trigger_index:exit_index + 1]
-    if any(row.get("quality_status") != "VALID" or row.get("source_version") != KBS_SOURCE_VERSION
+    if len({row.get("source_version") for row in bars}) != 1 or any(row.get("quality_status") != "VALID" or row.get("source_version") not in {KBS_SOURCE_VERSION, VCI_SOURCE_VERSION}
            for row in window):
         return None
     entry = float(bars[entry_index]["open"]) * 1.001
@@ -40,13 +40,13 @@ def _outcome(symbol_id: int, assessment: dict, bars: list[dict], trigger_index: 
             "entry_date": bars[entry_index]["trading_date"], "entry_price": round(entry, 4),
             "exit_date": bars[exit_index]["trading_date"], "exit_price": round(exit_price, 4),
             "net_return": round(net, 6), "max_drawdown": round(drawdown, 6),
-            "source_version": KBS_SOURCE_VERSION,
+            "source_version": bars[entry_index]["source_version"],
             "assumption_version": ASSUMPTION_VERSION}
 
 
 def replay_macd_symbol(symbol_id: int, rows: list[dict], start_date: date,
                        end_date: date) -> tuple[list[dict], list[dict]]:
-    if any(row.get("quality_status") != "VALID" or row.get("source_version") != KBS_SOURCE_VERSION
+    if len({row.get("source_version") for row in rows}) != 1 or any(row.get("quality_status") != "VALID" or row.get("source_version") not in {KBS_SOURCE_VERSION, VCI_SOURCE_VERSION}
            for row in rows if row["trading_date"] <= end_date.isoformat()):
         return [], []
     daily = sorted(({**row, "date": row["trading_date"]} for row in rows
@@ -60,7 +60,7 @@ def replay_macd_symbol(symbol_id: int, rows: list[dict], start_date: date,
         if bar.get("quality_status") != "VALID":
             continue
         for assessment in assess_macd_divergence(symbol_id, daily[:index + 1]):
-            assessment["version"] += "_KBS_REBASED"
+            assessment["version"] += "_VCI_REBASED" if daily[-1].get("source_version") == VCI_SOURCE_VERSION else "_KBS_REBASED"
             key = assessment["oscillator"]
             state = (assessment["setup_id"], assessment["stage"])
             if seen.get(key) != state or index == len(daily) - 1:

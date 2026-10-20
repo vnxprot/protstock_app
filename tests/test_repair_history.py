@@ -35,7 +35,7 @@ def test_repair_history_fetches_and_writes_only_missing_sessions(monkeypatch) ->
 
     monkeypatch.setattr("protstock.repair_history.Settings.from_env", lambda: object())
     monkeypatch.setattr("protstock.repair_history.SupabaseRestClient", lambda _settings: Client())
-    monkeypatch.setattr("protstock.repair_history.VnstockProvider", Provider)
+    monkeypatch.setattr("protstock.repair_history.MarketDataProvider", Provider)
     monkeypatch.setattr("protstock.repair_history.sleep", lambda _seconds: None)
 
     result = repair_missing_history(date(2021, 1, 4), date(2021, 1, 5), pause_seconds=0)
@@ -71,7 +71,7 @@ def test_full_range_backfills_before_first_observation_without_overwriting(monke
 
     monkeypatch.setattr("protstock.repair_history.Settings.from_env", lambda: object())
     monkeypatch.setattr("protstock.repair_history.SupabaseRestClient", lambda _settings: Client())
-    monkeypatch.setattr("protstock.repair_history.VnstockProvider", Provider)
+    monkeypatch.setattr("protstock.repair_history.MarketDataProvider", Provider)
     monkeypatch.setattr("protstock.repair_history.sleep", lambda _seconds: None)
     result = repair_missing_history(date(2021, 1, 1), date(2026, 9, 28), symbols={"AAA"}, pause_seconds=0, full_range=True)
     assert result["rows_written"] == 2
