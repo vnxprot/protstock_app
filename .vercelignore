@@ -11,7 +11,9 @@
 .github/
 outputs/
 tests/
-pipeline/
+# Shared JSON policy is imported by the web app; omit Python source only.
+pipeline/**/*.py
+pipeline/**/__pycache__/
 supabase/
 data/
 docs/
