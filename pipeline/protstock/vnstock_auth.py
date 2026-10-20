@@ -18,6 +18,7 @@ def authenticate() -> None:
     import vnstock
     try:
         vnstock.login(key)
-    except Exception:
-        raise RuntimeError("VNSTOCK_AUTH_FAILED: official API key login failed; check account/device entitlement") from None
+    except Exception as error:
+        detail = str(error).replace(key, "[REDACTED]")[:400]
+        raise RuntimeError(f"VNSTOCK_AUTH_FAILED ({type(error).__name__}): {detail}") from None
     _authenticated = True
