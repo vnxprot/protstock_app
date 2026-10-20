@@ -33,9 +33,7 @@ def main():
             client.close()
         retry = set()
         for item in items:
-            if item["status"] == "SKIPPED":
-                retry.add(item["item_key"])
-            elif item["status"] == "FAILED":
+            if item["status"] == "FAILED":
                 message = (item.get("error_message") or "").lower()
                 if any(word in message for word in ("timeout", "timed out", "429", "rate limit", "network", "503", "502", "connection")):
                     retry.add(item["item_key"])
@@ -43,7 +41,7 @@ def main():
                     permanent.add(item["item_key"])
         names = retry
         if names and attempt == 0:
-            print(f"Retrying {len(names)} missing/transient symbols once in the same run")
+            print(f"Retrying {len(names)} transient technical failures once in the same run")
             sleep(65)
     if permanent or (result and result.get("failed")):
         raise SystemExit(f"EOD shard incomplete; permanent errors: {','.join(sorted(permanent))}; check job_run_items")

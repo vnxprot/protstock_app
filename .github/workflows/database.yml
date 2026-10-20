@@ -9,6 +9,10 @@ on:
         default: dry-run
         type: choice
         options: [dry-run, deploy]
+      publish_eod_date:
+        description: Optional date to finalize from stored data after deployment, without fetching missing candles
+        required: false
+        type: string
       bootstrap_existing:
         description: Mark the already-installed Phase 1 migrations as applied
         required: true
@@ -22,6 +26,7 @@ on:
 
 permissions:
   contents: read
+  actions: write
 
 concurrency:
   group: protstock-database-production
@@ -83,3 +88,10 @@ jobs:
           done
           grep -Eq '^CREATE( OR REPLACE)? FUNCTION public\.apply_watchlist_entry\(p_symbol text, p_patch jsonb, p_expected_user_id uuid\)' remote_schema_unquoted.sql || { echo 'Missing owner-pinned v4 watchlist RPC overload'; exit 1; }
           echo "Verified v4 thesis tables and all financial/query/worker RPC definitions."
+      - name: Finalize stored EOD after migration and let Fast Lane trigger Intraday once
+        if: success() && inputs.mode == 'deploy' && inputs.publish_eod_date != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TRADING_DATE: ${{ inputs.publish_eod_date }}
+        run: gh workflow run eod-fast.yml --ref "$GITHUB_REF_NAME" -f trading_date="$TRADING_DATE" -f publish_only=true -f force_rerun=true -f skip_backtests=true -f skip_alerts=true

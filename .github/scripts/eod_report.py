@@ -11,8 +11,8 @@ def message(results: dict, day: str, link: str) -> str:
     source_ready = results.get("ingest", {}).get("outputs", {}).get("source_ready")
     if results.get("ingest", {}).get("result") == "failure" and source_ready != "success":
         detail = "Lỗi kiểm tra nguồn công khai VCI/KBS; hai lô chưa tải dữ liệu. Xem bước Check direct public sources and their KBS fallback."
-    elif all(results.get(name, {}).get("result") == "success" for name in ("preflight", "check-universe", "ingest", "finalize")):
-        detail = "Hai lô và bước xuất bản đã hoàn tất."
+    elif all(results.get(name, {}).get("result") == "success" for name in ("preflight", "check-universe", "finalize")) and results.get("ingest", {}).get("result") in {"success", "skipped"}:
+        detail = "EOD đã hoàn tất. Mã không có nến được liệt kê tại Pipeline và không tự chạy lại."
     else:
         detail = "EOD chưa hoàn tất; xem bước lỗi trong workflow. Dữ liệu thiếu chưa được xác nhận đã khắc phục."
     return f"Prot Stock · EOD {day}\n{detail}\n{stages}\n{link}"

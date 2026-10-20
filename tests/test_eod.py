@@ -241,27 +241,27 @@ def test_final_watchdog_publishes_partial_same_day_coverage(monkeypatch) -> None
     monkeypatch.setattr("protstock.eod.rebuild_signals", rebuild)
 
     result = finalize_fast_lane(day, allow_partial=True)
-    assert result["status"] == "PARTIAL"
+    assert result["status"] == "SUCCEEDED"
+    assert result["publication_status"] == "COMPLETE_WITH_MISSING"
     assert result["covered"] == 1 and result["expected"] == 2
     assert result["missing_symbols"] == ["BBB"]
     assert result["published_signals"] == 2
     assert calls == [("breadth", day, "SIDEWAYS"), ("signals", day, day.isoformat())]
 
 
-def test_final_watchdog_rejects_zero_same_day_snapshots(monkeypatch) -> None:
+def test_final_watchdog_records_zero_candles_without_fabricating_signals(monkeypatch) -> None:
+    saved=[]
     class Client:
         def active_symbols(self): return [{"id": 1, "symbol": "AAA"}]
         def daily_snapshots_for_date(self, _day): return []
+        def create_job(self, _payload): return {"id":"done"}
+        def finish_job(self, _id, payload): saved.append(payload)
         def close(self): pass
-
     monkeypatch.setattr("protstock.eod.SupabaseRestClient", lambda _settings: Client())
     monkeypatch.setattr("protstock.eod.Settings.from_env", lambda: object())
-    try:
-        finalize_fast_lane(date(2026, 9, 28), allow_partial=True)
-    except RuntimeError as exc:
-        assert "No same-day snapshots" in str(exc)
-    else:
-        raise AssertionError("zero coverage cannot produce a meaningful market context")
+    result=finalize_fast_lane(date(2026, 9, 28), allow_partial=True)
+    assert result["status"]=="SUCCEEDED" and result["published_signals"]==0
+    assert result["missing_symbols"]==["AAA"] and saved[0]["counts"]["covered_symbols"]==0
 
 
 def test_eod_evaluates_signals_only_after_same_day_market_snapshot(monkeypatch) -> None:
@@ -476,7 +476,7 @@ def test_full_rebuild_counts_only_prices_on_requested_session(monkeypatch):
     assert result["covered_symbols"] == result["symbols"] == 1
     assert result["expected_symbols"] == 3 and result["skipped_missing_price"] == 2
     assert result["failed"] == 0 and result["status"] == "SUCCEEDED"
-    assert result["publication_status"] == "PARTIAL"
+    assert result["publication_status"] == "COMPLETE_WITH_MISSING"
     assert {item[0] for item in writes} == {1}
     assert all(item[2] == item[3] == "2026-10-02" for item in writes)
     assert {(symbol_id, frame) for symbol_id, frame, _day in deleted} == {(symbol_id, frame) for symbol_id in (2, 3) for frame in ("D", "W", "M")}
@@ -502,6 +502,6 @@ def test_prepared_rebuild_does_not_reuse_stale_cached_daily_analysis(monkeypatch
 def test_prepared_rebuild_keeps_same_session_cached_analysis_reuse(monkeypatch):
     result, writes, _deleted, _items, _finished = _rebuild_same_session_fixture(monkeypatch, date(2026, 10, 2), True, fresh_cached=True)
     assert result["analysis_reused"] == 1 and result["covered_symbols"] == 2
-    assert result["skipped_missing_price"] == 1 and result["publication_status"] == "PARTIAL"
+    assert result["skipped_missing_price"] == 1 and result["publication_status"] == "COMPLETE_WITH_MISSING"
     assert {item[0] for item in writes} == {1, 2}
     assert all(item[2] == item[3] == "2026-10-02" for item in writes)

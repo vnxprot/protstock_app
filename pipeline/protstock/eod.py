@@ -308,6 +308,7 @@ def run_eod(
             except Exception as exc:  # a failed symbol must not stop the universe
                 if isinstance(exc, ValueError) and str(exc) == "SOURCE_MISSING_REQUESTED_SESSION":
                     counts["skipped_missing_price"] = counts.get("skipped_missing_price", 0) + 1
+                    counts.setdefault("missing_symbols", []).append(symbol_row["symbol"])
                     warnings.append(f"{symbol_row['symbol']}: SOURCE_MISSING_REQUESTED_SESSION")
                     client.create_job_item({
                         "job_run_id": job["id"], "symbol_id": symbol_row["id"],
@@ -343,7 +344,8 @@ def run_eod(
             _write_challenger_shadow(client, pending_signals, market_context, trading_date, counts, warnings)
         status = "SUCCEEDED" if counts["failed"] == 0 else "PARTIAL"
         if write_breadth_snapshot and symbols:
-            counts["publication_status"] = "COMPLETE" if status == "SUCCEEDED" and not counts.get("skipped_missing_price") and breadth["coverage_status"] == "COMPLETE" else "PARTIAL"
+            counts["publication_status"] = ("PARTIAL" if status != "SUCCEEDED" else
+                                             "COMPLETE_WITH_MISSING" if counts.get("skipped_missing_price") or breadth["coverage_status"] != "COMPLETE" else "COMPLETE")
             counts["covered_symbols"] = breadth["observed_count"]
             counts["expected_symbols"] = breadth["eligible_count"]
         if status == "SUCCEEDED" and write_breadth_snapshot and symbol_offset == 0 and symbol_limit is None and benchmark_daily and benchmark_daily[-1]["date"] == trading_date.isoformat():
@@ -375,6 +377,16 @@ def finalize_fast_lane(trading_date: date, *, allow_partial: bool = False, prepa
         missing = expected - covered
         if missing and not allow_partial:
             raise RuntimeError(f"Fast Lane incomplete: {len(covered)}/{len(expected)} daily snapshots")
+        if not covered and allow_partial:
+            missing_names = sorted(row["symbol"] for row in active_symbols)
+            job = client.create_job({"job_type": "DERIVE_BARS", "trading_date": trading_date.isoformat(),
+                "status": "RUNNING", "trigger_type": "SCHEDULED", "source_revision": ALGORITHM_VERSION})
+            counts = {"source_policy": "VCI_DIRECT_PRIMARY_V1", "publication_status": "COMPLETE_WITH_MISSING",
+                      "expected_symbols": len(expected), "covered_symbols": 0, "symbols": 0, "failed": 0,
+                      "skipped_missing_price": len(expected), "missing_symbols": missing_names, "published_signals": 0}
+            client.finish_job(job["id"], {"status": "SUCCEEDED", "finished_at": _now(), "counts": counts})
+            return {"status": "SUCCEEDED", "publication_status": "COMPLETE_WITH_MISSING", "covered": 0,
+                    "expected": len(expected), "missing_symbols": missing_names, "published_signals": 0}
         if not covered:
             raise RuntimeError(f"No same-day snapshots for {trading_date}; Market Health and signals cannot be evaluated")
         prepared = load_prepared_analyses(prepared_dir, trading_date) if prepared_dir is not None else None
@@ -385,8 +397,8 @@ def finalize_fast_lane(trading_date: date, *, allow_partial: bool = False, prepa
             subsequent = client._pages("job_runs", {"select": "id", "job_type": "eq.EOD_INGEST",
                 "trading_date": f"eq.{trading_date.isoformat()}", "counts->>symbols": "gt.0",
                 "finished_at": f"gt.{published[0]['finished_at']}", "limit": "1"}) if published and published[0].get("finished_at") else [None]
-            if published and not subsequent and (published[0].get("counts") or {}).get("covered_symbols") == len(covered):
-                return {"status": "PARTIAL" if missing else "SUCCEEDED", "unchanged": True,
+            if published and not subsequent and (published[0].get("counts") or {}).get("publication_status") in {"COMPLETE", "COMPLETE_WITH_MISSING"} and (published[0].get("counts") or {}).get("covered_symbols") == len(covered):
+                return {"status": "SUCCEEDED", "publication_status": "COMPLETE_WITH_MISSING" if missing else "COMPLETE", "unchanged": True,
                     "covered": len(covered), "expected": len(expected),
                     "missing_symbols": sorted(row["symbol"] for row in active_symbols if row["id"] in missing)}
         index = client.market_index("VNINDEX")
@@ -402,7 +414,7 @@ def finalize_fast_lane(trading_date: date, *, allow_partial: bool = False, prepa
     if rebuilt["status"] != "SUCCEEDED":
         raise RuntimeError(f"Fast Lane signal evaluation was {rebuilt['status']}")
     return {
-        "status": "PARTIAL" if missing else "SUCCEEDED",
+        "status": "SUCCEEDED", "publication_status": "COMPLETE_WITH_MISSING" if missing else "COMPLETE",
         "covered": len(covered), "expected": len(expected),
         "missing_symbols": sorted(row["symbol"] for row in active_symbols if row["id"] in missing),
         "breadth": breadth, "signals": rebuilt["signals"],
@@ -492,6 +504,7 @@ def rebuild_signals(trading_date: date, *, symbol_offset: int = 0, symbol_limit:
                     # Every rebuild, including historical runs, requires prices
                     # on its requested session; stale bars cannot count as covered.
                     counts["skipped_missing_price"] = counts.get("skipped_missing_price", 0) + 1
+                    counts.setdefault("missing_symbols", []).append(symbol_row["symbol"])
                     warnings.append(f"{symbol_row['symbol']}: STALE_PRICE_DATA")
                     for timeframe in ("D", "W", "M"):
                         client.delete_consolidated_signal(symbol_row["id"], timeframe, trading_date.isoformat())
@@ -591,7 +604,8 @@ def rebuild_signals(trading_date: date, *, symbol_offset: int = 0, symbol_limit:
             _write_challenger_shadow(client, pending_signals, prepared_market_context, trading_date, counts, warnings)
         status = "SUCCEEDED" if not counts["failed"] else "PARTIAL"
         final_breadth = (prepared_market_context or {}).get("breadth", {}) if prepared_market_context else breadth
-        counts["publication_status"] = "PARTIAL" if counts["failed"] or counts.get("skipped_missing_price") or final_breadth.get("coverage_status") != "COMPLETE" else "COMPLETE"
+        counts["publication_status"] = ("PARTIAL" if counts["failed"] else
+                                        "COMPLETE_WITH_MISSING" if counts.get("skipped_missing_price") or final_breadth.get("coverage_status") != "COMPLETE" else "COMPLETE")
         counts["expected_symbols"] = len(symbols)
         counts["covered_symbols"] = counts["symbols"]
         if status == "SUCCEEDED" and symbol_offset == 0 and symbol_limit is None and benchmark_daily and benchmark_daily[-1]["date"] == trading_date.isoformat():

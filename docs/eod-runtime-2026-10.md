@@ -39,3 +39,29 @@
   market-data tables to reclaim database space without deleting prices. A busy
   table fails the maintenance step after a five-second lock timeout rather than
   blocking application writes indefinitely.
+
+## Completion policy — 20 October 2026
+
+- Missing current-session candles are recorded as skipped, never fabricated or
+  automatically retried. Final publication succeeds with COMPLETE_WITH_MISSING;
+  Pipeline retains the missing ticker list and actual coverage. Technical failures
+  still fail the workflow. Even zero returned candles can finish without publishing
+  invented signals or Market Health.
+- Fast Lane remains scheduled at 15:30 Vietnam time, with two parallel lots.
+  The single 15:35 Watchdog checks publication completion, so missing candles do
+  not cause a second run.
+- Intraday has one automatic entry point: explicit dispatch from successful Fast
+  Lane finalization with its exact trading date. Independent cron and workflow_run
+  triggers are removed. Two lots include only symbols with same-day EOD prices and
+  snapshots. Terminal sessions are not retried automatically under the same source
+  policy; a manual refresh remains available. Minute publication still requires
+  95% baseline coverage among eligible symbols.
+- `publish_only=true` finalizes stored EOD without fetching prices. Database
+  deployment can chain this operation using `publish_eod_date`; this also starts
+  the Intraday guard after the schema is ready.
+- Portfolio accepts valid VCI/KBS closing prices without an entitlement valuation
+  gate. Cash dividends are gross receivables from the ex-date, separate from cash.
+  Only an explicit owner-recorded net receipt credits cash, once per event. A
+  scheduled payment date never creates cash. Share rights remain informational
+  until reflected in the transaction ledger. Vendor-adjusted historical prices
+  are used as supplied; this ledger is not a broker cash reconciliation.

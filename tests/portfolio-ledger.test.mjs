@@ -134,13 +134,23 @@ test('zero remaining contributed capital does not erase realized investment prof
  const result=portfolioPerformance(report({as_of_date:'2026-09-03',transactions:[trade('b','2026-09-01','BUY_NEW',10,1000),trade('s','2026-09-02','SELL_CLOSE',10,1200)],capital_movements:[{id:'out',movement_type:'WITHDRAWAL',amount:100000,effective_date:'2026-09-03'}],prices:[price('2026-09-01',1),price('2026-09-02',1.2)],market_sessions:['2026-09-01','2026-09-02','2026-09-03']}))
  assert.equal(result.latest.capital,0);assert.equal(result.profitLoss,1955);assert.equal(result.todayProfitLoss,0)
 })
-test('unresolved holder entitlements remain explicit and do not produce invented NAV',()=>{
+test('holder entitlement metadata does not block vendor-marked NAV',()=>{
  const result=portfolioPerformance(report({as_of_date:'2026-09-02',valuation_issues:[{symbol_id:1,symbol:'AAA',ex_date:'2026-09-02',action_type:'STOCK_DIVIDEND'}],valuation_blocked_symbols:[1],market_sessions:['2026-09-01','2026-09-02']}))
- assert.equal(result.profitLoss,null);assert.equal(result.todayProfitLoss,null)
- assert.equal(result.averageSamples,1)
+ assert.equal(result.profitLoss,0);assert.equal(result.todayProfitLoss,0)
+ assert.equal(result.averageSamples,2)
 })
 test('adjusted historical quotes do not invalidate current cash P/L after a full sale',()=>{
  const result=portfolioPerformance(report({as_of_date:'2026-09-03',transactions:[{...trade('b','2026-09-01','BUY_NEW',10,1000),broker_fee_override:0},{...trade('s','2026-09-02','SELL_CLOSE',10,1100),broker_fee_override:0,sell_tax_override:0}],prices:[{...price('2026-09-01',0.5),valuation_usable:false}],market_sessions:['2026-09-01','2026-09-02','2026-09-03']}))
- assert.equal(result.profitLoss,1000);assert.equal(result.todayProfitLoss,0);assert.equal(result.returnPct,null)
- assert.equal(result.averageNetAssets,101000);assert.equal(result.averageSamples,2)
+ assert.equal(result.profitLoss,1000);assert.equal(result.todayProfitLoss,0);nearly(result.returnPct,1)
+ assert.equal(result.averageNetAssets,99000);assert.equal(result.averageSamples,3)
+})
+
+
+test('cash dividend receivable is separate from cash and converts once at net receipt',()=>{
+ const base=report({as_of_date:'2026-10-16',portfolio:{capital:100000,created_at:'2026-10-01T01:00:00Z'},entitlements:[{symbol_id:1,symbol:'DGW',ex_date:'2026-10-05',action_type:'CASH_DIVIDEND',quantity:10,expected_cash:10000,source:'VCI_DIRECT_EVENTS'}],market_sessions:['2026-10-01','2026-10-05','2026-10-16']})
+ const waiting=portfolioPerformance(base)
+ assert.equal(waiting.latest.cash,100000);assert.equal(waiting.latest.receivables,10000);assert.equal(waiting.latest.nav,110000)
+ const paid=portfolioPerformance({...base,dividend_receipts:[{id:'one',symbol_id:1,ex_date:'2026-10-05',received_date:'2026-10-16',net_cash:9500}]})
+ assert.equal(paid.latest.cash,109500);assert.equal(paid.latest.receivables,0);assert.equal(paid.latest.nav,109500)
+ assert.equal(paid.latest.capital,100000);assert.equal(paid.todayProfitLoss,-500)
 })

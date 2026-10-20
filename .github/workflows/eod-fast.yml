@@ -25,6 +25,11 @@ on:
         required: false
         default: false
         type: boolean
+      publish_only:
+        description: Finalize stored EOD without fetching or retrying any symbols
+        required: false
+        default: false
+        type: boolean
       refresh_research:
         description: Refresh the full direct-source research archive after EOD (no backtest)
         required: false
@@ -89,7 +94,7 @@ jobs:
         run: protstock assert-universe data/universe.csv
   ingest:
     needs: [preflight, check-universe]
-    if: needs.preflight.outputs.action == 'RUN'
+    if: needs.preflight.outputs.action == 'RUN' && inputs.publish_only != true
     name: Fast ingest · 2 parallel lots
     outputs:
       source_ready: ${{ steps.source.outcome }}
@@ -136,8 +141,10 @@ jobs:
 
   finalize:
     needs: [preflight, check-universe, ingest]
-    if: always() && needs.preflight.outputs.action == 'RUN' && needs.check-universe.result == 'success' && needs.ingest.outputs.source_ready == 'success'
+    if: always() && needs.preflight.outputs.action == 'RUN' && needs.check-universe.result == 'success' && (needs.ingest.outputs.source_ready == 'success' || inputs.publish_only == true)
     runs-on: ubuntu-latest
+    outputs:
+      trading_date: ${{ steps.finalize.outputs.trading_date }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -226,17 +233,17 @@ jobs:
           SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
         run: python .github/scripts/compact_market_refresh.py
 
-  refresh-minute-dispatch:
-    needs: [preflight, ingest, finalize, research-refresh, compact-source-refresh]
-    if: always() && inputs.refresh_research == true && needs.preflight.outputs.action == 'RUN' && needs.ingest.outputs.source_ready == 'success'
+  dispatch-intraday:
+    needs: [preflight, finalize]
+    if: always() && needs.finalize.result == 'success' && needs.preflight.outputs.action == 'RUN'
     runs-on: ubuntu-latest
     permissions:
       contents: read
       actions: write
     steps:
-      - name: Start direct minute coverage refresh for the same historical session
+      - name: Start one Intraday workflow for the published EOD session
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           TRADING_DATE: ${{ needs.preflight.outputs.trading_date }}
-        run: gh workflow run intraday-spikes.yml --ref "$GITHUB_REF_NAME" -f trading_date="$TRADING_DATE" -f force_refresh=true
+        run: gh workflow run intraday-spikes.yml --ref "$GITHUB_REF_NAME" -f trading_date="$TRADING_DATE"

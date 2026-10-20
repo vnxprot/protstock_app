@@ -1,4 +1,4 @@
-"""Read-only EOD guard: complete coverage, fresh leases and bounded retries."""
+"""Read-only EOD guard: completed publication, fresh leases and bounded technical recovery."""
 import json
 import os
 import sys
@@ -25,8 +25,8 @@ def decide(mode: str, jobs: list[dict], breadth_exists: bool, *, force_rerun: bo
     if any(_fresh_job(job, now) for job in jobs):
         return "SKIP" if mode == "fast-lane" else "IN_PROGRESS"
     latest = next((job for job in jobs if job["job_type"] == "DERIVE_BARS"), None)
-    complete = breadth_exists and coverage_status == "COMPLETE" and latest is not None and latest["status"] == "SUCCEEDED" \
-        and (latest.get("counts") or {}).get("publication_status") == "COMPLETE" \
+    complete = latest is not None and latest["status"] == "SUCCEEDED" \
+        and (latest.get("counts") or {}).get("publication_status") in {"COMPLETE", "COMPLETE_WITH_MISSING"} \
         and (source_revision is None or latest.get("source_revision") == source_revision) \
         and (required_source_policy is None or (latest.get("counts") or {}).get("source_policy") == required_source_policy)
     if complete:

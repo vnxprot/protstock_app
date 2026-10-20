@@ -17,6 +17,7 @@ export type PortfolioReportData = {
   missingPriceCount?: number
   asOfDate: string | null
   capital: number
+  dividendReceivables?: number
   cash: number
   marketValue: number
   netAssetValue: number
@@ -56,6 +57,7 @@ export async function downloadPortfolioExcel(data: PortfolioReportData) {
     ['Chi tieu', 'Gia tri (VND)', 'Ty le'],
     ['Tong von', data.capital, 1],
     ['Tien mat uoc tinh', data.cash, data.capital ? data.cash / data.capital : null],
+    ['Co tuc phai thu (truoc thue)', data.dividendReceivables??0, null],
     ['Gia tri thi truong', data.marketValue, data.capital ? data.marketValue / data.capital : null],
     ['Tai san rong', data.netAssetValue, data.capital ? data.netAssetValue / data.capital : null],
     ['Loi nhuan / lo', data.profitLoss, data.returnPct == null ? null : data.returnPct / 100],
@@ -98,6 +100,7 @@ export async function downloadPortfolioPdf(data: PortfolioReportData) {
     body: [
       ['Total capital', money(data.capital)],
       ['Cash estimate', money(data.cash)],
+      ['Dividend receivables (gross)', money(data.dividendReceivables??0)],
       ['Market value', money(data.marketValue)],
       ['Net asset value', money(data.netAssetValue)],
       ['Profit / Loss', `${money(data.profitLoss)} · ${percent(data.returnPct)}`],

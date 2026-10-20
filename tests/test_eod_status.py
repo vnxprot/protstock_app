@@ -31,10 +31,12 @@ def test_breadth_without_signals_is_not_published():
     assert eod_status.decide("watchdog", jobs, True) == "DISPATCH_FAST_LANE"
 
 
-def test_complete_publication_requires_current_revision_and_coverage():
+def test_complete_publication_requires_current_revision_but_accepts_missing_candles():
     jobs = [{"job_type": "DERIVE_BARS", "status": "SUCCEEDED", "source_revision": "core-rules-v4.0.0", "counts": {"publication_status": "COMPLETE"}}]
     assert eod_status.decide("watchdog", jobs, True, coverage_status="COMPLETE", source_revision="core-rules-v4.0.0") == "COMPLETE"
-    assert eod_status.decide("watchdog", jobs, True, coverage_status="PARTIAL") == "DISPATCH_FAST_LANE"
+    assert eod_status.decide("watchdog", jobs, True, coverage_status="PARTIAL") == "COMPLETE"
+    jobs[0]["counts"]["publication_status"] = "COMPLETE_WITH_MISSING"
+    assert eod_status.decide("watchdog", jobs, False, coverage_status="PARTIAL") == "COMPLETE"
     assert eod_status.decide("watchdog", jobs, True, coverage_status="COMPLETE", source_revision="core-rules-v5.0.0") == "DISPATCH_FAST_LANE"
 
 

@@ -4,7 +4,13 @@ import { tradeCosts, type CostRate } from './portfolioCosts.ts'
 export type LedgerTransaction = { id: string; symbol_id: string | number; trading_date: string; created_at?: string; action: string; quantity: number; price: number | null; broker_fee_override?: number | null; sell_tax_override?: number | null; symbols?: { symbol: string; sector?: string | null } | null }
 export type CapitalMovement = { id: string; movement_type: string; amount: number; effective_date: string; created_at?: string; note?: string | null }
 export type LedgerPrice = { symbol_id: string | number; trading_date: string; close: number; valuation_usable?:boolean }
-export type LedgerReport = { portfolio: { capital: number; created_at?: string; initial_capital?: number }; initial_capital?: number; transactions: LedgerTransaction[]; capital_movements: CapitalMovement[]; prices: LedgerPrice[]; valuation_blocked_symbols?: number[]; valuation_issues?: {symbol_id:number;symbol:string;ex_date:string;action_type:string}[]; market_sessions?: string[]; as_of_date?:string }
+export type PortfolioEntitlement = { symbol_id: string | number; symbol: string; ex_date: string; action_type: string; quantity: number; expected_cash: number | null; cash_per_share?: number | null; ratio?: number | null; payment_date?: string | null; source: string }
+export type DividendReceipt = { id: string; symbol_id: string | number; ex_date: string; received_date: string; net_cash: number }
+export function cashReceivablesAt(entitlements: PortfolioEntitlement[], receipts: DividendReceipt[], day: string) {
+  return entitlements.filter(item=>item.action_type==='CASH_DIVIDEND'&&item.ex_date<=day&&!receipts.some(receipt=>String(receipt.symbol_id)===String(item.symbol_id)&&receipt.ex_date===item.ex_date&&receipt.received_date<=day))
+    .reduce((sum,item)=>sum+Math.max(0,Number(item.expected_cash)||0),0)
+}
+export type LedgerReport = { portfolio: { capital: number; created_at?: string; initial_capital?: number }; initial_capital?: number; transactions: LedgerTransaction[]; capital_movements: CapitalMovement[]; prices: LedgerPrice[]; entitlements?: PortfolioEntitlement[]; dividend_receipts?: DividendReceipt[]; valuation_basis?: string; valuation_blocked_symbols?: number[]; valuation_issues?: {symbol_id:number;symbol:string;ex_date:string;action_type:string}[]; market_sessions?: string[]; as_of_date?:string }
 export type RealizedSlice = { costBasis: number; pnl: number; returnPct: number; openedAt: string; quantity: number }
 
 const chronological = (a: LedgerTransaction, b: LedgerTransaction) => a.trading_date.localeCompare(b.trading_date) || (a.created_at ?? '').localeCompare(b.created_at ?? '') || a.id.localeCompare(b.id)
@@ -51,7 +57,9 @@ export function portfolioTimeline(report: LedgerReport, rates: CostRate[] = []) 
   const movements = report.capital_movements.filter(item=>!report.as_of_date||item.effective_date<=report.as_of_date).sort((a, b) => a.effective_date.localeCompare(b.effective_date) || (a.created_at ?? '').localeCompare(b.created_at ?? '') || a.id.localeCompare(b.id))
   const signed = (item: CapitalMovement) => (item.movement_type === 'DEPOSIT' ? 1 : -1) * Number(item.amount)
   const initialCapital = Number(report.initial_capital ?? report.portfolio.initial_capital ?? (Number(report.portfolio.capital) - report.capital_movements.reduce((sum, item) => sum + signed(item), 0)))
-  const eventDates = [...transactions.map(item => item.trading_date), ...movements.map(item => item.effective_date)]
+  const entitlements=report.entitlements??[]
+  const receipts=(report.dividend_receipts??[]).filter(item=>!report.as_of_date||item.received_date<=report.as_of_date).sort((a,b)=>a.received_date.localeCompare(b.received_date))
+  const eventDates = [...transactions.map(item => item.trading_date), ...movements.map(item => item.effective_date),...entitlements.map(item=>item.ex_date),...receipts.map(item=>item.received_date)]
   const createdAt = report.portfolio.created_at ? new Date(report.portfolio.created_at) : null
   const createdDate = createdAt && !Number.isNaN(createdAt.getTime()) ? todayInVietnam(createdAt) : undefined
   const firstDate = [...eventDates, ...(createdDate ? [createdDate] : [])].sort()[0] ?? report.prices.map(item => item.trading_date).sort()[0]
@@ -62,11 +70,12 @@ export function portfolioTimeline(report: LedgerReport, rates: CostRate[] = []) 
   for (const row of report.prices) (pricesByDate[row.trading_date] ??= []).push(row)
   const holdings: Record<string, { quantity: number; cost: number }> = {}
   const marks: Record<string, { value: number; date: string; usable:boolean }> = {}
-  let cash = 0, capital = 0, txIndex = 0, movementIndex = 0, previousNav = 0, growth = 1
+  let cash = 0, capital = 0, txIndex = 0, movementIndex = 0, receiptIndex = 0, previousNav = 0, growth = 1
   return dates.map((date, index) => {
     let flow = index === 0 ? initialCapital : 0
     while (movementIndex < movements.length && movements[movementIndex].effective_date <= date) flow += signed(movements[movementIndex++])
     capital += flow; cash += flow
+    while(receiptIndex<receipts.length&&receipts[receiptIndex].received_date<=date) cash+=Number(receipts[receiptIndex++].net_cash)
     while (txIndex < transactions.length && transactions[txIndex].trading_date <= date) {
       const item = transactions[txIndex++], key = String(item.symbol_id), quantity = Number(item.quantity), price = Number(item.price)
       const costs = tradeCosts(item, rates)
@@ -90,14 +99,14 @@ export function portfolioTimeline(report: LedgerReport, rates: CostRate[] = []) 
       if (mark&&!mark.usable) unverifiedPrices+=1
       return sum + held.quantity * (mark?.value ?? held.cost / held.quantity)
     }, 0)
-    const nav = cash + marketValue
+    const receivables=cashReceivablesAt(entitlements,receipts,date)
+    const nav = cash + marketValue + receivables
     // Contributions/withdrawals are assumed at the beginning of their effective day.
     const denominator = previousNav + flow
     const dailyReturn = denominator > 0 ? nav / denominator - 1 : null
     if (dailyReturn != null) growth *= 1 + dailyReturn
     previousNav = nav
-    const blocked=report.valuation_issues?.some(issue=>issue.ex_date<=date)??Boolean(report.valuation_blocked_symbols?.length)
-    return { date, nav, cash, capital, marketValue, netFlow: flow, value: (growth - 1) * 100, dailyReturn, missingPrices, stalePrices, unverifiedPrices, valuationComplete:!blocked&&!missingPrices&&!stalePrices&&!unverifiedPrices }
+    return { date, nav, cash, capital, marketValue, receivables, netFlow: flow, value: (growth - 1) * 100, dailyReturn, missingPrices, stalePrices, unverifiedPrices, valuationComplete:!missingPrices&&!stalePrices }
   })
 }
 

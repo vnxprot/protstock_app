@@ -1,6 +1,6 @@
 import { supabase } from './supabase'
 
-export type SignalPublication = { date: string; count: number; finishedAt: string | null; sourceRevision: string; publicationStatus: 'COMPLETE' | 'PARTIAL' | 'LEGACY'; covered: number | null; expected: number | null }
+export type SignalPublication = { date: string; count: number; finishedAt: string | null; sourceRevision: string; publicationStatus: 'COMPLETE' | 'COMPLETE_WITH_MISSING' | 'PARTIAL' | 'LEGACY'; covered: number | null; expected: number | null }
 let cached: { value: SignalPublication | null; expires: number } | null = null
 let pending: Promise<SignalPublication | null> | null = null
 export function clearSignalPublicationCache() { cached = null }
