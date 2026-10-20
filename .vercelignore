@@ -1,0 +1,22 @@
+# Only ship application source; research/test workspaces are not deployment inputs.
+.openai/
+.codex/
+.agents/
+.aws/
+.venv/
+.pytest*/
+.worktrees/
+.site-staging/
+.v4-*/
+.github/
+outputs/
+tests/
+pipeline/
+supabase/
+data/
+docs/
+scripts/
+*.zip
+*.log
+*.sqlite*
+.env*

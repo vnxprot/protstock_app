@@ -25,6 +25,7 @@ jobs:
       - run: npm run test:journal
       - run: npm run test:signals
       - run: npm run test:runtime
+      - run: node --experimental-strip-types --test tests/investment-modules.test.mjs
 
   pipeline:
     runs-on: ubuntu-latest
@@ -47,3 +48,4 @@ jobs:
           node-version: 22
       - run: npm install --prefix .v4-sql-check --no-save --ignore-scripts @electric-sql/pglite@0.5.8
       - run: node tests/v4-migration-smoke.mjs
+      - run: node tests/investment-module-migration.mjs

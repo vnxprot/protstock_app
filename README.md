@@ -60,6 +60,11 @@ See:
 
 ## Data source
 
+- Independent CAN SLIM and price-cycle modules reuse stored EOD prices. C/A/N/I
+  remain owner-verified checklists, with sources, reporting periods, expiry and
+  device-local drafts; no automatic fundamental feed is enabled. See
+  [module policy and rollout](docs/growth-and-cycle-modules.md).
+
 - EOD OHLCV uses direct public VCI by default. KBS is used when VCI fails, with a whole-series source switch. New bars record their source, fetch time, price unit, and adapter version.
 - The provisional vnstock/VCI fundamentals collector is disabled, and its old rows are hidden from stock analysis. Historical records remain in the database for audit.
 - Monthly context, weekly setup, and daily trigger research runs in a shadow funnel. It does not change live signals while historical outcomes and corporate-action coverage are being validated.

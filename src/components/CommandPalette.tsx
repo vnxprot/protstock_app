@@ -5,6 +5,7 @@ import { useDialogFocus } from '../hooks/useDialogFocus'
 
 export interface SymbolOption { symbol: string; sector?: string | null; exchange?: string | null }
 const destinations = [
+  { id: 'canslim', label: 'CAN SLIM', icon: TrendingUp }, { id: 'cycle', label: 'Chu kỳ cổ phiếu', icon: BarChart3 },
   { id: 'today', label: 'Tổng quan', icon: LayoutDashboard }, { id: 'market', label: 'Thị trường', icon: TrendingUp }, { id: 'analysis', label: 'Phân tích mã', icon: BarChart3 }, { id: 'screener', label: 'Bộ lọc tín hiệu', icon: Search }, { id: 'watchlist', label: 'Watchlist', icon: Star }, { id: 'watchlist-board', label: 'Bảng Watchlist', icon: Star }, { id: 'rules', label: 'Thiết lập quy tắc', icon: Workflow }, { id: 'backtest', label: 'Kiểm thử lịch sử', icon: FlaskConical }, { id: 'portfolio', label: 'Danh mục', icon: BriefcaseBusiness }, { id: 'journal', label: 'Nhật ký', icon: BookOpen }, { id: 'settings', label: 'Cài đặt và hướng dẫn', icon: Settings },
 ]
 const normalize = (text: string) => text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd').toLowerCase()
