@@ -64,3 +64,47 @@ html[data-theme=light] .investment-check.stale,html[data-theme=light] .investmen
   .app-shell .investment-pagination { flex-wrap:wrap; gap:12px; }
   .app-shell .investment-advanced input:not([type=date]) { font-size:16px; }
 }
+
+/* Original seven-column layout, compact rows; retain the current preset chips. */
+.app-shell .investment-original-table .investment-table { table-layout:fixed; min-width:1040px; width:100%; }
+.app-shell .investment-original-table .investment-table thead { background:transparent; }
+.app-shell .investment-original-table .investment-table th { padding:10px; height:46px; vertical-align:middle; white-space:nowrap; }
+.app-shell .investment-original-table .investment-table td { height:58px; min-height:0; min-width:0; padding:8px 10px; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; font:500 12px/1.45 var(--font-ui); }
+.app-shell .investment-original-table .investment-table td:first-child { white-space:normal; }
+.app-shell .investment-original-table .investment-table td:first-child small { display:block; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; margin-top:3px; font:400 10px/1.4 var(--font-ui); }
+.app-shell .investment-original-table .investment-table tbody tr:nth-child(n) { background:transparent; }
+.app-shell .investment-original-table .investment-table tbody tr:hover { background:color-mix(in srgb,var(--control-accent) 5%,transparent); }
+.app-shell .investment-original-table .investment-column-heading { display:flex; justify-content:space-between; align-items:center; gap:4px; width:100%; height:26px; min-height:0; padding:0; margin:0; border:0; border-radius:0; background:transparent; cursor:default; color:var(--muted); font:600 11px/1.4 var(--font-ui); }
+.investment-original-table .investment-column-heading>span { overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+.app-shell .investment-funnel { display:inline-flex; align-items:center; justify-content:center; flex:none; gap:1px; width:24px; height:26px; min-height:0; padding:0; border:1px solid transparent; border-radius:6px; background:transparent; color:var(--muted); cursor:pointer; }
+.app-shell .investment-funnel:is(:hover,.active) { background:var(--surface-2); border-color:var(--line-bright); color:var(--control-accent); }
+.app-shell .investment-funnel small { margin:0; font-size:9px; }
+.app-shell .investment-original-table .investment-checks { display:flex; flex-wrap:nowrap; align-items:center; gap:4px; }
+.app-shell .investment-original-table .investment-check { flex:none; display:inline-flex; flex-direction:row; align-items:center; justify-content:center; gap:3px; min-width:26px; height:24px; padding:2px 4px; border-radius:6px; font:600 10px/1.3 var(--font-ui); }
+.app-shell .investment-original-table .investment-check small { display:inline; margin:0!important; color:inherit; font:500 9px/1.3 var(--font-ui); }
+.app-shell .investment-original-table .investment-stage { display:inline-block; max-width:100%; padding:4px 7px; border-radius:6px; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; vertical-align:middle; font:500 11px/1.4 var(--font-ui); }
+.investment-row-actions { display:flex; flex-wrap:nowrap; gap:5px; align-items:center; justify-content:flex-end; }
+.app-shell .investment-original-table .investment-row-actions .icon-button { display:inline-flex; justify-content:center; align-items:center; flex:none; width:28px; height:28px; min-height:0; margin:0; padding:0; border:1px solid var(--line); border-radius:7px; background:transparent; }
+.app-shell .investment-original-table .investment-symbol { font:700 13px/1.4 var(--font-ui); }
+
+.investment-column-menu { z-index:10020; display:flex; flex-direction:column; gap:8px; box-sizing:border-box; width:min(288px,calc(100vw - 16px)); padding:12px; border:1px solid var(--line-bright); border-radius:12px; background:var(--surface); color:var(--text); box-shadow:0 12px 36px #0003; font:400 12px/1.45 var(--font-ui,Inter,sans-serif); overflow-y:auto; }
+.investment-column-menu-title { display:flex; align-items:center; justify-content:space-between; gap:8px; flex:none; }
+.investment-column-menu-title strong { overflow:hidden; white-space:nowrap; text-overflow:ellipsis; font-size:12px; }
+.investment-column-menu button { display:inline-flex; align-items:center; gap:7px; min-height:30px; padding:5px 8px; border:1px solid var(--line); border-radius:7px; background:var(--surface-2); color:var(--text); cursor:pointer; font:500 12px/1.4 var(--font-ui,Inter,sans-serif); }
+.investment-column-menu-title button { justify-content:center; width:28px; min-height:28px; padding:0; }
+.investment-column-sort { display:grid; gap:4px; padding-bottom:8px; border-bottom:1px solid var(--line); flex:none; }
+.investment-column-sort button { border-color:transparent; background:transparent; text-align:left; }
+.investment-column-sort button:is(:hover,[aria-pressed=true]) { color:var(--control-accent); background:var(--surface-2); }
+.investment-column-search { display:flex; align-items:center; gap:7px; min-height:34px; padding:0 8px; border:1px solid var(--line-bright); border-radius:7px; background:var(--surface-2); flex:none; }
+.investment-column-search input { width:100%; min-width:0; height:32px; padding:0; border:0; background:transparent; color:var(--text); font:inherit; }
+.investment-column-option { display:flex; align-items:center; gap:8px; min-height:28px; padding:4px; cursor:pointer; }
+.investment-column-option input { width:14px; height:14px; margin:0; flex:none; accent-color:var(--control-accent); }
+.investment-column-option>span { overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+.investment-column-option>small { margin-left:auto; color:var(--muted); }
+.investment-select-all { border-bottom:1px solid var(--line); flex:none; }
+.investment-column-options { flex:1 1 auto; min-height:40px; max-height:200px; overflow-y:auto; overscroll-behavior:contain; }
+.investment-column-options p { margin:8px 4px; color:var(--muted); }
+.investment-column-footer { display:flex; justify-content:space-between; gap:8px; padding-top:8px; border-top:1px solid var(--line); flex:none; }
+.investment-column-footer button { justify-content:center; }
+.investment-column-footer .investment-column-apply { color:var(--control-accent); border-color:var(--control-accent); }
+@media(max-width:760px) { .investment-column-search input { font-size:16px; } .investment-column-menu button { min-height:36px; } .investment-column-option { min-height:32px; } }
