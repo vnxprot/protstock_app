@@ -9,9 +9,8 @@ import { formatDate, todayInVietnam } from '../lib/date'
 import { canslimChecks, cycleLabels, emptyReview, eventLabels, reasonLabels, reviewIsStale, safeSource, setupLabels, statusLabels, technicalFresh, validateReview, type CheckStatus, type ModuleRow, type Review, type ReviewStatus } from '../lib/investmentModules'
 import { isWatchActive, toggleWatchlistSymbol, useWatchlist } from '../lib/watchlist'
 import { InvestmentFilterControls } from './InvestmentFilterControls'
-import { InvestmentColumnFilter } from './InvestmentColumnFilter'
 import { SoftSelect } from './SoftSelect'
-import { emptyInvestmentFilters, invalidInvestmentRange, matchesInvestmentFilters, investmentColumnValue, compareInvestmentColumn, type InvestmentColumn } from '../lib/investmentFilters'
+import { emptyInvestmentFilters, invalidInvestmentRange, matchesInvestmentFilters, investmentColumnValue, type InvestmentColumn } from '../lib/investmentFilters'
 import '../investment-modules.css'
 
 type Stock = { id: number; symbol: string; sector: string; company_name: string | null; exchange: string; trading_status: string }
@@ -28,7 +27,6 @@ export function InvestmentModulesPage({ module, authenticated, ownerId, canRevie
   const watchlist = useWatchlist().filter(isWatchActive).map(item => item.symbol)
   const [filters, setFilters] = useState(emptyInvestmentFilters), [preset, setPreset] = useState('ALL')
   const [page, setPage] = useState(1), [pageSize, setPageSize] = useState(25)
-  const [columnSort, setColumnSort] = useState<{ column: InvestmentColumn; direction: 'asc' | 'desc' } | null>(null)
   const [focused, setFocused] = useState<number | null>(null)
   const items = useMemo(() => {
     const current = new Map(data.data?.current.map(row => [row.symbol_id, row]))
@@ -50,17 +48,13 @@ export function InvestmentModulesPage({ module, authenticated, ownerId, canRevie
       return item.fresh && e?.setup === preset
     }
     return item.fresh && e?.cycle.state === preset || preset === 'UNKNOWN' && !item.fresh
-  }).sort((a, b) => columnSort ? compareInvestmentColumn(investmentColumnValue(a, columnSort.column, watchlist), investmentColumnValue(b, columnSort.column, watchlist), columnSort.direction) || a.stock.symbol.localeCompare(b.stock.symbol) : Number(b.fresh) - Number(a.fresh) || (b.row?.evidence.rs_percentile ?? -1) - (a.row?.evidence.rs_percentile ?? -1) || a.stock.symbol.localeCompare(b.stock.symbol))
-  useEffect(() => setPage(1), [filters, preset, pageSize, module, columnSort])
+  }).sort((a, b) => Number(b.fresh) - Number(a.fresh) || (b.row?.evidence.rs_percentile ?? -1) - (a.row?.evidence.rs_percentile ?? -1) || a.stock.symbol.localeCompare(b.stock.symbol))
+  useEffect(() => setPage(1), [filters, preset, pageSize, module])
   const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize)), currentPage = Math.min(page, pageCount)
   const selected = items.find(item => item.stock.id === focused)
   const sectors = [...new Set(items.map(item => item.stock.sector))].sort()
   const readyCount = items.filter(item => item.fresh).length
   const error = data.error || data.publicationError || symbols.error
-  const columnHeading = (column: InvestmentColumn, label: string, numeric = false) => {
-    const options = [...new Map(items.map(item => { const value = investmentColumnValue(item, column, watchlist); return [value.key, value] })).values()].sort((a, b) => compareInvestmentColumn(a, b, 'asc'))
-    return <th scope="col"><InvestmentColumnFilter label={label} options={options} selected={filters.columns?.[column]} numeric={numeric} direction={columnSort?.column === column ? columnSort.direction : undefined} onChange={selected => setFilters(previous => { const columns = { ...previous.columns }; if (selected === undefined) delete columns[column]; else columns[column] = selected; return { ...previous, columns } })} onSort={direction => setColumnSort(direction ? { column, direction } : null)}/></th>
-  }
   return <section className="investment-page">
     <header className="dashboard-header"><div><span className="investment-eyebrow">{isGrowth ? 'O’NEIL · NGHIÊN CỨU TĂNG TRƯỞNG' : 'CHU KỲ GIÁ · NGÀY VÀ TUẦN'}</span><h1>{isGrowth ? 'CAN SLIM' : 'Chu kỳ cổ phiếu'}</h1><p>{isGrowth ? 'Quan sát giá tự động, xác minh doanh nghiệp theo tài liệu đã đọc. Bảy tiêu chí được trình bày riêng.' : 'Nhìn trạng thái tuần đã đóng và sự kiện ngày. Tích lũy, tăng giá, phân phối, giảm giá.'}</p></div><button className="secondary-button" onClick={() => { void data.refetch(); void symbols.refetch() }} disabled={data.isFetching}><RefreshCw size={16}/>Cập nhật</button></header>
     <div className="investment-summary"><article className="panel"><span>Ngày công bố EOD</span><strong>{formatDate(data.publication?.date)}</strong><small>{data.publication?.publicationStatus ?? 'Chưa có công bố'}</small></article><article className="panel"><span>Dữ liệu kỹ thuật cùng phiên</span><strong>{readyCount}/{items.length}</strong><small>Mã thiếu hoặc cũ vẫn hiển thị rõ</small></article><article className="panel"><span>{isGrowth ? 'C/A đã xác minh còn hạn' : 'Khung phân loại chính'}</span><strong>{isGrowth ? items.filter(item => item.checks.C === 'PASS' && item.checks.A === 'PASS').length : 'Tuần đã đóng'}</strong><small>{isGrowth ? 'Đánh giá quá 90 ngày cần xem lại' : 'Hai tuần liên tiếp cùng trạng thái để củng cố'}</small></article></div>
@@ -71,7 +65,7 @@ export function InvestmentModulesPage({ module, authenticated, ownerId, canRevie
     <div className="screener-toolbar-chips investment-quick-filters" aria-label="Danh sách lọc">{(isGrowth ? [['ALL', 'Tất cả'], ['RESEARCH', 'Cần đọc Fundamental'], ['VERIFIED', 'C/A đã xác minh'], ['NEAR_PIVOT', 'Sắp vượt nền'], ['BREAKOUT', 'Vượt nền'], ['PULLBACK', 'Điều chỉnh'], ['EXTENDED', 'Đã kéo xa'], ['STALE', 'Cần xem lại'], ['ALL_CHECKS', 'Đủ 7 tiêu chí tham chiếu']] : [['ALL', 'Tất cả'], ...Object.entries(cycleLabels)]).map(([value, label]) => <button className={preset === value ? 'active' : ''} key={value} onClick={() => setPreset(value)} aria-pressed={preset === value}>{label}</button>)}</div>
     <div className="panel investment-results investment-original-table"><div className="investment-table-wrap"><table className={isGrowth ? 'investment-table investment-growth-table' : 'investment-table investment-cycle-table'}>
       <colgroup>{(isGrowth ? [14, 24, 18, 8, 10, 16, 10] : [14, 17, 23, 16, 11, 11, 8]).map((width, index) => <col key={index} style={{ width: width + '%' }}/>)}</colgroup>
-      <thead><tr>{columnHeading('symbol', 'Mã / Ngành')}{isGrowth ? <>{columnHeading('checks', 'Bảng kiểm CAN SLIM')}{columnHeading('setup', 'Trạng thái giá')}{columnHeading('rs', 'RS Prot', true)}{columnHeading('pivot', 'Đến pivot', true)}</> : <>{columnHeading('stage', 'Trạng thái tuần')}{columnHeading('evidence', 'Bằng chứng / Chuyển tiếp')}{columnHeading('event', 'Sự kiện ngày')}{columnHeading('weekly', 'Tuần đóng')}</>}{columnHeading('liquidity', 'Thanh khoản TV20', true)}{columnHeading('watch', 'Thao tác')}</tr></thead>
+      <thead><tr><th scope="col">Mã / Ngành</th>{isGrowth ? <><th scope="col">Bảng kiểm CAN SLIM</th><th scope="col">Trạng thái giá</th><th scope="col">RS Prot</th><th scope="col">Đến pivot</th></> : <><th scope="col">Trạng thái tuần</th><th scope="col">Bằng chứng / Chuyển tiếp</th><th scope="col">Sự kiện ngày</th><th scope="col">Tuần đóng</th></>}<th scope="col">Thanh khoản TV20</th><th scope="col">Thao tác</th></tr></thead>
       <tbody>{filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize).map(item => {
         const e = item.fresh ? item.row?.evidence : undefined
         const cell = (column: InvestmentColumn) => investmentColumnValue(item, column, watchlist).label
