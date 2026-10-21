@@ -3,9 +3,10 @@
   "short_name": "Prot Stock",
   "description": "Phân tích cổ phiếu Việt Nam sau phiên giao dịch.",
   "start_url": "/",
+  "id": "/",
   "display": "standalone",
-  "background_color": "#07110e",
-  "theme_color": "#07110e",
+  "background_color": "#f4f7f5",
+  "theme_color": "#f4f7f5",
   "lang": "vi",
   "icons": [
     {

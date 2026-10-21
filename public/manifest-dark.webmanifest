@@ -1,0 +1,12 @@
+{
+  "name": "Prot Stock v0.0.0",
+  "short_name": "Prot Stock",
+  "description": "Phân tích cổ phiếu Việt Nam sau phiên giao dịch.",
+  "id": "/",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#07110e",
+  "theme_color": "#07110e",
+  "lang": "vi",
+  "icons": [{ "src": "/prot-quant-p.png", "sizes": "1024x1024", "type": "image/png", "purpose": "any maskable" }]
+}

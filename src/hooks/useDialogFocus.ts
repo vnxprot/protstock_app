@@ -18,9 +18,10 @@ function lockBackground() {
     bodyWidth: document.body.style.width, bodyOverflow: document.body.style.overflow,
     htmlOverflow: document.documentElement.style.overflow,
   }
+  const bodyWidth = document.body.getBoundingClientRect().width
   document.body.style.position = 'fixed'
   document.body.style.top = `-${scrollPosition}px`
-  document.body.style.width = '100%'
+  document.body.style.width = `${bodyWidth}px`
   document.body.style.overflow = 'hidden'
   document.documentElement.style.overflow = 'hidden'
   updateModalViewport()
@@ -69,6 +70,6 @@ export function useDialogFocus(open: boolean, ref: RefObject<HTMLElement | null>
       else if (!event.shiftKey && (current === all.at(-1) || !node.contains(current))) { event.preventDefault(); all[0].focus() }
     }
     document.addEventListener('keydown', keyboard)
-    return () => { document.removeEventListener('keydown', keyboard); unlockBackground(); previous?.focus() }
+    return () => { document.removeEventListener('keydown', keyboard); unlockBackground(); previous?.focus({ preventScroll: true }) }
   }, [open, ref, onClose])
 }

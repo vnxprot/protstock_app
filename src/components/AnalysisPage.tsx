@@ -1,7 +1,7 @@
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { ChevronDown, Search, Star } from 'lucide-react'
 import { OpportunityAnalysis } from './OpportunitiesPanel'
 import { useOpportunityRoute } from '../lib/opportunities'
-import { useEffect, useMemo, useState } from 'react'
-import { ChevronDown, Search, Star } from 'lucide-react'
 import { useStockAnalysis, useSymbols, type ClassicalCandidate, type PatternInstance, type PriceZone, type StockDecision, type TechnicalSnapshot } from '../hooks/useStockAnalysis'
 import { openCommandPalette } from './CommandPalette'
 import { StockChart } from './StockChart'
@@ -12,108 +12,133 @@ import { MacdPanel } from './MacdPanel'
 import { displaySystemRevision } from '../lib/releaseLabels'
 import { ExRightsCalculator } from './ExRightsCalculator'
 import { MonthlyTrendEvidence } from './MonthlyTrendEvidence'
+import { AnalysisDetails, type AnalysisDetail, type OpenAnalysisDetails } from './AnalysisDetails'
 
-const patternNames:Record<string,string>={ACCUMULATION_BASE:'Nền tích lũy',FLAT_BASE_BREAKOUT:'Nền phẳng',DOUBLE_BOTTOM:'Hai đáy',DOUBLE_TOP:'Hai đỉnh',ASCENDING_TRIANGLE:'Tam giác tăng',DESCENDING_TRIANGLE:'Tam giác giảm',SYMMETRICAL_TRIANGLE:'Tam giác cân',BULL_FLAG:'Cờ tăng',BULL_PENNANT:'Cờ đuôi nheo tăng',BEAR_FLAG:'Cờ giảm',CUP_HANDLE:'Cốc tay cầm',PULLBACK_CONTINUATION:'Nhịp hồi tiếp diễn'}
-const number=(value:number|null|undefined,digits=2)=>value==null?'—':Number(value).toLocaleString('vi-VN',{maximumFractionDigits:digits})
-const rangeSize:Record<string,number>={ '1M':22,'3M':66,'6M':132,'1Y':260,'3Y':780,ALL:9999 }
-const exchangeLabel=(exchange:string|null|undefined)=>({HOSE:'HSX',HSX:'HSX',HNX:'HNX',UPCOM:'UPCOM'}[exchange??'']??'Đang đồng bộ sàn')
-const displayDate=(value:string|null|undefined)=>value?value.split('-').reverse().join('/'):'—'
-const actionName:Record<string,string>={WATCH:'Theo dõi · chưa có lệnh',PROBE_BUY:'Mua thăm dò',ADD:'Mua thêm',REDUCE:'Giảm tỷ trọng',EXIT:'Thoát vị thế'}
-
-function generateExecutiveSummary(snapshot: TechnicalSnapshot | undefined): string {
-  if (!snapshot) return 'Đang cập nhật đánh giá tổng hợp sau phiên...'
-  const trend = snapshot.trend_state === 'UP' ? 'Xu hướng tăng duy trì tốt'
-    : snapshot.trend_state === 'DOWN' ? 'Xu hướng điều chỉnh giảm'
-    : snapshot.trend_state === 'SIDEWAYS' ? 'Trạng thái trung tính, chưa có hướng đủ rõ'
-    : 'Xu hướng chưa rõ ràng'
-  const flow = snapshot.cmf20 == null ? 'chưa đủ dữ liệu đánh giá áp lực giá–khối lượng'
-    : snapshot.cmf20 > 0.05 ? 'áp lực mua đang chiếm ưu thế'
-    : snapshot.cmf20 < -0.05 ? 'áp lực bán ngắn hạn còn cao'
-    : 'áp lực mua bán ở mức cân bằng'
-  return `${trend}; ${flow}. Theo dõi các mốc hỗ trợ và kháng cự trước khi quyết định vị thế.`
+const patternNames: Record<string, string> = { ACCUMULATION_BASE:'Nền tích lũy', FLAT_BASE_BREAKOUT:'Nền phẳng', DOUBLE_BOTTOM:'Hai đáy', DOUBLE_TOP:'Hai đỉnh', ASCENDING_TRIANGLE:'Tam giác tăng', DESCENDING_TRIANGLE:'Tam giác giảm', SYMMETRICAL_TRIANGLE:'Tam giác cân', BULL_FLAG:'Cờ tăng', BULL_PENNANT:'Cờ đuôi nheo tăng', BEAR_FLAG:'Cờ giảm', CUP_HANDLE:'Cốc tay cầm', PULLBACK_CONTINUATION:'Nhịp hồi tiếp diễn' }
+const number = (value: number | null | undefined, digits = 2) => value == null ? '—' : Number(value).toLocaleString('vi-VN', { maximumFractionDigits: digits })
+const rangeSize: Record<string, number> = { '1M':22, '3M':66, '6M':132, '1Y':260, '3Y':780, ALL:9999 }
+const exchangeLabel = (exchange: string | null | undefined) => ({ HOSE:'HSX', HSX:'HSX', HNX:'HNX', UPCOM:'UPCOM' }[exchange ?? ''] ?? 'Đang đồng bộ sàn')
+const displayDate = (value: string | null | undefined) => value ? value.split('-').reverse().join('/') : '—'
+const actionName: Record<string, string> = { WATCH:'Theo dõi · chưa có lệnh', PROBE_BUY:'Mua thăm dò', ADD:'Mua thêm', REDUCE:'Giảm tỷ trọng', EXIT:'Thoát vị thế' }
+const trendName: Record<string, string> = { UP:'Xu hướng tăng', DOWN:'Xu hướng giảm', SIDEWAYS:'Đi ngang', UNKNOWN:'Chưa rõ xu hướng' }
+const zoneContext: Record<string, string> = {
+  UP:'Hỗ trợ là vùng theo dõi nhịp hồi; kháng cự cần xác nhận khi vượt, không phải lệnh bán tự động.',
+  DOWN:'Vùng kháng cự có thể gặp cung. Hỗ trợ là mốc quản trị rủi ro, chưa phải tín hiệu mua.',
+  SIDEWAYS:'Theo dõi biên hỗ trợ–kháng cự; breakout cần giá đóng cửa vượt vùng và xác nhận khối lượng.',
+  UNKNOWN:'Vùng giá là tham chiếu; cần thêm dữ liệu xu hướng trước khi dùng làm luận điểm giao dịch.',
 }
 
-function DecisionCard({decision,asOf,timeframe}:{decision:StockDecision|null;asOf:string|undefined;timeframe:'D'|'W'|'M'}) {
-  return <article className="panel analysis-decision-card"><div className="panel-title"><div><h3>Kết luận Prot v0.0.0 · {timeframe}</h3><small>Dữ liệu đã đóng đến {displayDate(asOf)}</small></div><span className={`action-pill ${(decision?.composite_action??'watch').toLowerCase()}`}>{decision?activityLabel(decision):'Không có signal mới'}</span></div><p>{decision?decision.reasons.slice(0,3).join(' · '):'Chỉ báo và mẫu hình bên dưới là bối cảnh; không có hành động mới cho kỳ dữ liệu này.'}</p><small title={decision?.source_revision}>{decision ? `Logic ${displaySystemRevision(decision.source_revision)} · cùng mốc dữ liệu` : 'Chưa có quyết định được công bố cho mốc dữ liệu này.'}</small></article>
+function Card({ title, subtitle, action, children, className = '' }: { title: string; subtitle?: string; action?: ReactNode; children: ReactNode; className?: string }) {
+  return <article className={`quant-card ${className}`}><header className="quant-card-header"><div><h3>{title}</h3>{subtitle && <p>{subtitle}</p>}</div>{action}</header>{children}</article>
 }
 
-function activityLabel(decision:StockDecision){return actionName[decision.composite_action]??decision.composite_action}
-
-function PatternPanel({patterns,classical,asOf,timeframe}:{patterns:PatternInstance[];classical:ClassicalCandidate[];asOf:string|undefined;timeframe:'D'|'W'|'M'}) {
-  const nativeTypes=new Set(patterns.map(pattern=>pattern.pattern_type))
-  const active=[...patterns.map(pattern=>({...pattern,source:'Chart'})),...classical.filter(pattern=>!nativeTypes.has(pattern.pattern_type)).map((pattern,index)=>({...pattern,id:`core-${index}`,confirmed_at:null,source:'Core v0'}))].filter(pattern=>pattern.state==='FORMING'||pattern.state==='READY'||pattern.state==='CONFIRMED')
-  const bullish=active.filter(pattern=>pattern.direction==='BULLISH').sort((a,b)=>b.quality_score-a.quality_score)
-  const bearish=active.filter(pattern=>pattern.direction==='BEARISH').sort((a,b)=>b.quality_score-a.quality_score)
-  const groups=[{title:'Cấu trúc tăng',items:bullish,tone:'bullish'},{title:'Rủi ro giảm',items:bearish,tone:'bearish'}]
-  return <article className="panel pattern-context-panel"><div className="panel-title"><div><h3>Mẫu hình · {timeframe}</h3><small>Nến đã đóng {displayDate(asOf)} · điểm đo cấu trúc, không phải xác suất</small></div><span>{active.length} cấu trúc</span></div>{bullish.length>0&&bearish.length>0&&<p className="pattern-conflict-note">Có kịch bản tăng và giảm cùng tồn tại. READY chưa xác nhận hướng; chờ giá phá ngưỡng tương ứng.</p>}<div className="pattern-context-grid">{groups.map(group=><section className={`pattern-context-group ${group.tone}`} key={group.title}><h4>{group.title}</h4>{group.items.length?group.items.slice(0,3).map(pattern=><div className="pattern-context-item" key={pattern.id}><div><strong>{patternNames[pattern.pattern_type]??pattern.pattern_type}</strong><span className="pattern-state">{pattern.state==='CONFIRMED'?'Đã xác nhận':pattern.state==='READY'?'Chờ xác nhận':'Đang hình thành'}</span></div><small>{pattern.source} · Cấu trúc {number(pattern.quality_score,0)} · Ngưỡng {formatMarketPrice(pattern.trigger_price)}</small>{pattern.confirmed_at&&<small>Xác nhận lần đầu {displayDate(pattern.confirmed_at)}</small>}<details><summary>Chi tiết kỹ thuật</summary><code>{pattern.reasons.join(' · ')}</code></details></div>):<p className="muted">Chưa có cấu trúc {group.tone==='bullish'?'tăng':'giảm'} đủ trạng thái theo dõi.</p>}</section>)}</div></article>
+function executiveSummary(snapshot: TechnicalSnapshot | undefined) {
+  const trend = trendName[snapshot?.trend_state ?? 'UNKNOWN'] ?? trendName.UNKNOWN
+  const flow = snapshot?.cmf20 == null ? 'chưa đủ dữ liệu áp lực giá–khối lượng' : snapshot.cmf20 > .05 ? 'áp lực mua chiếm ưu thế' : snapshot.cmf20 < -.05 ? 'áp lực bán còn cao' : 'áp lực mua bán cân bằng'
+  return `${trend}; ${flow}.`
 }
 
-const zoneContextCopy:Record<string,{title:string;message:string}>={
-  UP:{title:'Xu hướng tăng',message:'Hỗ trợ là vùng theo dõi nhịp hồi; kháng cự là mốc cần vượt bằng xác nhận, không phải lệnh bán tự động.'},
-  DOWN:{title:'Xu hướng giảm',message:'Kháng cự phía trên là vùng hồi kỹ thuật có thể gặp cung. Không xem đó là tín hiệu mua; hỗ trợ chỉ là mốc quản trị rủi ro đến khi có xác nhận.'},
-  SIDEWAYS:{title:'Xu hướng đi ngang',message:'Theo dõi biên hỗ trợ–kháng cự. Một vùng chỉ trở thành breakout khi giá đóng cửa vượt vùng và có xác nhận khối lượng.'},
-  UNKNOWN:{title:'Xu hướng chưa rõ',message:'Vùng giá là mốc tham chiếu; cần thêm dữ liệu xu hướng trước khi dùng làm luận điểm giao dịch.'},
-}
-function zoneDistance(zone:PriceZone, close:number|null|undefined) {
-  if (!close || close<=0) return 'Chưa có giá đóng cửa'
-  if (close>=zone.lower_price&&close<=zone.upper_price) return 'Giá đang trong vùng'
-  const boundary=zone.zone_type==='SUPPORT'?zone.upper_price:zone.lower_price
-  const distance=Math.abs(close-boundary)/close*100
-  return `${number(distance,1)}% phía ${zone.zone_type==='SUPPORT'?'dưới':'trên'}`
-}
-function FlowCard({snapshot,timeframe}:{snapshot:{as_of_date?:string;flow_score?:number|null;flow_state?:string;cmf20?:number|null;obv_slope20?:number|null;flow_volume_ratio20?:number|null;flow_clv?:number|null}|undefined;timeframe:'D'|'W'|'M'}) {
-  const state=snapshot?.flow_state??"UNKNOWN"
-  const title=state==="PURPLE"?"Áp lực mua rất mạnh":state==="GREEN"?"Áp lực mua":state==="BLUE"?"Áp lực bán rất mạnh":state==="RED"?"Áp lực bán":state==="NEUTRAL"?"Áp lực cân bằng":"Chưa đủ dữ liệu"
-  const unit=timeframe==='D'?'phiên':timeframe==='W'?'tuần':'tháng'
-  const date=snapshot?.as_of_date?.split('-').reverse().join('/')??'—'
-  const score=snapshot?.flow_score
-  const context=score==null?'Chưa đủ dữ liệu':score>0?'Thiên về tích lũy':score<0?'Thiên về phân phối':'Cân bằng'
-  return <article className="panel flow-card"><div className="panel-title"><div><h3>Prot Flow v0.0.0</h3><small>Áp lực giá–khối lượng · khung {timeframe} · {date}</small></div><b className={"flow-state "+state.toLowerCase()}>{state}</b></div><div className="flow-panels"><div className="flow-context"><span>Bối cảnh 20 {unit}</span><div><strong>{score==null?'—':`${score>0?'+':''}${number(score,1)}`}</strong><b>{context}</b></div><small>CMF {number(snapshot?.cmf20,3)} · OBV {number(snapshot?.obv_slope20,3)}</small></div><div className="flow-session"><span>{timeframe==='D'?'Phiên':timeframe==='W'?'Tuần':'Tháng'} kết thúc {date}</span><strong>{title}</strong><small>KL/TB20 {number(snapshot?.flow_volume_ratio20,2)}× · CLV {number(snapshot?.flow_clv,2)}</small></div></div><small className="flow-caveat">Màu chỉ phản ánh áp lực của nến gần nhất; điểm phản ánh 20 nến. Không xác định danh tính dòng tiền và không tự tạo lệnh.</small></article>
+function DecisionCard({ decision, snapshot, timeframe, onDetails }: { decision: StockDecision | null; snapshot: TechnicalSnapshot | undefined; timeframe: 'D' | 'W' | 'M'; onDetails: OpenAnalysisDetails }) {
+  return <Card title="Kết luận hệ thống" subtitle={`Prot v0.0.0 · ${timeframe} · Nến đóng ${displayDate(snapshot?.as_of_date)}`} action={<span className={`quant-status action-${(decision?.composite_action ?? 'WATCH').toLowerCase()}`}>{decision ? actionName[decision.composite_action] ?? decision.composite_action : 'Chưa có tín hiệu mới'}</span>}>
+    <p className="quant-takeaway">{executiveSummary(snapshot)}</p>
+    <p>{decision?.reasons.slice(0, 2).join(' · ') || 'Chỉ báo và mẫu hình là bối cảnh; chưa có hành động mới cho kỳ dữ liệu này.'}</p>
+    <button type="button" className="quant-detail-button" onClick={() => onDetails('Kết luận và cơ sở đánh giá', <><p>{executiveSummary(snapshot)}</p><ul>{decision?.reasons.map((reason, index) => <li key={index}>{reason}</li>)}</ul><p>{decision ? `Logic ${displaySystemRevision(decision.source_revision)} · cùng mốc dữ liệu` : 'Chưa có quyết định được công bố cho mốc dữ liệu này.'}</p><p>Theo dõi hỗ trợ, kháng cự và rủi ro trước khi quyết định vị thế.</p></>)}>Xem cơ sở đánh giá</button>
+  </Card>
 }
 
-function ZoneMap({zones,close,trend,timeframe,compact=false}:{zones:PriceZone[];close:number|null|undefined;trend:string|undefined;timeframe:string;compact?:boolean}) {
-  const state=zoneContextCopy[trend??'']?trend??'UNKNOWN':'UNKNOWN'; const context=zoneContextCopy[state]
-  const ranked=(kind:PriceZone['zone_type'])=>zones.filter(zone=>zone.zone_type===kind).sort((a,b)=>{const distance=(zone:PriceZone)=>!close?Infinity:Math.min(Math.abs(close-zone.lower_price),Math.abs(close-zone.upper_price));return distance(a)-distance(b)||b.strength-a.strength}).slice(0,compact?1:3)
-  const groups:[PriceZone['zone_type'],string,string][]=[['RESISTANCE','Kháng cự gần giá','Vùng cản phía trên'],['SUPPORT','Hỗ trợ gần giá','Vùng đệm phía dưới']]
-  return <article className={`panel zone-panel zone-context-${state.toLowerCase()}`}><div className="panel-title"><div><h3>Hỗ trợ · kháng cự</h3><small>Bản đồ vùng giá · khung {timeframe} · VND/cổ phiếu</small></div><span>{zones.length} vùng</span></div><div className="zone-context-copy"><b>{context.title}</b>{!compact&&<p>{context.message}</p>}</div><div className="zone-groups">{groups.map(([kind,title,subtitle])=>{const items=ranked(kind);return <section className={`zone-group ${kind.toLowerCase()}`} key={kind}><div className="zone-group-heading"><div><strong>{title}</strong><small>{subtitle}</small></div><span>{items.length} vùng</span></div>{items.length?<div className="zone-list">{items.map(zone=><div className={`zone-card ${zone.zone_type==='SUPPORT'?'support':'resistance'}`} key={zone.id}><div className="zone-card-main"><span className="zone-kind">{zone.zone_type==='SUPPORT'?'Hỗ trợ':'Kháng cự'} · {zoneDistance(zone,close)}</span><strong>{formatMarketPrice(zone.lower_price)} <i>—</i> {formatMarketPrice(zone.upper_price)}</strong></div><div className="zone-meta"><span className="zone-touches"><b>{zone.touches}</b><small>lần chạm</small></span><span>Độ mạnh {number(zone.strength,0)}</span></div>{!compact&&<ZoneEvidence zone={zone}/>}</div>)}</div>:<p className="zone-empty">{kind==='SUPPORT'?'Chưa có hỗ trợ đủ pivot để xác nhận.':'Chưa có kháng cự đủ pivot để xác nhận.'}</p>}</section>})}</div></article>
+function zoneDistance(zone: PriceZone, close: number | null | undefined) {
+  if (!close || close <= 0) return '—'
+  if (close >= zone.lower_price && close <= zone.upper_price) return 'Trong vùng'
+  // Choose the nearest boundary even when price has moved past a previous zone.
+  const boundary = close < zone.lower_price ? zone.lower_price : zone.upper_price
+  return `${number(Math.abs(close - boundary) / close * 100, 1)}% ${boundary < close ? 'dưới' : 'trên'}`
 }
 
-export function AnalysisPage({authenticated}:{authenticated:boolean}) {
-  const opportunityRoute=useOpportunityRoute();
-  const symbols=useSymbols(authenticated); const [selected,setSelected]=useState<string|null>(()=>opportunityRoute.symbol||localStorage.getItem('protstock-symbol')); const [favorites,setFavorites]=useState<string[]>(()=>loadWatchlist().filter(isWatchActive).map(item=>item.symbol)); const [timeframe,setTimeframe]=useState<'D'|'W'|'M'>('D'); const [range,setRange]=useState('1Y'); const [multiPane,setMultiPane]=useState(()=>localStorage.getItem('protstock-chart-mode')==='triple'); const [indicators,setIndicators]=useState({ma20:true,ma50:true,ma200:false,bollinger:false,rsi:true,macd:false})
-  useEffect(()=>{ if(!selected&&symbols.data?.length)setSelected(symbols.data.find(x=>x.symbol==='FPT')?.symbol??symbols.data[0].symbol) },[selected,symbols.data])
-  useEffect(()=>{ const listener=(e:Event)=>setSelected((e as CustomEvent).detail); const favoriteListener=(e:Event)=>setFavorites((e as CustomEvent).detail); addEventListener('protstock:symbol',listener); addEventListener('protstock:favorites',favoriteListener); return()=>{removeEventListener('protstock:symbol',listener);removeEventListener('protstock:favorites',favoriteListener)} },[])
-  useEffect(()=>{if(opportunityRoute.symbol)setSelected(opportunityRoute.symbol)},[opportunityRoute.symbol]);
-  const dailyAnalysis=useStockAnalysis(selected,'D',authenticated,opportunityRoute.date); const weeklyAnalysis=useStockAnalysis(selected,'W',authenticated,opportunityRoute.date); const monthlyAnalysis=useStockAnalysis(selected,'M',authenticated,opportunityRoute.date); const analysis={D:dailyAnalysis,W:weeklyAnalysis,M:monthlyAnalysis}[timeframe]; const snapshot=analysis.data?.technical[0]; const bars=useMemo(()=>analysis.data?.prices.slice(-rangeSize[range])??[],[analysis.data?.prices,range])
-  const closedBars=bars.filter(bar=>bar.is_complete!==false)
-  const changePct = closedBars.length>=2 ? (closedBars[closedBars.length-1].close-closedBars[closedBars.length-2].close)/closedBars[closedBars.length-2].close*100 : null
-  const formingBar=timeframe!=='D'&&bars.at(-1)?.is_complete===false?bars.at(-1):null
-  const toggle=(key:keyof typeof indicators)=>setIndicators(value=>({...value,[key]:!value[key]})); const toggleFavorite=()=>{if(selected)toggleWatchlistSymbol(selected)}
-  const chipValue: Record<string, number | null | undefined> = { ma20: snapshot?.sma20, ma50: snapshot?.sma50, ma200: snapshot?.sma200, rsi: snapshot?.rsi14, macd: snapshot?.macd }
-  return <section className="workspace-page analysis-page"><div className="page-title-row analysis-title-row"><h1>Phân tích mã</h1><ExRightsCalculator symbols={symbols.data??[]} selected={selected}/></div>
-    {opportunityRoute.date&&<p className="forming-period-note">Đang xem phiên {displayDate(opportunityRoute.date)} · <a href="#analysis" onClick={()=>{if(selected)localStorage.setItem('protstock-symbol',selected)}}>Về dữ liệu mới nhất</a></p>}
-    {analysis.isLoading&&<div className="skeleton-page"><div className="skeleton skeleton-card"/><div className="skeleton-grid">{[1,2,3,4].map(i=><div className="skeleton" key={i}/>)}</div></div>}{analysis.isError&&<div className="empty-state warning">Chưa tải được dữ liệu phân tích. <button className="text-button" onClick={()=>void analysis.refetch()}>Thử lại</button></div>}
-    {!authenticated&&!analysis.data&&<div className="empty-state"><Search size={25}/><h3>Workspace phân tích đã sẵn sàng</h3><p>Kết nối dữ liệu để xem biểu đồ, mẫu hình và vùng giá của các mã đang theo dõi.</p></div>}
-    {analysis.data&&<><div className="stock-heading"><div><div className="analysis-stock-name-row"><h2><button type="button" className="analysis-symbol-button" aria-label={`Đổi mã cổ phiếu, hiện tại ${analysis.data.symbol.symbol}`} onClick={()=>openCommandPalette('symbols')}>{analysis.data.symbol.symbol}<ChevronDown size={17}/></button></h2><span className="sector-label">{analysis.data.symbol.sector}</span><button type="button" className={favorites.includes(selected??'')?'analysis-watch-star active':'analysis-watch-star'} aria-label={favorites.includes(selected??'')?`Bỏ ${selected} khỏi Watchlist`:`Thêm ${selected} vào Watchlist`} aria-pressed={favorites.includes(selected??'')} onClick={toggleFavorite}><Star size={16} fill={favorites.includes(selected??'')?'currentColor':'none'}/></button></div><p>{analysis.data.symbol.company_name||'Chưa đồng bộ tên doanh nghiệp'} · {exchangeLabel(analysis.data.symbol.exchange)} · {displayDate(snapshot?.as_of_date)}</p></div><div className={`trend-badge ${snapshot?.trend_state?.toLowerCase()??''}`}>{snapshot?.trend_state??'CHƯA CÓ SNAPSHOT'}</div></div>
-<div className="metric-grid analysis-metrics">{[['Đóng cửa',snapshot?.close,false,true],['Thay đổi phiên',changePct,true,false],['ATR 14',snapshot?.atr14,false,true],['Volume / TB20',snapshot?.volume_ratio20,false,false]].map(([label,value,isPct,isPrice])=><article className="metric-card" key={label as string}><span>{label}</span><strong className={isPct&&typeof value==='number'?(value<0?'negative':'positive'):undefined}>{isPct&&typeof value==='number'?`${value>=0?'+':''}${value.toFixed(2)}%`:isPrice?formatMarketPrice(value as number|null):number(value as number|null)}</strong></article>)}</div>
-<div className="analysis-workbench"><div className="analysis-chart-column">
-<div className="chart-toolbar"><div className="chart-tools" aria-label="Khoảng thời gian">{['1M','3M','6M','1Y','3Y','ALL'].map(item=><button type="button" aria-pressed={range===item} className={range===item?'active':''} onClick={()=>setRange(item)} key={item}>{item==='ALL'?'Tất cả':item}</button>)}</div><div className="chart-tools" aria-label="Khung nến">{([['D','Ngày'],['W','Tuần'],['M','Tháng']] as const).map(([v,l])=><button type="button" aria-pressed={timeframe===v&&!multiPane} className={timeframe===v&&!multiPane?'active':''} onClick={()=>{setTimeframe(v);setMultiPane(false);localStorage.setItem('protstock-chart-mode','single')}} key={v}>{l}</button>)}<button type="button" aria-pressed={multiPane} className={multiPane?'active':''} onClick={()=>setMultiPane(value=>{const next=!value;localStorage.setItem('protstock-chart-mode',next?'triple':'single');return next})}>M/W/D</button></div></div>
-      <div className="chart-toolbar indicator-toolbar"><div className="chart-tools">{([['ma20','MA20'],['ma50','MA50'],['ma200','MA200'],['bollinger','Bollinger'],['rsi','RSI'],['macd','MACD']] as const).map(([key,label])=>{const value=chipValue[key];const display=key==='rsi'?number(value):formatMarketPrice(value);return <button type="button" key={key} aria-pressed={indicators[key]} className={indicators[key]?'active':''} onClick={()=>toggle(key)}>{label}{indicators[key]&&value!=null?<b>{display}</b>:null}</button>})}</div></div>
-      {multiPane?<div className="multi-chart-studio">{([['M','Tháng'],['W','Tuần'],['D','Ngày']] as const).map(([pane,paneLabel])=>{const paneAnalysis={D:dailyAnalysis,W:weeklyAnalysis,M:monthlyAnalysis}[pane];const paneBars=paneAnalysis.data?.prices.slice(-(pane==='M'?60:pane==='W'?156:260))??[];return <article className="multi-chart-pane" key={pane}><div className="multi-chart-pane-title"><span>{pane}</span><strong>Khung {paneLabel}</strong><small>{paneBars.length} nến · đồng bộ con trỏ</small></div>{paneBars.length?<StockChart bars={paneBars} zones={paneAnalysis.data?.zones} patterns={paneAnalysis.data?.patterns} indicators={indicators} paneId={pane} paneLabel={`Khung ${paneLabel}`}/>:<div className="empty-state compact">Chưa có dữ liệu {paneLabel.toLowerCase()}.</div>}</article>})}</div>:bars.length?<StockChart bars={bars} zones={analysis.data.zones} patterns={analysis.data.patterns} indicators={indicators} paneId={timeframe} paneLabel={`Khung ${timeframe}`}/>:<div className="empty-state">Chưa có OHLCV. Pipeline EOD sẽ điền dữ liệu sau phiên.</div>}
-      {indicators.macd && <MacdPanel bars={dailyAnalysis.data?.prices ?? []}/>}
-      {formingBar&&<div className="forming-period-note">Nến {timeframe==='W'?'tuần':'tháng'} đến {displayDate(formingBar.trading_date)} đang hình thành trên chart. Chỉ báo, mẫu hình và kết luận bên dưới dùng nến đã đóng đến {displayDate(snapshot?.as_of_date)}.</div>}
-      {dailyAnalysis.data?.prices.at(-1)?.source && <p className="analysis-source">Nguồn OHLCV EOD: {dailyAnalysis.data.prices.at(-1)?.source} · Giá và khối lượng theo chuỗi do nguồn cung cấp.</p>}
-</div><aside className="analysis-overview" aria-label="Kết luận và mốc giá quan trọng">
-<DecisionCard decision={analysis.data.decision} asOf={snapshot?.as_of_date} timeframe={timeframe}/>
-      <div className="analysis-executive-takeaway" role="note"><span className="takeaway-tag">Tóm lược nhanh</span><p>{generateExecutiveSummary(snapshot)}</p></div>
-<ZoneMap compact zones={analysis.data.zones} close={snapshot?.close} trend={snapshot?.trend_state} timeframe={timeframe}/>
-<OpportunityAnalysis symbol={analysis.data.symbol.symbol}/>
-</aside></div>
-<div className="analysis-evidence analysis-secondary-grid">
-<FlowCard snapshot={snapshot} timeframe={timeframe}/>
-<PatternPanel patterns={analysis.data.patterns} classical={snapshot?.classical_candidates??[]} asOf={snapshot?.as_of_date} timeframe={timeframe}/>
-<details className="analysis-more-zones"><summary>Tất cả vùng hỗ trợ · kháng cự và bằng chứng</summary><ZoneMap zones={analysis.data.zones} close={snapshot?.close} trend={snapshot?.trend_state} timeframe={timeframe}/></details>
-      {snapshot?.monthly_context && <details className="analysis-monthly-context"><summary>Bối cảnh tháng · {snapshot.monthly_context.state} · {snapshot.monthly_context.period_end}</summary><MonthlyTrendEvidence value={snapshot.monthly_context}/></details>}
-</div>
-    </>}</section>
+function ZoneMap({ zones, close, trend, timeframe, onDetails }: { zones: PriceZone[]; close: number | null | undefined; trend: string | undefined; timeframe: string; onDetails: OpenAnalysisDetails }) {
+  const groups = (['RESISTANCE', 'SUPPORT'] as const).map(kind => ({ kind, title: kind === 'SUPPORT' ? 'Hỗ trợ' : 'Kháng cự', items: zones.filter(zone => zone.zone_type === kind).sort((a, b) => {
+    const distance = (zone: PriceZone) => !close ? Infinity : close >= zone.lower_price && close <= zone.upper_price ? 0 : Math.min(Math.abs(close - zone.lower_price), Math.abs(close - zone.upper_price))
+    return distance(a) - distance(b) || b.strength - a.strength
+  }) }))
+  const evidence = (zone: PriceZone) => <><dl className="quant-detail-facts"><div><dt>Vùng giá · VND/cổ phiếu</dt><dd>{formatMarketPrice(zone.lower_price)} – {formatMarketPrice(zone.upper_price)}</dd></div><div><dt>Khoảng cách</dt><dd>{zoneDistance(zone, close)}</dd></div><div><dt>Độ mạnh</dt><dd>{number(zone.strength, 0)}</dd></div><div><dt>Số lần chạm</dt><dd>{zone.touches}</dd></div><div><dt>Ngày dữ liệu</dt><dd>{displayDate(zone.as_of_date)}</dd></div></dl>{zone.evidence ? <ZoneEvidence zone={zone}/> : <p>Chưa có bằng chứng bổ sung cho vùng này.</p>}</>
+  return <Card title="Hỗ trợ · kháng cự" subtitle={`${timeframe} · VND/cổ phiếu · ${zones.length} vùng`}>
+    {groups.map(group => <section className={`quant-zone-group ${group.kind.toLowerCase()}`} key={group.kind}><h4>{group.title}<span>{group.items.length} vùng</span></h4>{group.items.length ? <table className="quant-zone-table"><caption className="sr-only">Các vùng {group.title.toLowerCase()}</caption><thead><tr><th>Vùng giá</th><th>Cách giá</th><th>Độ mạnh</th><th>Chạm</th></tr></thead><tbody>{group.items.slice(0, 3).map(zone => <tr key={zone.id}><td><button type="button" aria-label={`Xem bằng chứng ${group.title.toLowerCase()} ${formatMarketPrice(zone.lower_price)} đến ${formatMarketPrice(zone.upper_price)}`} onClick={() => onDetails(`${group.title} · khung ${timeframe}`, evidence(zone))}><span>{formatMarketPrice(zone.lower_price)}</span><span>– {formatMarketPrice(zone.upper_price)}</span></button></td><td>{zoneDistance(zone, close)}</td><td>{number(zone.strength, 0)}</td><td>{zone.touches}</td></tr>)}</tbody></table> : <p className="quant-empty">Chưa có vùng đủ pivot để xác nhận.</p>}</section>)}
+    <button type="button" className="quant-detail-button" onClick={() => onDetails('Toàn bộ vùng giá và bằng chứng', <><p>{zoneContext[trend ?? 'UNKNOWN'] ?? zoneContext.UNKNOWN}</p>{groups.map(group => <section key={group.kind}><h3>{group.title} · {group.items.length} vùng</h3>{group.items.length ? group.items.map(zone => <article className="quant-zone-evidence" key={zone.id}>{evidence(zone)}</article>) : <p>Chưa có vùng đủ bằng chứng.</p>}</section>)}</>)}>Xem toàn bộ vùng và bằng chứng</button>
+  </Card>
+}
+
+function FlowCard({ snapshot, timeframe }: { snapshot: TechnicalSnapshot | undefined; timeframe: 'D' | 'W' | 'M' }) {
+  const state = snapshot?.flow_state ?? 'UNKNOWN'
+  const title = ({ PURPLE:'Áp lực mua rất mạnh', GREEN:'Áp lực mua', BLUE:'Áp lực bán rất mạnh', RED:'Áp lực bán', NEUTRAL:'Cân bằng' } as Record<string, string>)[state] ?? 'Chưa đủ dữ liệu'
+  const score = snapshot?.flow_score
+  return <Card title="Áp lực giá–khối lượng" subtitle={`Prot Flow v0.0.0 · ${timeframe} · ${displayDate(snapshot?.as_of_date)}`} action={<span className={`quant-status flow-${state.toLowerCase()}`}>{title}</span>}>
+    <dl className="quant-flow-grid">{[['Điểm 20 nến', score == null ? '—' : `${score > 0 ? '+' : ''}${number(score, 1)}`], ['Bối cảnh', score == null ? 'Chưa đủ dữ liệu' : score > 0 ? 'Thiên tích lũy' : score < 0 ? 'Thiên phân phối' : 'Cân bằng'], ['CMF 20', number(snapshot?.cmf20, 3)], ['OBV', number(snapshot?.obv_slope20, 3)], ['KL/TB20', snapshot?.flow_volume_ratio20 == null ? '—' : `${number(snapshot.flow_volume_ratio20)}×`], ['CLV', number(snapshot?.flow_clv)]].map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>
+    <p className="quant-caption">Trạng thái phản ánh nến gần nhất; điểm phản ánh 20 nến. Không xác định danh tính dòng tiền và không tự tạo lệnh.</p>
+  </Card>
+}
+
+function PatternPanel({ patterns, classical, asOf, timeframe, onDetails }: { patterns: PatternInstance[]; classical: ClassicalCandidate[]; asOf: string | undefined; timeframe: 'D' | 'W' | 'M'; onDetails: OpenAnalysisDetails }) {
+  const nativeTypes = new Set(patterns.map(pattern => pattern.pattern_type))
+  const active = [...patterns.map(pattern => ({ ...pattern, source:'Chart' })), ...classical.filter(pattern => !nativeTypes.has(pattern.pattern_type)).map((pattern, index) => ({ ...pattern, id:`core-${index}`, confirmed_at:null, source:'Core v0' }))].filter(pattern => ['FORMING', 'READY', 'CONFIRMED'].includes(pattern.state)).sort((a, b) => b.quality_score - a.quality_score)
+  const stateLabel = (state: string) => state === 'CONFIRMED' ? 'Đã xác nhận' : state === 'READY' ? 'Chờ xác nhận' : 'Đang hình thành'
+  const content = (pattern: typeof active[number]) => <><p>{pattern.source} · {stateLabel(pattern.state)} · Điểm cấu trúc {number(pattern.quality_score, 0)}</p><p>Ngưỡng {formatMarketPrice(pattern.trigger_price)} · Dữ liệu {displayDate(asOf)}{pattern.confirmed_at ? ` · Xác nhận ${displayDate(pattern.confirmed_at)}` : ''}</p><ul>{pattern.reasons.map((reason, index) => <li key={index}>{reason}</li>)}</ul></>
+  return <Card title="Mẫu hình" subtitle={`${timeframe} · Nến đóng ${displayDate(asOf)} · Điểm cấu trúc, không phải xác suất`}>
+    <div className="quant-pattern-groups">{[{ label:'Cấu trúc tăng', direction:'BULLISH' }, { label:'Rủi ro giảm', direction:'BEARISH' }].map(group => { const items = active.filter(pattern => pattern.direction === group.direction); return <section key={group.direction}><h4>{group.label}</h4>{items.length ? items.slice(0, 2).map(pattern => <button type="button" className="quant-pattern-row" key={pattern.id} onClick={() => onDetails(patternNames[pattern.pattern_type] ?? pattern.pattern_type, content(pattern))}><span><strong>{patternNames[pattern.pattern_type] ?? pattern.pattern_type}</strong><small>{stateLabel(pattern.state)} · Ngưỡng {formatMarketPrice(pattern.trigger_price)}</small></span><b>{number(pattern.quality_score, 0)}</b></button>) : <p className="quant-empty">Chưa có cấu trúc đủ bằng chứng.</p>}</section> })}</div>
+    {active.some(pattern => pattern.direction === 'BULLISH') && active.some(pattern => pattern.direction === 'BEARISH') && <p className="quant-caption">Có kịch bản tăng và giảm đồng thời; chờ giá xác nhận hướng.</p>}
+    {!!active.length && <button type="button" className="quant-detail-button" onClick={() => onDetails(`Toàn bộ ${active.length} mẫu hình`, <>{active.map(pattern => <section className="quant-zone-evidence" key={pattern.id}><h3>{patternNames[pattern.pattern_type] ?? pattern.pattern_type}</h3>{content(pattern)}</section>)}</>)}>Xem tất cả {active.length} mẫu hình</button>}
+  </Card>
+}
+
+export function AnalysisPage({ authenticated }: { authenticated: boolean }) {
+  const opportunityRoute = useOpportunityRoute()
+  const symbols = useSymbols(authenticated)
+  const [selected, setSelected] = useState<string | null>(() => opportunityRoute.symbol || localStorage.getItem('protstock-symbol'))
+  const [favorites, setFavorites] = useState<string[]>(() => loadWatchlist().filter(isWatchActive).map(item => item.symbol))
+  const [timeframe, setTimeframe] = useState<'D' | 'W' | 'M'>('D')
+  const [range, setRange] = useState('1Y')
+  const [multiPane, setMultiPane] = useState(() => localStorage.getItem('protstock-chart-mode') === 'triple')
+  const [indicators, setIndicators] = useState({ ma20:true, ma50:true, ma200:false, bollinger:false, rsi:true, macd:false })
+  const [detail, setDetail] = useState<AnalysisDetail | null>(null)
+  const closeDetails = useCallback(() => setDetail(null), [])
+  const openDetails: OpenAnalysisDetails = useCallback((title, content) => setDetail({ title, content }), [])
+  useEffect(() => { if (!selected && symbols.data?.length) setSelected(symbols.data.find(item => item.symbol === 'FPT')?.symbol ?? symbols.data[0].symbol) }, [selected, symbols.data])
+  useEffect(() => { const listener = (event: Event) => setSelected((event as CustomEvent).detail); const favoriteListener = (event: Event) => setFavorites((event as CustomEvent).detail); addEventListener('protstock:symbol', listener); addEventListener('protstock:favorites', favoriteListener); return () => { removeEventListener('protstock:symbol', listener); removeEventListener('protstock:favorites', favoriteListener) } }, [])
+  useEffect(() => { if (opportunityRoute.symbol) setSelected(opportunityRoute.symbol) }, [opportunityRoute.symbol])
+  useEffect(closeDetails, [selected, timeframe, opportunityRoute.date, closeDetails])
+  const dailyAnalysis = useStockAnalysis(selected, 'D', authenticated, opportunityRoute.date)
+  const weeklyAnalysis = useStockAnalysis(selected, 'W', authenticated, opportunityRoute.date)
+  const monthlyAnalysis = useStockAnalysis(selected, 'M', authenticated, opportunityRoute.date)
+  const analysis = { D:dailyAnalysis, W:weeklyAnalysis, M:monthlyAnalysis }[timeframe]
+  const snapshot = analysis.data?.technical[0]
+  const bars = useMemo(() => analysis.data?.prices.slice(-rangeSize[range]) ?? [], [analysis.data?.prices, range])
+  const closedBars = analysis.data?.prices.filter(bar => bar.is_complete !== false) ?? []
+  const changePct = closedBars.length >= 2 ? (closedBars[closedBars.length - 1].close - closedBars[closedBars.length - 2].close) / closedBars[closedBars.length - 2].close * 100 : null
+  const formingBar = timeframe !== 'D' && bars.at(-1)?.is_complete === false ? bars.at(-1) : null
+  const chipValue: Record<string, number | null | undefined> = { ma20:snapshot?.sma20, ma50:snapshot?.sma50, ma200:snapshot?.sma200, rsi:snapshot?.rsi14, macd:snapshot?.macd }
+  return <section className="workspace-page quant-analysis">
+    <header className="quant-page-header"><h1>Phân tích mã</h1><ExRightsCalculator symbols={symbols.data ?? []} selected={selected}/></header>
+    {opportunityRoute.date && <p className="quant-caption">Đang xem phiên {displayDate(opportunityRoute.date)} · <a href="#analysis" onClick={() => { if (selected) localStorage.setItem('protstock-symbol', selected) }}>Về dữ liệu mới nhất</a></p>}
+    {analysis.isLoading && <div className="skeleton-page"><div className="skeleton skeleton-card"/></div>}
+    {analysis.isError && <div className="empty-state warning">Chưa tải được dữ liệu phân tích. <button className="text-button" onClick={() => void analysis.refetch()}>Thử lại</button></div>}
+    {!authenticated && !analysis.data && <div className="empty-state"><Search size={24}/><p>Kết nối dữ liệu để xem biểu đồ và phân tích.</p></div>}
+    {analysis.data && <>
+      <div className="quant-instrument"><div className="quant-instrument-name"><button type="button" className="quant-symbol" aria-label={`Đổi mã, hiện tại ${analysis.data.symbol.symbol}`} onClick={() => openCommandPalette('symbols')}>{analysis.data.symbol.symbol}<ChevronDown size={15}/></button><button type="button" className="quant-watch" aria-label={`${favorites.includes(selected ?? '') ? 'Bỏ' : 'Thêm'} ${selected} ${favorites.includes(selected ?? '') ? 'khỏi' : 'vào'} Watchlist`} aria-pressed={favorites.includes(selected ?? '')} onClick={() => { if (selected) toggleWatchlistSymbol(selected) }}><Star size={15} fill={favorites.includes(selected ?? '') ? 'currentColor' : 'none'}/></button><span>{analysis.data.symbol.company_name || 'Chưa đồng bộ tên doanh nghiệp'}</span></div><p>{exchangeLabel(analysis.data.symbol.exchange)} · {analysis.data.symbol.sector} · {displayDate(snapshot?.as_of_date)}<span className="quant-status">{trendName[snapshot?.trend_state ?? 'UNKNOWN'] ?? trendName.UNKNOWN}</span></p></div>
+      <dl className="quant-quote-strip" aria-label="Số liệu phiên đã đóng"><div><dt>Đóng cửa</dt><dd>{formatMarketPrice(snapshot?.close)}</dd></div><div><dt>Thay đổi phiên</dt><dd className={changePct == null ? '' : changePct < 0 ? 'negative' : 'positive'}>{changePct == null ? '—' : `${changePct >= 0 ? '+' : ''}${number(changePct)}%`}</dd></div><div><dt>ATR 14</dt><dd>{formatMarketPrice(snapshot?.atr14)}</dd></div><div><dt>Volume/TB20</dt><dd>{snapshot?.volume_ratio20 == null ? '—' : `${number(snapshot.volume_ratio20)}×`}</dd></div></dl>
+      <div className="quant-workspace">
+        <div className="quant-main">
+          <section className="quant-chart-panel" aria-label="Biểu đồ giá và công cụ">
+            <div className="quant-chart-toolbar"><div className="quant-control-group" aria-label="Khoảng thời gian">{['1M','3M','6M','1Y','3Y','ALL'].map(item => <button type="button" aria-pressed={range === item} onClick={() => setRange(item)} key={item}>{item === 'ALL' ? 'Tất cả' : item}</button>)}</div><div className="quant-control-group" aria-label="Khung nến">{([['D','Ngày'],['W','Tuần'],['M','Tháng']] as const).map(([value, label]) => <button type="button" aria-pressed={timeframe === value && !multiPane} onClick={() => { setTimeframe(value); setMultiPane(false); localStorage.setItem('protstock-chart-mode','single') }} key={value}>{label}</button>)}<button type="button" aria-pressed={multiPane} onClick={() => setMultiPane(current => { localStorage.setItem('protstock-chart-mode', current ? 'single' : 'triple'); return !current })}>M/W/D</button></div></div>
+            <div className="quant-control-group quant-indicators" aria-label="Chỉ báo">{([['ma20','MA20'],['ma50','MA50'],['ma200','MA200'],['bollinger','Bollinger'],['rsi','RSI'],['macd','MACD']] as const).map(([key, label]) => <button type="button" key={key} aria-pressed={indicators[key]} onClick={() => setIndicators(current => ({ ...current, [key]:!current[key] }))}>{label}{indicators[key] && chipValue[key] != null && <b>{key === 'rsi' ? number(chipValue[key]) : formatMarketPrice(chipValue[key])}</b>}</button>)}</div>
+            {multiPane ? <div className="quant-multi-charts">{([['M','Tháng'],['W','Tuần'],['D','Ngày']] as const).map(([pane, label]) => { const data = { D:dailyAnalysis, W:weeklyAnalysis, M:monthlyAnalysis }[pane].data; const paneBars = data?.prices.slice(-(pane === 'M' ? 60 : pane === 'W' ? 156 : 260)) ?? []; return <article className="multi-chart-pane" key={pane}><h4>Khung {label}</h4>{paneBars.length ? <StockChart bars={paneBars} zones={data?.zones} patterns={data?.patterns} indicators={indicators} paneId={pane} paneLabel={`Khung ${label}`}/> : <p className="quant-empty">Chưa có dữ liệu {label.toLowerCase()}.</p>}</article> })}</div> : bars.length ? <StockChart bars={bars} zones={analysis.data.zones} patterns={analysis.data.patterns} indicators={indicators} paneId={timeframe} paneLabel={`Khung ${timeframe}`}/> : <p className="quant-empty">Chưa có OHLCV cho phiên được chọn.</p>}
+            {indicators.macd && <MacdPanel bars={dailyAnalysis.data?.prices ?? []}/>}
+            {formingBar && <p className="quant-caption">Nến {timeframe === 'W' ? 'tuần' : 'tháng'} đến {displayDate(formingBar.trading_date)} đang hình thành. Kết luận dùng nến đã đóng đến {displayDate(snapshot?.as_of_date)}.</p>}
+            {dailyAnalysis.data?.prices.at(-1)?.source && <p className="quant-caption">OHLCV EOD · {dailyAnalysis.data.prices.at(-1)?.source} · Giá và khối lượng theo chuỗi do nguồn cung cấp.</p>}
+          </section>
+          <div className="quant-evidence-grid"><FlowCard snapshot={snapshot} timeframe={timeframe}/><PatternPanel patterns={analysis.data.patterns} classical={snapshot?.classical_candidates ?? []} asOf={snapshot?.as_of_date} timeframe={timeframe} onDetails={openDetails}/></div>
+          {snapshot?.monthly_context && <Card title="Bối cảnh tháng" subtitle={`${snapshot.monthly_context.state} · ${displayDate(snapshot.monthly_context.period_end)}`}><button type="button" className="quant-detail-button" onClick={() => openDetails('Bối cảnh tháng', <MonthlyTrendEvidence value={snapshot.monthly_context!}/>)}>Xem bằng chứng tháng</button></Card>}
+        </div>
+        <aside className="quant-side" aria-label="Kết luận, vùng giá và phiên tới"><DecisionCard decision={analysis.data.decision} snapshot={snapshot} timeframe={timeframe} onDetails={openDetails}/><ZoneMap zones={analysis.data.zones} close={snapshot?.close} trend={snapshot?.trend_state} timeframe={timeframe} onDetails={openDetails}/><OpportunityAnalysis symbol={analysis.data.symbol.symbol} onOpenDetails={openDetails}/></aside>
+      </div>
+    </>}
+    <AnalysisDetails detail={detail} onClose={closeDetails}/>
+  </section>
 }

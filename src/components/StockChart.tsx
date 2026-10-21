@@ -100,7 +100,8 @@ export function StockChart({bars,zones=[],patterns=[],indicators,syncGroup='anal
       cancelAnimationFrame(resizeFrame)
       resizeFrame=requestAnimationFrame(()=>{
         const liveWidth=Math.floor(host.getBoundingClientRect().width)
-        if(liveWidth>1){chart.applyOptions({width:liveWidth});syncPatterns()}
+        const liveHeight=host.closest('.quant-analysis')?Math.floor(host.clientHeight):0
+        if(liveWidth>1){chart.applyOptions({width:liveWidth,...(liveHeight>0?{height:liveHeight}:{})});syncPatterns()}
       })
     })
     observer.observe(host)

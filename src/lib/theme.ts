@@ -16,8 +16,14 @@ function preferredTheme(): Theme {
 }
 
 function applyTheme(theme: Theme) {
+  const background = theme === 'light' ? '#f4f7f5' : '#07110e'
   document.documentElement.dataset.theme = theme
-  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', theme === 'light' ? '#f4f7f5' : '#07110e')
+  document.documentElement.style.backgroundColor = background
+  document.documentElement.style.colorScheme = theme
+  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', background)
+  document.querySelector('meta[name="color-scheme"]')?.setAttribute('content', theme)
+  document.querySelector('meta[name="apple-mobile-web-app-status-bar-style"]')?.setAttribute('content', theme === 'light' ? 'default' : 'black-translucent')
+  document.getElementById('app-manifest')?.setAttribute('href', theme === 'light' ? '/manifest.webmanifest' : '/manifest-dark.webmanifest')
   window.dispatchEvent(new Event(eventName))
 }
 

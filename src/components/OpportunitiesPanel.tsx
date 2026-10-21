@@ -3,6 +3,7 @@ import { ArrowUpRight, ChevronDown, SlidersHorizontal, Star } from 'lucide-react
 import { DateField } from './DateField'
 import { FilterField } from './FilterField'
 import { SoftSelect } from './SoftSelect'
+import type { OpenAnalysisDetails } from './AnalysisDetails'
 import { useOpportunities, useOpportunityRoute, opportunityHref, opportunityStatus, hasOpportunityPublication, type Opportunity } from '../lib/opportunities'
 import { formatDate } from '../lib/date'
 import { isWatchActive, toggleWatchlistSymbol, useWatchlist } from '../lib/watchlist'
@@ -73,12 +74,13 @@ export function OpportunitiesPanel({ compact = false, authenticated = true }: { 
   </article>
 }
 
-export function OpportunityAnalysis({ symbol }: { symbol: string }) {
+export function OpportunityAnalysis({ symbol, onOpenDetails }: { symbol: string; onOpenDetails?: OpenAnalysisDetails }) {
   const route = useOpportunityRoute()
   const result = useOpportunities(route.date, route.publication)
   const row = result.data?.rows.find(item => item.symbol === symbol)
   if (result.isError) return <article className="panel"><p>Chưa tải được bằng chứng chuẩn bị phiên tới. <button type="button" className="text-button" onClick={() => void result.refetch()}>Thử lại</button></p></article>
   if (!row || !hasOpportunityPublication(result.data)) return route.publication ? <article className="panel"><p>Không có bằng chứng cho mã này trong bản lưu được chọn.</p></article> : null
+  if (onOpenDetails) return <article className="quant-card"><header className="quant-card-header"><div><h3>Chuẩn bị phiên tới</h3><p>{result.data.phase === 'EOD' ? 'EOD sơ bộ · ' : ''}{formatDate(result.data.trading_date)} · Hệ thống {row.system_action} · #{row.rank}</p></div><span className={`quant-status opportunity-${row.status.toLowerCase()}`}>{opportunityStatus[row.status]}</span></header><p>{row.status === 'EXTENDED' ? 'Giá đã kéo xa. Xem điều kiện và rủi ro trước khi xem xét vị thế.' : row.reasons[0] ?? row.next_step}</p><button type="button" className="quant-detail-button" onClick={() => onOpenDetails(`Chuẩn bị phiên tới · ${opportunityStatus[row.status]}`, <><OpportunityEvidence row={row} day={result.data?.trading_date}/><p className="quant-caption">Bằng chứng nghiên cứu được lưu riêng; biểu đồ giới hạn đến phiên được chọn.</p></>)}>Xem điều kiện và rủi ro</button></article>
   return <details key={`${symbol}-${result.data.id}-${row.status}`} className="panel opportunities-panel opportunity-analysis" open={row.status === 'EXTENDED' ? undefined : true}><summary><span><strong>Chuẩn bị phiên tới · {opportunityStatus[row.status]}</strong><small>{result.data.phase==='EOD'?'EOD sơ bộ · ':''}Bằng chứng phiên {formatDate(result.data.trading_date)} · Hệ thống {row.system_action} · #{row.rank}</small>{row.status === 'EXTENDED' && <small className="opportunity-extension-warning">Giá đã kéo xa · mở để xem điều kiện và rủi ro.</small>}</span><ChevronDown size={16}/></summary><OpportunityEvidence row={row} day={result.data.trading_date}/><p className="opportunity-note">Bằng chứng nghiên cứu được lưu riêng; biểu đồ giới hạn đến phiên được chọn.</p></details>
 }
 
