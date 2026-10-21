@@ -17,7 +17,7 @@ type SpikeEvent = {
 }
 type MinuteBar = { t: string; o: number; h: number; l: number; c: number; v: number }
 type MinuteDay = { bars: MinuteBar[]; coverage_status: string; bar_count: number; minute_volume: number; daily_volume: number | null }
-type RadarSession = { status: 'PROCESSING' | 'INCOMPLETE' | 'PUBLISHED'; attempt_count: number;
+type RadarSession = { status: 'PROCESSING' | 'INCOMPLETE' | 'PUBLISHED' | 'FAILED'; attempt_count: number;
   expected_symbols: number; complete_symbols: number; baseline_ready_symbols: number;
   source_errors: { symbol: string; status: string; error: string | null }[] }
 type Mode = 'market' | 'screener'
@@ -131,9 +131,11 @@ export function IntradaySpikeRadar({ date, authenticated, mode }: { date: string
       ? `Phiên ${formatDate(coverageDate)} đã công bố · ${completed}/${observed} mã đủ nến phút · ${baselineReady} mã có ít nhất 10 phiên mốc.`
       : radarSession.data?.status === 'PROCESSING'
         ? `Đang xử lý phiên ${formatDate(coverageDate)} · ${completed}/${observed} mã đủ nến phút · ${baselineReady} mã đủ phiên mốc · lượt ${radarSession.data.attempt_count}/3.`
+        : radarSession.data?.status === 'FAILED'
+          ? `Xử lý phiên ${formatDate(coverageDate)} thất bại · lượt ${radarSession.data.attempt_count}/3. ${radarSession.data.attempt_count < 3 ? 'Hệ thống sẽ thử phục hồi lỗi kỹ thuật.' : 'Đã hết lượt tự phục hồi, cần xử lý.'}`
         : radarSession.data?.status === 'INCOMPLETE'
           ? `Thiếu dữ liệu phiên ${formatDate(coverageDate)} · ${completed}/${observed} mã đủ nến phút · ${baselineReady} mã đủ phiên mốc · lượt ${radarSession.data.attempt_count}/3.`
-          : `Phiên ${formatDate(coverageDate)} đang chờ EOD hoặc lượt thu thập Radar.`}
+          : `Phiên ${formatDate(coverageDate)} chưa được khởi tạo Radar; đang chờ EOD hoặc hệ thống phục hồi. Chưa thể kết luận có giao dịch đột biến hay không.`}
       {radarSession.data?.source_errors?.length ? ` Lỗi/thiếu nguồn: ${radarSession.data.source_errors.slice(0, 3).map(item => `${item.symbol} (${item.error || item.status})`).join('; ')}${radarSession.data.source_errors.length > 3 ? '…' : ''}` : ''}</p>}
     {mode === 'screener' && ready && !events.isError && <p className="spike-result-count">{events.data?.total ? `${(page - 1) * pageSize + 1}–${Math.min(page * pageSize, events.data.total)} / ${events.data.total} sự kiện` : '0 sự kiện'}</p>}
     {ready && !events.isError && <div className="spike-list">
@@ -153,7 +155,7 @@ export function IntradaySpikeRadar({ date, authenticated, mode }: { date: string
               <a href="#analysis" onClick={() => { const symbol = event.symbol; localStorage.setItem('protstock-symbol', symbol); dispatchEvent(new CustomEvent('protstock:symbol', { detail: symbol })) }}>Xem phân tích mã <ArrowUpRight size={15}/></a></div>}
         </article>
       })}
-      {!filtered.length && <p className="spike-empty">{radarSession.data?.status === 'PUBLISHED' ? 'Không có sự kiện khớp bộ lọc và ngưỡng dữ liệu hiện tại.' : 'Sự kiện của phiên này sẽ hiển thị khi độ phủ dữ liệu đạt ngưỡng công bố.'}</p>}
+      {!filtered.length && <p className="spike-empty">{radarSession.data?.status === 'PUBLISHED' ? 'Không có sự kiện khớp bộ lọc và ngưỡng dữ liệu hiện tại.' : 'Phiên chưa công bố dữ liệu. Danh sách trống không có nghĩa là không phát sinh giao dịch đột biến.'}</p>}
     </div>}
     {mode === 'screener' && ready && !events.isError && (events.data?.total ?? 0) > 0 && <ResearchPagination label="Phân trang giao dịch đột biến" page={page} pageSize={pageSize} total={events.data?.total ?? 0} onPage={value => { setPage(value); setSelectedId(null) }} onPageSize={value => { setPageSize(value); resetPage() }}/>}
     {mode === 'market' && ready && (events.data?.total ?? 0) > 12 && <a className="spike-more" href="#screener?tab=spikes">Xem toàn bộ trong Bộ lọc tín hiệu <ArrowUpRight size={15}/></a>}

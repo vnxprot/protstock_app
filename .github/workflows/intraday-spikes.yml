@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       force_refresh:
-        description: Rebuild minute coverage and baseline for the direct-source rollout
+        description: Explicitly rebuild all eligible symbols and reset the three-attempt recovery budget
         required: false
         default: false
         type: boolean
@@ -67,7 +67,7 @@ jobs:
 
   finalize:
     needs: [preflight, collect]
-    if: always() && needs.preflight.outputs.action == 'RUN'
+    if: always() && (needs.preflight.outputs.action == 'RUN' || needs.preflight.outputs.action == 'FINALIZE_ONLY')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -81,3 +81,13 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           TRADING_DATE: ${{ needs.preflight.outputs.trading_date }}
         run: python .github/scripts/intraday_radar_schedule.py finalize
+
+  report-failure:
+    needs: [preflight, collect, finalize]
+    if: always() && (needs.preflight.result == 'failure' || needs.collect.result == 'failure' || needs.finalize.result == 'failure')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Report Radar failure independently of EOD success
+        run: |
+          echo '::error::Intraday Radar failed. Technical failures can be recovered by Intraday radar recovery; source/baseline gaps require attention.'
+          echo 'Radar failed; EOD success does not imply Radar publication. See failed job logs for PostgreSQL/source details.' >> "$GITHUB_STEP_SUMMARY"

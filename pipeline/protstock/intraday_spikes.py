@@ -23,6 +23,17 @@ MIN_RATIO = 3.0
 RETENTION_DAYS = 50  # About 30 trading sessions; event history is retained.
 
 
+def retryable_failure(error: Exception) -> bool:
+    """Retry transport/rate/server failures, never schema or baseline errors."""
+    if isinstance(error, (httpx.TimeoutException, httpx.NetworkError)):
+        return True
+    if isinstance(error, httpx.HTTPStatusError):
+        return error.response.status_code in {408, 429, 500, 502, 503, 504}
+    if isinstance(error, SourceUnavailable):
+        return any(f"HTTP={code}" in str(error) for code in (408, 429, 500, 502, 503, 504)) or "HTTP=None" in str(error)
+    return False
+
+
 def _minute_of_day(time_text: str) -> int:
     hour, minute = (int(part) for part in time_text.split(":"))
     return hour * 60 + minute
@@ -164,6 +175,7 @@ def run_intraday_spikes(trading_date: date, *, symbol_offset: int = 0, symbol_li
             counts["symbols"] += 1
             symbol_id, symbol = int(row["id"]), str(row["symbol"])
             symbol_status, baseline_count, minute_source, error = "EMPTY", 0, None, None
+            retryable = False
             try:
                 stored = db._pages("intraday_minute_days", {
                     "select": "trading_date,bars,coverage_status,data_revision,source", "symbol_id": f"eq.{symbol_id}",
@@ -254,11 +266,13 @@ def run_intraday_spikes(trading_date: date, *, symbol_offset: int = 0, symbol_li
                                                    "symbol_id,trading_date,start_time,algorithm_version")
             except Exception as exc:
                 symbol_status, error = "FAILED", str(exc)[:160]
+                retryable = retryable_failure(exc)
                 counts["failed"].append({"symbol": symbol, "error": error})
             finally:
                 db.upsert("intraday_radar_symbol_status", [{"trading_date": trading_date.isoformat(),
                     "symbol_id": symbol_id, "status": symbol_status, "baseline_sessions": baseline_count,
                     "source": minute_source, "error": error,
+                    "retryable": retryable,
                     "updated_at": datetime.now(timezone.utc).isoformat()}], "trading_date,symbol_id")
             if pause_seconds:
                 sleep(pause_seconds)

@@ -33,6 +33,14 @@ class SupabaseRestClient:
             try:
                 response = self._client.request(method, url, **kwargs)
                 if response.status_code not in {408, 429, 500, 502, 503, 504} or attempt == 2:
+                    if response.is_error:
+                        # Preserve PostgreSQL code/constraint details without logging credentials or headers.
+                        try:
+                            body = response.json()
+                            details = {key: body[key] for key in ("code", "message", "details", "hint") if key in body}
+                        except (ValueError, TypeError):
+                            details = {"message": "Non-JSON database error"}
+                        print(f"Database HTTP {response.status_code} {method} {url}: {str(details)[:1500]}", flush=True)
                     return response
                 retry_after = response.headers.get("retry-after", "")
                 delay = min(float(retry_after), 30) if retry_after.isdigit() else 2 ** attempt

@@ -1,0 +1,49 @@
+name: Intraday radar recovery
+
+on:
+  schedule:
+    # Hourly 16:15-23:15 Vietnam; independent of successful EOD skip guards.
+    - cron: '15 9-16 * * 1-5'
+  workflow_dispatch:
+    inputs:
+      trading_date:
+        description: Completed date to inspect; blank uses today in Vietnam
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  actions: write
+
+concurrency:
+  group: protstock-intraday-watchdog
+  cancel-in-progress: false
+
+jobs:
+  recover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install httpx
+      - id: inspect
+        env:
+          SUPABASE_URL: https://upmqxwktvvguegqeqibn.supabase.co
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          TRADING_DATE: ${{ inputs.trading_date }}
+        run: python .github/scripts/intraday_radar_schedule.py watchdog
+      - name: Recover missing or technically failed Radar without rerunning EOD
+        if: steps.inspect.outputs.action == 'DISPATCH_RADAR'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TRADING_DATE: ${{ steps.inspect.outputs.trading_date }}
+        run: gh workflow run intraday-spikes.yml --ref "$GITHUB_REF_NAME" -f trading_date="$TRADING_DATE"
+      - name: Keep recovery failures visible
+        if: failure()
+        run: |
+          echo '::error::Radar recovery needs attention. Inspect the failed step for database, source, or retry-limit details.'
+          echo 'Radar recovery failed. This workflow does not mark an incomplete session as published.' >> "$GITHUB_STEP_SUMMARY"

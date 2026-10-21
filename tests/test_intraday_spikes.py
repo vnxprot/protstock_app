@@ -5,6 +5,16 @@ import sys
 from protstock.intraday_spikes import _fetch_vci_minutes, detect_events, parse_minute_bars, run_intraday_spikes
 
 
+def test_recovery_only_retries_technical_failures():
+    import httpx
+    from protstock.intraday_spikes import retryable_failure
+    from protstock.market_http import SourceUnavailable
+    assert retryable_failure(httpx.ReadTimeout('timeout'))
+    assert retryable_failure(SourceUnavailable('vendor: HTTP=429'))
+    assert not retryable_failure(SourceUnavailable('vendor: HTTP=404'))
+    assert not retryable_failure(ValueError('MISSING_CANONICAL_INTRADAY_SESSION'))
+
+
 def bars(start=600, count=20, volume=1000, rising=False):
     output = []
     for offset in range(count):

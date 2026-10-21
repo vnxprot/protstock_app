@@ -13,6 +13,10 @@ on:
         description: Optional date to finalize from stored data after deployment, without fetching missing candles
         required: false
         type: string
+      recover_intraday_date:
+        description: Start Radar recovery for this date only after migrations succeed
+        required: false
+        type: string
       bootstrap_existing:
         description: Mark the already-installed Phase 1 migrations as applied
         required: true
@@ -95,3 +99,10 @@ jobs:
           GH_REPO: ${{ github.repository }}
           TRADING_DATE: ${{ inputs.publish_eod_date }}
         run: gh workflow run eod-fast.yml --ref "$GITHUB_REF_NAME" -f trading_date="$TRADING_DATE" -f publish_only=true -f force_rerun=true -f skip_backtests=true -f skip_alerts=true
+      - name: Recover Intraday after its database migration succeeds
+        if: success() && inputs.mode == 'deploy' && inputs.recover_intraday_date != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TRADING_DATE: ${{ inputs.recover_intraday_date }}
+        run: gh workflow run intraday-spikes.yml --ref "$GITHUB_REF_NAME" -f trading_date="$TRADING_DATE" -f force_refresh=true

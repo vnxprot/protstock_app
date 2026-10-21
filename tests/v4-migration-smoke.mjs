@@ -55,6 +55,25 @@ try {
  assert.equal(Number(Object.values((await db.query(`select count(*) from daily_prices p join symbols s on s.id=p.symbol_id where s.symbol='TRC' and p.close=10 and p.volume=400 and p.source_version='KBS_PUBLIC_V2_20260930_TRC_VSDC_199296'`)).rows[0])[0]),1001)
  // Supabase grants these through its platform default privileges.
  await db.exec(`grant all on all tables in schema public to service_role;grant all on all sequences in schema public to service_role;`)
+ // A brand-new date with a missing EOD symbol must initialize parent + children atomically.
+ const radarIds=(await db.query(`select id from symbols order by id limit 2`)).rows.map(row=>Number(row.id))
+ const radarDay='2026-10-21'
+ const radarArgs=[radarDay,'VCI_DIRECT_MINUTES_ONCE_V1',JSON.stringify([{id:radarIds[0]}]),JSON.stringify([{id:radarIds[1]}]),JSON.stringify([radarIds[0]])]
+ const claimRadar=async(args=radarArgs)=>Object.values((await db.query(`select begin_intraday_radar_session($1,$2,$3::jsonb,$4::jsonb,$5::jsonb,false)`,args)).rows[0])[0]
+ assert.equal((await claimRadar()).action,'RUN')
+ assert.equal((await db.query(`select count(*)::int n from intraday_radar_symbol_status where trading_date=$1`,[radarDay])).rows[0].n,2)
+ assert.equal((await claimRadar()).action,'IN_PROGRESS')
+ await db.query(`update intraday_radar_sessions set status='FAILED' where trading_date=$1`,[radarDay])
+ assert.equal((await claimRadar()).attempt,2)
+ await db.query(`update intraday_radar_sessions set status='FAILED' where trading_date=$1`,[radarDay])
+ assert.equal((await claimRadar()).attempt,3)
+ await db.query(`update intraday_radar_sessions set status='FAILED' where trading_date=$1`,[radarDay])
+ assert.equal((await claimRadar()).action,'RETRY_LIMIT')
+ await assert.rejects(()=>claimRadar(['2026-10-20','policy','[]','[{"id":-1}]','[]']),/foreign key/)
+ assert.equal((await db.query(`select count(*)::int n from intraday_radar_sessions where trading_date='2026-10-20'`)).rows[0].n,0)
+ assert.equal((await db.query(`select has_function_privilege('authenticated','public.begin_intraday_radar_session(date,text,jsonb,jsonb,jsonb,boolean)','EXECUTE') ok`)).rows[0].ok,false)
+ await db.query(`delete from intraday_radar_sessions where trading_date=$1`,[radarDay])
+ console.log('PASS: Radar parent/child FK, atomic rollback, duplicate claim, three-attempt cap, service-only RPC')
  await db.exec(`insert into public.user_profiles(user_id,username,full_name,role,status) values('${other}','other','Other','ADMIN','ACTIVE');
  insert into public.symbols(symbol,sector) values('AAA','TECH'),('BBB','TECH') on conflict(symbol)do nothing;
  insert into public.portfolios(id,user_id,name,capital) values('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa','${owner}','A',1000000),('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb','${other}','B',2000000);
