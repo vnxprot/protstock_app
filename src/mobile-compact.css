@@ -1,0 +1,111 @@
+/* Shared phone layout. Desktop measurements stay in their page styles. */
+.investment-mobile-cards,.investment-mobile-intro { display:none; }
+
+@media(max-width:760px) {
+  .app-shell main { padding:0 12px calc(92px + env(safe-area-inset-bottom)); font-size:14px; }
+  .app-shell main :is(.workspace-page,.overview-page,.investment-page,.market-page,.analysis-evidence,.overview-main,.overview-side,.dashboard-grid,.analysis-columns,.analytics-grid) { gap:12px; }
+  .app-shell main :is(.page-title-row,.dashboard-header,.overview-header,.universe-page-heading,.spike-head) { gap:8px; margin:0 0 10px; padding-top:0; padding-bottom:0; }
+  .app-shell main :is(.page-title-row,.dashboard-header,.overview-header,.universe-page-heading) h1,
+  .app-shell main .workspace-page>h1 { margin:0 0 4px; font:700 24px/1.2 var(--font-ui); overflow-wrap:anywhere; }
+  .app-shell main :is(.page-title-row,.dashboard-header,.overview-header,.universe-page-heading,.spike-head) p { margin:0; font:400 13px/1.4 var(--font-ui); }
+  .app-shell main .panel { padding:12px; }
+  .app-shell main :is(.panel-title,.market-context-heading,.overview-card-heading) { gap:8px; margin:0 0 8px; }
+  .app-shell main :is(.panel-title h2,.panel-title h3,.spike-head h2,.overview-card-heading h2,.panel>h2) { margin:0; font:600 16px/1.35 var(--font-ui); }
+  .app-shell main .panel>h2 { margin-bottom:8px; }
+  .app-shell main :is(.overview-kpi,.metric-card,.spike-metrics>div,.decision-zone,.watch-stock,.market-context-card) { padding:10px 12px; }
+  .app-shell main :is(.page-actions,.watch-detail-actions,.portfolio-actions) { gap:8px; }
+  .app-shell main :is(.chart-toolbar,.chart-tools,.timeframe-tabs) { gap:6px; margin-bottom:8px; }
+  .app-shell main .spike-head { margin-bottom:10px; }
+  .app-shell main .spike-metrics { margin-bottom:10px; gap:6px; }
+  .app-shell main .journal-timeline-panel { padding:12px; }
+
+  /* Search and selects share one visible border and one 44px hit area. */
+  .app-shell main :is(.screener-field,.journal-toolbar .screener-field,.investment-primary-search-box) { box-sizing:border-box; height:44px; min-height:44px!important; margin:0; padding:0 10px; border:1px solid var(--line-bright); border-radius:11px; background:var(--control-surface); box-shadow:none; color:var(--text); font:400 16px/1.4 var(--font-ui); }
+  .app-shell main :is(.screener-search,.investment-primary-search-box):focus-within { outline:2px solid var(--control-accent); outline-offset:1px; }
+  .app-shell main :is(.screener-search input,.journal-toolbar .screener-field input,.investment-primary-search-box input) { appearance:none; box-sizing:border-box; width:100%; min-width:0; height:42px; min-height:0; margin:0; padding:0; border:0; border-radius:0; background:transparent; color:var(--text); opacity:1; font:400 16px/1.4 var(--font-ui); text-align:left; }
+  .app-shell main :is(.screener-search input,.investment-primary-search-box input)::placeholder { color:var(--muted); opacity:1; }
+  .app-shell main .screener-field .soft-select-trigger { box-sizing:border-box; min-width:0; height:42px; min-height:0; padding:0; border:0; background:transparent; color:var(--text); font:400 16px/1.4 var(--font-ui); }
+  .app-shell main .screener-field .soft-select-trigger>span { overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+
+  /* Eight date presets fit the portrait width; the pill is 30px in a 36px target. */
+  .app-shell main .signal-history-ranges,.app-shell main .investment-page .investment-date-ranges { display:grid; grid-template-columns:repeat(8,minmax(0,1fr)); gap:3px; box-sizing:border-box; width:100%; max-width:100%; margin:4px 0; padding:0; overflow:visible; }
+  .app-shell main .signal-history-ranges button,.app-shell main .investment-page .investment-date-ranges button { position:relative; isolation:isolate; box-sizing:border-box; width:100%; min-width:0; height:auto; min-height:36px!important; margin:0; padding:7px 1px; border:0; border-radius:999px; background:transparent; color:var(--muted); font:400 12px/1.3 var(--font-ui); white-space:normal; overflow-wrap:anywhere; }
+  .app-shell main .signal-history-ranges button::before { content:''; position:absolute; z-index:-1; inset:3px 0; border:1px solid var(--line); border-radius:999px; background:var(--surface-2); }
+  .app-shell main .signal-history-ranges button.active,.app-shell main .investment-page .investment-date-ranges button.active { background:transparent; color:var(--text); font-weight:600; }
+  .app-shell main .signal-history-ranges button.active::before { border-color:var(--control-accent); background:color-mix(in srgb,var(--control-accent) 15%,var(--surface-2)); }
+  html[data-theme=light] .app-shell main .signal-history-ranges button { background:transparent!important; }
+
+  /* Journal: search/filter, followed by strategy/action. */
+  .app-shell main .journal-workspace .journal-filter-row { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); grid-template-areas:'search filter' 'strategy action' 'clear clear'; gap:8px; align-items:stretch; }
+  .app-shell main .journal-filter-row .screener-search { grid-area:search; }
+  .app-shell main .journal-filter-row .journal-filter-toggle { grid-area:filter; }
+  .app-shell main .journal-filter-row .journal-filter-strategy { grid-area:strategy; }
+  .app-shell main .journal-filter-row .journal-filter-action { grid-area:action; }
+  .app-shell main .journal-filter-row .journal-clear-filters { grid-area:clear; justify-self:end; width:auto; }
+  .app-shell main .journal-filter-row>.secondary-button { height:44px; min-height:44px; padding:0 8px; border:1px solid var(--line-bright); border-radius:11px; background:var(--control-surface); font:400 16px/1.4 var(--font-ui); }
+  .app-shell main .journal-summary { gap:6px 12px; margin-top:8px; padding-top:8px; font-size:12px; }
+
+  /* Investment modules have a two-row mobile toolbar and compact results. */
+  .app-shell main .investment-filter-scroll { overflow:visible; }
+  .app-shell main .investment-primary-toolbar { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); grid-template-areas:'search filter' 'sector state'; gap:8px; width:100%; min-width:0; padding:10px; }
+  .app-shell main .investment-primary-field { display:grid; grid-template-rows:auto 44px; gap:3px; width:100%; min-width:0; font-size:12px; }
+  .app-shell main .investment-primary-search { grid-area:search; grid-template-rows:44px; }
+  .app-shell main .investment-primary-search>span:first-child { display:none; }
+  .app-shell main .investment-primary-sector { grid-area:sector; }
+  .app-shell main .investment-primary-state { grid-area:state; }
+  .app-shell main .investment-primary-advanced { grid-area:filter; align-self:start; width:100%; min-width:0; height:44px; min-height:44px; border-radius:11px; font-size:16px; }
+  .app-shell main .investment-primary-field .soft-select-trigger { height:44px; min-height:44px; border-radius:11px; font-size:16px; }
+  .app-shell main .investment-filter-scope,.app-shell main .investment-date-note { font:400 12px/1.4 var(--font-ui); margin:0; }
+  .app-shell main .investment-page>.dashboard-header { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:start; margin:0; }
+  .app-shell main .investment-page>.dashboard-header .secondary-button { min-height:36px; padding:0 8px; font-size:12px; }
+  .app-shell main .investment-intro { display:none; }
+  .app-shell main .investment-mobile-intro { display:block; margin-top:4px; font:400 12px/1.4 var(--font-ui); }
+  .investment-mobile-intro summary { cursor:pointer; color:var(--muted); }
+  .investment-mobile-intro p { margin-top:5px!important; }
+  .app-shell main .investment-eyebrow { display:none; }
+  .app-shell main .investment-summary { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:6px; }
+  .app-shell main .investment-summary article { display:flex; flex-direction:column; align-items:flex-start; justify-content:flex-start; gap:4px; min-width:0; padding:9px 7px; border-radius:12px; }
+  .app-shell main .investment-summary article>span { font:400 11px/1.35 var(--font-ui); }
+  .app-shell main .investment-summary strong { font:600 15px/1.35 var(--font-ui); overflow-wrap:anywhere; }
+  .app-shell main .investment-summary small { font:400 11px/1.3 var(--font-ui); overflow-wrap:anywhere; }
+  .app-shell main .investment-summary article:not(:first-child) small { display:none; }
+  .app-shell main .investment-quick-filters { display:flex; flex-wrap:wrap; gap:5px!important; }
+  .app-shell main .investment-quick-filters button { flex:0 1 auto; width:auto; min-height:32px!important; padding:4px 7px; font-size:12px; }
+  .app-shell main .investment-results { padding:0; border:0; background:transparent; box-shadow:none; overflow:visible; }
+  .app-shell main .investment-results>.investment-table-wrap { display:none; }
+  .investment-mobile-cards { display:grid; gap:8px; }
+  .investment-mobile-card { min-width:0; padding:10px; border:1px solid var(--line); border-radius:12px; background:var(--surface); }
+  .investment-mobile-card>header { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.2fr) 32px; align-items:center; gap:6px; }
+  .investment-mobile-card header>div { min-width:0; }
+  .investment-mobile-card .investment-symbol { display:flex; align-items:center; gap:4px; min-height:32px; padding:0; font:700 15px/1.3 var(--font-ui); }
+  .investment-mobile-card header small { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--muted); font-size:12px; }
+  .investment-mobile-card .investment-stage { max-width:100%; padding:5px 6px; white-space:normal; font:500 12px/1.35 var(--font-ui); }
+  .app-shell main .investment-card-watch { display:grid; place-items:center; width:32px; min-height:36px; padding:0; border:0; border-radius:8px; background:var(--surface-2); color:var(--muted); }
+  .app-shell main .investment-card-watch[aria-pressed=true] { color:var(--control-accent); }
+  .investment-mobile-card dl { display:flex; gap:8px; margin:8px 0 0; }
+  .investment-mobile-card dl>div { flex:1; min-width:0; }
+  .investment-mobile-card dt { color:var(--muted); font-size:12px; }
+  .investment-mobile-card dd { margin:2px 0 0; font:500 14px/1.4 var(--font-ui); font-variant-numeric:tabular-nums; }
+  .investment-mobile-card>p { margin:8px 0 0; color:var(--muted); font:400 12px/1.4 var(--font-ui); }
+  .app-shell main .investment-card-detail { display:flex; align-items:center; gap:5px; min-height:32px; margin:4px 0 0; padding:0; border:0; background:transparent; color:var(--control-accent); font:500 12px/1.3 var(--font-ui); }
+}
+
+/* Portaled mobile sheet follows the keyboard's available viewport. */
+.investment-filter-backdrop { position:fixed; z-index:500; top:var(--modal-viewport-top,0px); left:0; right:0; height:var(--modal-viewport-height,100dvh); display:flex; align-items:flex-end; background:#0008; }
+.investment-filter-sheet { box-sizing:border-box; width:100%; max-height:calc(var(--modal-viewport-height,100dvh) - 12px); overflow-y:auto; overscroll-behavior:contain; padding:14px 12px max(12px,env(safe-area-inset-bottom)); border:1px solid var(--line-bright); border-radius:20px 20px 0 0; background:var(--surface); color:var(--text); font:400 14px/1.4 var(--font-ui); }
+.investment-filter-sheet>header { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:12px; }
+.investment-filter-sheet h2 { margin:0; font-size:18px; }
+.investment-filter-sheet>header button { display:grid; place-items:center; width:36px; height:36px; border:0; border-radius:10px; color:var(--text); background:var(--surface-2); }
+.investment-filter-sheet .investment-advanced { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px 8px; padding:0; background:transparent; }
+.investment-filter-sheet :is(.filter-field,.date-field) { display:grid; align-content:start; gap:5px; min-width:0; margin:0; color:var(--muted); font-size:12px; }
+.investment-filter-sheet :is(input:not([type=date]),.soft-select-trigger) { box-sizing:border-box; width:100%; min-width:0; height:44px; min-height:44px; padding:0 9px; border:1px solid var(--line-bright); border-radius:10px; background:var(--control-surface); color:var(--text); font:400 16px/1.4 var(--font-ui); }
+.investment-filter-sheet .date-input-wrap>input { padding-right:32px; }
+.investment-filter-sheet .soft-select-trigger>span { overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+.investment-filter-sheet .investment-reset { grid-column:1/-1; min-height:44px; margin:4px 0 0; }
+.investment-filter-sheet>footer { position:sticky; bottom:0; padding:10px 0 0; background:var(--surface); }
+.investment-filter-sheet>footer button { width:100%; min-height:44px; }
+@media(max-width:359px) {
+  .app-shell main .signal-history-ranges,.app-shell main .investment-page .investment-date-ranges { gap:2px; }
+  .app-shell main .signal-history-ranges button,.app-shell main .investment-page .investment-date-ranges button { font-size:11px; }
+  .app-shell main .investment-summary strong { font-size:14px; }
+}
