@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ArrowUpRight, ChevronDown, Star } from 'lucide-react'
+import { ArrowUpRight, ChevronDown, SlidersHorizontal, Star } from 'lucide-react'
+import { DateField } from './DateField'
+import { FilterField } from './FilterField'
+import { SoftSelect } from './SoftSelect'
 import { useOpportunities, useOpportunityRoute, opportunityHref, opportunityStatus, hasOpportunityPublication, type Opportunity } from '../lib/opportunities'
 import { formatDate } from '../lib/date'
 import { isWatchActive, toggleWatchlistSymbol, useWatchlist } from '../lib/watchlist'
@@ -26,6 +29,7 @@ export function OpportunitiesPanel({ compact = false, authenticated = true }: { 
   const [filter, setFilter] = useState('ALL')
   const [expanded, setExpanded] = useState<number | null>(null)
   const [limit, setLimit] = useState(25)
+  const [filtersOpen, setFiltersOpen] = useState(true)
   useEffect(() => { if (!compact) { setDay(route.date); setPublication(route.publication); setExpanded(null) } }, [route.date, route.publication, compact])
   const result = useOpportunities(day, publication, authenticated)
   const watched = useWatchlist().filter(isWatchActive)
@@ -40,7 +44,14 @@ export function OpportunitiesPanel({ compact = false, authenticated = true }: { 
   const fullLink = '#screener?section=opportunities' + (data?.trading_date ? '&date=' + data.trading_date : '') + (data?.id ? '&publication=' + data.id : '')
   return <article className={`panel opportunities-panel${compact ? ' opportunities-compact' : ''}`}>
     <div className="panel-title"><div><h2>{compact ? 'Ưu tiên phiên tới' : 'Cơ hội phiên tới'}</h2><p className="muted">Danh sách nghiên cứu cho phiên giao dịch kế tiếp · tách riêng với quyết định mua/bán.</p></div>{compact && <a href={fullLink}>Xem tất cả <ArrowUpRight size={15}/></a>}</div>
-    {!compact && <div className="opportunity-toolbar"><label>Phiên dữ liệu<input type="date" value={day || data?.trading_date || ''} onChange={event => { setDay(event.target.value); setPublication(''); setLimit(25) }}/></label><label>Tìm mã<input value={query} placeholder="VSC, HPG…" onChange={event => { setQuery(event.target.value); setLimit(25) }}/></label><label>Hiển thị<select value={filter} onChange={event => { setFilter(event.target.value); setLimit(25) }}><option value="ACTIVE">Đang theo dõi</option><option value="PRIORITY">Ưu tiên theo dõi</option><option value="OBSERVE">Theo dõi thêm</option><option value="EXTENDED">Đã kéo xa</option><option value="RISK">Rủi ro hệ thống</option><option value="INVALIDATED">Mất hiệu lực</option><option value="WATCHLIST">Trong Watchlist</option><option value="ALL">Tất cả</option></select></label><button type="button" className="text-button" onClick={() => { location.hash = 'screener?section=opportunities'; setDay(''); setPublication('') }}>Phiên mới nhất</button></div>}
+    {!compact && <><div className="opportunity-toolbar">
+      <div className="opportunity-search"><FilterField label="Tìm mã"><input type="search" aria-label="Tìm mã cơ hội phiên tới" value={query} placeholder="VSC, HPG…" onChange={event => { setQuery(event.target.value); setLimit(25) }}/></FilterField></div>
+      <button type="button" className="secondary-button opportunity-filter-toggle" aria-expanded={filtersOpen} aria-controls="opportunity-filters" onClick={() => setFiltersOpen(value => !value)}><SlidersHorizontal size={15}/>Bộ lọc{filter !== 'ALL' || day ? ` · ${Number(filter !== 'ALL') + Number(Boolean(day))}` : ''}</button>
+      {filtersOpen && <div id="opportunity-filters" className="opportunity-filter-fields">
+        <DateField label="Phiên dữ liệu" value={day || data?.trading_date || ''} onChange={value => { setDay(value); setPublication(''); setLimit(25) }}/>
+        <FilterField label="Hiển thị"><SoftSelect aria-label="Lọc trạng thái cơ hội" value={filter} onChange={event => { setFilter(event.target.value); setLimit(25) }}><option value="ACTIVE">Đang theo dõi</option><option value="PRIORITY">Ưu tiên theo dõi</option><option value="OBSERVE">Theo dõi thêm</option><option value="EXTENDED">Đã kéo xa</option><option value="RISK">Rủi ro hệ thống</option><option value="INVALIDATED">Mất hiệu lực</option><option value="WATCHLIST">Trong Watchlist</option><option value="ALL">Tất cả</option></SoftSelect></FilterField>
+      </div>}
+    </div><button type="button" className="text-button opportunity-latest" onClick={() => { location.hash = 'screener?section=opportunities'; setDay(''); setPublication('') }}>Phiên mới nhất</button></>}
     {result.isLoading && <p role="status">Đang tải danh sách phiên tới…</p>}
     {result.isError && <p role="alert">Chưa tải được danh sách cơ hội. <button type="button" className="text-button" onClick={() => void result.refetch()}>Thử lại</button></p>}
     {data && !published && <p role={data.status==='FAILED'||data.status==='STALLED'?'alert':'status'}>{pending[data.status] ?? 'Danh sách chưa được công bố.'} · Phiên {formatDate(data.trading_date)}. Chưa thể kết luận không có cơ hội.</p>}
@@ -68,7 +79,7 @@ export function OpportunityAnalysis({ symbol }: { symbol: string }) {
   const row = result.data?.rows.find(item => item.symbol === symbol)
   if (result.isError) return <article className="panel"><p>Chưa tải được bằng chứng chuẩn bị phiên tới. <button type="button" className="text-button" onClick={() => void result.refetch()}>Thử lại</button></p></article>
   if (!row || !hasOpportunityPublication(result.data)) return route.publication ? <article className="panel"><p>Không có bằng chứng cho mã này trong bản lưu được chọn.</p></article> : null
-  return <article className="panel opportunities-panel"><div className="panel-title"><div><h3>Chuẩn bị phiên tới · {opportunityStatus[row.status]}</h3><small>{result.data.phase==='EOD'?'EOD sơ bộ · ':''}Bằng chứng phiên {formatDate(result.data.trading_date)} · Hệ thống {row.system_action}</small></div><span>#{row.rank}</span></div><OpportunityEvidence row={row} day={result.data.trading_date}/><p className="opportunity-note">Bằng chứng nghiên cứu được lưu riêng; biểu đồ phía trên giới hạn đến phiên được chọn.</p></article>
+  return <details key={`${symbol}-${result.data.id}-${row.status}`} className="panel opportunities-panel opportunity-analysis" open={row.status === 'EXTENDED' ? undefined : true}><summary><span><strong>Chuẩn bị phiên tới · {opportunityStatus[row.status]}</strong><small>{result.data.phase==='EOD'?'EOD sơ bộ · ':''}Bằng chứng phiên {formatDate(result.data.trading_date)} · Hệ thống {row.system_action} · #{row.rank}</small>{row.status === 'EXTENDED' && <small className="opportunity-extension-warning">Giá đã kéo xa · mở để xem điều kiện và rủi ro.</small>}</span><ChevronDown size={16}/></summary><OpportunityEvidence row={row} day={result.data.trading_date}/><p className="opportunity-note">Bằng chứng nghiên cứu được lưu riêng; biểu đồ giới hạn đến phiên được chọn.</p></details>
 }
 
 export function OpportunityBadge({ symbol }: { symbol: string }) {

@@ -13,6 +13,7 @@ import './layout-refinement.css'
 import './design-system.css'
 import './workspace-controls.css'
 import './mobile-compact.css'
+import './ui-consistency.css'
 import { initializeTheme } from './lib/theme'
 import { initializeInputModality } from './lib/inputModality'
 

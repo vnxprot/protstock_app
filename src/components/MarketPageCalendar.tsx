@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react'
+import { useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { ArrowUpRight, Search } from 'lucide-react'
 import { useSymbols } from '../hooks/useStockAnalysis'
@@ -54,9 +54,23 @@ async function fetchBreadth(start: string, end: string): Promise<BreadthRow[]> {
 function SectorChart({ points, grain, view, selectedKey, onSelect }: {
   points: ChartPoint[]; grain: SectorGrain; view: SectorView; selectedKey: string; onSelect: (key: string) => void
 }) {
+  const scroll = useRef<HTMLDivElement>(null)
+  const pointKeys = points.map(point => point.key).join(',')
+  useLayoutEffect(() => {
+    const container = scroll.current
+    if (!container) return
+    const position = () => {
+      const selected = container.querySelector<HTMLElement>('[aria-pressed="true"]')
+      if (selected) container.scrollLeft = Math.max(0, selected.offsetLeft + selected.offsetWidth - container.clientWidth + 8)
+    }
+    position()
+    const observer = new ResizeObserver(position)
+    observer.observe(container)
+    return () => observer.disconnect()
+  }, [selectedKey, pointKeys, grain])
   if (!points.length) return <p className="market-empty">Chưa có kỳ giao dịch để vẽ biểu đồ.</p>
   return <div className="market-calendar-chart" role="group" aria-label={`Biểu đồ ${view === 'health' ? 'Sức khỏe ngành' : 'Sector Flow'} theo ${grain}`}>
-    <div className="market-calendar-chart-scroll">{points.map(point => {
+    <div className="market-calendar-chart-scroll" ref={scroll}>{points.map(point => {
       const value = point.score
       const positive = value != null && value >= 0
       const height = value == null ? 0 : view === 'health' ? Math.max(2, Math.min(100, value)) : Math.max(2, Math.min(50, Math.abs(value) / 2))
@@ -67,7 +81,7 @@ function SectorChart({ points, grain, view, selectedKey, onSelect }: {
         <span className={`market-chart-track ${view === 'flow' ? 'is-flow' : ''}`}><span className={`market-chart-bar ${positive ? 'positive' : 'negative'}`}
           style={view === 'flow' ? { height: `${height}%`, [positive ? 'bottom' : 'top']: '50%' } : { height: `${height}%`, bottom: 0 }}/></span>
         <span className="market-chart-value">{value == null ? '—' : score(value)}</span>
-        <span className="market-chart-label">{grain === 'day' ? point.key.slice(8, 10) : grain === 'week' ? `${point.key.slice(8, 10)}/${point.key.slice(5, 7)}` : grain === 'month' ? `T${Number(point.key.slice(5, 7))}` : grain === 'quarter' ? `Q${point.key.slice(-1)}` : point.key}</span>
+        <span className="market-chart-label">{grain === 'day' || grain === 'week' ? `${point.key.slice(8, 10)}/${point.key.slice(5, 7)}` : grain === 'month' ? `T${Number(point.key.slice(5, 7))}` : grain === 'quarter' ? `Q${point.key.slice(-1)}` : point.key}</span>
       </button>
     })}</div>
     <small>Chọn một cột để xem đúng kỳ đó. Cột mờ: độ phủ chưa đạt chuẩn; không dùng để xếp hạng.</small>
@@ -104,7 +118,9 @@ export function MarketPage({ authenticated }: { authenticated: boolean }) {
     if (grain === 'quarter') return Array.from({ length: 4 }, (_, i) => `${selectedYear}-Q${i + 1}`).filter(key => calendarBounds(key, 'quarter').start <= latestDate)
     return [...new Set(yearDates.map(date => calendarKey(date, grain)))].reverse()
   }, [grain, latestDate, selectedYear, yearDates, years])
-  const scopeStart = grain === 'year' ? '2021-01-01' : grain === 'day' ? `${activeDate.slice(0, 7)}-01` : grain === 'week' ? calendarKey(`${selectedYear}-01-01`, 'week') : `${selectedYear}-01-01`
+  // Include the preceding sessions so the latest view is useful even at a month boundary.
+  const dayScopeStart = marketDates.filter(date => date < `${activeDate.slice(0, 7)}-01`).slice(-15)[0] ?? `${activeDate.slice(0, 7)}-01`
+  const scopeStart = grain === 'year' ? '2021-01-01' : grain === 'day' ? dayScopeStart : grain === 'week' ? calendarKey(`${selectedYear}-01-01`, 'week') : `${selectedYear}-01-01`
   const scopeEnd = grain === 'year' ? latestDate : grain === 'day' ? calendarBounds(activeDate.slice(0, 7), 'month').end : grain === 'week' ? calendarBounds(calendarKey(`${selectedYear}-12-31`, 'week'), 'week').end : `${selectedYear}-12-31`
   const history = useQuery({
     queryKey: ['market-calendar-breadth', scopeStart, scopeEnd], enabled: authenticated && Boolean(supabase) && Boolean(scopeStart) && Boolean(scopeEnd), staleTime: 60_000, refetchInterval: 60_000,
@@ -152,11 +168,11 @@ export function MarketPage({ authenticated }: { authenticated: boolean }) {
       || Number(b.summary.persistencePct ?? -1) - Number(a.summary.persistencePct ?? -1))
   const focused = visible.find(row => row.sector === selectedSector) ?? visible[0]
   const chartKeys = useMemo(() => {
-    const dates = grain === 'year' ? marketDates : grain === 'day' ? marketDates.filter(date => date.startsWith(activeDate.slice(0, 7))) : yearDates
+    const dates = grain === 'year' ? marketDates : grain === 'day' ? marketDates.filter(date => date >= scopeStart && date <= scopeEnd && date <= latestDate) : yearDates
     if (grain === 'month') return Array.from({ length: 12 }, (_, i) => `${selectedYear}-${String(i + 1).padStart(2, '0')}`).filter(key => key <= latestDate.slice(0, 7))
     if (grain === 'quarter') return Array.from({ length: 4 }, (_, i) => `${selectedYear}-Q${i + 1}`).filter(key => calendarBounds(key, 'quarter').start <= latestDate)
     return [...new Set(dates.map(date => calendarKey(date, grain)))]
-  }, [activeDate, grain, latestDate, marketDates, selectedYear, yearDates])
+  }, [scopeStart, scopeEnd, grain, latestDate, marketDates, selectedYear, yearDates])
   const chartPoints = useMemo(() => focused ? chartKeys.map(key => {
     const dates = marketDates.filter(date => calendarKey(date, grain) === key)
     const data = scopeRows.filter(row => calendarKey(row.trading_date, grain) === key)
@@ -184,11 +200,22 @@ export function MarketPage({ authenticated }: { authenticated: boolean }) {
       <div className="market-universe-breakdown"><div><h3>Theo sàn</h3><div>{exchangeCounts.map(([exchange, count]) => <a key={exchange} href={`#universe?exchange=${encodeURIComponent(exchange)}`}>{exchange === 'HOSE' ? 'HSX' : exchange}<b>{count}</b></a>)}</div></div><div><h3>Theo nhóm ngành Prot</h3><div>{[...sectorCounts].sort((a, b) => b[1] - a[1]).map(([sector, count]) => <a key={sector} href={sectorLink(sector)}>{sector}<b>{count}</b></a>)}</div></div></div>
     </section>
     <section className="panel market-sector-panel" aria-label="Thống kê ngành"><div className="market-section-head"><div><span className="eyebrow">02 · ĐỌC NGÀNH</span><h2>{section === 'health' ? 'Sức khỏe ngành' : 'Sector Flow'} v0.0.0</h2><p>{section === 'health' ? 'Sức khỏe xu hướng giá; không phải khuyến nghị mua.' : 'Dấu vết áp lực giá–khối lượng; không xác định danh tính nhà đầu tư.'}</p></div><div className="market-section-switch" role="tablist" aria-label="Loại thống kê ngành" onKeyDown={event => { if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return; event.preventDefault(); const next = event.key === 'Home' ? 'health' : event.key === 'End' ? 'flow' : section === 'health' ? 'flow' : 'health'; setSection(next); event.currentTarget.querySelector<HTMLButtonElement>(`#market-tab-${next}`)?.focus() }}><button type="button" id="market-tab-health" role="tab" aria-controls="market-sector-content" aria-selected={section === 'health'} tabIndex={section === 'health' ? 0 : -1} className={section === 'health' ? 'active' : ''} onClick={() => setSection('health')}>Sức khỏe</button><button type="button" id="market-tab-flow" role="tab" aria-controls="market-sector-content" aria-selected={section === 'flow'} tabIndex={section === 'flow' ? 0 : -1} className={section === 'flow' ? 'active' : ''} onClick={() => setSection('flow')}>Sector Flow</button></div></div>
-      <div className="market-calendar-controls"><div className="market-period-switch" role="group" aria-label="Đơn vị thời gian">{SECTOR_GRAINS.map(item => <button key={item.key} type="button" aria-pressed={grain === item.key} className={grain === item.key ? 'active' : ''} onClick={() => setGrain(item.key)}>{item.label}</button>)}</div><div className="market-calendar-selects">{grain !== 'year' && <label>Năm<SoftSelect aria-label="Chọn năm thống kê ngành" value={selectedYear} onChange={event => setAnchorDate(marketDates.filter(date => date.startsWith(event.target.value)).at(-1) ?? `${event.target.value}-01-01`)}>{years.map(year => <option key={year} value={year}>{year}</option>)}</SoftSelect></label>}<label>{grain === 'year' ? 'Năm' : grain === 'day' ? 'Phiên' : grain === 'week' ? 'Tuần' : grain === 'month' ? 'Tháng' : 'Quý'}<SoftSelect aria-label="Chọn kỳ thống kê ngành" value={selectedKey} onChange={event => chooseKey(event.target.value)}>{periodOptions.map(key => <option key={key} value={key}>{calendarLabel(key, grain)}</option>)}</SoftSelect></label></div></div>
+      <div className="market-calendar-controls"><div className="market-period-switch" role="group" aria-label="Đơn vị thời gian">{SECTOR_GRAINS.map(item => <button key={item.key} type="button" aria-pressed={grain === item.key} className={grain === item.key ? 'active' : ''} onClick={() => setGrain(item.key)}>{item.label}</button>)}</div><div className="market-calendar-selects"><button type="button" className="secondary-button market-latest" onClick={() => { setGrain('day'); setAnchorDate(''); const container = chartRef.current?.querySelector('.market-calendar-chart-scroll'); if (container) container.scrollLeft = container.scrollWidth }}>Phiên mới nhất</button>{grain !== 'year' && <label>Năm<SoftSelect aria-label="Chọn năm thống kê ngành" value={selectedYear} onChange={event => setAnchorDate(marketDates.filter(date => date.startsWith(event.target.value)).at(-1) ?? `${event.target.value}-01-01`)}>{years.map(year => <option key={year} value={year}>{year}</option>)}</SoftSelect></label>}<label>{grain === 'year' ? 'Năm' : grain === 'day' ? 'Phiên' : grain === 'week' ? 'Tuần' : grain === 'month' ? 'Tháng' : 'Quý'}<SoftSelect aria-label="Chọn kỳ thống kê ngành" value={selectedKey} onChange={event => chooseKey(event.target.value)}>{periodOptions.map(key => <option key={key} value={key}>{calendarLabel(key, grain)}</option>)}</SoftSelect></label></div></div>
       <p className="market-calendar-meta"><strong>{selectedKey ? calendarLabel(selectedKey, grain) : 'Chưa có kỳ'}</strong> · {periodMarketDates.length} phiên giao dịch VN-Index · {periodRows.length} phiên có Market Health{provisional ? ' · Kỳ đang diễn ra' : ''}</p>
       {focused && <section className="market-sector-detail" ref={chartRef} aria-label={`Biểu đồ ngành ${focused.sector}`}><div className="market-sector-detail-head"><div><span className="eyebrow">BIỂU ĐỒ {section === 'health' ? 'SỨC KHỎE' : 'SECTOR FLOW'}</span><h3>{focused.sector}</h3></div><a href={sectorLink(focused.sector)}>Xem cổ phiếu <ArrowUpRight size={14}/></a></div><div className="market-sector-detail-stats"><div><span>Điểm kỳ (trung vị)</span><strong>{section === 'health' ? score(focused.summary.score) : signed(focused.summary.score)}</strong></div><div><span>Điểm phiên cuối hợp lệ</span><strong>{section === 'health' ? score(focused.summary.lastValue) : signed(focused.summary.lastValue)}</strong></div><div><span>Thay đổi đầu–cuối kỳ</span><strong>{signed(focused.summary.change)}</strong></div><div><span>{section === 'health' ? 'Phiên khỏe' : 'Phiên Flow dương'}</span><strong>{focused.summary.persistencePct == null ? '—' : `${focused.summary.persistencePct}%`}</strong></div><div><span>Phiên hợp lệ / giao dịch</span><strong>{focused.summary.qualified}/{focused.summary.expected}</strong></div>{section === 'flow' && <div><span>Thị phần GTGD ước tính</span><strong>{pct(focused.summary.turnoverSharePct)}</strong></div>}</div><SectorChart points={chartPoints} grain={grain} view={section} selectedKey={selectedKey} onSelect={chooseKey}/><small>{section === 'flow' ? 'Flow là áp lực giá–khối lượng với nền 20 phiên; thị phần GTGD là ước tính giá × khối lượng trong Prot Universe, không phải mua ròng.' : 'Điểm kỳ là trung vị các phiên hợp lệ; điểm sức khỏe không phải tín hiệu mua.'}</small></section>}
       <div className="market-sector-tools"><label><Search size={16}/><input type="search" aria-label="Tìm nhóm ngành" placeholder="Tìm nhóm ngành…" value={search} onChange={event => setSearch(event.target.value)}/></label><span>{visible.length} nhóm ngành · {selectedKey ? calendarLabel(selectedKey, grain) : '—'}</span></div>
-      <div className="market-table-scroll" id="market-sector-content" role="tabpanel" aria-labelledby={`market-tab-${section}`} tabIndex={0}><table className="market-sector-table"><thead>{section === 'health' ? <tr><th>Hạng</th><th>Nhóm ngành</th><th>Điểm kỳ</th><th>Phiên cuối</th><th>Phiên khỏe</th><th>Độ phủ</th><th>Mẫu cuối</th><th>Trạng thái</th></tr> : <tr><th>Hạng</th><th>Nhóm ngành</th><th>Flow kỳ</th><th>Phiên cuối</th><th>Phiên dương</th><th>Độ phủ</th><th>Mẫu Flow</th><th>Thị phần GTGD</th><th>Trạng thái</th></tr>}</thead><tbody>{visible.map((row, index) => {
+      <div className="market-table-scroll" id="market-sector-content" role="tabpanel" aria-labelledby={`market-tab-${section}`} tabIndex={0}>
+<div className="market-mobile-sector-cards">{visible.map((row, index) => {
+  const summary = row.summary
+  const qualified = summary.complete && summary.score != null
+  const status = summary.lastRow?.sample_warning === 'SMALL_SAMPLE' ? 'Mẫu ngành nhỏ' : summary.reason ?? (provisional ? 'Kỳ đang diễn ra' : section === 'health' ? stateLabel(summary.score) : 'Đủ mẫu quan sát')
+  return <article key={row.sector} className={'market-sector-card' + (focused?.sector === row.sector ? ' selected' : '')}>
+    <header><span className="market-sector-rank">{qualified ? '#' + (index + 1) : '—'}</span><button type="button" onClick={() => chooseSector(row.sector)} aria-label={'Xem biểu đồ ngành ' + row.sector}>{row.sector}</button><a href={sectorLink(row.sector)} aria-label={'Mở cổ phiếu ngành ' + row.sector}><ArrowUpRight size={15}/></a></header>
+    <p><span>{section === 'health' ? 'Điểm' : 'Flow'} <b>{section === 'health' ? score(summary.score) : signed(summary.score)}</b></span><span>Cuối kỳ <b>{section === 'health' ? score(summary.lastValue) : signed(summary.lastValue)}</b></span><span>{section === 'health' ? 'Phiên khỏe' : 'Phiên dương'} <b>{summary.persistencePct == null ? '—' : summary.persistencePct + '%'}</b></span></p>
+    <p><span>Độ phủ <b>{summary.qualified}/{summary.expected} phiên</b></span><span>Mẫu <b>{section === 'health' ? summary.lastRow?.sample_size ?? 0 : summary.lastRow?.flow_observed_count ?? 0}/{row.total} mã</b></span>{section === 'flow' && <span>GTGD <b>{pct(summary.turnoverSharePct)}</b></span>}</p>
+    <p className="market-sector-card-status"><span>{status}</span><span>{formatDate(summary.lastDate)}</span></p>
+  </article>
+})}</div><table className="market-sector-table"><thead>{section === 'health' ? <tr><th>Hạng</th><th>Nhóm ngành</th><th>Điểm kỳ</th><th>Phiên cuối</th><th>Phiên khỏe</th><th>Độ phủ</th><th>Mẫu cuối</th><th>Trạng thái</th></tr> : <tr><th>Hạng</th><th>Nhóm ngành</th><th>Flow kỳ</th><th>Phiên cuối</th><th>Phiên dương</th><th>Độ phủ</th><th>Mẫu Flow</th><th>Thị phần GTGD</th><th>Trạng thái</th></tr>}</thead><tbody>{visible.map((row, index) => {
         const summary = row.summary
         const qualified = summary.complete && summary.score != null
         const status = summary.lastRow?.sample_warning === 'SMALL_SAMPLE' ? 'Mẫu ngành nhỏ' : summary.reason ?? (provisional ? 'Kỳ đang diễn ra' : section === 'health' ? stateLabel(summary.score) : 'Đủ mẫu quan sát')

@@ -1,7 +1,7 @@
 import { useOpportunityRoute } from '../lib/opportunities'
 import { useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Activity, ArrowUpRight, Clock3, Database, Search, Waves } from 'lucide-react'
+import { Activity, ArrowUpRight, Clock3, Database, Search, SlidersHorizontal, Waves } from 'lucide-react'
 import { formatDate } from '../lib/date'
 import { supabase } from '../lib/supabase'
 import { SoftSelect } from './SoftSelect'
@@ -124,7 +124,7 @@ export function IntradaySpikeRadar({ date, authenticated, mode }: { date: string
       <label>Phiên<SoftSelect aria-label="Lọc phiên giao dịch" value={session} onChange={event => { setSession(event.target.value); resetPage() }}><option value="ALL">Cả ngày</option><option value="AM">Phiên sáng</option><option value="PM">Phiên chiều</option></SoftSelect></label>
       <label>Diễn biến<SoftSelect aria-label="Lọc diễn biến giao dịch" value={direction} onChange={event => { setDirection(event.target.value); resetPage() }}><option value="ALL">Tất cả</option>{Object.entries(directionName).map(([key, label]) => <option value={key} key={key}>{label}</option>)}</SoftSelect></label>
       <label>Mức đột biến<SoftSelect aria-label="Lọc mức đột biến" value={minRatio} onChange={event => { setMinRatio(Number(event.target.value)); resetPage() }}><option value="3">Từ 3×</option><option value="5">Từ 5×</option><option value="10">Từ 10×</option></SoftSelect></label>
-      {mode === 'screener' && <button type="button" className="spike-advanced-toggle" aria-expanded={advancedOpen} onClick={() => setAdvancedOpen(!advancedOpen)}>Bộ lọc nâng cao</button>}</div>
+      {mode === 'screener' && <button type="button" className="spike-advanced-toggle" aria-expanded={advancedOpen} onClick={() => setAdvancedOpen(!advancedOpen)}><SlidersHorizontal size={15}/>Bộ lọc</button>}</div>
       {mode === 'screener' && advancedOpen && <div className="spike-advanced"><DateField label="Từ ngày" value={fromDate} onChange={value => chooseRange(setFromDate, value)}/><DateField label="Đến ngày" value={toDate} onChange={value => chooseRange(setToDate, value)}/><button type="button" onClick={() => { setExactDate(''); setFromDate(''); setToDate(''); resetPage() }}>Toàn bộ lịch sử</button><button type="button" onClick={() => { setQuery(''); setSession('ALL'); setDirection('ALL'); setMinRatio(3); chooseExactDate(date) }}>Xóa bộ lọc</button></div>}
     {fromDate && toDate && fromDate > toDate && <p className="spike-error" role="alert">Từ ngày phải trước hoặc bằng đến ngày.</p>}
     {(events.isError || radarSession.isError) && <p className="spike-error" role="alert">Không tải được Radar giao dịch. <button type="button" onClick={() => { void events.refetch(); void radarSession.refetch() }}>Thử lại</button></p>}
