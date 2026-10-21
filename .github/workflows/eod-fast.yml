@@ -246,4 +246,4 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           TRADING_DATE: ${{ needs.preflight.outputs.trading_date }}
-        run: gh workflow run intraday-spikes.yml --ref "$GITHUB_REF_NAME" -f trading_date="$TRADING_DATE"
+        run: gh workflow run intraday-spikes.yml --ref "$GITHUB_REF_NAME" -f trading_date="$TRADING_DATE" -f notify="${{ inputs.skip_alerts != true }}"

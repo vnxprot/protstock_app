@@ -163,7 +163,7 @@ export function MomentumRadarPanel({ date, championSignals, championLoading, cha
   const current = Math.min(page, pages)
 
   return <article className="panel momentum-radar-panel" id="screener-panel-radar" role="tabpanel" aria-labelledby="screener-tab-radar">
-    <div className="panel-title"><div><h3>Radar cơ hội</h3><p className="muted">Một mã · một diễn biến · đối chiếu Phễu, WATCH và phân kỳ cùng phiên.</p></div><time>{day(date)}/{date.slice(0, 4)}</time></div>
+    <div className="panel-title"><div><h3>Đà tăng · nghiên cứu</h3><p className="muted">Một mã · một diễn biến · đối chiếu Phễu, WATCH và phân kỳ cùng phiên.</p></div><time>{day(date)}/{date.slice(0, 4)}</time></div>
     <div className="radar-summary"><span><b>{all.length}</b> mã</span><span><b>{counts.active}</b> đang có đà</span><span><b>{counts.fresh}</b> có mốc mới</span><span><b>{counts.extended}</b> quá xa stop</span></div>
     <div className="radar-filters"><label className="radar-search">Tìm mã <span className="radar-search-control"><Search size={15}/><input aria-label="Tìm mã Radar" value={search} onChange={event => { setSearch(event.target.value); setPage(1) }} placeholder="Tìm mã…"/></span></label>
       <label>Giai đoạn <SoftSelect aria-label="Lọc giai đoạn Radar" value={stage} onChange={event => { setStage(event.target.value); setPage(1) }}>{stageOrder.map(value => <option key={value} value={value}>{value === 'ALL' ? 'Tất cả' : stageNames[value]}</option>)}</SoftSelect></label>

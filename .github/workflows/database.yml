@@ -17,6 +17,12 @@ on:
         description: Start Radar recovery for this date only after migrations succeed
         required: false
         type: string
+      opportunities_start:
+        description: Optional stored-data shortlist rebuild start; never sends historical Telegram
+        type: string
+      opportunities_end:
+        description: Stored-data shortlist rebuild end
+        type: string
       bootstrap_existing:
         description: Mark the already-installed Phase 1 migrations as applied
         required: true
@@ -106,3 +112,11 @@ jobs:
           GH_REPO: ${{ github.repository }}
           TRADING_DATE: ${{ inputs.recover_intraday_date }}
         run: gh workflow run intraday-spikes.yml --ref "$GITHUB_REF_NAME" -f trading_date="$TRADING_DATE" -f force_refresh=true
+      - name: Rebuild stored opportunities after migrations succeed
+        if: success() && inputs.mode == 'deploy' && inputs.opportunities_start != '' && inputs.opportunities_end != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          START_DATE: ${{ inputs.opportunities_start }}
+          END_DATE: ${{ inputs.opportunities_end }}
+        run: gh workflow run opportunities.yml --ref "$GITHUB_REF_NAME" -f start_date="$START_DATE" -f end_date="$END_DATE" -f notify=false

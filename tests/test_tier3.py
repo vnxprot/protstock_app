@@ -35,6 +35,9 @@ class _Client:
     def __init__(self, action, prior_days):
         self._client = _Rest(action, prior_days)
         self.writes = []
+    def _pages(self, table, params):
+        assert table == 'user_profiles'
+        return []
     def upsert(self, table, rows, conflict):
         self.writes.extend(rows)
         return len(rows)

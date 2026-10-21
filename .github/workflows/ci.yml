@@ -49,3 +49,4 @@ jobs:
       - run: npm install --prefix .v4-sql-check --no-save --ignore-scripts @electric-sql/pglite@0.5.8
       - run: node tests/v4-migration-smoke.mjs
       - run: node tests/investment-module-migration.mjs
+      - run: node tests/opportunity-migration.mjs

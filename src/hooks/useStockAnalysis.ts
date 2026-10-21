@@ -101,14 +101,14 @@ export function useSymbols(enabled: boolean) {
   })
 }
 
-export function useStockAnalysis(symbol: string | null, timeframe: 'D' | 'W' | 'M', enabled: boolean) {
+export function useStockAnalysis(symbol: string | null, timeframe: 'D' | 'W' | 'M', enabled: boolean, asOfDate?: string) {
   const publication = useQuery({ queryKey: ['signal-publication'], enabled: enabled && Boolean(supabase), staleTime: 60_000, queryFn: latestSignalPublication })
   return useQuery({
-    queryKey: ['stock-analysis', symbol, timeframe, publication.data?.date, publication.data?.sourceRevision], enabled: enabled && Boolean(supabase) && Boolean(symbol) && !publication.isPending, staleTime: 300_000,
+    queryKey: ['stock-analysis', symbol, timeframe, asOfDate, publication.data?.date, publication.data?.sourceRevision], enabled: enabled && Boolean(supabase) && Boolean(symbol) && !publication.isPending, staleTime: 300_000,
     queryFn: async () => {
       if (!supabase || !symbol) throw new Error('Symbol is required')
       if (publication.error) throw publication.error
-      const { data, error } = await supabase.rpc('stock_analysis_data', { p_symbol: symbol, p_timeframe: timeframe, p_as_of_date: publication.data?.date ?? null, p_revision: publication.data?.sourceRevision ?? null, p_history_limit: timeframe === 'D' ? 2600 : 500 })
+      const { data, error } = await supabase.rpc('stock_analysis_data', { p_symbol: symbol, p_timeframe: timeframe, p_as_of_date: asOfDate || publication.data?.date || null, p_revision: asOfDate ? null : publication.data?.sourceRevision ?? null, p_history_limit: timeframe === 'D' ? 2600 : 500 })
       if (error) throw error
       const technical = (data.technical ?? []) as TechnicalSnapshot[]
       const decision = data.decision as StockDecision | null

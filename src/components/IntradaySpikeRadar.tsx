@@ -1,3 +1,4 @@
+import { useOpportunityRoute } from '../lib/opportunities'
 import { useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Activity, ArrowUpRight, Clock3, Database, Search, Waves } from 'lucide-react'
@@ -49,18 +50,19 @@ function MiniChart({ bars, event }: { bars: MinuteBar[]; event: SpikeEvent }) {
 }
 
 export function IntradaySpikeRadar({ date, authenticated, mode }: { date: string; authenticated: boolean; mode: Mode }) {
-  const [query, setQuery] = useState('')
+  const route = useOpportunityRoute()
+  const [query, setQuery] = useState(route.symbol)
   const [direction, setDirection] = useState('ALL')
   const [minRatio, setMinRatio] = useState(3)
   const [session, setSession] = useState('ALL')
-  const [exactDate, setExactDate] = useState(date)
+  const [exactDate, setExactDate] = useState(route.date || date)
   const [fromDate, setFromDate] = useState('')
   const [toDate, setToDate] = useState('')
   const [advancedOpen, setAdvancedOpen] = useState(false)
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(25)
-  const [selectedId, setSelectedId] = useState<number | null>(null)
-  useEffect(() => { if (mode === 'screener') setExactDate(date) }, [date, mode])
+  const [selectedId, setSelectedId] = useState<number | null>(()=>{const id=Number(new URLSearchParams(location.hash.split('?')[1]??'').get('event'));return Number.isSafeInteger(id)&&id>0?id:null})
+  useEffect(() => { if (mode === 'screener') {setExactDate(route.date || date);setQuery(route.symbol);const id=Number(new URLSearchParams(location.hash.split('?')[1]??'').get('event'));setSelectedId(Number.isSafeInteger(id)&&id>0?id:null)} }, [date, mode, route.date, route.symbol])
   const effectiveDate = mode === 'market' ? date : exactDate
   const coverageDate = effectiveDate || date
   const radarSession = useQuery({ queryKey: ['intraday-radar-session', coverageDate], enabled: authenticated && Boolean(supabase) && Boolean(coverageDate),

@@ -11,6 +11,7 @@ import { TodayHealth } from './components/TodayHealth'
 import { formatDate } from './lib/date'
 import { version as appVersion } from '../package.json'
 import { ThemeToggle } from './components/ThemeToggle'
+import { OpportunitiesPanel } from './components/OpportunitiesPanel'
 import { SignalDecisionBoard } from './components/SignalDecisionBoard'
 import { HealthMethodDetails } from './components/HealthMethodDetails'
 import { latestSignalPublication } from './lib/signalPublication'
@@ -175,7 +176,7 @@ function Dashboard({ syncStatus }: { syncStatus: 'loading' | 'ready' | 'error' }
     </header>
     <MarketContextCard/>
     <ExecutiveKpiStrip favorites={favorites}/>
-    <SignalDecisionBoard onSelect={selectSymbol}/>
+    <OpportunitiesPanel compact/><SignalDecisionBoard onSelect={selectSymbol}/>
     <section className="overview-support-grid">
         <article className="panel overview-watch-card">
           <div className="overview-card-heading"><div><h2>Watchlist <small>{favorites.length} mã</small></h2></div><a className="text-button" href="#watchlist">Mở Watchlist</a></div>

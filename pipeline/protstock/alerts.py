@@ -51,6 +51,13 @@ def send_eod_telegram_alerts(trading_date: date, action_dedupe_days: int = 5) ->
         return {"status": "DISABLED", "reason": "Telegram secrets are not configured"}
     client = SupabaseRestClient(Settings.from_env())
     try:
+        owners = client._pages('user_profiles', {'select': 'user_id', 'username': 'eq.prot', 'role': 'eq.ADMIN', 'status': 'eq.ACTIVE'})
+        if owners:
+            pref = client._get('/opportunity_notification_settings', params={'select': 'system_alerts', 'user_id': f"eq.{owners[0]['user_id']}"})
+            if pref.status_code != 404:
+                pref.raise_for_status()
+                if pref.json() and not pref.json()[0]['system_alerts']:
+                    return {'status': 'DISABLED', 'reason': 'Owner notification preference'}
         from .eod import resolve_eod_session
         trading_date = resolve_eod_session(client, trading_date)
         revision_getter = getattr(client, "published_signal_revision", None)

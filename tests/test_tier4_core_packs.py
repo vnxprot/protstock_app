@@ -103,6 +103,9 @@ class _Rest:
 
 class _Client:
     def __init__(self): self._client = _Rest()
+    def _pages(self, table, params):
+        assert table == 'user_profiles'
+        return []
     def close(self): pass
 
 
