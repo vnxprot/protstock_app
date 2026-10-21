@@ -25,7 +25,7 @@ jobs:
       - run: npm run test:journal
       - run: npm run test:signals
       - run: npm run test:runtime
-      - run: node --experimental-strip-types --test tests/investment-modules.test.mjs
+      - run: node --experimental-strip-types --test tests/investment-modules.test.mjs tests/investment-filters.test.mjs
 
   pipeline:
     runs-on: ubuntu-latest
