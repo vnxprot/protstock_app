@@ -1,53 +1,21 @@
 import { useSyncExternalStore } from 'react'
 
 export type Theme = 'light' | 'dark'
-const storageKey = 'protstock-theme'
 const eventName = 'protstock:theme-change'
 
-function savedTheme(): Theme | null {
-  try {
-    const value = localStorage.getItem(storageKey)
-    return value === 'light' || value === 'dark' ? value : null
-  } catch { return null }
+declare global {
+  interface Window {
+    // The synchronous head bootstrap also owns restore/visibility/system-theme events.
+    protStockTheme: { read: () => Theme; apply: (theme: Theme) => void; set: (theme: Theme) => void }
+  }
 }
 
-function preferredTheme(): Theme {
-  return savedTheme() ?? (matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark')
-}
-
-function applyTheme(theme: Theme) {
-  const background = theme === 'light' ? '#f4f7f5' : '#07110e'
-  document.documentElement.dataset.theme = theme
-  document.documentElement.style.backgroundColor = background
-  document.documentElement.style.colorScheme = theme
-  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', background)
-  document.querySelector('meta[name="color-scheme"]')?.setAttribute('content', theme)
-  document.querySelector('meta[name="apple-mobile-web-app-status-bar-style"]')?.setAttribute('content', theme === 'light' ? 'default' : 'black-translucent')
-  document.getElementById('app-manifest')?.setAttribute('href', theme === 'light' ? '/manifest.webmanifest' : '/manifest-dark.webmanifest')
-  window.dispatchEvent(new Event(eventName))
-}
-
-export function initializeTheme() { applyTheme(preferredTheme()) }
-
-export function setTheme(theme: Theme) {
-  try { localStorage.setItem(storageKey, theme) } catch { /* Session-only preference when storage is unavailable. */ }
-  applyTheme(theme)
-}
+export function initializeTheme() { window.protStockTheme.apply(window.protStockTheme.read()) }
+export function setTheme(theme: Theme) { window.protStockTheme.set(theme) }
 
 function subscribe(listener: () => void) {
-  const media = matchMedia('(prefers-color-scheme: light)')
-  const syncStorage = (event: StorageEvent) => {
-    if (event.key === storageKey || event.key === null) applyTheme(preferredTheme())
-  }
-  const syncSystem = () => { if (!savedTheme()) applyTheme(preferredTheme()) }
   window.addEventListener(eventName, listener)
-  window.addEventListener('storage', syncStorage)
-  media.addEventListener('change', syncSystem)
-  return () => {
-    window.removeEventListener(eventName, listener)
-    window.removeEventListener('storage', syncStorage)
-    media.removeEventListener('change', syncSystem)
-  }
+  return () => window.removeEventListener(eventName, listener)
 }
 
 const snapshot = (): Theme => document.documentElement.dataset.theme === 'light' ? 'light' : 'dark'

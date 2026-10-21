@@ -117,7 +117,7 @@ html[data-theme="light"] .app-shell main :is(.screener-field,.investment-primary
     background:var(--app-top-surface); border-bottom:1px solid var(--line); isolation:isolate;
   }
   html[data-theme="light"] .app-shell .mobile-header { background:var(--app-top-surface)!important; box-shadow:none; }
-  .app-shell::before { content:''; position:fixed; z-index:80; top:0; left:0; right:0; height:env(safe-area-inset-top,0px); background:var(--app-top-surface); pointer-events:none; }
+  .app-shell::before { content:''; position:fixed; z-index:80; top:0; left:0; right:0; height:max(8px,env(safe-area-inset-top,0px)); background:var(--app-top-surface); pointer-events:none; }
   .app-shell main :is(.ui-field,.aligned-filters,.signal-search-advanced,.investment-primary-toolbar) :is(input:not([type=date]):not([type=checkbox]):not([type=radio]),.soft-select-trigger) { font-size:16px; }
   .app-shell .date-calendar { width:30px; height:40px; right:4px; justify-content:center; }
   .app-shell .date-calendar input[type=date] { width:30px; height:40px; min-height:0; }

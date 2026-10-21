@@ -8,6 +8,7 @@
   --text-body: 400 .875rem/1.6 var(--font-ui);
   --text-label: 500 .8125rem/1.4 var(--font-ui);
   --text-caption: 400 .75rem/1.4 var(--font-ui);
+  --text-card-title: 600 1rem/1.35 var(--font-ui);
   --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px;
   --space-5: 20px; --space-6: 24px; --space-8: 32px;
   --space-10: 40px; --space-12: 48px;

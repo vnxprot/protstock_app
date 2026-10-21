@@ -1,5 +1,5 @@
-const CACHE = 'prot-stock-shell-quant-ios-20261022'
-const APP_SHELL = ['/', '/manifest.webmanifest', '/manifest-dark.webmanifest', '/prot-quant-p.png']
+const CACHE = 'prot-stock-shell-prot-theme-20261022'
+const APP_SHELL = ['/', '/manifest.webmanifest', '/prot-quant-p.png']
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(APP_SHELL)))

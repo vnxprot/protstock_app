@@ -3,25 +3,46 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta name="theme-color" content="#f4f7f5" />
+    <meta name="theme-color" content="#07110e" />
     <meta name="color-scheme" content="light dark" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <link id="app-manifest" rel="manifest" href="/manifest.webmanifest" />
-    <style>:root{color-scheme:light;background:#f4f7f5}:root[data-theme="dark"]{color-scheme:dark;background:#07110e}html,body{margin:0;min-height:100%}</style>
+    <style>:root{color-scheme:light dark;background:#07110e}@media(prefers-color-scheme:light){:root{background:#f4f7f5}}html,body{margin:0;min-height:100%}</style>
     <script>
       (() => {
-        let theme;
-        try { theme = localStorage.getItem('protstock-theme'); } catch {}
-        if (theme !== 'light' && theme !== 'dark') theme = matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
-        document.documentElement.dataset.theme = theme;
-        const background = theme === 'light' ? '#f4f7f5' : '#07110e';
-        document.documentElement.style.backgroundColor = background;
-        document.documentElement.style.colorScheme = theme;
-        document.querySelector('meta[name="theme-color"]').content = background;
-        document.querySelector('meta[name="color-scheme"]').content = theme;
-        document.querySelector('meta[name="apple-mobile-web-app-status-bar-style"]').content = theme === 'light' ? 'default' : 'black-translucent';
-        document.getElementById('app-manifest').href = theme === 'light' ? '/manifest.webmanifest' : '/manifest-dark.webmanifest';
+        const key = 'protstock-theme';
+        const media = matchMedia('(prefers-color-scheme: light)');
+        const read = () => {
+          let saved;
+          try { saved = localStorage.getItem(key); } catch {}
+          return saved === 'light' || saved === 'dark' ? saved : media.matches ? 'light' : 'dark';
+        };
+        const apply = theme => {
+          const root = document.documentElement;
+          const changed = root.dataset.theme !== theme;
+          const background = theme === 'light' ? '#f4f7f5' : '#07110e';
+          root.dataset.theme = theme;
+          root.style.backgroundColor = background;
+          root.style.colorScheme = theme;
+          root.style.setProperty('--app-top-surface', background);
+          if (document.body) document.body.style.backgroundColor = background;
+          document.querySelector('meta[name="theme-color"]').content = background;
+          document.querySelector('meta[name="color-scheme"]').content = theme;
+          if (changed) window.dispatchEvent(new Event('protstock:theme-change'));
+        };
+        const set = theme => {
+          try { localStorage.setItem(key, theme); } catch {}
+          apply(theme);
+        };
+        const sync = () => apply(read());
+        window.protStockTheme = { read, apply, set };
+        sync();
+        window.addEventListener('pageshow', sync);
+        document.addEventListener('visibilitychange', () => { if (!document.hidden) sync(); });
+        window.addEventListener('storage', event => { if (event.key === key || event.key === null) sync(); });
+        media.addEventListener('change', sync);
+        document.addEventListener('DOMContentLoaded', sync, { once: true });
       })();
     </script>
     <meta name="description" content="Prot Stock — phân tích cổ phiếu Việt Nam sau phiên giao dịch." />
