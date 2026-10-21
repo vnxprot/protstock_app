@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
 import { ArrowUpRight, ChevronDown, Star } from 'lucide-react'
-import { useOpportunities, useOpportunityRoute, opportunityHref, opportunityStatus, type Opportunity } from '../lib/opportunities'
+import { useOpportunities, useOpportunityRoute, opportunityHref, opportunityStatus, hasOpportunityPublication, type Opportunity } from '../lib/opportunities'
 import { formatDate } from '../lib/date'
 import { isWatchActive, toggleWatchlistSymbol, useWatchlist } from '../lib/watchlist'
 import './opportunities.css'
 
 const price = (value: number | null | undefined) => value == null ? 'Chưa xác nhận' : (value * 1000).toLocaleString('vi-VN', { maximumFractionDigits: 0 })
-const pending: Record<string, string> = { WAIT_EOD: 'Đang chờ dữ liệu EOD được công bố.', WAIT_RADAR: 'Đang chờ Radar nến phút hoàn tất.', WAIT_SUMMARY: 'Đang tổng hợp cơ hội từ EOD và Radar.', FAILED: 'Radar chưa hoàn tất; chưa thể kết luận về cơ hội.', INCOMPLETE: 'Radar thiếu độ phủ; chưa công bố danh sách.', NOT_FOUND: 'Không tìm thấy bản lưu của phiên được chọn.' }
+const pending: Record<string, string> = { WAIT_EOD: 'Đang chờ dữ liệu EOD được công bố.', PROCESSING: 'Đang xử lý danh sách cơ hội.', NOT_STARTED: 'EOD đã sẵn sàng; bước tổng hợp cơ hội chưa bắt đầu.', FAILED: 'Tổng hợp cơ hội đã thất bại.', STALLED: 'Lượt tổng hợp đã quá thời gian xử lý.', NOT_FOUND: 'Không tìm thấy bản lưu của phiên được chọn.' }
+const familyNames: Record<string,string> = { RECOVERY: 'Hồi phục', CONTINUATION: 'Setup / tiếp diễn', UNUSUAL_VOLUME: 'Giao dịch bất thường' }
 
 export function OpportunityEvidence({ row, day }: { row: Opportunity; day?: string }) {
   return <div className="opportunity-evidence"><div><h4>Vì sao đáng chú ý?</h4>{row.reasons.map(reason => <p key={reason}>{reason}</p>)}<small>Phát hiện từ {formatDate(row.first_seen)} · {row.age_sessions} phiên theo dõi</small></div>
@@ -22,7 +23,7 @@ export function OpportunitiesPanel({ compact = false, authenticated = true }: { 
   const [day, setDay] = useState(compact ? '' : route.date)
   const [publication, setPublication] = useState(compact ? '' : route.publication)
   const [query, setQuery] = useState('')
-  const [filter, setFilter] = useState('ACTIVE')
+  const [filter, setFilter] = useState('ALL')
   const [expanded, setExpanded] = useState<number | null>(null)
   const [limit, setLimit] = useState(25)
   useEffect(() => { if (!compact) { setDay(route.date); setPublication(route.publication); setExpanded(null) } }, [route.date, route.publication, compact])
@@ -30,6 +31,9 @@ export function OpportunitiesPanel({ compact = false, authenticated = true }: { 
   const watched = useWatchlist().filter(isWatchActive)
   const names = new Set(watched.map(item => item.symbol))
   const data = result.data
+  const published = hasOpportunityPublication(data)
+  const counts = Object.fromEntries(Object.keys(opportunityStatus).map(status => [status, (data?.rows ?? []).filter(row => row.status === status).length]))
+  const buildProblem = data?.build && ['FAILED','STALLED','PARTIAL'].includes(data.build.status)
   const rows = useMemo(() => (data?.rows ?? []).filter(row => (!query || row.symbol.includes(query.trim().toUpperCase()))
     && (filter === 'ALL' || filter === 'WATCHLIST' && names.has(row.symbol) || filter === 'ACTIVE' && ['PRIORITY', 'OBSERVE'].includes(row.status) || row.status === filter)), [data, query, filter, watched.map(item => item.symbol).join(',')])
   const visible = rows.slice(0, compact ? 5 : limit)
@@ -39,16 +43,21 @@ export function OpportunitiesPanel({ compact = false, authenticated = true }: { 
     {!compact && <div className="opportunity-toolbar"><label>Phiên dữ liệu<input type="date" value={day || data?.trading_date || ''} onChange={event => { setDay(event.target.value); setPublication(''); setLimit(25) }}/></label><label>Tìm mã<input value={query} placeholder="VSC, HPG…" onChange={event => { setQuery(event.target.value); setLimit(25) }}/></label><label>Hiển thị<select value={filter} onChange={event => { setFilter(event.target.value); setLimit(25) }}><option value="ACTIVE">Đang theo dõi</option><option value="PRIORITY">Ưu tiên theo dõi</option><option value="OBSERVE">Theo dõi thêm</option><option value="EXTENDED">Đã kéo xa</option><option value="RISK">Rủi ro hệ thống</option><option value="INVALIDATED">Mất hiệu lực</option><option value="WATCHLIST">Trong Watchlist</option><option value="ALL">Tất cả</option></select></label><button type="button" className="text-button" onClick={() => { location.hash = 'screener?section=opportunities'; setDay(''); setPublication('') }}>Phiên mới nhất</button></div>}
     {result.isLoading && <p role="status">Đang tải danh sách phiên tới…</p>}
     {result.isError && <p role="alert">Chưa tải được danh sách cơ hội. <button type="button" className="text-button" onClick={() => void result.refetch()}>Thử lại</button></p>}
-    {data && data.status !== 'PUBLISHED' && <p role="status">{pending[data.status] ?? 'Danh sách chưa được công bố.'} Danh sách trống chưa có nghĩa là không có cơ hội.</p>}
-    {data?.status === 'PUBLISHED' && <><p className="opportunity-date">Dữ liệu {formatDate(data.trading_date)} · Công bố {data.published_at ? new Date(data.published_at).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' }) : '—'} · Radar {data.summary?.radar_coverage ?? '—'} mã{data.pinned ? ' · Bản lưu cố định' : ''}{data.historical ? ' · Tái dựng từ dữ liệu lưu trữ' : ''}</p>
+    {data && !published && <p role={data.status==='FAILED'||data.status==='STALLED'?'alert':'status'}>{pending[data.status] ?? 'Danh sách chưa được công bố.'} · Phiên {formatDate(data.trading_date)}. Chưa thể kết luận không có cơ hội.</p>}
+    {buildProblem && <p className="opportunity-build-error" role="alert">{data?.build?.last_error || 'Bước tổng hợp cần phục hồi.'} · {data?.build?.phase==='EOD'?'EOD sơ bộ':'Đối chiếu Radar'} · Lượt {data?.build?.attempt}/3{data?.build?.finished_at?' · '+new Date(data.build.finished_at).toLocaleString('vi-VN',{timeZone:'Asia/Ho_Chi_Minh'}):''}. {data?.build?.retry_exhausted?'Đã hết lượt tự phục hồi cho nguồn này; cần xử lý lỗi.':'Hệ thống sẽ thử lại theo lịch phục hồi.'}</p>}
+    {published && <>
+      {data.status==='PROVISIONAL'&&<p className="opportunity-phase" role="status">Danh sách EOD sơ bộ · {data.summary?.input_complete===false?'Một số nhóm mã chưa xử lý xong.':'Chưa đối chiếu đầy đủ Radar.'} Chưa gửi bản tin Telegram hoàn chỉnh.</p>}
+      {data.status==='STALE'&&<p className="opportunity-phase" role="status">Bản công bố trước đang được giữ để tham khảo; nguồn dữ liệu đã thay đổi, cần tổng hợp lại.</p>}
+      <div className="opportunity-counts" role="group" aria-label="Số mã theo trạng thái">{Object.entries(opportunityStatus).map(([status,label])=><button type="button" key={status} onClick={()=>setFilter(status)} aria-pressed={filter===status}>{label} <b>{counts[status]}</b></button>)}<button type="button" onClick={()=>setFilter('ALL')} aria-pressed={filter==='ALL'}>Tất cả <b>{data.rows.length}</b></button></div><p className="opportunity-date">Dữ liệu {formatDate(data.trading_date)} · Công bố {data.published_at ? new Date(data.published_at).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' }) : '—'} · Xử lý {data.summary?.processed_symbols ?? '—'}/{data.summary?.expected_symbols ?? '—'} mã · Radar {data.summary?.radar_coverage ?? '—'}{data.pinned ? ' · Bản lưu cố định' : ''}{data.historical ? ' · Tái dựng từ dữ liệu lưu trữ' : ''}</p>
       {!visible.length && <p>Không có mã đạt bộ lọc hiện tại trong phiên đã công bố.</p>}
       <div className="opportunity-list">{visible.map(row => <section className={`opportunity-row status-${row.status.toLowerCase()}`} key={row.symbol_id}>
         <div className="opportunity-line"><div className="opportunity-name"><span className="opportunity-rank">#{row.rank}</span><a href={opportunityHref(row.symbol, data.trading_date, data.id)}><strong>{row.symbol}</strong></a><small>{row.sector}</small></div>
           <div className="opportunity-reason"><b>{opportunityStatus[row.status]}</b><span>{row.reasons[0]}</span>{row.reasons[1] && <small>{row.reasons[1]}</small>}</div>
-          <div className="opportunity-decision"><span>Hệ thống {row.system_action}</span><small>{row.risks[0] ?? 'Kiểm tra điều kiện phiên kế tiếp'}</small></div>
+          <div className="opportunity-decision"><small>{row.families?.map(value=>familyNames[value]).join(' · ')}</small><span>Hệ thống {row.system_action}</span><small>{row.risks[0] ?? 'Kiểm tra điều kiện phiên kế tiếp'}</small></div>
           <div className="opportunity-actions"><button type="button" className="icon-button" aria-label={`${names.has(row.symbol) ? 'Bỏ' : 'Thêm'} ${row.symbol} ${names.has(row.symbol) ? 'khỏi' : 'vào'} Watchlist`} onClick={() => toggleWatchlistSymbol(row.symbol)}><Star size={16} fill={names.has(row.symbol) ? 'currentColor' : 'none'}/></button><button type="button" className="icon-button" aria-label={`Bằng chứng ${row.symbol}`} aria-expanded={expanded === row.symbol_id} onClick={() => setExpanded(expanded === row.symbol_id ? null : row.symbol_id)}><ChevronDown size={17}/></button></div></div>
         {expanded === row.symbol_id && <OpportunityEvidence row={row} day={data.trading_date}/>}</section>)}</div>
       {!compact && rows.length > visible.length && <button type="button" className="secondary-button" onClick={() => setLimit(value => value + 25)}>Xem thêm · {visible.length}/{rows.length} mã</button>}
+      {!compact && data.summary?.diagnostics && <details className="opportunity-diagnostics"><summary>Độ phủ và lý do chưa vào danh sách</summary><p>Thiếu lịch sử: {data.summary.diagnostics.insufficient_history??0} · Giá thiếu/sai phiên: {data.summary.diagnostics.stale_or_invalid_price??0} · Thanh khoản dưới ngưỡng: {data.summary.diagnostics.below_turnover_floor??0} · Chưa có bằng chứng phù hợp: {data.summary.diagnostics.no_matching_evidence??0} · Nhóm mã chưa đọc được: {Math.max(0,(data.summary.expected_symbols??0)-(data.summary.processed_symbols??0))} mã.</p></details>}
       {!compact && <small className="opportunity-note">Thứ hạng thể hiện mức ưu tiên nghiên cứu, chưa phải xác suất thắng. Dữ liệu EOD và nến phút được tổng hợp sau phiên. Phiên theo dõi kết thúc khi mất vùng tham chiếu hoặc sau 5 phiên nếu không có bằng chứng mới.</small>}</>}
   </article>
 }
@@ -58,12 +67,12 @@ export function OpportunityAnalysis({ symbol }: { symbol: string }) {
   const result = useOpportunities(route.date, route.publication)
   const row = result.data?.rows.find(item => item.symbol === symbol)
   if (result.isError) return <article className="panel"><p>Chưa tải được bằng chứng chuẩn bị phiên tới. <button type="button" className="text-button" onClick={() => void result.refetch()}>Thử lại</button></p></article>
-  if (!row || result.data?.status !== 'PUBLISHED') return route.publication ? <article className="panel"><p>Không có bằng chứng cho mã này trong bản lưu được chọn.</p></article> : null
-  return <article className="panel opportunities-panel"><div className="panel-title"><div><h3>Chuẩn bị phiên tới · {opportunityStatus[row.status]}</h3><small>Bằng chứng phiên {formatDate(result.data.trading_date)} · Hệ thống {row.system_action}</small></div><span>#{row.rank}</span></div><OpportunityEvidence row={row} day={result.data.trading_date}/><p className="opportunity-note">Bằng chứng nghiên cứu được lưu riêng; biểu đồ phía trên giới hạn đến phiên được chọn.</p></article>
+  if (!row || !hasOpportunityPublication(result.data)) return route.publication ? <article className="panel"><p>Không có bằng chứng cho mã này trong bản lưu được chọn.</p></article> : null
+  return <article className="panel opportunities-panel"><div className="panel-title"><div><h3>Chuẩn bị phiên tới · {opportunityStatus[row.status]}</h3><small>{result.data.phase==='EOD'?'EOD sơ bộ · ':''}Bằng chứng phiên {formatDate(result.data.trading_date)} · Hệ thống {row.system_action}</small></div><span>#{row.rank}</span></div><OpportunityEvidence row={row} day={result.data.trading_date}/><p className="opportunity-note">Bằng chứng nghiên cứu được lưu riêng; biểu đồ phía trên giới hạn đến phiên được chọn.</p></article>
 }
 
 export function OpportunityBadge({ symbol }: { symbol: string }) {
   const result = useOpportunities()
-  const row = result.data?.status === 'PUBLISHED' ? result.data.rows.find(item => item.symbol === symbol) : undefined
-  return row ? <a className={`opportunity-badge status-${row.status.toLowerCase()}`} href={opportunityHref(symbol, result.data?.trading_date, result.data?.id)}>{opportunityStatus[row.status]}</a> : null
+  const row = hasOpportunityPublication(result.data) ? result.data.rows.find(item => item.symbol === symbol) : undefined
+  return row ? <a className={`opportunity-badge status-${row.status.toLowerCase()}`} href={opportunityHref(symbol, result.data?.trading_date, result.data?.id)}>{opportunityStatus[row.status]}{result.data?.phase==='EOD'?' · EOD sơ bộ':''}{result.data?.status==='STALE'?' · chờ cập nhật':''}</a> : null
 }

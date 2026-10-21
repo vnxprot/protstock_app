@@ -168,6 +168,14 @@ jobs:
       - name: Report publish failure
         if: failure() && steps.finalize.outcome == 'failure'
         run: echo "::error::Same-day Market Health or signals could not be published; Telegram alerts are withheld."
+      - name: Publish EOD-only opportunities before minute Radar finishes
+        if: steps.finalize.outcome == 'success'
+        continue-on-error: true
+        env:
+          SUPABASE_URL: https://upmqxwktvvguegqeqibn.supabase.co
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          TRADING_DATE: ${{ needs.preflight.outputs.trading_date }}
+        run: python -m protstock.opportunities --end-date "$TRADING_DATE" --phase EOD
       - name: Send final concise Telegram EOD alerts
         if: steps.finalize.outcome == 'success' && needs.ingest.result == 'success' && inputs.skip_alerts != true
         env:

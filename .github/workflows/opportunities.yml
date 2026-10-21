@@ -7,12 +7,17 @@ on:
         description: Optional historical start date; range runs never send Telegram
         type: string
       end_date:
-        description: Completed date; blank uses today in Vietnam
+        description: Completed date; blank uses latest published EOD through today in Vietnam
         type: string
       notify:
         description: Send today's new shortlist after publication
         type: boolean
         default: false
+      phase:
+        description: EOD publishes preliminary candidates; AUTO also confirms with published Radar
+        type: choice
+        options: [AUTO, EOD]
+        default: AUTO
 
 permissions:
   contents: read
@@ -38,8 +43,10 @@ jobs:
           START_DATE: ${{ inputs.start_date }}
           END_DATE: ${{ inputs.end_date }}
           NOTIFY: ${{ inputs.notify }}
+          PHASE: ${{ inputs.phase }}
         run: |
           args=()
+          args+=(--phase "${PHASE:-AUTO}")
           if [ -n "$START_DATE" ]; then args+=(--start-date "$START_DATE"); fi
           if [ -n "$END_DATE" ]; then args+=(--end-date "$END_DATE"); fi
           if [ "$NOTIFY" = 'true' ] && [ -z "$START_DATE" ]; then args+=(--notify); fi

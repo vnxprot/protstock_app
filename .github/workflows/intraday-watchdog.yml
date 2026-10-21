@@ -22,7 +22,7 @@ concurrency:
 jobs:
   recover:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -47,13 +47,16 @@ jobs:
         run: |
           echo '::error::Radar recovery needs attention. Inspect the failed step for database, source, or retry-limit details.'
           echo 'Radar recovery failed. This workflow does not mark an incomplete session as published.' >> "$GITHUB_STEP_SUMMARY"
-      - name: Recover opportunity publication independently after Radar is ready
-        if: steps.inspect.outputs.action == 'DONE'
+      - name: Recover EOD discovery and Radar shortlist independently
+        if: always() && steps.inspect.outputs.action != 'WAIT_EOD'
         env:
           PYTHONPATH: pipeline
           SUPABASE_URL: https://upmqxwktvvguegqeqibn.supabase.co
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          TRADING_DATE: ${{ steps.inspect.outputs.trading_date }}
-        run: python -m protstock.opportunities --end-date "$TRADING_DATE" --notify
+          TRADING_DATE: ${{ steps.inspect.outputs.trading_date || inputs.trading_date }}
+        run: |
+          args=(--notify)
+          if [ -n "$TRADING_DATE" ]; then args+=(--end-date "$TRADING_DATE"); fi
+          python -m protstock.opportunities "${args[@]}"

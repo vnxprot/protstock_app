@@ -1,6 +1,7 @@
 from copy import deepcopy
 from datetime import date, datetime, timedelta
 import httpx
+import pytest
 
 from protstock.opportunities import assess, telegram_text
 from protstock import opportunities
@@ -93,3 +94,97 @@ def test_duplicate_claim_never_sends_to_telegram(monkeypatch):
     monkeypatch.setattr(opportunities.httpx, 'post', unexpected)
     result = opportunities.notify(Client(), {'date': '2026-10-20', 'publication_id': 'fixed', 'rows': assess([stock()], '2026-10-20')})
     assert result['status'] == 'ALREADY_CLAIMED'
+
+
+def test_duplicate_stock_fails_instead_of_creating_multiple_ranks():
+    with pytest.raises(ValueError, match='Duplicate symbol'):
+        assess([stock(), stock()], '2026-10-20')
+
+
+def test_eod_preview_does_not_claim_missing_minute_data_or_send_a_digest():
+    item = stock()
+    item['bursts'], item['minute_status'] = [], {}
+    row = assess([item], '2026-10-20', minutes_checked=False)[0]
+    assert row['status'] == 'OBSERVE'
+    assert 'Danh sách EOD sơ bộ, chưa đối chiếu Radar' in row['risks']
+    assert opportunities.notify(None, {'phase': 'EOD'})['status'] == 'PROVISIONAL_NOT_SENT'
+
+
+def test_rpc_records_database_error_and_retries_only_safe_reads(monkeypatch):
+    class Rest:
+        calls = 0
+        def post(self, path, json):
+            self.calls += 1
+            return httpx.Response(500, json={'code': '57014', 'message': 'statement timeout'},
+                                  request=httpx.Request('POST', 'https://example.org' + path))
+    class Client:
+        _client = Rest()
+    client = Client()
+    monkeypatch.setattr(opportunities, 'sleep', lambda _: None)
+    with pytest.raises(RuntimeError, match='57014.*statement timeout'):
+        opportunities.rpc(client, 'opportunity_input_batch', {})
+    assert client._client.calls == 2
+    with pytest.raises(RuntimeError):
+        opportunities.rpc(client, 'begin_opportunity_build', {})
+    assert client._client.calls == 3
+
+
+def test_failed_batch_still_publishes_explicit_partial_preview(monkeypatch):
+    item = stock()
+    ids = list(range(1, 51))
+    saved = []
+    def rpc(client, name, payload):
+        if name == 'begin_opportunity_build':
+            return {'action': 'RUN', 'token': 'owned'}
+        if name == 'opportunity_input_batch':
+            if payload['p_ids'][0] == 1:
+                raise RuntimeError('one failed batch')
+            return [{**deepcopy(item), 'symbol_id': i, 'symbol': f'S{i}'} for i in payload['p_ids']]
+        assert name == 'finish_opportunity_build'
+        saved.append(payload)
+        return 'partial-id'
+    class Rest:
+        def patch(self, *args, **kwargs):
+            return httpx.Response(204, request=httpx.Request('PATCH', 'https://example.org/build'))
+    class Client:
+        _client = Rest()
+    monkeypatch.setattr(opportunities, 'rpc', rpc)
+    result = opportunities._build_phase(Client(), {'eod': {'finished_at': 'eod', 'source_revision': 'rev'},
+        'radar': {'published_at': 'radar'}, 'symbol_ids': ids}, date(2026, 10, 20), 'RADAR', True)
+    assert result['status'] == 'PROVISIONAL' and result['build_failed']
+    assert saved[0]['p_summary']['processed_symbols'] == 25
+    assert saved[0]['p_summary']['failed_symbol_ids'] == list(range(1, 26))
+    assert opportunities.notify(None, result)['status'] == 'PROVISIONAL_NOT_SENT'
+
+
+def test_eod_success_remains_visible_when_radar_build_fails(monkeypatch):
+    monkeypatch.setattr(opportunities, 'rpc', lambda *args: {'eod': {'finished_at': 'eod', 'counts': {'publication_status': 'COMPLETE'}},
+                                                           'radar': {'status': 'PUBLISHED', 'published_at': 'radar'}})
+    def build(client, inputs, day, phase, historical):
+        if phase == 'RADAR':
+            raise RuntimeError('radar unavailable')
+        return {'status': 'PROVISIONAL', 'date': day.isoformat(), 'rows': [stock()]}
+    monkeypatch.setattr(opportunities, '_build_phase', build)
+    result = opportunities.publish(None, date(2026, 10, 20))
+    assert result['status'] == 'PROVISIONAL' and result['build_failed']
+
+
+def test_history_failure_does_not_block_latest_sessions(monkeypatch):
+    calls = []
+    class Client:
+        _client = type('Rest', (), {})()
+        def close(self):
+            pass
+    def publish(client, day, **kwargs):
+        calls.append(day.isoformat())
+        if day == date(2026, 10, 14):
+            raise RuntimeError('isolated historical error')
+        return {'status': 'PUBLISHED', 'date': day.isoformat(), 'rows': []}
+    monkeypatch.setattr(opportunities.Settings, 'from_env', lambda: None)
+    monkeypatch.setattr(opportunities, 'SupabaseRestClient', lambda _: Client())
+    monkeypatch.setattr(opportunities, 'publish', publish)
+    monkeypatch.setattr('sys.argv', ['opportunities', '--start-date', '2026-10-14', '--end-date', '2026-10-21'])
+    with pytest.raises(RuntimeError, match='remaining dates'):
+        opportunities.main()
+    assert calls[:2] == ['2026-10-20', '2026-10-21']
+    assert '2026-10-19' in calls and calls[-2:] == ['2026-10-20', '2026-10-21']

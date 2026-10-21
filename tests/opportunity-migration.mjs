@@ -52,4 +52,52 @@ try {
   assert.equal((await scalar("select get_opportunities('2026-10-20')")).status,'WAIT_SUMMARY')
   assert.equal((await scalar('select get_opportunities(null,$1)',[id])).rows[0].symbol,'VSC')
   console.log('PASS: migration, atomic source guards, immutable history, idempotency, RLS, date pinning, stale-source handling')
+  await db.exec(`reset role;
+    alter table intraday_radar_sessions add baseline_ready_symbols int,add expected_symbols int;
+    alter table technical_snapshots add close numeric,add ema20 numeric,add rsi14 numeric,add macd_histogram numeric,add volume_avg20 bigint,add volume_ratio20 numeric,add cmf20 numeric,add atr14 numeric,add monthly_context jsonb;
+    alter table intraday_radar_symbol_status add status text,add baseline_sessions int;
+    alter table momentum_radar_assessments add stage text,add entry_status text,add evidence jsonb;
+    alter table signal_funnel_assessments add stage text;
+    alter table macd_divergence_assessments add stage text,add swings int,add trigger_date date;
+    alter table market_breadth_snapshots add vnindex_trend_state text,add pct_above_sma50 numeric;
+    insert into job_runs values('2026-10-21','SUCCEEDED','core-rules-v0.0.0-trend1','{"published_signals":0,"publication_status":"COMPLETE"}','2026-10-21 09:00+00');
+    insert into symbols select i,'S'||i,'TEST',true from generate_series(1,30) i;
+    insert into daily_prices select s.id,'2026-10-21'::date-i,13,13.4,12.7,13.4,7000000,'VALID','VENDOR',null from symbols s cross join generate_series(0,24) i;
+    insert into technical_snapshots select s.id,'D','2026-10-21'::date-i,13.4,13.1,52,.1,7000000,1,-.2,.4,
+      jsonb_build_object('state','DOWN','unused_history',repeat('x',4000)) from symbols s cross join generate_series(0,3) i;
+    insert into macd_divergence_assessments select s.id,'2026-10-21','MACD_BULLISH_DIVERGENCE_ZONE_V0_0_0','MACD_LINE','WATCH_PRICE_CONFIRMATION',i,null from symbols s cross join generate_series(2,4) i;`)
+  await db.exec(await readFile('supabase/migrations/20261022010000_opportunity_pipeline_recovery.sql','utf8'))
+  await db.exec('set role service_role;')
+  const ids=Array.from({length:25},(_,i)=>i+1)
+  const batch=await scalar("select opportunity_input_batch('2026-10-21',$1,'core-rules-v0.0.0-trend1',false)",[ids])
+  assert.equal(batch.length,25);assert.equal(new Set(batch.map(s=>s.symbol_id)).size,25)
+  assert(batch.every(s=>s.macd.swings===4));assert(JSON.stringify(batch).length<200000)
+  assert(!JSON.stringify(batch).includes('unused_history'))
+  await assert.rejects(()=>scalar("select opportunity_input_batch('2026-10-21',$1,'r',true)",[Array.from({length:26},(_,i)=>i+1)]),/1 to 25/)
+  const begin="select begin_opportunity_build('2026-10-21',$1,'V2','2026-10-21 09:00+00',$2,null)"
+  const eodClaim=await scalar(begin,['EOD',null])
+  assert.equal((await scalar(begin,['EOD',null])).action,'IN_PROGRESS')
+  const finish="select finish_opportunity_build('2026-10-21',$1,$2,$3,$4,$5,true)"
+  const eodId=await scalar(finish,['EOD',eodClaim.token,'eod-v2','[]','{"input_complete":true}'])
+  assert.equal((await scalar(begin,['EOD',null])).action,'READY')
+  await db.exec(`reset role;set request.jwt.claim.sub='${owner}';set role authenticated;`)
+  assert.equal((await scalar("select get_opportunities('2026-10-21')")).status,'PROVISIONAL')
+  assert.equal((await scalar('select get_opportunities(null,$1)',[eodId])).phase,'EOD')
+  await db.exec(`reset role;insert into intraday_radar_sessions values('2026-10-21','PUBLISHED','2026-10-21 11:00+00',30,30);set role service_role;`)
+  const radarClaim=await scalar(begin,['RADAR','2026-10-21 11:00+00'])
+  const radarId=await scalar(finish,['RADAR',radarClaim.token,'radar-v2','[{"symbol_id":1,"symbol":"S1"}]','{"input_complete":true}'])
+  await assert.rejects(()=>scalar(finish,['RADAR',eodClaim.token,'bad','[]','{}']),/lease/)
+  await scalar("select publish_opportunities('2026-10-21','V2','late-eod','2026-10-21 09:00+00',null,'[]','{}',true)")
+  await db.exec(`reset role;set request.jwt.claim.sub='${owner}';set role authenticated;`)
+  assert.equal((await scalar("select get_opportunities('2026-10-21')")).id,radarId)
+  await assert.rejects(()=>scalar(begin,['RADAR','2026-10-21 11:00+00']),/permission denied/)
+  await db.exec(`reset role;insert into job_runs values('2026-10-22','SUCCEEDED','core-rules-v0.0.0-trend1','{"published_signals":0}','2026-10-22 09:00+00');set role service_role;`)
+  const retry="select begin_opportunity_build('2026-10-22','EOD','V2','2026-10-22 09:00+00',null,null)"
+  for(let i=1;i<=3;i++){assert.equal((await scalar(retry)).attempt,i);await db.exec("update opportunity_builds set status='FAILED',last_error='Input unavailable',finished_at=now() where trading_date='2026-10-22'")}
+  assert.equal((await scalar(retry)).action,'RETRY_LIMIT')
+  await db.exec(`reset role;set request.jwt.claim.sub='${owner}';set role authenticated;`)
+  const failure=await scalar("select get_opportunities('2026-10-22')")
+  assert.equal(failure.status,'FAILED');assert.equal(failure.build.retry_exhausted,true)
+  assert.equal((await scalar('select get_opportunities(null,$1)',[radarId])).rows[0].symbol,'S1')
+  console.log('PASS: compact unique batches, EOD preview, final promotion, no downgrade, lease ownership and bounded failure state')
 } finally { await db.close() }

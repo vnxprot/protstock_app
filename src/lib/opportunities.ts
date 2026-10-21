@@ -9,14 +9,19 @@ export type Opportunity = {
   system_action: string; monthly_state: string; reasons: string[]; risks: string[]; next_step: string
   trigger_price: number | null; invalidation_price: number | null; support_reference: number | null; resistance_reference: number | null
   recovery: boolean; burst: boolean; late_burst: boolean; setup: boolean
+  families?: Array<'RECOVERY' | 'CONTINUATION' | 'UNUSUAL_VOLUME'>
   evidence: { ema20?: number; rsi14?: number; macd_histogram?: number; volume_ratio20?: number
     up_burst_share_pct: number; up_burst_value_vnd: number; minute_complete: boolean
     events: Array<{ id: number; start_time: string; end_time: string; volume: number; value_vnd: number; price_change_pct: number }>
     momentum_stage?: string; funnel_stage?: string; macd_stage?: string }
 }
 export type OpportunityPublication = { id?: string; trading_date?: string; published_at?: string; status: string
-  version?: string; pinned?: boolean; historical?: boolean; rows: Opportunity[]
-  summary?: { radar_coverage?: string; priority?: number; total?: number } }
+  version?: string; phase?: 'EOD' | 'RADAR'; pinned?: boolean; historical?: boolean; rows: Opportunity[]
+  build?: { status: string; phase: string; attempt: number; started_at?: string; finished_at?: string; last_error?: string; retry_exhausted?: boolean } | null
+  summary?: { radar_coverage?: string; priority?: number; total?: number; processed_symbols?: number; expected_symbols?: number; input_complete?: boolean; diagnostics?: Record<string, number> } }
+export function hasOpportunityPublication(value?: OpportunityPublication): value is OpportunityPublication & { status: 'PUBLISHED' | 'PROVISIONAL' | 'STALE' } {
+  return Boolean(value && ['PUBLISHED', 'PROVISIONAL', 'STALE'].includes(value.status))
+}
 export const opportunityStatus: Record<string, string> = {
   PRIORITY: 'Ưu tiên theo dõi', OBSERVE: 'Theo dõi thêm', EXTENDED: 'Đã kéo xa', RISK: 'Ưu tiên xử lý rủi ro', INVALIDATED: 'Mất hiệu lực',
 }

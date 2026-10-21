@@ -85,7 +85,7 @@ def test_four_troughs_produce_three_segments_and_rule_signal(monkeypatch):
 def test_research_series_quarantines_scale_jump_and_preserves_source():
     bars = [SimpleNamespace(trading_date=date(2026, 9, day), open=value,
                             high=value + 1, low=value - 1, close=value,
-                            volume=100, collected_at=SimpleNamespace(isoformat=lambda: "2026-10-01T00:00:00Z"))
+                            volume=100, source="KBS_DIRECT", collected_at=SimpleNamespace(isoformat=lambda: "2026-10-01T00:00:00Z"))
             for day, value in [(1, 88), (2, 22), (3, 21)]]
     rows = research_price_rows(1, "TRC", bars)
     assert rows[0]["quality_status"] == "QUARANTINED"

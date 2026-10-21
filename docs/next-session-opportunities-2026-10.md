@@ -1,10 +1,14 @@
-# Cơ hội phiên tới — NEXT_SESSION_V1
+# Cơ hội phiên tới — NEXT_SESSION_V2
 
 Research shortlist, independent of Champion orders. No backtest or profitability claim accompanies this release.
 
 ## Publication
 
-After a same-revision EOD publication and PUBLISHED direct-minute Radar, `python -m protstock.opportunities` reads stored inputs, ranks one row per symbol and publishes an immutable snapshot. An atomic source-timestamp guard rejects a concurrent EOD/Radar change. The current-day pointer changes only after the full snapshot is stored. Pinned publication links continue to resolve after recalculation. Missing EOD/Radar/summary is distinct from a published empty result.
+After EOD publication, `python -m protstock.opportunities --phase EOD` publishes preliminary candidates without waiting for minute Radar. AUTO also builds a final snapshot when same-session direct-minute Radar is PUBLISHED. Both use the actual published EOD source revision. Source-timestamp guards reject concurrent source changes; final snapshots cannot be downgraded by a delayed EOD build. Pinned links remain immutable.
+
+The context RPC returns compact metadata and symbol IDs. Input reads contain at most 25 unique symbols with only the fields consumed by the scorer. MACD variants are resolved deterministically to one result per symbol, preventing join multiplication. Read RPCs retry transient failures once; failed groups are isolated and reported. Partial coverage may produce an explicitly preliminary snapshot, never a final Telegram digest. Two consecutive failed groups or an eight-minute phase budget stops further reads. A token-owned lease and at most three attempts per input revision prevent overlapping or endless recovery. Changes to source data or the previous campaign snapshot invalidate the cached build.
+
+Build status distinguishes NOT_STARTED, PROCESSING, FAILED and a lease older than twenty minutes (STALLED). Stored previews remain visible during errors. The interface shows coverage, attempt count, candidate status totals and exclusion counts; an empty list no longer implies that aggregation is still running. The default shows all candidates, including extension and risk labels. Candidate families identify recovery, continuation/setup and unusual volume without changing the evidence thresholds to fit a particular stock.
 
 Initial recovery hypothesis: a fresh EMA20 reclaim in the last three intervals, RSI 45–65, improving MACD histogram, close in the top quarter of the candle, estimated average turnover at least VND 3bn. Minute confirmation requires complete symbol coverage, at least ten baseline sessions, UP events with price movement at least 0.5%, value at least VND 1bn, and combined eligible-event share at least 15% or value at least VND 5bn; close location at least 0.6. Impossible aggregate event volume is rejected. These are initial versioned hypotheses, not independently measured edges.
 
@@ -22,4 +26,6 @@ The same database snapshot supplies both web and Telegram. Link queries include 
 
 ## Deployment
 
-Deploy migration `20261021020000_next_session_opportunities.sql`, then rebuild stored dates through `opportunities.yml` (`start_date` and `end_date`, notifications disabled). `database.yml` can dispatch this rebuild after successful migration. Future Radar workflows publish the summary and optional daily digest automatically. No backtest is dispatched by this release.
+Deploy the original migration `20261021020000_next_session_opportunities.sql` and recovery migration `20261022010000_opportunity_pipeline_recovery.sql`, then rebuild stored dates through `opportunities.yml` (`start_date` and `end_date`, notifications disabled). `database.yml` dispatches this rebuild only after successful migration. Range recovery processes the latest two sessions first, repairs older sessions in order despite individual failures, then refreshes the latest two campaigns. Failures stay visible in the workflow log and build records.
+
+Fast EOD publishes preliminary discovery before its existing notification step. Radar completion publishes the final summary and optional daily digest. The existing watchdog can recover discovery independently of Radar completion and respects the same lease/attempt limit. Historical rebuilds never send Telegram; no backtest is dispatched by this release.
