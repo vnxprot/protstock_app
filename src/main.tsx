@@ -15,6 +15,7 @@ import './workspace-controls.css'
 import './mobile-compact.css'
 import './ui-consistency.css'
 import './analysis-workspace.css'
+import './card-details.css'
 import { initializeTheme } from './lib/theme'
 import { initializeInputModality } from './lib/inputModality'
 

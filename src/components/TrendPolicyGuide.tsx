@@ -1,7 +1,8 @@
+import { CardDisclosure } from './CardHeader'
 import policy from '../../pipeline/protstock/trend_policy.json'
 
 export function TrendPolicyGuide() {
-  return <details id="guide-monthly-trend" className="guide-group"><summary>Xu hướng tháng và phễu tháng → tuần → ngày <small>{policy.version}</small></summary><div className="guide-group-content">
+  return <CardDisclosure id="guide-monthly-trend" className="guide-group" title={<>Xu hướng tháng và phễu tháng → tuần → ngày <small>{policy.version}</small></>}><div className="guide-group-content">
     <p>Champion, Challenger, Radar, Phễu và kiểm thử lịch sử dùng chung công thức tháng, cùng dữ liệu giá và cùng lịch xác nhận đóng nến. Tham số dưới đây lấy trực tiếp từ cấu hình đang chạy. Mỗi thay đổi cấu hình phải có phiên bản mới và tính lại các đầu ra liên quan.</p>
     <h3>Thời gian và dữ liệu</h3><p>Tuần từ thứ Hai đến thứ Sáu; tháng từ ngày 1 đến cuối tháng. Ngày nến là phiên cuối có dữ liệu. Chỉ dùng nến đã đóng, xác nhận theo phiên VNINDEX và lịch nghỉ HOSE. Giá đang chạy giữa tuần/tháng chưa thay nhãn của kỳ đã đóng. Đọc lịch sử giá đã lưu từ năm 2021; không cần tải lại giá để đổi quy tắc.</p>
     <h3>Xu hướng tháng</h3><p>Cần ít nhất {policy.minimum_months} tháng đã đóng ở mọi bộ máy. Dưới mức này là UNKNOWN; không dùng quy tắc SMA6 riêng. SIDEWAYS là vùng trung tính chưa có hướng tăng/giảm đủ mạnh và bền, chưa chứng minh có nền để mua hồi hỗ trợ.</p>
@@ -23,5 +24,5 @@ export function TrendPolicyGuide() {
     <h3>Đọc bảng Phễu MTF Challenger</h3><p>Phiên đánh giá là ngày EOD chung của danh sách. Ngày tạo setup là phiên đóng nến tuần tạo setup hiện tại; ngày kích hoạt là lần xác nhận ngày đầu tiên của chính setup đó. Đây không phải ngày đầu tiên mã xuất hiện trong ứng dụng. Tuổi trigger đếm số phiên VNINDEX sau ngày kích hoạt đến phiên đánh giá, bằng 0 ngay ngày kích hoạt; không đếm cuối tuần/ngày nghỉ. Dấu — nghĩa là chưa có sự kiện hoặc chưa đủ dữ liệu xác minh ngày/tuổi.</p>
     <p>Mặc định Đang theo dõi gồm kích hoạt mới trong phiên, chờ kích hoạt và đã kích hoạt còn hiệu lực. Thứ tự ưu tiên theo giai đoạn này, rồi ngày sự kiện mới nhất; mã có trigger mới nhưng bị chặn hành động vẫn ở nhóm kích hoạt mới và có lý do chặn. Tất cả bao gồm cả chưa có setup hợp lệ và dữ liệu cần kiểm tra. Bộ đếm thể hiện toàn bộ phiên trước bộ lọc nâng cao; số kết quả cạnh ô tìm mã phản ánh bộ lọc đang dùng. Mở mã để xem nền/stop theo đồng mỗi cổ phiếu, bối cảnh tháng và mã lý do. Hiệu lực setup vẫn tính từ ngày setup, không tính lại từ ngày kích hoạt.</p>
     <p>Chuỗi có Close không dương hoặc tỷ lệ Close hai phiên ≤0,1 hay ≥10 được cách ly. Chi tiết từng mã hiển thị kỳ tháng, độ bền, độ dốc, ngưỡng và từng điều kiện đạt/chưa đạt.</p>
-  </div></details>
+  </div></CardDisclosure>
 }

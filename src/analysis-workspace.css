@@ -22,8 +22,11 @@
 .app-shell .quant-quote-strip dd { font:600 16px/1.4 var(--font-ui); font-variant-numeric:tabular-nums; overflow-wrap:anywhere; }
 .app-shell .quant-workspace { display:grid; grid-template-columns:minmax(0,2fr) minmax(320px,1fr); gap:12px; align-items:start; min-width:0; }
 .app-shell :is(.quant-main,.quant-side) { display:grid; align-content:start; gap:12px; min-width:0; }
-.app-shell .quant-evidence-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); align-items:start; gap:12px; min-width:0; }
-.app-shell .quant-analysis .quant-card { display:grid; align-content:start; gap:8px; min-width:0; padding:12px; border:1px solid var(--line); border-radius:var(--radius-lg); color:var(--text); }
+.app-shell .quant-evidence-grid { display:grid; grid-template-columns:minmax(0,1fr); align-items:start; gap:12px; min-width:0; }
+.app-shell .quant-analysis .quant-card { display:grid; align-content:start; gap:5px; min-width:0; padding:12px; border:1px solid var(--line); border-radius:var(--radius-lg); color:var(--text); }
+.app-shell .quant-overview-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); align-items:start; gap:12px; min-width:0; }
+.app-shell .quant-overview-grid>.panel { min-width:0; margin:0; }
+@media(min-width:1440px) { .app-shell .quant-overview-grid { grid-template-columns:repeat(4,minmax(0,1fr)); } }
 .app-shell .quant-card-header { display:flex; flex-direction:column; align-items:flex-start; gap:6px; min-width:0; }
 .app-shell .quant-card-header>div { min-width:0; }
 .app-shell .quant-card-header h3 { color:var(--text); font:var(--text-card-title); }
@@ -36,6 +39,10 @@
 .app-shell .quant-status:is(.action-probe_buy,.action-add,.flow-green,.flow-purple) { color:var(--feedback-success); }
 .app-shell .quant-status:is(.action-reduce,.action-exit,.flow-red,.flow-blue,.opportunity-risk,.opportunity-invalidated) { color:var(--feedback-error); }
 .app-shell .quant-status.opportunity-extended { color:var(--feedback-warning); }
+.app-shell .quant-status.trend-up { color:var(--mint); border-color:color-mix(in srgb,var(--mint) 45%,var(--line)); background:color-mix(in srgb,var(--mint) 13%,var(--surface)); }
+.app-shell .quant-status.trend-down { color:var(--red); border-color:color-mix(in srgb,var(--red) 45%,var(--line)); background:color-mix(in srgb,var(--red) 13%,var(--surface)); }
+.app-shell .quant-status.trend-sideways { color:var(--amber); border-color:color-mix(in srgb,var(--amber) 45%,var(--line)); background:color-mix(in srgb,var(--amber) 13%,var(--surface)); }
+.app-shell .quant-status.trend-unknown { color:var(--muted); }
 .app-shell .quant-status:is(.action-probe_buy,.action-add) { background:color-mix(in srgb,var(--mint) 12%,var(--surface)); border-color:color-mix(in srgb,var(--mint) 40%,var(--line)); }
 .app-shell .quant-status:is(.action-reduce,.action-exit,.opportunity-risk,.opportunity-invalidated) { background:color-mix(in srgb,var(--red) 12%,var(--surface)); border-color:color-mix(in srgb,var(--red) 40%,var(--line)); }
 .app-shell .quant-status:is(.action-watch,.opportunity-extended) { background:color-mix(in srgb,var(--amber) 12%,var(--surface)); border-color:color-mix(in srgb,var(--amber) 40%,var(--line)); color:var(--amber); }
@@ -56,7 +63,12 @@
 .app-shell .quant-analysis .multi-chart-pane { display:block; min-width:0; padding:0; margin:0; border:0; border-radius:0; background:transparent; }
 .app-shell .quant-analysis .multi-chart-pane h4 { margin:0 0 4px; color:var(--muted); font:500 12px/1.4 var(--font-ui); }
 .app-shell .quant-analysis .multi-chart-pane .stock-chart { height:280px!important; }
-.app-shell .quant-zone-group { display:grid; gap:4px; min-width:0; }
+.app-shell .quant-zone-group { display:grid; gap:3px; min-width:0; padding:7px; border:1px solid var(--line); border-radius:var(--radius-md); }
+.app-shell .quant-zone-group.support { border-color:color-mix(in srgb,var(--mint) 40%,var(--line)); background:color-mix(in srgb,var(--mint) 8%,var(--surface)); }
+.app-shell .quant-zone-group.resistance { border-color:color-mix(in srgb,var(--red) 40%,var(--line)); background:color-mix(in srgb,var(--red) 8%,var(--surface)); }
+.app-shell .quant-zone-group.support .quant-zone-table button { color:var(--mint); }
+.app-shell .quant-zone-group.resistance .quant-zone-table button { color:var(--red); }
+.app-shell :is(.quant-zone-strength,.quant-zone-touches) { display:inline-flex; justify-content:center; align-items:center; min-width:24px; padding:2px 4px; border:1px solid var(--line-bright); border-radius:6px; background:var(--surface-2); color:var(--text); font-weight:700; }
 .app-shell .quant-zone-group h4 { display:flex; justify-content:space-between; gap:8px; padding-top:4px; font:600 13px/1.4 var(--font-ui); }
 .app-shell .quant-zone-group h4>span { color:var(--muted); font:400 12px/1.4 var(--font-ui); }
 .app-shell .quant-zone-group.support h4 { color:var(--mint); }
@@ -79,7 +91,7 @@
 .app-shell .quant-flow-grid>div { min-width:0; }
 .app-shell .quant-flow-grid dt { color:var(--muted); font-size:12px; }
 .app-shell .quant-flow-grid dd { margin-top:2px; font:var(--text-label); font-variant-numeric:tabular-nums; overflow-wrap:anywhere; }
-.app-shell .quant-pattern-groups { display:grid; gap:8px; min-width:0; }
+.app-shell .quant-pattern-groups { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; min-width:0; }
 .app-shell .quant-pattern-groups h4 { margin:0 0 4px; font:500 13px/1.4 var(--font-ui); }
 .app-shell .quant-pattern-row { display:flex; align-items:center; justify-content:space-between; gap:8px; width:100%; min-width:0; padding:6px 0; border:0; border-bottom:1px solid var(--line); background:transparent; color:var(--text); text-align:left; cursor:pointer; }
 .app-shell .quant-pattern-row>span { min-width:0; }
@@ -91,11 +103,17 @@ html[data-theme=light] .app-shell .quant-control-group button[aria-pressed=true]
 
 /* Detail overlays leave the chart and document geometry in place. */
 .quant-detail-overlay { position:fixed; z-index:2000; top:var(--modal-viewport-top,0px); left:0; right:0; height:var(--modal-viewport-height,100dvh); display:flex; justify-content:flex-end; background:#0006; }
-.quant-detail-panel { display:flex; flex-direction:column; width:min(560px,100%); min-width:0; height:100%; padding:0; border-left:1px solid var(--line); background:var(--surface); color:var(--text); border-radius:var(--radius-lg) 0 0 var(--radius-lg); box-shadow:var(--elevation-4); font:var(--text-body); }
+.quant-detail-panel { display:flex; flex-direction:column; width:min(1100px,calc(100% - 40px)); min-width:0; height:100%; padding:0; border-left:1px solid var(--line); background:var(--surface); color:var(--text); border-radius:var(--radius-lg) 0 0 var(--radius-lg); box-shadow:var(--elevation-4); font:var(--text-body); }
 .quant-detail-panel>header { display:flex; align-items:center; justify-content:space-between; gap:12px; flex:none; padding:12px 16px; border-bottom:1px solid var(--line); }
 .quant-detail-panel h2 { margin:0; font:600 16px/1.4 var(--font-ui); }
 .quant-detail-panel>header>button { display:grid; place-items:center; flex:none; width:36px; height:36px; padding:0; border:1px solid var(--line); border-radius:var(--radius-sm); background:var(--surface-2); color:var(--text); cursor:pointer; }
 .quant-detail-content { flex:1; min-height:0; overflow-y:auto; overscroll-behavior:contain; padding:16px; overflow-wrap:anywhere; }
+.quant-detail-content:has(>section+section) { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); align-content:start; align-items:start; gap:12px; }
+.quant-detail-content:has(>section+section)>p { grid-column:1/-1; }
+.quant-detail-content>.monthly-trend-evidence { padding:0; }
+.quant-detail-content .monthly-trend-evidence p { margin:4px 0; }
+.quant-detail-content .trend-evidence-grid { margin:6px 0; gap:8px; }
+.quant-detail-content .trend-evidence-grid ul { margin:4px 0; line-height:1.45; }
 .quant-detail-content h3 { margin:12px 0 8px; font:600 14px/1.4 var(--font-ui); }
 .quant-detail-content p { margin:0 0 8px; }
 .quant-detail-content ul { padding-left:18px; }
@@ -130,7 +148,9 @@ html[data-theme=light] .app-shell .quant-control-group button[aria-pressed=true]
   .app-shell .quant-side { order:1; width:100%; gap:10px; }
   .app-shell .quant-evidence-grid { order:2; width:100%; grid-template-columns:minmax(0,1fr); gap:10px; }
   .app-shell .quant-main>.quant-card { order:3; width:100%; }
-  .app-shell .quant-analysis .quant-card { padding:12px; gap:8px; }
+  .app-shell .quant-analysis .quant-card { padding:12px; gap:5px; }
+  .app-shell .quant-overview-grid { grid-template-columns:minmax(0,1fr); gap:10px; }
+  .app-shell .quant-pattern-groups { grid-template-columns:minmax(0,1fr); }
   .app-shell .quant-chart-toolbar { gap:6px; }
   .app-shell .quant-control-group button { min-height:36px; padding:6px 8px; }
   .app-shell .quant-indicators { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:4px; }
@@ -144,4 +164,5 @@ html[data-theme=light] .app-shell .quant-control-group button[aria-pressed=true]
   .quant-detail-panel>header { padding:calc(10px + env(safe-area-inset-top,0px)) 12px 10px; }
   .quant-detail-panel>header>button { width:44px; height:44px; }
   .quant-detail-content { padding:12px 12px calc(12px + env(safe-area-inset-bottom,0px)); }
+  .quant-detail-content:has(>section+section) { grid-template-columns:minmax(0,1fr); gap:8px; }
 }

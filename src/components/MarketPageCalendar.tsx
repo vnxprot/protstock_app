@@ -1,3 +1,4 @@
+import { CardDetailsButton } from './CardHeader'
 import { useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { ArrowUpRight, Search } from 'lucide-react'
@@ -210,7 +211,7 @@ export function MarketPage({ authenticated }: { authenticated: boolean }) {
   const qualified = summary.complete && summary.score != null
   const status = summary.lastRow?.sample_warning === 'SMALL_SAMPLE' ? 'Mẫu ngành nhỏ' : summary.reason ?? (provisional ? 'Kỳ đang diễn ra' : section === 'health' ? stateLabel(summary.score) : 'Đủ mẫu quan sát')
   return <article key={row.sector} className={'market-sector-card' + (focused?.sector === row.sector ? ' selected' : '')}>
-    <header><span className="market-sector-rank">{qualified ? '#' + (index + 1) : '—'}</span><button type="button" onClick={() => chooseSector(row.sector)} aria-label={'Xem biểu đồ ngành ' + row.sector}>{row.sector}</button><a href={sectorLink(row.sector)} aria-label={'Mở cổ phiếu ngành ' + row.sector}><ArrowUpRight size={15}/></a></header>
+    <header><span className="market-sector-rank">{qualified ? '#' + (index + 1) : '—'}</span><button type="button" onClick={() => chooseSector(row.sector)} aria-label={'Xem biểu đồ ngành ' + row.sector}>{row.sector}</button><CardDetailsButton context={'ngành ' + row.sector} onClick={() => chooseSector(row.sector)}/></header>
     <p><span>{section === 'health' ? 'Điểm' : 'Flow'} <b>{section === 'health' ? score(summary.score) : signed(summary.score)}</b></span><span>Cuối kỳ <b>{section === 'health' ? score(summary.lastValue) : signed(summary.lastValue)}</b></span><span>{section === 'health' ? 'Phiên khỏe' : 'Phiên dương'} <b>{summary.persistencePct == null ? '—' : summary.persistencePct + '%'}</b></span></p>
     <p><span>Độ phủ <b>{summary.qualified}/{summary.expected} phiên</b></span><span>Mẫu <b>{section === 'health' ? summary.lastRow?.sample_size ?? 0 : summary.lastRow?.flow_observed_count ?? 0}/{row.total} mã</b></span>{section === 'flow' && <span>GTGD <b>{pct(summary.turnoverSharePct)}</b></span>}</p>
     <p className="market-sector-card-status"><span>{status}</span><span>{formatDate(summary.lastDate)}</span></p>
