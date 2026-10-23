@@ -1,4 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import type { UserProfile } from './AuthGate'
 import { useQuery } from '@tanstack/react-query'
 import { BarChart3, BookOpen, BriefcaseBusiness, CheckCircle2, ChevronDown, ChevronLeft, CloudOff, Command, FlaskConical, LayoutDashboard, LoaderCircle, LogOut, Menu, Search, Settings, ShieldCheck, Star, TrendingUp, UserRound, Workflow, X } from 'lucide-react'
@@ -127,20 +128,23 @@ function MarketContextCard() {
   const observed = data?.breadth?.observed_count ?? data?.breadth?.sample_size ?? 0
   const eligible = data?.breadth?.eligible_count ?? data?.breadth?.sample_size ?? 0
   const coveragePct = data?.breadth?.coverage_ratio == null ? null : Number(data.breadth.coverage_ratio) * 100
-  return <details className="market-context-card panel">
-    <summary>
+  const [detailOpen, setDetailOpen] = useState(false)
+  const detailRef = useRef<HTMLElement>(null)
+  useDialogFocus(detailOpen, detailRef, () => setDetailOpen(false))
+  return <><article className="market-context-card panel">
+    <div className="market-context-summary">
       <div className="market-context-heading"><strong>VN-Index · {market.isLoading ? 'Đang tải…' : formatDate(data?.latest?.trading_date ?? data?.breadth?.trading_date)}</strong><small>EOD · {data?.latest?.source?.replace('VNSTOCK_', '') ?? '—'}</small></div>
       <div className="market-context-price"><b>{data?.latest ? Number(data.latest.close).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'}</b><span className={data?.change != null && data.change < 0 ? 'negative' : 'positive'}>{data?.change == null ? '—' : `${data.change >= 0 ? '+' : ''}${data.change.toFixed(2)}%`}</span></div>
       <span className={`market-regime ${state.toLowerCase()}`}>{stateLabel}</span><ChevronDown className="market-context-chevron" size={18}/>
-    </summary>
-    <div className="market-context-detail">{market.isError&&<p role="alert">Chưa tải được bối cảnh thị trường. <button className="text-button" onClick={()=>void market.refetch()}>Thử lại</button></p>}
+      <button type="button" className="card-details-button market-context-open" onClick={() => setDetailOpen(true)} aria-label="Chi tiết VN-Index">Chi tiết</button>
+    </div>
+  </article>{detailOpen && createPortal(<div className="sheet-backdrop market-context-backdrop" onMouseDown={() => setDetailOpen(false)}><section ref={detailRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label="Chi tiết VN-Index" className="market-context-sheet" onMouseDown={event => event.stopPropagation()}><header><h2>VN-Index · Chi tiết</h2><button type="button" className="icon-button" aria-label="Đóng chi tiết VN-Index" onClick={() => setDetailOpen(false)}><X size={20}/></button></header><div className="market-context-detail">{market.isError&&<p role="alert">Chưa tải được bối cảnh thị trường. <button className="text-button" onClick={()=>void market.refetch()}>Thử lại</button></p>}
       <div><span>Prot Universe Breadth · SMA50</span><strong>{breadthPct}</strong><small>{observed}/{eligible} mã đủ điều kiện</small></div>
       <div><span>Độ bao phủ dữ liệu</span><strong className={coverageStatus === 'INCOMPLETE' ? 'negative' : 'positive'}>{coverageLabel}</strong><small>{coveragePct == null ? 'Chưa đủ lịch sử để đánh giá' : `${coveragePct.toFixed(1)}% mẫu đủ điều kiện đã quan sát`}</small></div>
       <div><span>Market Health</span><strong className={hasUsableBreadth ? healthState === 'RISK_OFF' ? 'negative' : 'positive' : ''}>{healthScore} · {healthLabel}</strong><small>SMA20 {breadthMetric(data?.breadth?.pct_above_sma20)} · SMA50 {breadthPct} · SMA200 {breadthMetric(data?.breadth?.pct_above_sma200)}</small></div><div><span>Độ sâu thị trường</span><strong>{data?.breadth?.advance_count ?? '—'} tăng / {data?.breadth?.decline_count ?? '—'} giảm</strong><small>Đỉnh/đáy 20 phiên: {data?.breadth?.new_high20_count ?? '—'} / {data?.breadth?.new_low20_count ?? '—'} · KL tăng/giảm: {data?.breadth?.up_down_volume_ratio == null ? '—' : `${Number(data.breadth.up_down_volume_ratio).toFixed(2)}x`}</small></div><div><span>Ngành khỏe nhất</span><strong>{sectorLeaders.length ? sectorLeaders.map((item:any) => `${item.sector} ${Number(item.market_health_score).toFixed(0)}`).join(' · ') : 'Chưa có ngành đủ mẫu'}</strong><small>Chỉ xếp hạng nhóm có ≥5 mã quan sát và độ phủ ≥80%.</small></div><div><span>Market Gate</span><strong className={isRiskOff ? 'negative' : 'positive'}>{!hasUsableBreadth ? 'Chặn mua mới' : isRiskOff ? 'Thận trọng' : 'Cho phép setup'}</strong><small>{!hasUsableBreadth ? 'Market Health đang thiếu dữ liệu nên tín hiệu mua hạ WATCH.' : isRiskOff ? 'Tín hiệu mua có thể bị hạ xuống WATCH.' : 'Không có chặn mua từ bối cảnh thị trường.'}</small></div>
       <HealthMethodDetails components={data?.breadth?.health_components} version={data?.breadth?.health_method_version}/>
-      <p>Độ rộng, A/D, đỉnh/đáy và khối lượng chỉ đo trên Prot Trading Universe; không đại diện toàn bộ thị trường Việt Nam. Card này là bối cảnh cho Prot Core Engine; biểu đồ VN-Index chuyên sâu vẫn nên xem tại FireAnt, 24HMoney hoặc TradingView.</p>
     </div>
-  </details>
+  </section></div>, document.body)}</>
 }
 function ExecutiveKpiStrip({ favorites }: { favorites: string[] }) {
   const summary = useQuery({
