@@ -50,7 +50,7 @@ input:focus-visible,textarea:focus-visible,button:focus-visible,[role="combobox"
 .signal-triage-toolbar>label { display:grid; gap:5px; width:min(220px,100%); color:var(--muted); font-size:12px; }
 .signal-triage-toolbar .soft-select-trigger { min-height:38px; border:1px solid var(--line); }
 .signal-triage-toolbar>span { color:var(--muted); font-size:12px; }
-.triage-expand-actions { display:flex; gap:6px; margin-left:auto; }
+.triage-expand-actions { display:flex; gap:6px; margin-left:auto; justify-content:flex-end; }
 .triage-expand-actions button,.triage-pagination button { padding:8px 11px; border:1px solid var(--line); border-radius:8px; background:var(--control-surface); color:var(--text); font:inherit; font-size:12px; cursor:pointer; }
 .triage-expand-actions button:disabled,.triage-pagination button:disabled { opacity:.45; cursor:default; }
 .signal-triage-group { border:1px solid var(--line); border-radius:12px; background:var(--surface); }

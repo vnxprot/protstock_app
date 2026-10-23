@@ -10,7 +10,6 @@ import { ZoneEvidence } from './ZoneEvidence'
 import { formatMarketPrice } from '../lib/marketUnits'
 import { isWatchActive, loadWatchlist, toggleWatchlistSymbol } from '../lib/watchlist'
 import { MacdPanel } from './MacdPanel'
-import { displaySystemRevision } from '../lib/releaseLabels'
 import { ExRightsCalculator } from './ExRightsCalculator'
 import { MonthlyTrendEvidence, type MonthlyEvidence } from './MonthlyTrendEvidence'
 import { AnalysisDetails, type AnalysisDetail, type OpenAnalysisDetails } from './AnalysisDetails'
@@ -40,10 +39,10 @@ function executiveSummary(snapshot: TechnicalSnapshot | undefined) {
 }
 
 function DecisionCard({ decision, snapshot, timeframe, onDetails }: { decision: StockDecision | null; snapshot: TechnicalSnapshot | undefined; timeframe: 'D' | 'W' | 'M'; onDetails: OpenAnalysisDetails }) {
-  return <Card title="Kết luận hệ thống" subtitle={`Prot v0.0.0 · ${timeframe} · Nến đóng ${displayDate(snapshot?.as_of_date)}`} action={<span className={`quant-status action-${(decision?.composite_action ?? 'WATCH').toLowerCase()}`}>{decision ? actionName[decision.composite_action] ?? decision.composite_action : 'Chưa có tín hiệu mới'}</span>} onDetails={() => onDetails('Kết luận và cơ sở đánh giá', <><p>{executiveSummary(snapshot)}</p><ul>{decision?.reasons.map((reason, index) => <li key={index}>{reason}</li>)}</ul><p>{decision ? `Logic ${displaySystemRevision(decision.source_revision)} · cùng mốc dữ liệu` : 'Chưa có quyết định được công bố cho mốc dữ liệu này.'}</p><p>Theo dõi hỗ trợ, kháng cự và rủi ro trước khi quyết định vị thế.</p></>)}>
+  return <Card title="Kết luận hệ thống" subtitle={`${timeframe} · Nến đóng ${displayDate(snapshot?.as_of_date)}`} action={<span className={`quant-status action-${(decision?.composite_action ?? 'WATCH').toLowerCase()}`}>{decision ? actionName[decision.composite_action] ?? decision.composite_action : 'Chưa có tín hiệu mới'}</span>} onDetails={() => onDetails('Kết luận và cơ sở đánh giá', <><p>{executiveSummary(snapshot)}</p><ul>{decision?.reasons.map((reason, index) => <li key={index}>{reason}</li>)}</ul><p>{decision ? 'Cùng mốc dữ liệu' : 'Chưa có quyết định được công bố cho mốc dữ liệu này.'}</p><p>Theo dõi hỗ trợ, kháng cự và rủi ro trước khi quyết định vị thế.</p></>)}>
     <p className="quant-takeaway">{executiveSummary(snapshot)}</p>
     <p>{decision?.reasons.slice(0, 3).join(' · ') || 'Chỉ báo và mẫu hình là bối cảnh; chưa có hành động mới cho kỳ dữ liệu này.'}</p>
-    <p className="quant-caption">{decision ? `Nguồn ${displaySystemRevision(decision.source_revision)} · cùng mốc dữ liệu` : 'Chưa có quyết định được công bố cho mốc dữ liệu này.'}</p>
+    <p className="quant-caption">{decision ? 'Cùng mốc dữ liệu' : 'Chưa có quyết định được công bố cho mốc dữ liệu này.'}</p>
   </Card>
 }
 
@@ -79,7 +78,7 @@ function FlowCard({ snapshot, timeframe }: { snapshot: TechnicalSnapshot | undef
   const state = snapshot?.flow_state ?? 'UNKNOWN'
   const title = ({ PURPLE:'Áp lực mua rất mạnh', GREEN:'Áp lực mua', BLUE:'Áp lực bán rất mạnh', RED:'Áp lực bán', NEUTRAL:'Cân bằng' } as Record<string, string>)[state] ?? 'Chưa đủ dữ liệu'
   const score = snapshot?.flow_score
-  return <Card title="Áp lực giá–khối lượng" subtitle={`Prot Flow v0.0.0 · ${timeframe} · ${displayDate(snapshot?.as_of_date)}`} action={<span className={`quant-status flow-${state.toLowerCase()}`}>{title}</span>}>
+  return <Card title="Áp lực giá–khối lượng" subtitle={`Prot Flow · ${timeframe} · ${displayDate(snapshot?.as_of_date)}`} action={<span className={`quant-status flow-${state.toLowerCase()}`}>{title}</span>}>
     <dl className="quant-flow-grid">{[['Điểm 20 nến', score == null ? '—' : `${score > 0 ? '+' : ''}${number(score, 1)}`], ['Bối cảnh', score == null ? 'Chưa đủ dữ liệu' : score > 0 ? 'Thiên tích lũy' : score < 0 ? 'Thiên phân phối' : 'Cân bằng'], ['CMF 20', number(snapshot?.cmf20, 3)], ['OBV', number(snapshot?.obv_slope20, 3)], ['KL/TB20', snapshot?.flow_volume_ratio20 == null ? '—' : `${number(snapshot.flow_volume_ratio20)}×`], ['CLV', number(snapshot?.flow_clv)]].map(([label, value]) => <div key={label}><dt>{label}</dt><dd className={label === 'Điểm 20 nến' && score != null ? score < 0 ? 'negative' : 'positive' : undefined}>{value}</dd></div>)}</dl>
     <p className="quant-caption">Trạng thái phản ánh nến gần nhất; điểm phản ánh 20 nến. Không xác định danh tính dòng tiền và không tự tạo lệnh.</p>
   </Card>

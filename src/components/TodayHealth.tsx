@@ -73,7 +73,7 @@ export function TodayHealth() {
   })
   const data = health.data
   return <article className="panel discipline-card today-health-card">
-    <div className="panel-title"><div><h2>Dữ liệu và pipeline v0.0.0</h2></div><Activity size={23}/></div>
+    <div className="panel-title"><div><h2>Dữ liệu và pipeline</h2></div><Activity size={23}/></div>
     {!supabase ? <p className="muted">Chưa kết nối dữ liệu.</p> : health.isLoading ? <p className="muted">Đang kiểm tra độ phủ dữ liệu…</p> : health.isError ? <p className="negative" role="alert">Không tải được trạng thái dữ liệu. <button className="text-button" onClick={()=>void health.refetch()}>Thử lại</button></p> : <>
       <div className="health-metrics"><span><b>{data?.newestDate && data.activeSymbols > 0 ? `${data.coveredSymbols}/${data.activeSymbols}` : '—'}</b><small>Mã có snapshot phiên {formatDate(data?.newestDate)}</small></span><span><b>{(data?.priceRows ?? 0).toLocaleString('vi-VN')}</b><small>Tổng bản ghi giá</small></span><span><b>{data?.coreActions ?? 0}</b><small>Action · phiên mới nhất</small></span><span><b>{data?.coreWatch ?? 0}</b><small>WATCH · phiên mới nhất</small></span></div>
       <dl className="health-details">

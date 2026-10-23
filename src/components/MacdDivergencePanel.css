@@ -26,6 +26,8 @@
 .macd-divergence-tools .screener-field { justify-content:flex-start; flex:1 1 200px; max-width:300px; }
 .macd-divergence-tools .screener-field:first-child { flex-basis:150px; max-width:210px; }
 .macd-divergence-tools .screener-field input { height:36px; min-height:36px; padding:0; border:0; background:transparent; text-align:left; }
+.app-shell .macd-divergence-tools .screener-field .soft-select-trigger,
+.app-shell .macd-divergence-tools .screener-field .soft-select-trigger>span { text-align:left; }
 .macd-divergence-list { overflow:hidden; border:1px solid var(--line); border-radius:10px; }
 .macd-divergence-list details { padding:12px 14px; border-bottom:1px solid var(--line); }
 .macd-divergence-list details:nth-of-type(odd) { background:color-mix(in srgb,var(--surface-2) 72%,var(--surface)); }

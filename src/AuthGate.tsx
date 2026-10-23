@@ -69,7 +69,7 @@ export function AuthGate({ children }: AuthGateProps) {
   }
 
   if (!isSupabaseConfigured) return <>{children(false, null)}</>
-  if (loading) return <div className="auth-screen"><div className="auth-card">Đang kiểm tra phiên đăng nhập…</div></div>
+  if (loading) return <div className="auth-screen auth-loading-screen"><div className="auth-card auth-loading-card" role="status">🤡 Đang kiểm tra phiên đăng nhập...</div></div>
   if (session && profile) return <>{children(true, profile)}</>
   if (session && message) return <main className="auth-screen"><section className="auth-card"><h1>Kiểm tra kết nối</h1><p role="alert">{message}</p><button className="primary-button" onClick={() => { setLoading(true); setReload(value => value + 1) }}>Thử lại</button><button className="text-button" onClick={() => void supabase?.auth.signOut()}>Đăng xuất</button></section></main>
 

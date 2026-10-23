@@ -34,6 +34,6 @@ export function MonthlyTrendEvidence({ value }: { value?: MonthlyEvidence }) {
       <div><dt>Biến động tháng / trạng thái trước</dt><dd>{pct(value.monthly_volatility)} / {value.previous_state ?? '—'}</dd></div>
     </dl>
     <div className="trend-evidence-grid">{(['UP', 'DOWN'] as const).map(direction => <div key={direction}><strong>Điều kiện vào {direction}</strong><ul>{Object.entries((direction === 'UP' ? value.entry_up_checks : value.entry_down_checks) ?? {}).map(([key, pass]) => <li key={key}>{pass ? '✓ Đạt' : '✗ Chưa đạt'} · {checks[key] ?? key}</li>)}</ul></div>)}</div>
-    <small>Quy tắc {value.policy_version}. SIDEWAYS cần thêm nền tuần hợp lệ để xét hồi hỗ trợ.</small>
+    <small>SIDEWAYS cần thêm nền tuần hợp lệ để xét hồi hỗ trợ.</small>
   </section>
 }

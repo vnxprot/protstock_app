@@ -14,7 +14,7 @@ export function displayStructureName(name: string): string {
     const clean = name.replace(/\s+v\d+(?:\.\d+){1,2}\b/gi, '')
     return `${clean} ${STRUCTURE_VERSION}`
   }
-  return name
+  return name.replace(/\s+v0\.0\.0\b/gi, '')
 }
 
 export function displaySystemRevision(revision?: string | null): string {

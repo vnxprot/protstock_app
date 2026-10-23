@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabase'
 import { useDialogFocus } from '../hooks/useDialogFocus'
 import { formatDate, formatDateTime } from '../lib/date'
 import { formatVnd } from '../lib/marketUnits'
+import { displayStructureName } from '../lib/releaseLabels'
 import { adherenceLabels, entryStatus, journalActions, journalConflict, journalRoles, journalSources, journalStatuses, linkedTransaction, strategyKey, type JournalCycle, type JournalEntry } from '../lib/journalModel'
 
 function HistoricalThesis({entry}:{entry:JournalEntry}) {
@@ -14,11 +15,11 @@ function HistoricalThesis({entry}:{entry:JournalEntry}) {
 function Evidence({entry}:{entry:JournalEntry}) {
   const evidence=entry.evidence_snapshot
   return <details><summary>Bằng chứng phiên {formatDate(evidence?.as_of_date)}</summary>{!evidence?<p>Chưa có bằng chứng lịch sử. Không dùng dữ liệu hiện tại thay thế.</p>:<>
-    <p>Ghi nhận {formatDateTime(evidence.captured_at)} · {evidence.source_revision||'Chưa rõ phiên bản công bố'}</p>
+    <p>Ghi nhận {formatDateTime(evidence.captured_at)}</p>
     {journalConflict(evidence)&&<p className="form-error">{journalConflict(evidence)}</p>}
     {evidence.signals.map((signal,index)=><p key={index}><strong>{signal.timeframe} · {signal.action}</strong> · {signal.state} · {signal.score} điểm<br/>{signal.reasons.join(' · ')}</p>)}
-    {evidence.engines?.map(item=><p key={item.rule_version_id+String(item.signal.timeframe)}><strong>{item.name} · v{item.version}</strong> · {String(item.signal.action??'—')}<br/>{Array.isArray(item.signal.reasons)?item.signal.reasons.join(' · '):''}</p>)}
-    {(['challenger','funnel','radar','macd'] as const).map((key,index)=>evidence[key]?.length?<details key={key}><summary>{['Challenger','Phễu','Radar','MACD'][index]} · {evidence[key]!.length} đánh giá</summary>{evidence[key]!.map((item,i)=><div key={i}><p><strong>{item.strategy_code??item.version??item.engine_version??key}</strong> · {item.action??item.stage??item.evidence?.funnel_stage??'—'}</p>{item.reasons&&<p>{item.reasons.join(' · ')}</p>}<details><summary>Bằng chứng chi tiết</summary><pre className="journal-evidence-json">{JSON.stringify(item.evidence??item,null,2)}</pre></details></div>)}</details>:null)}
+    {evidence.engines?.map(item=><p key={item.rule_version_id+String(item.signal.timeframe)}><strong>{displayStructureName(item.name)}</strong> · {String(item.signal.action??'—')}<br/>{Array.isArray(item.signal.reasons)?item.signal.reasons.join(' · '):''}</p>)}
+    {(['challenger','funnel','radar','macd'] as const).map((key,index)=>evidence[key]?.length?<details key={key}><summary>{['Challenger','Phễu','Radar','MACD'][index]} · {evidence[key]!.length} đánh giá</summary>{evidence[key]!.map((item,i)=><div key={i}><p><strong>{item.strategy_code??key}</strong> · {item.action??item.stage??item.evidence?.funnel_stage??'—'}</p>{item.reasons&&<p>{item.reasons.join(' · ')}</p>}<details><summary>Bằng chứng chi tiết</summary><pre className="journal-evidence-json">{JSON.stringify(item.evidence??item,(field,value)=>/version|revision/i.test(field)?undefined:value,2)}</pre></details></div>)}</details>:null)}
     {!evidence.signals.length&&!evidence.engines?.length&&<p>Không có tín hiệu tổng hợp hoặc engine trong phiên đã ghi; xem các nguồn nghiên cứu nếu có.</p>}
   </>}</details>
 }

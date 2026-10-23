@@ -9,6 +9,8 @@
   background:var(--bg,#07110e);
 }
 :root[data-theme="light"] { color-scheme:light; --app-top-surface:#f4f7f5; }
+.auth-loading-screen { min-height:100vh; min-height:100dvh; box-sizing:border-box; display:grid; place-items:center; padding:24px; }
+.auth-loading-card { text-align:center; }
 html,body,#root { min-height:100%; }
 body { min-height:100dvh; }
 html[data-theme] body { background-color:var(--app-top-surface); }
@@ -58,6 +60,19 @@ html[data-theme="light"] .app-shell main :is(.screener-field,.investment-primary
   background:var(--control-surface); color:var(--text); font:500 14px/1.4 var(--font-ui); text-align:left;
 }
 .app-shell :is(.advanced-toggle,.investment-primary-advanced,.spike-advanced-toggle,.journal-filter-toggle,.signal-funnel-filter-toggle,.opportunity-filter-toggle) svg { flex:none; width:15px; height:15px; }
+.app-shell .screener-page .screener-filter-fields { grid-template-columns:minmax(145px,190px) minmax(170px,210px)!important; }
+.app-shell .screener-page .screener-filter-fields .screener-action { width:100%; }
+.app-shell .screener-page .screener-filter-toolbar :is(.screener-field,.advanced-toggle,.screener-toolbar-view button) { box-sizing:border-box; height:var(--field-height); min-height:var(--field-height)!important; border-radius:var(--control-radius); font:500 var(--field-text)/1.4 var(--font-ui); }
+.app-shell .screener-page .screener-filter-toolbar .screener-field input,
+.app-shell .screener-page .screener-filter-toolbar .screener-field .soft-select-trigger { font:500 var(--field-text)/1.4 var(--font-ui); }
+.app-shell .spike-advanced-toggle.active { background:var(--lime)!important; border-color:var(--lime)!important; color:#07110e!important; box-shadow:0 0 0 2px color-mix(in srgb,var(--lime) 18%,transparent); }
+html[data-theme="light"] .app-shell .spike-advanced-toggle.active { background:#d7ff52!important; border-color:#94b238!important; color:#172d23!important; }
+@media(max-width:760px) {
+  .app-shell .screener-page .screener-filter-fields { grid-template-columns:repeat(2,minmax(0,1fr))!important; }
+  .app-shell .screener-page .screener-filter-toolbar :is(.screener-field,.advanced-toggle,.screener-toolbar-view button) { height:44px; min-height:44px!important; font-size:14px; }
+  .app-shell .screener-page .screener-filter-toolbar .screener-field input,
+  .app-shell .screener-page .screener-filter-toolbar .screener-field .soft-select-trigger { font-size:14px; }
+}
 
 /* Opportunities and Telegram use the same field and label components as Signals. */
 .app-shell .opportunity-toolbar { display:grid; grid-template-columns:minmax(160px,1fr) auto minmax(320px,2fr); align-items:end; gap:8px; margin:12px 0 0; }

@@ -43,10 +43,8 @@ const changeLabels = { new: 'Mới xuất hiện', action: 'Đổi tín hiệu',
 export function SignalTriageList({ rows, allRows, latestDate, onExplain, canJournal=false }: Props) {
   const [focus, setFocus] = useState<TriageFocus>('all')
   const [holding, setHolding] = useState<TriageHolding>('all')
-  const [expandedAll, setExpandedAll] = useState(false)
   const [expandedIds, setExpandedIds] = useState<Set<number>>(() => new Set())
-  const [collapsedIds, setCollapsedIds] = useState<Set<number>>(() => new Set())
-  const [page, setPage] = useState(1)
+  const [showAll, setShowAll] = useState(false)
   const previous = useQuery({ queryKey: ['signal-triage-previous', latestDate], enabled: Boolean(supabase) && Boolean(latestDate),
     staleTime: 300_000, queryFn: () => loadPrevious(latestDate) })
   const positions = useQuery({ queryKey: ['signal-triage-positions'], enabled: Boolean(supabase),
@@ -101,27 +99,18 @@ export function SignalTriageList({ rows, allRows, latestDate, onExplain, canJour
       .filter(group => visibleIds.has(group.symbol_id))
   }, [rows, allRows, latestDate, previous.isSuccess, previous.data, positions.data, lotStates.data, sectorStrength.data, extension.data])
   const groups = useMemo(() => filterSignalGroups(allGroups, focus, holding), [allGroups, focus, holding])
-  useEffect(() => setPage(1), [focus, holding, latestDate])
-  const pageCount = Math.max(1, Math.ceil(groups.length / 10))
-  const currentPage = Math.min(page, pageCount)
-  const visibleGroups = signalGroupPage(groups, currentPage)
+  useEffect(() => setShowAll(false), [focus, holding, latestDate])
+  const visibleGroups = showAll ? groups : signalGroupPage(groups, 1)
   const signalCount = allGroups.reduce((count, group) => count + group.signals.length, 0)
   const repeated = signalCount - allGroups.length
 
   function toggleGroup(id: number) {
-    if (expandedAll) setCollapsedIds(current => {
-      const next = new Set(current)
-      if (next.has(id)) next.delete(id); else next.add(id)
-      return next
-    })
-    else setExpandedIds(current => {
+    setExpandedIds(current => {
       const next = new Set(current)
       if (next.has(id)) next.delete(id); else next.add(id)
       return next
     })
   }
-  function openAll() { setExpandedAll(true); setCollapsedIds(new Set()); setPage(1) }
-  function collapseAll() { setExpandedAll(false); setExpandedIds(new Set()); setCollapsedIds(new Set()) }
 
   return <div className="signal-triage">
     <div className="signal-triage-summary"><strong>{allGroups.length} mã từ {signalCount} tín hiệu</strong>
@@ -137,11 +126,11 @@ export function SignalTriageList({ rows, allRows, latestDate, onExplain, canJour
         <option value="all">Mọi mã</option><option value="held">Đang nắm giữ</option><option value="unheld">Chưa nắm giữ</option>
       </SoftSelect></label>
       <span>{groups.length} mã khớp bộ lọc</span>
-      <div className="triage-expand-actions"><button type="button" onClick={openAll} disabled={expandedAll && collapsedIds.size === 0}>Mở tất cả</button><button type="button" onClick={collapseAll} disabled={!expandedAll && expandedIds.size === 0}>Thu gọn</button></div>
+      {groups.length > 10 && <div className="triage-expand-actions"><button type="button" aria-expanded={showAll} onClick={() => setShowAll(value => !value)}>{showAll ? 'Thu gọn' : 'Tất cả'}</button></div>}
     </div>
     {(previous.isError || positions.isError) && <p className="muted" role="status">{previous.isError ? 'Chưa đọc được phiên trước; thứ tự tạm thời chưa tính thay đổi mới. ' : ''}{positions.isError ? 'Chưa đọc được danh mục; thứ tự tạm thời chưa tính vị thế.' : ''}</p>}
     {visibleGroups.map(group => {
-      const open = expandedAll ? !collapsedIds.has(group.symbol_id) : expandedIds.has(group.symbol_id)
+      const open = expandedIds.has(group.symbol_id)
       return <article className={`signal-triage-group ${open ? 'open' : ''}`} key={group.symbol_id}>
       <button type="button" className="triage-summary-row" aria-expanded={open} aria-controls={open ? `triage-details-${group.symbol_id}` : undefined} onClick={() => toggleGroup(group.symbol_id)}>
         <span className="triage-symbol"><strong>{group.symbol}</strong><small>{group.sector ?? 'Chưa phân ngành'}</small></span>
@@ -161,10 +150,6 @@ export function SignalTriageList({ rows, allRows, latestDate, onExplain, canJour
       </div>)}</div>}
     </article>})}
     {!groups.length && <p className="muted">Chưa có tín hiệu khớp bộ lọc.</p>}
-    {groups.length > 10 && <nav className="triage-pagination" aria-label="Phân trang bảng gộp">
-      <span>Trang {currentPage}/{pageCount} · {Math.min((currentPage - 1) * 10 + 1, groups.length)}–{Math.min(currentPage * 10, groups.length)} / {groups.length} mã</span>
-      <div><button type="button" disabled={currentPage === 1} onClick={() => setPage(value => Math.max(1, value - 1))}>‹ Trước</button>
-        <button type="button" disabled={currentPage === pageCount} onClick={() => setPage(value => Math.min(pageCount, value + 1))}>Sau ›</button></div>
-    </nav>}
+    {groups.length > 10 && <div className="triage-pagination"><span>Hiển thị {visibleGroups.length} / {groups.length} mã</span></div>}
   </div>
 }

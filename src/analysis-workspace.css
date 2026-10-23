@@ -57,6 +57,7 @@
 .app-shell .quant-control-group { display:flex; flex-wrap:wrap; align-items:center; gap:4px; min-width:0; }
 .app-shell .quant-control-group button { display:inline-flex; align-items:center; justify-content:center; flex-wrap:wrap; gap:3px; min-height:30px; min-width:0; padding:4px 8px; border:1px solid var(--line); border-radius:999px; background:var(--surface-2); color:var(--muted); font:400 12px/1.35 var(--font-ui); cursor:pointer; }
 .app-shell .quant-control-group button[aria-pressed=true] { border-color:var(--control-accent); background:var(--lime); color:#07110e; font-weight:600; }
+.app-shell .quant-control-group[aria-label="Khoảng thời gian"] button:not(:last-child) { width:42px; min-width:42px; min-height:32px; padding:4px 7px; border-radius:999px; }
 .app-shell .quant-control-group button b { font-size:12px; font-weight:500; font-variant-numeric:tabular-nums; }
 .app-shell .quant-analysis .stock-chart { height:430px; min-width:0; margin:0; border:0; border-radius:var(--radius-md); }
 .app-shell .quant-multi-charts { display:grid; gap:8px; min-width:0; }
