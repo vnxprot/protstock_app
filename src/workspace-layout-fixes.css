@@ -42,11 +42,11 @@
 .app-shell .opportunity-settings .soft-select-trigger { border:1px solid var(--line-bright); border-radius:var(--control-radius); }
 .app-shell .settings-page .replay-panel .date-input-wrap>input { border:1px solid var(--line-bright); }
 
-/* The sector table owns the longest region. Below its usable width, the
-   existing sector cards show every measure without a horizontal scrollbar. */
+/* Keep the sector table in the widest region while giving the two side
+   panels enough room for their headings and stock-list link. */
 @media (min-width:1200px) {
   .app-shell main>.market-page {
-    grid-template-columns:minmax(155px,.9fr) minmax(0,7fr) minmax(155px,.9fr);
+    grid-template-columns:minmax(250px,1.6fr) minmax(0,3.3fr) minmax(250px,1.6fr);
     align-items:start;
   }
   .app-shell main>.market-page>.market-universe-panel { grid-column:1; }
@@ -58,29 +58,42 @@
   .app-shell .market-universe-grid strong { font-size:clamp(17px,1.35vw,21px); line-height:1.2; }
   .app-shell .market-universe-grid :is(span,small) { font-size:10px; line-height:1.25; }
   .app-shell .market-universe-panel .market-section-head { display:grid; gap:8px; margin-bottom:12px; }
-  .app-shell .market-universe-panel .market-section-head h2 { font-size:18px; }
-  .app-shell .market-universe-panel .market-section-head p { font-size:11px; }
+  .app-shell .market-universe-panel .market-section-head p { font-size:12px; }
   .app-shell .market-universe-breakdown { gap:10px; margin-top:12px; }
   .app-shell .market-universe-breakdown>div>div { display:grid; grid-template-columns:minmax(0,1fr); }
   .app-shell .market-universe-breakdown a { min-width:0; overflow-wrap:anywhere; border-radius:8px; }
 }
+.app-shell .market-page-header h1 { font-size:23px; line-height:1.2; }
+.app-shell .market-page-header p { margin:4px 0 0; font-size:12px; line-height:1.5; }
+.app-shell .market-page .market-section-head { gap:8px; margin-bottom:10px; }
+.app-shell .market-page .market-section-head .eyebrow { margin-bottom:4px; font-size:11px; white-space:nowrap; }
+.app-shell .market-page .market-section-head h2 { margin:0 0 4px; font:var(--text-card-title); letter-spacing:normal; white-space:nowrap; }
+.app-shell .market-page .market-section-head p { font-size:12px; line-height:1.5; }
+.app-shell .market-universe-panel .market-link { font-size:12px; white-space:nowrap; }
+.app-shell .market-calendar-selects .market-latest,
+.app-shell .market-calendar-selects .soft-select-trigger { box-sizing:border-box; height:var(--field-height); min-height:var(--field-height); }
+.app-shell .market-calendar-selects .market-latest { align-self:end; margin:0; padding:0 10px; border:1px solid var(--line-bright); border-radius:var(--control-radius); background:var(--control-surface); white-space:nowrap; }
 .app-shell .market-sector-panel { container-type:inline-size; }
 .app-shell .market-sector-panel .market-table-scroll { max-width:100%; min-width:0; }
 .app-shell .market-sector-panel .market-sector-table { min-width:0; width:100%; table-layout:fixed; font-size:11px; }
-.app-shell .market-sector-panel .market-sector-table :is(th,td) { padding:8px 5px; white-space:normal; overflow-wrap:anywhere; }
-.app-shell .market-sector-panel .market-sector-table th { font-size:10px; letter-spacing:0; }
+.app-shell .market-sector-panel .market-sector-table :is(th,td) { padding:7px 3px; white-space:normal; overflow-wrap:anywhere; vertical-align:middle; }
+.app-shell .market-sector-panel .market-sector-table :is(th,td):first-child { width:7%; }
+.app-shell .market-sector-panel .market-sector-table :is(th,td):nth-child(2) { width:20%; }
+.app-shell .market-sector-panel .market-sector-table :is(th,td):last-child { width:17%; }
+.app-shell .market-sector-panel .market-sector-table th { font-size:10px; line-height:1.25; letter-spacing:0; }
+.app-shell .market-sector-panel .market-sector-table td strong { font-size:13px; }
+.app-shell .market-sector-panel .market-sector-name button { font-size:11px; line-height:1.3; }
 .app-shell .market-sector-panel .market-sector-name { min-width:0; }
 .app-shell .market-sector-panel .market-sector-name button { max-width:100%; overflow-wrap:anywhere; }
 .app-shell .market-sector-panel .market-state { max-width:100%; white-space:normal; overflow-wrap:anywhere; }
 .app-shell .market-brief-panel { display:grid; align-content:start; gap:12px; min-width:0; }
 .app-shell .market-brief-panel .market-section-head { margin:0; }
-.app-shell .market-brief-panel h2 { font-size:18px; }
 .app-shell .market-brief-list { display:grid; gap:8px; margin:0; }
 .app-shell .market-brief-list>div { display:grid; gap:3px; min-width:0; padding:8px; border:1px solid var(--line); border-radius:9px; background:var(--surface-2); }
 .app-shell .market-brief-list dt { color:var(--muted); font-size:11px; }
 .app-shell .market-brief-list dd { min-width:0; margin:0; font-size:12px; font-weight:650; overflow-wrap:anywhere; }
 .app-shell .market-brief-panel .market-link { flex-wrap:wrap; min-width:0; white-space:normal; }
-@container (max-width:760px) {
+@container (max-width:540px) {
   .app-shell .market-sector-panel .market-mobile-sector-cards { display:grid; gap:8px; }
   .app-shell .market-sector-panel .market-mobile-sector-cards+.market-sector-table { display:none; }
   .app-shell .market-sector-panel .market-sector-card { min-width:0; padding:10px; border:1px solid var(--line); border-radius:10px; background:var(--surface-2); }
@@ -103,10 +116,11 @@
 /* Settings uses one type scale and full-width cards. */
 .app-shell .settings-page #settings-panel { display:grid; grid-template-columns:minmax(0,1fr); gap:var(--workspace-gap); min-width:0; }
 .app-shell .settings-page #settings-panel>* { min-width:0; width:100%; }
-.app-shell .settings-page .account-panel { box-sizing:border-box; display:grid; align-content:start; gap:8px; max-width:none; width:100%; }
+.app-shell .settings-page .account-panel { box-sizing:border-box; display:grid; align-content:start; gap:12px; max-width:none; width:100%; }
 .app-shell .settings-page .account-panel>.secondary-button { justify-self:start; }
 .app-shell .settings-page .account-panel>p { margin:0; }
-.app-shell .settings-page :is(.account-panel h2,.data-reading-card h2,.today-health-card h2,.version-release h3) { margin:0; font:600 16px/1.35 var(--font-ui); }
+.app-shell .settings-page :is(.account-panel,.opportunity-settings)>h2 { margin:0; font:600 20px/1.35 var(--font-ui); }
+.app-shell .settings-page :is(.data-reading-card h2,.today-health-card h2,.version-release h3) { margin:0; font:600 16px/1.35 var(--font-ui); }
 .app-shell .settings-page :is(.account-panel,.data-reading-card,.today-health-card,.version-release) :is(p,dt,dd,li,.rule-row) { font-size:13px; line-height:1.5; }
 .app-shell .settings-page .data-reading-card>p { margin:8px 0 0; }
 .app-shell .settings-page .version-history { gap:var(--workspace-gap); margin:0; }
@@ -116,10 +130,10 @@
 /* Keep the seven guide steps compact while giving the arrows room to read. */
 .app-shell .settings-page .guide-orientation { container-type:inline-size; }
 .app-shell .settings-page .guide-journey { grid-template-columns:repeat(7,minmax(0,1fr)); gap:24px; margin-bottom:14px; }
-.app-shell .settings-page .guide-journey li { display:flex; align-items:center; gap:5px; min-width:0; min-height:56px; padding:8px; border-color:color-mix(in srgb,var(--lime) 58%,var(--line)); background:color-mix(in srgb,var(--lime) 16%,var(--surface-2)); }
+.app-shell .settings-page .guide-journey li { display:flex; align-items:center; gap:5px; min-width:0; min-height:56px; padding:8px; border-color:var(--lime); background:var(--lime); color:#14200d; }
 .app-shell .settings-page .guide-journey li:not(:last-child)::after { content:'➜'; top:50%; right:-21px; transform:translateY(-50%); color:var(--lime); font-size:20px; font-weight:800; line-height:1; }
 .app-shell .settings-page .guide-journey :is(span,strong) { white-space:nowrap; font-size:clamp(10px,.7vw,12px); line-height:1.2; }
-.app-shell .settings-page .guide-journey strong { color:var(--text); }
+.app-shell .settings-page .guide-journey :is(span,strong) { color:#14200d; }
 @container (max-width:1050px) {
   .app-shell .settings-page .guide-journey { grid-template-columns:repeat(4,minmax(0,1fr)); }
   .app-shell .settings-page .guide-journey li:nth-child(4)::after { display:none; }
@@ -139,10 +153,12 @@
 .app-shell main .market-page>.panel { padding:var(--workspace-padding); }
 .app-shell .quant-analysis :is(.quant-profile,.quant-main,.quant-side) { align-content:start; }
 .app-shell .quant-analysis :is(.quant-card,.quant-chart-panel,.quant-instrument) { box-sizing:border-box; padding:var(--workspace-padding); margin:0; }
-.app-shell .quant-analysis .quant-card { gap:8px; }
+.app-shell .quant-analysis .quant-card { gap:5px; }
 .app-shell .quant-analysis .quant-card>.card-header { margin:0; }
 .app-shell .quant-analysis .quant-card>p,
 .app-shell .quant-analysis .quant-card>dl { margin:0; }
+.app-shell .quant-analysis .quant-card>p { line-height:1.5; }
+.app-shell .quant-analysis .quant-zone-group h4 { margin:0; padding-top:0; }
 .app-shell .quant-analysis .opportunity-analysis { margin:0; }
 
 @media (max-width:1199px) {
