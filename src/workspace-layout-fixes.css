@@ -198,6 +198,14 @@ html[data-theme="light"] .app-shell .settings-page .guide-journey :is(span,stron
 .app-shell .quant-analysis .quant-card>p { line-height:1.5; }
 .app-shell .quant-analysis .quant-zone-group h4 { margin:0; padding-top:0; }
 .app-shell .quant-analysis .opportunity-analysis { margin:0; }
+.app-shell .quant-analysis .quant-card:not(.quant-fundamentals)>.card-header+* { padding-top:7px; }
+.app-shell .quant-analysis .quant-card:not(.quant-fundamentals)>:last-child { padding-bottom:7px; }
+.app-shell .quant-analysis .quant-pattern-groups>section { min-width:0; padding:7px; border:1px solid var(--line); border-radius:var(--radius-md); }
+.app-shell .quant-analysis .quant-pattern-bullish { border-color:color-mix(in srgb,var(--mint) 40%,var(--line)); background:color-mix(in srgb,var(--mint) 8%,var(--surface)); }
+.app-shell .quant-analysis .quant-pattern-bearish { border-color:color-mix(in srgb,var(--red) 40%,var(--line)); background:color-mix(in srgb,var(--red) 8%,var(--surface)); }
+.app-shell .quant-analysis .quant-pattern-bullish h4 { color:var(--mint); }
+.app-shell .quant-analysis .quant-pattern-bearish h4 { color:var(--red); }
+.app-shell .quant-analysis .quant-free-float-badge { display:inline-grid; place-items:center; min-width:38px; min-height:38px; padding:3px 6px; border:2px solid var(--lime); border-radius:999px; background:var(--lime); color:#14200d; font-weight:800; font-variant-numeric:tabular-nums; white-space:nowrap; }
 
 /* Three compact navigation levels: section, engine, then result group. */
 .app-shell .screener-page .screener-tabs { gap:5px; margin:2px 0 5px; padding-bottom:2px; }

@@ -25,7 +25,7 @@ export function VciCompanyCard({ symbolId, historical = false }: { symbolId: num
   ]
   return <article className="panel quant-card quant-fundamentals" aria-label="Chỉ số doanh nghiệp VCI">
     <CardHeader title="Chỉ số doanh nghiệp" status={<span className="quant-caption">VCI</span>}/>
-    <dl className="quant-fundamental-grid">{fields.map(([label, text]) => <div key={label}><dt>{label}</dt><dd>{text}</dd></div>)}</dl>
+    <dl className="quant-fundamental-grid">{fields.map(([label, text]) => <div key={label}><dt>{label}</dt><dd>{label === 'Free float' && value.free_float_pct != null && Number.isFinite(value.free_float_pct) && value.free_float_pct > 50 ? <span className="quant-free-float-badge">{text}</span> : text}</dd></div>)}</dl>
     <p className="quant-caption">Tỷ số {value.ratio_basis ?? 'TTM'} · {value.ratio_period ?? 'Chưa có kỳ'}</p>
     <p className="quant-caption">{value.fetched_at ? `Lấy từ VCI: ${new Date(value.fetched_at).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}` : query.isFetching ? 'Đang tải chỉ số VCI…' : 'Đang chờ tác vụ cập nhật VCI.'}</p>
     {(query.isError || query.data?.overview_error) && <p className="quant-risk-note" role="status">Chưa tải được bản mới; giữ số liệu VCI đã lưu.</p>}
