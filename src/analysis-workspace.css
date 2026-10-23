@@ -167,3 +167,57 @@ html[data-theme=light] .app-shell .quant-control-group button[aria-pressed=true]
   .quant-detail-content { padding:12px 12px calc(12px + env(safe-area-inset-bottom,0px)); }
   .quant-detail-content:has(>section+section) { grid-template-columns:minmax(0,1fr); gap:8px; }
 }
+
+/* Three regions: company context, chart/evidence, decisions and price levels. */
+@media(min-width:761px){.app-shell main:has(:is(.quant-analysis,.cs-workbench)){width:100%;max-width:none;padding:18px 20px}}
+.app-shell .quant-analysis{container-type:inline-size;--text-body:400 12px/1.5 var(--font-ui);--text-caption:400 11px/1.4 var(--font-ui);--text-card-title:600 13px/1.35 var(--font-ui);gap:10px}
+.app-shell .quant-analysis .quant-page-header h1{font-size:23px}
+.app-shell .quant-analysis .quant-workspace{display:grid;grid-template-columns:minmax(230px,.85fr) minmax(0,2fr) minmax(270px,1fr);gap:10px;align-items:start}
+.app-shell .quant-analysis :is(.quant-profile,.quant-main,.quant-side){display:grid;gap:10px;min-width:0;align-content:start}
+.app-shell .quant-analysis :is(.quant-card,.quant-chart-panel){padding:10px;border-radius:12px;box-shadow:none}
+.app-shell .quant-analysis .quant-instrument{padding:10px;border:1px solid var(--line);border-radius:12px;background:var(--surface)}
+.app-shell .quant-instrument-name>span{flex-basis:100%;font-size:12px;line-height:1.45}
+.app-shell .quant-analysis .quant-symbol{font-size:22px}
+.app-shell .quant-analysis .quant-quote-strip{grid-template-columns:repeat(2,minmax(0,1fr));border-radius:10px;box-shadow:none}
+.app-shell .quant-analysis .quant-quote-strip>div{padding:8px;gap:2px 5px}
+.app-shell .quant-analysis .quant-quote-strip>div:nth-child(3){border-left:0}
+.app-shell .quant-analysis .quant-quote-strip>div:nth-child(n+3){border-top:1px solid var(--line)}
+.app-shell .quant-analysis .quant-quote-strip dt{font-size:11px}
+.app-shell .quant-analysis .quant-quote-strip dd{font-size:14px}
+.app-shell .quant-analysis .stock-chart{height:clamp(320px,46vh,480px)}
+.app-shell .quant-analysis .quant-multi-charts{grid-template-columns:1fr}
+.app-shell .quant-analysis .multi-chart-pane .stock-chart{height:280px!important}
+.app-shell .quant-analysis .quant-card .card-header h3{font-size:13px}
+.app-shell .quant-analysis .quant-card .card-header-subtitle{font-size:11px}
+.app-shell .quant-analysis .quant-card :is(p,dl){font-size:12px}
+.app-shell .quant-analysis .quant-card .quant-caption{font-size:11px}
+.app-shell .quant-analysis .quant-control-group button{min-height:28px;padding:3px 6px;border-radius:6px;font-size:11px}
+.app-shell .quant-analysis .quant-control-group button b{font-size:11px}
+.app-shell .quant-analysis .quant-detail-button{min-height:26px}
+.app-shell .quant-analysis .quant-fundamental-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 10px;margin:0}
+.app-shell .quant-fundamental-grid>div{padding:7px 0;border-bottom:1px solid var(--line);min-width:0}
+.app-shell .quant-fundamental-grid dt{font-size:11px;color:var(--muted)}
+.app-shell .quant-fundamental-grid dd{margin:2px 0 0;font-size:13px;font-weight:600;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.app-shell .quant-fundamentals-heading{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.app-shell .quant-fundamentals-heading h3{font-size:13px}
+.app-shell .quant-fundamentals-heading>span{font-size:10px;color:var(--control-accent);padding:2px 5px;border:1px solid var(--line);border-radius:4px}
+.app-shell .quant-main>.quant-card .quant-flow-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
+.app-shell .quant-analysis .quant-side .quant-zone-table{font-size:11px}
+.app-shell .quant-analysis .quant-zone-meta{font-size:10px}
+.app-shell .quant-analysis .quant-pattern-groups{gap:8px}
+@container (max-width:1100px){
+ .app-shell .quant-analysis .quant-workspace{grid-template-columns:240px minmax(0,1fr)}
+ .app-shell .quant-analysis .quant-side{grid-column:1/-1;grid-template-columns:repeat(3,minmax(0,1fr));align-items:start}
+}
+@container (max-width:760px){
+ .app-shell .quant-analysis .quant-workspace{display:flex;flex-direction:column}
+ .app-shell .quant-analysis .quant-profile{display:contents}
+ .app-shell .quant-analysis .quant-instrument{order:0;width:100%}
+ .app-shell .quant-analysis .quant-quote-strip{order:1;width:100%}
+ .app-shell .quant-analysis .quant-main{order:2;width:100%;display:grid}
+ .app-shell .quant-analysis .quant-side{order:3;width:100%;grid-template-columns:1fr}
+ .app-shell .quant-analysis .quant-profile>.quant-card{order:4;width:100%}
+ .app-shell .quant-analysis .quant-profile>.quant-fundamentals{order:5}
+ .app-shell .quant-analysis .quant-pattern-groups{grid-template-columns:1fr}
+ .app-shell .quant-analysis .stock-chart{height:320px!important}
+}

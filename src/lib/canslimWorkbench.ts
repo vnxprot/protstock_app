@@ -1,10 +1,10 @@
 export type Metric = 'eps'|'eps_diluted'|'revenue'|'profit'|'profit_total'|'roe'
 export type PeriodRow = { period:string; kind:'quarter'|'year'; year:number; quarter:number; labels?:Record<string,string> } & Partial<Record<Metric,number>>
 export type Bar = {date:string;open:number;high:number;low:number;close:number;volume:number}
-export type Snapshot = {symbol_id:number;financial:PeriodRow[];prices:Bar[];status:string;fetched_at:string|null;attempted_at:string;error?:string}
+export type Snapshot = {symbol_id:number;financial:PeriodRow[];prices:Bar[];status:string;fetched_at:string|null;attempted_at:string;error?:string;overview?:import('./vciOverview').VciOverview;overview_error?:string|null}
 export type Rule = {id:string;group:'C'|'A';enabled:boolean;metric:Metric;kind:'quarter'|'year'|'ttm';mode:'level'|'yoy'|'qoq'|'lag'|'cagr'|'points'|'turnaround';lag:number;op:'gte'|'gt'|'lte'|'lt'|'between';threshold:number;upper:number;period:string;count:number;required:number;positive:boolean}
 export type SConfig = {enabled:boolean;mode:'base'|'breakout'|'either';base:number;depth:number;near:number;tight:number;range:number;contraction:number;dry:number;baseline:number;dryRatio:number;volume:number;volumeRatio:number;extended:number;closePosition:number;liquidity:number;liquidityWindow:number;upDown:boolean;upDownRatio:number;pullback:boolean;pullbackRatio:number}
-export type Config = {rules:Rule[];s:SConfig;groupMode:'all'|'k';groupRequired:number;onlyMatches:boolean;view:'overview'|'growth'|'volume';presets:Record<string,{rules:Rule[];s:SConfig}>}
+export type Config = {rules:Rule[];s:SConfig;groupMode:'all'|'k';groupRequired:number;onlyMatches:boolean;view:'overview'|'growth'|'volume'|'valuation';presets:Record<string,{rules:Rule[];s:SConfig}>}
 export type Verdict = 'PASS'|'FAIL'|'UNKNOWN'|'STALE'|'OFF'
 export const metricLabels:Record<Metric,string>={eps:'EPS cơ bản',eps_diluted:'EPS pha loãng',revenue:'Doanh thu thuần',profit:'LNST cổ đông công ty mẹ',profit_total:'Tổng LNST',roe:'ROE'}
 export const modeLabels:Record<Rule['mode'],string>={level:'Giá trị tuyệt đối',yoy:'Cùng kỳ năm trước · YoY',qoq:'Quý liền trước · QoQ',lag:'So với N kỳ trước',cagr:'CAGR · N năm',points:'Thay đổi điểm % · YoY',turnaround:'Chuyển lỗ thành lãi · YoY'}

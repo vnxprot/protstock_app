@@ -65,7 +65,7 @@ jobs:
           python-version: '3.12'
           cache: pip
       - run: python -m pip install -e .
-      - name: Collect VCI financials and prices for active universe
+      - name: Collect VCI company overview, vendor ratios, financials and prices
         env:
           SUPABASE_URL: https://upmqxwktvvguegqeqibn.supabase.co
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}

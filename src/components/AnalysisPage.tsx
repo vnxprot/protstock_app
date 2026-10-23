@@ -13,6 +13,7 @@ import { MacdPanel } from './MacdPanel'
 import { ExRightsCalculator } from './ExRightsCalculator'
 import { MonthlyTrendEvidence, type MonthlyEvidence } from './MonthlyTrendEvidence'
 import { AnalysisDetails, type AnalysisDetail, type OpenAnalysisDetails } from './AnalysisDetails'
+import { VciCompanyCard } from './VciCompanyCard'
 
 const patternNames: Record<string, string> = { ACCUMULATION_BASE:'Nền tích lũy', FLAT_BASE_BREAKOUT:'Nền phẳng', DOUBLE_BOTTOM:'Hai đáy', DOUBLE_TOP:'Hai đỉnh', ASCENDING_TRIANGLE:'Tam giác tăng', DESCENDING_TRIANGLE:'Tam giác giảm', SYMMETRICAL_TRIANGLE:'Tam giác cân', BULL_FLAG:'Cờ tăng', BULL_PENNANT:'Cờ đuôi nheo tăng', BEAR_FLAG:'Cờ giảm', CUP_HANDLE:'Cốc tay cầm', PULLBACK_CONTINUATION:'Nhịp hồi tiếp diễn' }
 const number = (value: number | null | undefined, digits = 2) => value == null ? '—' : Number(value).toLocaleString('vi-VN', { maximumFractionDigits: digits })
@@ -128,15 +129,14 @@ export function AnalysisPage({ authenticated }: { authenticated: boolean }) {
     {analysis.isError && <div className="empty-state warning">Chưa tải được dữ liệu phân tích. <button className="text-button" onClick={() => void analysis.refetch()}>Thử lại</button></div>}
     {!authenticated && !analysis.data && <div className="empty-state"><Search size={24}/><p>Kết nối dữ liệu để xem biểu đồ và phân tích.</p></div>}
     {analysis.data && <>
+      <div className="quant-workspace">
+        <aside className="quant-profile" aria-label="Hồ sơ và chỉ số doanh nghiệp">
       <div className="quant-instrument"><div className="quant-instrument-name"><button type="button" className="quant-symbol" aria-label={`Đổi mã, hiện tại ${analysis.data.symbol.symbol}`} onClick={() => openCommandPalette('symbols')}>{analysis.data.symbol.symbol}</button><button type="button" className="quant-watch" aria-label={`${favorites.includes(selected ?? '') ? 'Bỏ' : 'Thêm'} ${selected} ${favorites.includes(selected ?? '') ? 'khỏi' : 'vào'} Watchlist`} aria-pressed={favorites.includes(selected ?? '')} onClick={() => { if (selected) toggleWatchlistSymbol(selected) }}><Star size={15} fill={favorites.includes(selected ?? '') ? 'currentColor' : 'none'}/></button><span>{analysis.data.symbol.company_name || 'Chưa đồng bộ tên doanh nghiệp'}</span></div><p>{exchangeLabel(analysis.data.symbol.exchange)} · {analysis.data.symbol.sector} · {displayDate(snapshot?.as_of_date)}<span className={`quant-status trend-${(snapshot?.trend_state ?? 'UNKNOWN').toLowerCase()}`}>{trendName[snapshot?.trend_state ?? 'UNKNOWN'] ?? trendName.UNKNOWN}</span></p></div>
       <dl className="panel quant-quote-strip" aria-label="Số liệu phiên đã đóng"><div><dt>Đóng cửa</dt><dd>{formatMarketPrice(snapshot?.close)}</dd></div><div><dt>Thay đổi phiên</dt><dd className={changePct == null ? '' : changePct < 0 ? 'negative' : 'positive'}>{changePct == null ? '—' : `${changePct >= 0 ? '+' : ''}${number(changePct)}%`}</dd></div><div><dt>ATR 14</dt><dd>{formatMarketPrice(snapshot?.atr14)}</dd></div><div><dt>Volume/TB20</dt><dd>{snapshot?.volume_ratio20 == null ? '—' : `${number(snapshot.volume_ratio20)}×`}</dd></div></dl>
-      <div className="quant-overview-grid" aria-label="Tổng quan phân tích mã">
-        <DecisionCard decision={analysis.data.decision} snapshot={snapshot} timeframe={timeframe} onDetails={openDetails}/>
-        <MonthlyCard value={snapshot?.monthly_context} onDetails={openDetails}/>
-        <OpportunityAnalysis symbol={analysis.data.symbol.symbol} onOpenDetails={openDetails}/>
-        <FlowCard snapshot={snapshot} timeframe={timeframe}/>
-      </div>
-      <div className="quant-workspace">
+
+          <VciCompanyCard symbolId={analysis.data.symbol.id} historical={Boolean(opportunityRoute.date)}/>
+          <MonthlyCard value={snapshot?.monthly_context} onDetails={openDetails}/>
+        </aside>
         <div className="quant-main">
           <section className="panel quant-chart-panel" aria-label="Biểu đồ giá và công cụ">
             <div className="quant-chart-toolbar"><div className="quant-control-group" aria-label="Khoảng thời gian">{['1M','3M','6M','1Y','3Y','ALL'].map(item => <button type="button" aria-pressed={range === item} onClick={() => setRange(item)} key={item}>{item === 'ALL' ? 'Tất cả' : item}</button>)}</div><div className="quant-control-group" aria-label="Khung nến">{([['D','Ngày'],['W','Tuần'],['M','Tháng']] as const).map(([value, label]) => <button type="button" aria-pressed={timeframe === value && !multiPane} onClick={() => { setTimeframe(value); setMultiPane(false); localStorage.setItem('protstock-chart-mode','single') }} key={value}>{label}</button>)}<button type="button" aria-pressed={multiPane} onClick={() => setMultiPane(current => { localStorage.setItem('protstock-chart-mode', current ? 'single' : 'triple'); return !current })}>M/W/D</button></div></div>
@@ -146,10 +146,11 @@ export function AnalysisPage({ authenticated }: { authenticated: boolean }) {
             {formingBar && <p className="quant-caption">Nến {timeframe === 'W' ? 'tuần' : 'tháng'} đến {displayDate(formingBar.trading_date)} đang hình thành. Kết luận dùng nến đã đóng đến {displayDate(snapshot?.as_of_date)}.</p>}
             {dailyAnalysis.data?.prices.at(-1)?.source && <p className="quant-caption">OHLCV EOD · {dailyAnalysis.data.prices.at(-1)?.source} · Giá và khối lượng theo chuỗi do nguồn cung cấp.</p>}
           </section>
+          <FlowCard snapshot={snapshot} timeframe={timeframe}/>
           <div className="quant-evidence-grid"><PatternPanel patterns={analysis.data.patterns} classical={snapshot?.classical_candidates ?? []} asOf={snapshot?.as_of_date} timeframe={timeframe} onDetails={openDetails}/></div>
 
         </div>
-        <aside className="quant-side" aria-label="Hỗ trợ và kháng cự"><ZoneMap zones={analysis.data.zones} close={snapshot?.close} trend={snapshot?.trend_state} timeframe={timeframe} onDetails={openDetails}/></aside>
+        <aside className="quant-side" aria-label="Kết luận và vùng giá"><DecisionCard decision={analysis.data.decision} snapshot={snapshot} timeframe={timeframe} onDetails={openDetails}/><OpportunityAnalysis symbol={analysis.data.symbol.symbol} onOpenDetails={openDetails}/><ZoneMap zones={analysis.data.zones} close={snapshot?.close} trend={snapshot?.trend_state} timeframe={timeframe} onDetails={openDetails}/></aside>
       </div>
     </>}
     <AnalysisDetails detail={detail} onClose={closeDetails}/>

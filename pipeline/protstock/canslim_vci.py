@@ -20,8 +20,8 @@ def numeric(value):
 
 def metric_name(item):
     title = norm(item.get('titleEn') or item.get('titleVi') or '')
-    if 'diluted earnings per share' in title or 'lai suy giam tren co phieu' in title: return 'eps_diluted'
-    if 'basic earnings per share' in title or 'lai co ban tren co phieu' in title or 'basic eps' in title or title in ('eps', 'eps (vnd)', 'earnings per share', 'earnings per share (vnd)'): return 'eps'
+    if 'diluted earnings per share' in title or 'eps diluted' in title or 'lai suy giam tren co phieu' in title or 'lai tren co phieu pha loang' in title: return 'eps_diluted'
+    if 'basic earnings per share' in title or 'lai co ban tren co phieu' in title or 'basic eps' in title or 'eps basic' in title or title in ('eps', 'eps (vnd)', 'earnings per share', 'earnings per share (vnd)'): return 'eps'
     if any(x in title for x in ['net revenue', 'net sales', 'doanh thu thuan', 'total operating income']): return 'revenue'
     if any(x in title for x in ['profit attributable to', 'profit after tax attributable', 'loi nhuan sau thue cua co dong', 'loi nhuan sau thue cua cong ty me']): return 'profit'
     if title in ['profit after tax', 'net profit', 'net profit after tax', 'loi nhuan sau thue thu nhap doanh nghiep', 'loi nhuan sau thue']: return 'profit_total'
@@ -66,6 +66,52 @@ def normalize_reports(metadata, reports):
                 break
     return sorted(output.values(), key=lambda r:(r['year'],r['quarter']), reverse=True)
 
+def apply_vendor_ratios(financial, statistics):
+    """VCI ratios are fractions; quarter observations are explicitly TTM."""
+    ratios = {}
+    for item in statistics:
+        if not isinstance(item, dict): continue
+        year = int(item.get('yearReport') or 0)
+        quarter = int(item.get('quarter') or 0)
+        if year and quarter in (1, 2, 3, 4) and item.get('ratioType') == 'RATIO_TTM':
+            ratios[(year, quarter)] = item
+    for row in financial:
+        # Do not silently substitute a locally computed ROE for the vendor ratio.
+        row.pop('roe', None)
+        row['labels'].pop('roe', None)
+        ratio = ratios.get((row['year'], row['quarter'] or 4), {})
+        for metric in ('roe', 'roa'):
+            value = numeric(ratio.get(metric))
+            if value is not None:
+                row[metric] = value * 100
+                row['labels'][metric] = f'{metric.upper()} VCI · TTM {row["year"]}-Q{row["quarter"] or 4}'
+    return ratios
+
+
+def normalize_overview(details, statistics, financial):
+    ratios = apply_vendor_ratios(financial, statistics)
+    latest_key = max(ratios, default=None)
+    latest = ratios.get(latest_key, {})
+    eps = next((r for r in financial if r['kind'] == 'quarter' and numeric(r.get('eps')) is not None), None)
+    if eps is None:
+        eps = next((r for r in financial if numeric(r.get('eps')) is not None), None)
+    return {
+        'source': 'VCI_DIRECT',
+        'market_cap': numeric(details.get('marketCap')),
+        'shares': numeric(details.get('numberOfSharesMktCap')),
+        'free_float_pct': None if numeric(details.get('freeFloatPercentage')) is None else float(details['freeFloatPercentage']) * 100,
+        'free_float_shares': numeric(details.get('freeFloat')),
+        'pe': numeric(latest.get('pe')), 'pb': numeric(latest.get('pb')),
+        'roe': None if numeric(latest.get('roe')) is None else float(latest['roe']) * 100,
+        'roa': None if numeric(latest.get('roa')) is None else float(latest['roa']) * 100,
+        'ratio_period': f'{latest_key[0]}-Q{latest_key[1]}' if latest_key else None,
+        'ratio_basis': 'TTM',
+        'eps': eps.get('eps') if eps else None,
+        'eps_period': eps['period'] if eps else None,
+        'eps_basis': 'EPS cơ bản · quý' if eps and eps['kind'] == 'quarter' else 'EPS cơ bản · năm',
+    }
+
+
 def collect(symbol):
     from .market_http import request_json
     from .market_sources import vci_candles
@@ -88,6 +134,15 @@ def collect(symbol):
     prices = [{'date':r['t'][:10], 'open':r['o'], 'high':r['h'], 'low':r['l'], 'close':r['c'], 'volume':r['v']} for r in bars if r['t'][:10] <= last_closed.isoformat()][-550:]
     return financial, prices
 
+
+def collect_overview(symbol, financial):
+    from .market_http import request_json
+    details = request_json('GET', BASE+'/details', params={'ticker': symbol}).get('data')
+    statistics = request_json('GET', f'{BASE}/{symbol}/statistics-financial').get('data')
+    if not isinstance(details, dict) or details.get('ticker') != symbol or not isinstance(statistics, list):
+        raise ValueError('VCI overview contract unavailable')
+    return normalize_overview(details, statistics, financial)
+
 def main():
     from .supabase_rest import SupabaseRestClient
     parser=argparse.ArgumentParser()
@@ -100,7 +155,14 @@ def main():
             stamp=datetime.now(timezone.utc).isoformat()
             try:
                 financial,prices=collect(stock['symbol'])
-                client.upsert('canslim_vci_data',[{'symbol_id':stock['id'],'financial':financial,'prices':prices,'fetched_at':stamp,'attempted_at':stamp,'status':'READY','error':None}], 'symbol_id')
+                try:
+                    overview = collect_overview(stock['symbol'], financial)
+                    overview.update({'fetched_at': stamp, 'status': 'READY'})
+                    overview_patch = {'overview': overview, 'overview_attempted_at': stamp, 'overview_error': None}
+                except Exception as error:
+                    # Preserve the last successful overview if only this endpoint fails.
+                    overview_patch = {'overview_attempted_at': stamp, 'overview_error': str(error)[:300]}
+                client.upsert('canslim_vci_data',[{'symbol_id':stock['id'],'financial':financial,'prices':prices,'fetched_at':stamp,'attempted_at':stamp,'status':'READY','error':None, **overview_patch}], 'symbol_id')
                 print(stock['symbol'],'READY',len(financial),len(prices),flush=True)
             except Exception as error:
                 # Partial upsert preserves previous successful data, visibly marked stale.
