@@ -25,7 +25,7 @@ jobs:
       - run: npm run test:journal
       - run: npm run test:signals
       - run: npm run test:runtime
-      - run: node --experimental-strip-types --test tests/investment-modules.test.mjs tests/investment-filters.test.mjs
+      - run: node --experimental-strip-types --test tests/investment-modules.test.mjs tests/investment-filters.test.mjs tests/canslim-workbench.test.mjs
 
   pipeline:
     runs-on: ubuntu-latest
@@ -49,4 +49,5 @@ jobs:
       - run: npm install --prefix .v4-sql-check --no-save --ignore-scripts @electric-sql/pglite@0.5.8
       - run: node tests/v4-migration-smoke.mjs
       - run: node tests/investment-module-migration.mjs
+      - run: node tests/canslim-migration.mjs
       - run: node tests/opportunity-migration.mjs

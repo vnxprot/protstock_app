@@ -44,3 +44,27 @@ views asynchronously. Subsequent successful **EOD Fast Lane** / **EOD pipeline**
 runs refresh them through workflow_run. No monitoring, replay, backtest or user
 acceptance step is required by this rollout. Frontend tolerates an absent schema,
 empty initial outputs and stale/partial prices while the worker runs.
+
+## CANSLIM workbench (2026-10-23)
+
+CANSLIM now uses VCI-only financial and completed daily price data across the
+active universe. The separate Cycle page retains its existing calculations.
+`canslim_vci_data` stores one compact snapshot per symbol; failed attempts preserve
+last successful values and are marked stale. No ROA is requested as a metric,
+calculated or stored. ROE is derived from matching VCI earnings and average equity.
+Unavailable EPS/ROE TTM remain unknown, never fabricated by summing per-share data.
+
+C/A rules support level, exact-period YoY/QoQ/custom lag, annual CAGR,
+ROE percentage-point changes, turnaround and K-of-N periods. C/A/S statuses,
+result counts and explanations follow the same debounced configuration. Settings
+and named presets persist per account under RLS with device fallback. S has
+configurable contraction, volume, liquidity and breakout thresholds, excludes
+the breakout bar from setup/baseline calculations and uses VCI prices in VND.
+
+Dispatch `CANSLIM VCI data refresh` to apply the schema then collect all active
+symbols in four independent shards. It also runs weekdays after the close and
+after successful EOD jobs. No sampling, cross-source reconciliation, backtest,
+alert delivery or deployment-monitoring loop is included.
+
+Validation: production build; exact-period growth/negative denominator/CAGR
+coverage; S pre-breakout windows; parser fixtures; migration and owner isolation.
