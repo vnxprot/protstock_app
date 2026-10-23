@@ -47,3 +47,17 @@ test('breakout uses the pre-breakout contraction and excludes today from volume 
  assert.equal(s.rows[4].value,.1)
  assert.ok(s.volumeRatio>2)
 })
+
+test('data coverage stays missing even when a failing rule already settles the group',()=>{
+ const c=defaultConfig();c.s.enabled=false;c.rules=c.rules.filter(r=>r.group==='C');
+ const snapshot={symbol_id:1,status:'READY',fetched_at:new Date().toISOString(),financial:[{period:'2026-Q2',kind:'quarter',year:2026,quarter:2,eps:110},{period:'2025-Q2',kind:'quarter',year:2025,quarter:2,eps:100}],prices:[]};
+ const result=evaluate(snapshot,c);
+ assert.equal(result.checks.C,'FAIL');assert.equal(result.dataState,'MISSING');assert.equal(result.match,false);
+ assert.ok(result.dataReasons.some(r=>r.includes('Doanh thu')));
+});
+test('K/N can pass with a missing period while coverage remains missing',()=>{
+ const c=defaultConfig();c.s.enabled=false;c.rules=[{...c.rules[0],count:2,required:1}];
+ const snapshot={symbol_id:1,status:'READY',fetched_at:new Date().toISOString(),financial:[{period:'2026-Q2',kind:'quarter',year:2026,quarter:2,eps:150},{period:'2025-Q2',kind:'quarter',year:2025,quarter:2,eps:100}],prices:[]};
+ const result=evaluate(snapshot,c);assert.equal(result.match,true);assert.equal(result.dataState,'MISSING');
+ assert.equal(evaluate({...snapshot,status:'ERROR'},c).dataState,'STALE');
+});

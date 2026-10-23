@@ -1,3 +1,4 @@
+import { CardHeader } from './CardHeader'
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 import { vciValue, type VciOverview } from '../lib/vciOverview'
@@ -23,12 +24,11 @@ export function VciCompanyCard({ symbolId, historical = false }: { symbolId: num
     ['ROE · TTM', vciValue(value.roe, '%')], ['ROA · TTM', vciValue(value.roa, '%')],
   ]
   return <article className="panel quant-card quant-fundamentals" aria-label="Chỉ số doanh nghiệp VCI">
-    <header className="quant-fundamentals-heading"><h3>Chỉ số doanh nghiệp</h3><span>VCI</span></header>
+    <CardHeader title="Chỉ số doanh nghiệp" status={<span className="quant-caption">VCI</span>}/>
     <dl className="quant-fundamental-grid">{fields.map(([label, text]) => <div key={label}><dt>{label}</dt><dd>{text}</dd></div>)}</dl>
     <p className="quant-caption">Tỷ số {value.ratio_basis ?? 'TTM'} · {value.ratio_period ?? 'Chưa có kỳ'}</p>
     <p className="quant-caption">{value.fetched_at ? `Lấy từ VCI: ${new Date(value.fetched_at).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}` : query.isFetching ? 'Đang tải chỉ số VCI…' : 'Đang chờ tác vụ cập nhật VCI.'}</p>
     {(query.isError || query.data?.overview_error) && <p className="quant-risk-note" role="status">Chưa tải được bản mới; giữ số liệu VCI đã lưu.</p>}
     {historical && <p className="quant-risk-note">Chỉ số doanh nghiệp là bản cập nhật hiện tại, không phải số liệu tại phiên lịch sử đang xem.</p>}
-    <p className="quant-caption">Ô “—”: VCI chưa cung cấp dữ liệu.</p>
   </article>
 }

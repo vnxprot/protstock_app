@@ -1,0 +1,52 @@
+
+/* Shared compact workspace: twelve tracks form three logical regions. */
+.app-shell{--workspace-gap:10px;--workspace-padding:12px;--text-body:400 12px/1.5 var(--font-ui);--text-caption:400 11px/1.4 var(--font-ui);--text-card-title:600 14px/1.35 var(--font-ui);--control-radius:12px}
+.app-shell main{width:100%;max-width:none;padding:18px 20px;min-width:0}
+.app-shell :is(.workspace-page,.dashboard-page,.investment-page,.market-page,.watchlist-page,.screener-page){min-width:0;gap:var(--workspace-gap)}
+.app-shell :is(.panel,.analytic-card,.metric-card,.overview-kpi){box-sizing:border-box;padding:var(--workspace-padding);border-radius:12px;box-shadow:none}
+.app-shell :is(.panel,.analytic-card,.metric-card)>:first-child{margin-top:0}
+.app-shell :is(.panel,.analytic-card,.metric-card)>:last-child{margin-bottom:0}
+.app-shell :is(.card-header,.panel-title){min-height:0;height:auto;margin:0 0 8px;padding:0;align-content:start}
+.app-shell :is(.card-header-line h3,.panel-title h2){font-size:14px;line-height:1.35}
+.app-shell :is(.page-title-row,.dashboard-header) h1{font-size:23px}
+.app-shell :is(.dashboard-grid,.analytics-grid,.analysis-columns,.overview-support-grid,.investment-summary,.metric-grid,.settings-grid,.portfolio-grid,.journal-summary,.watch-board-grid){gap:var(--workspace-gap)}
+.app-shell :is(.panel,.analytic-card) :is(p,dt,dd){font-size:12px;line-height:1.5}
+.app-shell .quant-analysis :is(.quant-workspace,.quant-profile,.quant-main,.quant-side,.quant-evidence-grid){gap:var(--workspace-gap)}
+.app-shell .quant-analysis :is(.quant-card,.quant-chart-panel){padding:var(--workspace-padding)}
+.app-shell .quant-card>.card-header{gap:3px;margin:0 0 3px;height:auto;min-height:0}
+.app-shell .quant-fundamentals{grid-auto-rows:max-content;gap:5px}
+.app-shell .quant-fundamentals>.card-header{grid-template-columns:minmax(0,1fr) auto;align-items:center}
+.app-shell .quant-fundamentals .card-header-status{justify-content:flex-end}
+.app-shell .quant-analysis .quant-quote-strip>div{display:grid;grid-template-columns:1fr;align-content:start;align-items:start;gap:3px}
+.app-shell .quant-analysis .quant-quote-strip dd{margin:0}
+.app-shell .quant-analysis .quant-pattern-row{display:grid;grid-template-columns:minmax(0,1fr) 42px;gap:10px;padding:8px}
+.app-shell .quant-analysis .quant-pattern-row>b{display:grid;place-items:center;min-width:34px;min-height:30px;padding:3px;border:1px solid var(--line-bright);border-radius:6px;background:var(--surface-2);color:var(--text);font-size:14px;font-weight:700;font-variant-numeric:tabular-nums}
+.app-shell .cs-workbench .soft-select{display:block;min-width:0;max-width:100%}
+.app-shell .cs-workbench .soft-select-trigger{display:flex;align-items:center;justify-content:space-between;gap:5px;width:100%;min-width:0;min-height:32px;height:32px;padding:4px 8px;border-radius:var(--control-radius);border:1px solid var(--line-bright);background:var(--surface-2);color:var(--text);font:400 12px/1.4 var(--font-ui)}
+.app-shell .cs-workbench .soft-select-trigger>span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.app-shell .cs-workbench input:not([type=checkbox]){border-radius:var(--control-radius);background:var(--surface-2)}
+.app-shell .cs-inline-inputs>.soft-select{flex:1;min-width:0}
+.app-shell .cs-condition>.soft-select{flex:0 0 68px}
+.app-shell .cs-rule-table td>.soft-select{width:100%}
+.app-shell .cs-results .cs-check-column{width:78px;min-width:78px;max-width:78px;text-align:center}
+.app-shell .cs-results{table-layout:auto}
+.app-shell .cs-results tbody tr:hover>td,.app-shell .cs-results tbody tr:focus-within>td{background:color-mix(in srgb,var(--control-accent) 15%,var(--surface))}
+.app-shell .cs-results .cs-badge{justify-content:center;min-width:58px;font-size:11px}
+.app-shell .cs-workbench .cs-scroll:has(.cs-results){padding:0}
+@media(min-width:1200px){
+ .app-shell main>:is(.workspace-page,.dashboard-page,.investment-page,.market-page,.watchlist-page,.screener-page):not(.quant-analysis):not(.cs-workbench){display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:var(--workspace-gap);align-content:start}
+ .app-shell main>:is(.workspace-page,.dashboard-page,.investment-page,.market-page,.watchlist-page,.screener-page):not(.quant-analysis):not(.cs-workbench)>*{grid-column:1/-1;min-width:0}
+ .app-shell main>:is(.workspace-page,.dashboard-page,.investment-page,.market-page,.watchlist-page,.screener-page):not(.quant-analysis):not(.cs-workbench)>.panel{grid-column:span 4}
+ .app-shell main>:is(.workspace-page,.dashboard-page,.investment-page,.market-page,.watchlist-page,.screener-page)>.panel:has(:is(table,form,.data-table,.screener-table)){grid-column:1/-1}
+ .app-shell .overview-page>.market-context-card{grid-column:span 4}
+ .app-shell .overview-page>.overview-kpis{grid-column:span 4}
+ .app-shell .overview-page>.opportunities-panel{grid-column:span 4}
+ .app-shell :is(.settings-grid,.analytics-grid,.dashboard-grid){grid-template-columns:repeat(3,minmax(0,1fr))}
+}
+@media(max-width:1199px) and (min-width:761px){.app-shell :is(.settings-grid,.analytics-grid,.dashboard-grid){grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:760px){
+ .app-shell main{padding:0 12px 24px}.app-shell{--workspace-padding:12px}
+ .app-shell .cs-workbench .soft-select-trigger{height:40px;min-height:40px;font-size:14px}
+ .app-shell :is(.settings-grid,.analytics-grid,.dashboard-grid){grid-template-columns:1fr}
+ .app-shell .quant-analysis .quant-pattern-row{padding:8px}
+}

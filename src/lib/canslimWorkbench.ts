@@ -37,7 +37,7 @@ export function evaluateRule(rows:PeriodRow[],r:Rule) {
  if(r.mode==='points'){value=current.value-prior.value;reason=''}
  else if(r.mode==='turnaround'){value=prior.value<=0&&current.value>0?1:0;reason=''}
  else if(prior.value>0&&(r.mode!=='cagr'||current.value>0)){value=r.mode==='cagr'?((current.value/prior.value)**(1/r.lag)-1)*100:(current.value/prior.value-1)*100;reason=''}
- else reason='Mẫu số không dương: không áp dụng tăng trưởng'
+ else reason='Kỳ gốc bằng 0 hoặc âm: không áp dụng tăng trưởng %'
  }}
  let pass=value===null?null:r.mode==='turnaround'?value===1:r.op==='gte'?value>=r.threshold:r.op==='gt'?value>r.threshold:r.op==='lte'?value<=r.threshold:r.op==='lt'?value<r.threshold:value>=r.threshold&&value<=r.upper
  if(r.positive&&finite(current?.value)&&current.value<=0){pass=false;reason='Giá trị hiện tại phải dương'}
@@ -81,5 +81,12 @@ export function evaluate(snapshot:Snapshot|undefined,c:Config,expectedPriceDate?
  const C=groupVerdict(rules.filter(r=>r.rule.group==='C').map(r=>r.status)), A=groupVerdict(rules.filter(r=>r.rule.group==='A').map(r=>r.status))
  const checks={C:stale&&C!=='OFF'?'STALE' as const:C,A:stale&&A!=='OFF'?'STALE' as const:A,S:(stale||Boolean(expectedPriceDate&&s.date&&s.date<expectedPriceDate))&&s.status!=='OFF'?'STALE' as const:s.status}
  const active=Object.values(checks).filter(v=>v!=='OFF'), required=c.groupMode==='all'?active.length:c.groupRequired
- return {rules,s,checks,match:active.length>0&&active.filter(v=>v==='PASS').length>=required}
+ const activeRules=rules.filter(r=>r.rule.enabled)
+ const dataReasons=activeRules.flatMap(r=>r.evidence.filter(e=>e.value===null).map(e=>r.rule.group+' · '+metricLabels[r.rule.metric]+' · '+(r.rule.period||'Mới nhất')+': '+(r.rule.kind==='ttm'&&r.rule.metric.startsWith('eps')?'Chưa hỗ trợ EPS TTM':e.reason||'Thiếu kỳ so sánh')))
+ if(c.s.enabled&&s.status==='UNKNOWN')dataReasons.push('S: chưa đủ lịch sử giá / volume hoặc thước đo không tính được')
+ if(stale)dataReasons.push('Bản lưu quá 7 ngày hoặc lần lấy mới lỗi; cần cập nhật')
+ const priceStale=Boolean(c.s.enabled&&expectedPriceDate&&s.date&&s.date<expectedPriceDate)
+ if(priceStale)dataReasons.push('S: giá chưa đến phiên công bố '+expectedPriceDate)
+ const dataState=stale||priceStale?'STALE' as const:dataReasons.length?'MISSING' as const:'READY' as const
+ return {rules,s,checks,dataState,dataReasons,match:active.length>0&&active.filter(v=>v==='PASS').length>=required}
 }
