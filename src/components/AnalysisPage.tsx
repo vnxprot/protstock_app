@@ -135,7 +135,6 @@ export function AnalysisPage({ authenticated }: { authenticated: boolean }) {
       <dl className="panel quant-quote-strip" aria-label="Số liệu phiên đã đóng"><div><dt>Đóng cửa</dt><dd>{formatMarketPrice(snapshot?.close)}</dd></div><div><dt>Thay đổi phiên</dt><dd className={changePct == null ? '' : changePct < 0 ? 'negative' : 'positive'}>{changePct == null ? '—' : `${changePct >= 0 ? '+' : ''}${number(changePct)}%`}</dd></div><div><dt>ATR 14</dt><dd>{formatMarketPrice(snapshot?.atr14)}</dd></div><div><dt>Volume/TB20</dt><dd>{snapshot?.volume_ratio20 == null ? '—' : `${number(snapshot.volume_ratio20)}×`}</dd></div></dl>
 
           <VciCompanyCard symbolId={analysis.data.symbol.id} historical={Boolean(opportunityRoute.date)}/>
-          <MonthlyCard value={snapshot?.monthly_context} onDetails={openDetails}/>
         </aside>
         <div className="quant-main">
           <section className="panel quant-chart-panel" aria-label="Biểu đồ giá và công cụ">
@@ -146,7 +145,10 @@ export function AnalysisPage({ authenticated }: { authenticated: boolean }) {
             {formingBar && <p className="quant-caption">Nến {timeframe === 'W' ? 'tuần' : 'tháng'} đến {displayDate(formingBar.trading_date)} đang hình thành. Kết luận dùng nến đã đóng đến {displayDate(snapshot?.as_of_date)}.</p>}
             {dailyAnalysis.data?.prices.at(-1)?.source && <p className="quant-caption">OHLCV EOD · {dailyAnalysis.data.prices.at(-1)?.source} · Giá và khối lượng theo chuỗi do nguồn cung cấp.</p>}
           </section>
-          <FlowCard snapshot={snapshot} timeframe={timeframe}/>
+          <div className="quant-context-grid">
+            <MonthlyCard value={snapshot?.monthly_context} onDetails={openDetails}/>
+            <FlowCard snapshot={snapshot} timeframe={timeframe}/>
+          </div>
           <div className="quant-evidence-grid"><PatternPanel patterns={analysis.data.patterns} classical={snapshot?.classical_candidates ?? []} asOf={snapshot?.as_of_date} timeframe={timeframe} onDetails={openDetails}/></div>
 
         </div>

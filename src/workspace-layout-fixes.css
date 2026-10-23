@@ -201,6 +201,11 @@ html[data-theme="light"] .app-shell .settings-page .guide-journey :is(span,stron
 .app-shell .quant-analysis .quant-card-body { display:grid; align-content:start; gap:5px; min-width:0; padding-block:var(--workspace-padding); }
 .app-shell .quant-analysis .quant-fundamental-grid>div:nth-child(-n+2) { padding-top:0; }
 .app-shell .quant-analysis .quant-card-body>.quant-flow-grid>div { padding:0 0 7px; }
+.app-shell .quant-analysis .quant-context-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:var(--workspace-gap); min-width:0; align-items:start; }
+.app-shell .quant-analysis .quant-context-grid .quant-card-body { gap:3px; padding-block:8px; }
+.app-shell .quant-analysis .quant-context-grid .quant-flow-grid { gap:4px 8px; }
+.app-shell .quant-analysis .quant-context-grid .quant-card-body>.quant-flow-grid>div { padding:0; }
+.app-shell .quant-analysis .quant-context-grid .quant-flow-grid dd { margin-top:0; }
 .app-shell .quant-analysis .quant-card:not(:has(>.quant-card-body))>.card-header+* { padding-top:var(--workspace-padding); }
 .app-shell .quant-analysis .quant-card:not(:has(>.quant-card-body))>:last-child { padding-bottom:var(--workspace-padding); }
 .app-shell .quant-analysis .quant-pattern-groups>section { min-width:0; padding:7px; border:1px solid var(--line); border-radius:var(--radius-md); }
@@ -208,6 +213,7 @@ html[data-theme="light"] .app-shell .settings-page .guide-journey :is(span,stron
 .app-shell .quant-analysis .quant-pattern-bearish { border-color:color-mix(in srgb,var(--red) 40%,var(--line)); background:color-mix(in srgb,var(--red) 8%,var(--surface)); }
 .app-shell .quant-analysis .quant-pattern-bullish h4 { color:var(--mint); }
 .app-shell .quant-analysis .quant-pattern-bearish h4 { color:var(--red); }
+@container (max-width:760px) { .app-shell .quant-analysis .quant-context-grid { grid-template-columns:minmax(0,1fr); } }
 .app-shell .quant-analysis .quant-control-group[aria-label="Khoảng thời gian"] button:last-child { min-height:32px; padding:4px 7px; border-radius:999px; }
 
 /* Three compact navigation levels: section, engine, then result group. */
