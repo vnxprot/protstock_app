@@ -47,7 +47,7 @@ export function OpportunitiesPanel({ compact = false, authenticated = true }: { 
   return <article className={`panel opportunities-panel${compact ? ' opportunities-compact' : ''}`}>
     <div className="panel-title"><div><h2>{compact ? 'Ưu tiên phiên tới' : 'Cơ hội phiên tới'}</h2><p className="muted">Danh sách nghiên cứu cho phiên giao dịch kế tiếp · tách riêng với quyết định mua/bán.</p></div>{compact && <a href={fullLink}>Xem tất cả <ArrowUpRight size={15}/></a>}</div>
     {!compact && <><div className="opportunity-toolbar">
-      <div className="opportunity-search"><FilterField label="Tìm mã"><input type="search" aria-label="Tìm mã cơ hội phiên tới" value={query} placeholder="VSC, HPG…" onChange={event => { setQuery(event.target.value); setLimit(25) }}/></FilterField></div>
+      <div className="opportunity-search"><FilterField label="Tìm mã"><input type="search" aria-label="Tìm mã cơ hội phiên tới" value={query} placeholder="Tìm mã…" onChange={event => { setQuery(event.target.value); setLimit(25) }}/></FilterField></div>
       <button type="button" className="secondary-button opportunity-filter-toggle" aria-expanded={filtersOpen} aria-controls="opportunity-filters" onClick={() => setFiltersOpen(value => !value)}><SlidersHorizontal size={15}/>Bộ lọc{filter !== 'ALL' || day ? ` · ${Number(filter !== 'ALL') + Number(Boolean(day))}` : ''}</button>
       {filtersOpen && <div id="opportunity-filters" className="opportunity-filter-fields">
         <DateField label="Phiên dữ liệu" value={day || data?.trading_date || ''} onChange={value => { setDay(value); setPublication(''); setLimit(25) }}/>

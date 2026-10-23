@@ -80,7 +80,7 @@ function FlowCard({ snapshot, timeframe }: { snapshot: TechnicalSnapshot | undef
   const score = snapshot?.flow_score
   return <Card title="Áp lực giá–khối lượng" subtitle={`Prot Flow · ${timeframe} · ${displayDate(snapshot?.as_of_date)}`} action={<span className={`quant-status flow-${state.toLowerCase()}`}>{title}</span>}>
     <dl className="quant-flow-grid">{[['Điểm 20 nến', score == null ? '—' : `${score > 0 ? '+' : ''}${number(score, 1)}`], ['Bối cảnh', score == null ? 'Chưa đủ dữ liệu' : score > 0 ? 'Thiên tích lũy' : score < 0 ? 'Thiên phân phối' : 'Cân bằng'], ['CMF 20', number(snapshot?.cmf20, 3)], ['OBV', number(snapshot?.obv_slope20, 3)], ['KL/TB20', snapshot?.flow_volume_ratio20 == null ? '—' : `${number(snapshot.flow_volume_ratio20)}×`], ['CLV', number(snapshot?.flow_clv)]].map(([label, value]) => <div key={label}><dt>{label}</dt><dd className={label === 'Điểm 20 nến' && score != null ? score < 0 ? 'negative' : 'positive' : undefined}>{value}</dd></div>)}</dl>
-    <p className="quant-caption">Trạng thái phản ánh nến gần nhất; điểm phản ánh 20 nến. Không xác định danh tính dòng tiền và không tự tạo lệnh.</p>
+    <p className="quant-caption">Trạng thái phản ánh nến gần nhất</p>
   </Card>
 }
 
