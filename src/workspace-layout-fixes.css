@@ -198,12 +198,11 @@ html[data-theme="light"] .app-shell .settings-page .guide-journey :is(span,stron
 .app-shell .quant-analysis .quant-card>p { line-height:1.5; }
 .app-shell .quant-analysis .quant-zone-group h4 { margin:0; padding-top:0; }
 .app-shell .quant-analysis .opportunity-analysis { margin:0; }
-.app-shell .quant-analysis .quant-card-body { display:grid; align-content:start; gap:5px; min-width:0; }
-.app-shell .quant-analysis .quant-card-body>p:first-child { padding-top:7px; }
-.app-shell .quant-analysis .quant-card-body>p:last-child { padding-bottom:7px; }
-.app-shell .quant-analysis .quant-card-body>.quant-flow-grid>div { padding:7px 0; }
-.app-shell .quant-analysis .quant-card:not(:has(>.quant-card-body))>.card-header+* { padding-top:7px; }
-.app-shell .quant-analysis .quant-card:not(:has(>.quant-card-body))>:last-child { padding-bottom:7px; }
+.app-shell .quant-analysis .quant-card-body { display:grid; align-content:start; gap:5px; min-width:0; padding-block:var(--workspace-padding); }
+.app-shell .quant-analysis .quant-fundamental-grid>div:nth-child(-n+2) { padding-top:0; }
+.app-shell .quant-analysis .quant-card-body>.quant-flow-grid>div { padding:0 0 7px; }
+.app-shell .quant-analysis .quant-card:not(:has(>.quant-card-body))>.card-header+* { padding-top:var(--workspace-padding); }
+.app-shell .quant-analysis .quant-card:not(:has(>.quant-card-body))>:last-child { padding-bottom:var(--workspace-padding); }
 .app-shell .quant-analysis .quant-pattern-groups>section { min-width:0; padding:7px; border:1px solid var(--line); border-radius:var(--radius-md); }
 .app-shell .quant-analysis .quant-pattern-bullish { border-color:color-mix(in srgb,var(--mint) 40%,var(--line)); background:color-mix(in srgb,var(--mint) 8%,var(--surface)); }
 .app-shell .quant-analysis .quant-pattern-bearish { border-color:color-mix(in srgb,var(--red) 40%,var(--line)); background:color-mix(in srgb,var(--red) 8%,var(--surface)); }
