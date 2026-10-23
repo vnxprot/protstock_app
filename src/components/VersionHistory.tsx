@@ -16,7 +16,7 @@ const release = {
       'Bộ lọc giao dịch đột biến dùng nến phút cùng nguồn với EOD của mã.',
     ] },
     { name: 'Phạm vi', changes: [
-      'Universe hiện tại gồm 277 mã, có TLG đang hoạt động.',
+      'Universe hiện tại gồm 277 mã.',
       'Prot Stock là ứng dụng cá nhân, phi thương mại.',
     ] },
   ],

@@ -34,8 +34,8 @@
 .app-shell .cs-results .cs-badge{justify-content:center;min-width:58px;font-size:11px}
 .app-shell .cs-workbench .cs-scroll:has(.cs-results){padding:0}
 @media(min-width:1200px){
- .app-shell main>:is(.workspace-page,.dashboard-page,.investment-page,.market-page,.watchlist-page,.screener-page):not(.quant-analysis):not(.cs-workbench){display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:var(--workspace-gap);align-content:start}
- .app-shell main>:is(.workspace-page,.dashboard-page,.investment-page,.market-page,.watchlist-page,.screener-page):not(.quant-analysis):not(.cs-workbench)>*{grid-column:1/-1;min-width:0}
+ .app-shell main>:where(.workspace-page,.dashboard-page,.investment-page,.market-page,.watchlist-page,.screener-page):where(:not(.quant-analysis)):where(:not(.cs-workbench)){display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:var(--workspace-gap);align-content:start}
+ .app-shell main>:where(.workspace-page,.dashboard-page,.investment-page,.market-page,.watchlist-page,.screener-page):where(:not(.quant-analysis)):where(:not(.cs-workbench))>*{grid-column:1/-1;min-width:0}
  /* Full-width content remains full-width; only the overview's first row is split. */
  .app-shell main>.overview-page>.market-context-card{grid-column:span 4}
  .app-shell main>.overview-page>.overview-kpis{grid-column:span 8}
