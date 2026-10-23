@@ -1,0 +1,126 @@
+/* Keep long-form cards on the reading axis. The three-region grid is reserved
+   for content that is genuinely comparable side by side. */
+.app-shell main>.workspace-page>.panel,
+.app-shell main>.investment-page>.panel,
+.app-shell main>.screener-page>.panel { grid-column:1/-1; width:100%; min-width:0; }
+.app-shell main>.investment-page { width:100%; max-width:none; margin:0; }
+.app-shell main>.investment-page>.investment-results { min-width:0; }
+.app-shell main>.journal-page>.journal-toolbar { position:static; top:auto; z-index:auto; }
+.app-shell main>.journal-page>#journal-content { min-width:0; width:100%; }
+.app-shell main>.admin-page>.panel { grid-column:1/-1; }
+
+.app-shell main>.overview-page { align-items:start; }
+.app-shell main>.overview-page>.market-context-card,
+.app-shell main>.overview-page>.overview-kpis { align-self:stretch; min-width:0; margin:0; }
+.app-shell main>.overview-page>.opportunities-panel { grid-column:1/-1; width:100%; margin:0; }
+.app-shell main>.overview-page>.signal-decision-board,
+.app-shell main>.overview-page>.overview-support-grid { grid-column:1/-1; min-width:0; }
+.app-shell .overview-page .signal-decision-board,
+.app-shell .overview-page .overview-support-grid { gap:var(--workspace-gap); }
+.app-shell .overview-page .decision-zone { min-width:0; }
+
+/* Controls follow the visible reading order: symbol, display, session, filters. */
+.app-shell .opportunities-panel .opportunity-toolbar {
+  grid-template-columns:minmax(150px,1fr) minmax(0,2fr) auto;
+  align-items:end; gap:8px;
+}
+.app-shell .opportunities-panel .opportunity-filter-fields { grid-column:auto; min-width:0; }
+.app-shell .opportunities-panel .opportunity-filter-toggle { min-width:0; white-space:normal; }
+.app-shell .opportunities-panel .opportunity-search { min-width:0; }
+.app-shell .opportunities-panel .opportunity-filter-fields>* { min-width:0; }
+
+/* Focus rings use the same accent as the signal filter fields. */
+.app-shell .opportunity-settings .ui-field:focus-within,
+.app-shell .opportunity-settings .soft-select-trigger:focus,
+.app-shell .settings-page .replay-panel .date-input-wrap:focus-within>input {
+  outline:2px solid var(--control-accent)!important;
+  outline-offset:1px;
+  border-color:var(--control-accent)!important;
+}
+.app-shell .opportunity-settings .ui-field { min-width:0; border-radius:var(--control-radius); }
+.app-shell .opportunity-settings .soft-select-trigger { border:1px solid var(--line-bright); border-radius:var(--control-radius); }
+.app-shell .settings-page .replay-panel .date-input-wrap>input { border:1px solid var(--line-bright); }
+
+/* The sector table owns the longest region. Below its usable width, the
+   existing sector cards show every measure without a horizontal scrollbar. */
+@media (min-width:1200px) {
+  .app-shell main>.market-page {
+    grid-template-columns:minmax(175px,1.15fr) minmax(0,6.5fr) minmax(175px,1.15fr);
+    align-items:start;
+  }
+  .app-shell main>.market-page>.market-universe-panel { grid-column:1; }
+  .app-shell main>.market-page>.market-sector-panel { grid-column:2; }
+  .app-shell main>.market-page>.market-brief-panel { grid-column:3; }
+  .app-shell main>.market-page>.spike-radar { grid-column:1/-1; }
+  .app-shell .market-universe-grid { grid-template-columns:minmax(0,1fr); gap:7px; }
+  .app-shell .market-universe-grid>div { min-width:0; min-height:0; padding:8px; overflow-wrap:anywhere; }
+  .app-shell .market-universe-grid strong { font-size:clamp(17px,1.35vw,21px); line-height:1.2; }
+  .app-shell .market-universe-grid :is(span,small) { font-size:11px; line-height:1.3; }
+  .app-shell .market-universe-panel .market-section-head { display:grid; gap:8px; margin-bottom:12px; }
+  .app-shell .market-universe-panel .market-section-head h2 { font-size:18px; }
+  .app-shell .market-universe-panel .market-section-head p { font-size:11px; }
+  .app-shell .market-universe-breakdown { gap:10px; margin-top:12px; }
+  .app-shell .market-universe-breakdown>div>div { display:grid; grid-template-columns:minmax(0,1fr); }
+  .app-shell .market-universe-breakdown a { min-width:0; overflow-wrap:anywhere; border-radius:8px; }
+}
+.app-shell .market-sector-panel { container-type:inline-size; }
+.app-shell .market-sector-panel .market-table-scroll { max-width:100%; min-width:0; }
+.app-shell .market-sector-panel .market-sector-table { min-width:0; width:100%; table-layout:fixed; font-size:11px; }
+.app-shell .market-sector-panel .market-sector-table :is(th,td) { padding:8px 5px; white-space:normal; overflow-wrap:anywhere; }
+.app-shell .market-sector-panel .market-sector-table th { font-size:10px; letter-spacing:0; }
+.app-shell .market-sector-panel .market-sector-name { min-width:0; }
+.app-shell .market-sector-panel .market-sector-name button { max-width:100%; overflow-wrap:anywhere; }
+.app-shell .market-sector-panel .market-state { max-width:100%; white-space:normal; overflow-wrap:anywhere; }
+.app-shell .market-brief-panel { display:grid; align-content:start; gap:12px; min-width:0; }
+.app-shell .market-brief-panel .market-section-head { margin:0; }
+.app-shell .market-brief-panel h2 { font-size:18px; }
+.app-shell .market-brief-list { display:grid; gap:8px; margin:0; }
+.app-shell .market-brief-list>div { display:grid; gap:3px; min-width:0; padding:8px; border:1px solid var(--line); border-radius:9px; background:var(--surface-2); }
+.app-shell .market-brief-list dt { color:var(--muted); font-size:11px; }
+.app-shell .market-brief-list dd { min-width:0; margin:0; font-size:12px; font-weight:650; overflow-wrap:anywhere; }
+.app-shell .market-brief-panel .market-link { flex-wrap:wrap; min-width:0; white-space:normal; }
+@container (max-width:930px) {
+  .app-shell .market-sector-panel .market-mobile-sector-cards { display:grid; gap:8px; }
+  .app-shell .market-sector-panel .market-mobile-sector-cards+.market-sector-table { display:none; }
+  .app-shell .market-sector-panel .market-sector-card { min-width:0; padding:10px; border:1px solid var(--line); border-radius:10px; background:var(--surface-2); }
+  .app-shell .market-sector-panel .market-sector-card.selected { border-color:var(--control-accent); }
+  .app-shell .market-sector-panel .market-sector-card header { display:flex; align-items:center; gap:6px; min-width:0; }
+  .app-shell .market-sector-panel .market-sector-card header button { flex:1; min-width:0; min-height:36px; padding:0; border:0; background:transparent; color:var(--text); font:600 13px/1.35 var(--font-ui); text-align:left; overflow-wrap:anywhere; cursor:pointer; }
+  .app-shell .market-sector-panel .market-sector-card p { display:flex; flex-wrap:wrap; gap:3px 10px; margin:4px 0 0; color:var(--muted); font-size:11px; line-height:1.4; }
+  .app-shell .market-sector-panel .market-sector-card p b { color:var(--text); }
+}
+
+/* Flex and grid children can shrink at browser zoom without pushing text over
+   a neighboring control. Dense tables retain their own local scroll areas. */
+.app-shell main :is(.workspace-page,.dashboard-page,.investment-page,.market-page) :is(.panel,.ui-field,.filter-field,.date-field,.soft-select) { min-width:0; }
+.app-shell main :is(.workspace-page,.dashboard-page,.investment-page,.market-page) :is(input,textarea,select,.soft-select-trigger) { box-sizing:border-box; max-width:100%; min-width:0; }
+.app-shell main :is(.panel,.overview-kpi,.market-universe-grid>div,.decision-zone) { overflow-wrap:anywhere; }
+.app-shell main .soft-select-trigger>span { min-width:0; overflow:hidden; text-overflow:ellipsis; }
+.app-shell main :is(.panel,.overview-kpi,.metric-card)>:is(form,fieldset,div,section) { min-width:0; max-width:100%; }
+.app-shell main :is(.page-title-row,.panel-title,.market-section-head,.spike-head) { min-width:0; flex-wrap:wrap; }
+
+@media (max-width:1199px) {
+  .app-shell main>.overview-page>.market-context-card,
+  .app-shell main>.overview-page>.overview-kpis { grid-column:1/-1; }
+  .app-shell main>.market-page>.market-universe-panel,
+  .app-shell main>.market-page>.market-sector-panel,
+  .app-shell main>.market-page>.market-brief-panel { grid-column:1/-1; }
+  .app-shell .market-universe-grid { grid-template-columns:repeat(4,minmax(0,1fr)); }
+}
+@media (max-width:850px) {
+  .app-shell .opportunities-panel .opportunity-toolbar { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .app-shell .opportunities-panel .opportunity-search { grid-column:1/-1; }
+  .app-shell .opportunities-panel .opportunity-filter-fields { grid-column:1/-1; }
+  .app-shell .opportunities-panel .opportunity-filter-toggle { grid-column:1/-1; justify-self:start; }
+  .app-shell .market-universe-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+}
+@media (max-width:520px) {
+  .app-shell .opportunities-panel .opportunity-toolbar,
+  .app-shell .opportunities-panel .opportunity-filter-fields { grid-template-columns:minmax(0,1fr); }
+  .app-shell .overview-kpis { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .app-shell .market-brief-list { grid-template-columns:repeat(2,minmax(0,1fr)); }
+}
+@media (max-width:760px) {
+  .app-shell .overview-page>.signal-decision-board,
+  .app-shell .overview-page>.overview-support-grid { order:0; }
+}

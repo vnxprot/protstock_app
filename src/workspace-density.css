@@ -36,11 +36,10 @@
 @media(min-width:1200px){
  .app-shell main>:is(.workspace-page,.dashboard-page,.investment-page,.market-page,.watchlist-page,.screener-page):not(.quant-analysis):not(.cs-workbench){display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:var(--workspace-gap);align-content:start}
  .app-shell main>:is(.workspace-page,.dashboard-page,.investment-page,.market-page,.watchlist-page,.screener-page):not(.quant-analysis):not(.cs-workbench)>*{grid-column:1/-1;min-width:0}
- .app-shell main>:is(.workspace-page,.dashboard-page,.investment-page,.market-page,.watchlist-page,.screener-page):not(.quant-analysis):not(.cs-workbench)>.panel{grid-column:span 4}
- .app-shell main>:is(.workspace-page,.dashboard-page,.investment-page,.market-page,.watchlist-page,.screener-page)>.panel:has(:is(table,form,.data-table,.screener-table)){grid-column:1/-1}
- .app-shell .overview-page>.market-context-card{grid-column:span 4}
- .app-shell .overview-page>.overview-kpis{grid-column:span 4}
- .app-shell .overview-page>.opportunities-panel{grid-column:span 4}
+ /* Full-width content remains full-width; only the overview's first row is split. */
+ .app-shell main>.overview-page>.market-context-card{grid-column:span 4}
+ .app-shell main>.overview-page>.overview-kpis{grid-column:span 8}
+ .app-shell main>.overview-page>.opportunities-panel{grid-column:1/-1}
  .app-shell :is(.settings-grid,.analytics-grid,.dashboard-grid){grid-template-columns:repeat(3,minmax(0,1fr))}
 }
 @media(max-width:1199px) and (min-width:761px){.app-shell :is(.settings-grid,.analytics-grid,.dashboard-grid){grid-template-columns:repeat(2,minmax(0,1fr))}}

@@ -17,6 +17,7 @@ import './ui-consistency.css'
 import './analysis-workspace.css'
 import './card-details.css'
 import './workspace-density.css'
+import './workspace-layout-fixes.css'
 import { initializeTheme } from './lib/theme'
 import { initializeInputModality } from './lib/inputModality'
 
