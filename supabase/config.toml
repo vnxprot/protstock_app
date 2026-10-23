@@ -14,7 +14,7 @@ major_version = 17
 [auth]
 enabled = true
 site_url = "http://localhost:5173"
-additional_redirect_urls = ["https://protstockapp.vercel.app"]
+additional_redirect_urls = ["https://protstock.vercel.app"]
 enable_signup = false
 
 [studio]

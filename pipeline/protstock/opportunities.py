@@ -283,7 +283,7 @@ def publish(client, day: date, historical: bool = True, phase: str = 'AUTO'):
 
 def telegram_text(publication: dict, rows: list[dict]) -> str:
     day = publication['date']
-    base = os.getenv('PROTSTOCK_APP_URL', 'https://protstockapp.vercel.app').rstrip('/')
+    base = os.getenv('PROTSTOCK_APP_URL', 'https://protstock.vercel.app').rstrip('/')
     params = urlencode({'date': day, 'publication': publication['publication_id']})
     lines = [f'🔎 PROT STOCK · CƠ HỘI PHIÊN TỚI\nDữ liệu {day} · cập nhật {datetime.now(VN):%H:%M}']
     for row in rows:
