@@ -30,7 +30,7 @@ const zoneContext: Record<string, string> = {
 }
 
 function Card({ title, subtitle, action, onDetails, children, className = '' }: { title: string; subtitle?: string; action?: ReactNode; onDetails?: () => void; children: ReactNode; className?: string }) {
-  return <article className={`panel quant-card ${className}`}><CardHeader title={title} subtitle={subtitle} status={action} onDetails={onDetails}/>{children}</article>
+  return <article className={`panel quant-card ${className}`}><CardHeader title={title} subtitle={subtitle} status={action} onDetails={onDetails}/><div className="quant-card-body">{children}</div></article>
 }
 
 function executiveSummary(snapshot: TechnicalSnapshot | undefined) {
