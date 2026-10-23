@@ -170,6 +170,8 @@
 .app-shell .settings-page .guide-journey li:not(:last-child)::after { content:'➜'; top:50%; right:-21px; transform:translateY(-50%); color:var(--lime); font-size:20px; font-weight:800; line-height:1; }
 .app-shell .settings-page .guide-journey :is(span,strong) { white-space:nowrap; font-size:clamp(10px,.7vw,12px); line-height:1.2; }
 .app-shell .settings-page .guide-journey :is(span,strong) { color:#14200d; }
+html[data-theme="light"] .app-shell .settings-page .guide-journey li { background:#d7ff52!important; border-color:#94b238!important; }
+html[data-theme="light"] .app-shell .settings-page .guide-journey :is(span,strong) { color:#172d23!important; }
 @container (max-width:1050px) {
   .app-shell .settings-page .guide-journey { grid-template-columns:repeat(4,minmax(0,1fr)); }
   .app-shell .settings-page .guide-journey li:nth-child(4)::after { display:none; }
@@ -196,6 +198,30 @@
 .app-shell .quant-analysis .quant-card>p { line-height:1.5; }
 .app-shell .quant-analysis .quant-zone-group h4 { margin:0; padding-top:0; }
 .app-shell .quant-analysis .opportunity-analysis { margin:0; }
+
+/* Three compact navigation levels: section, engine, then result group. */
+.app-shell .screener-page .screener-tabs { gap:5px; margin:2px 0 5px; padding-bottom:2px; }
+.app-shell .screener-page .screener-tabs button { min-height:34px; padding:5px 11px; font-size:12px; }
+.app-shell .screener-page .screener-tabs-primary button.active { background:var(--control-accent)!important; border-color:var(--control-accent)!important; color:#061d13!important; }
+html[data-theme="light"] .app-shell .screener-page .screener-tabs-primary button.active { color:#fff!important; }
+.app-shell .screener-page .screener-tabs-secondary { padding-left:10px; border-left:2px solid var(--control-accent); }
+.app-shell .screener-page .screener-tabs-secondary button { font-weight:600; }
+.app-shell .screener-page .screener-tabs-tertiary { padding-left:20px; border-left:2px solid var(--line-bright); }
+.app-shell .screener-page .screener-tabs-tertiary button { min-height:30px; font-size:11px; }
+.app-shell .screener-page .screener-view-toggle { display:inline-flex; align-items:center; justify-content:center; gap:5px; min-height:var(--field-height); white-space:nowrap; }
+@media (min-width:1200px) {
+  .app-shell .screener-page .screener-filter-toolbar { display:flex!important; flex-wrap:nowrap; align-items:end; gap:6px!important; margin:5px 0!important; padding:8px!important; overflow-x:auto; }
+  .app-shell .screener-page .screener-filter-fields,
+  .app-shell .screener-page .screener-toolbar-actions,
+  .app-shell .screener-page .screener-filter-toolbar .screener-advanced-filters { display:contents!important; }
+  .app-shell .screener-page .screener-filter-fields>.screener-search { flex:0 0 125px; }
+  .app-shell .screener-page .screener-filter-fields>.screener-action { flex:0 0 155px; }
+  .app-shell .screener-page .screener-filter-toolbar .screener-advanced-filters>.ui-field:first-child { flex:0 0 105px; }
+  .app-shell .screener-page .screener-filter-toolbar .screener-advanced-filters>.ui-field:nth-child(2) { flex:0 0 145px; }
+  .app-shell .screener-page .screener-filter-toolbar .screener-advanced-filters>.date-field { flex:0 0 118px; }
+  .app-shell .screener-page .screener-filter-toolbar .screener-advanced-filters>.secondary-button { flex:0 0 auto; min-height:var(--field-height); }
+  .app-shell .screener-page .screener-toolbar-scope { display:none; }
+}
 
 @media (max-width:1199px) {
   .app-shell main>.overview-page>.market-context-card,
