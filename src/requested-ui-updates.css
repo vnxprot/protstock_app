@@ -36,6 +36,7 @@
 .app-shell .workspace-page:has(.portfolio-overview) .budget-label { margin-top:7px; }
 .app-shell .workspace-page:has(.portfolio-overview) .analytic-card p { margin:6px 0; }
 .app-shell .workspace-page:has(.portfolio-overview) .analytic-card .signal-preview { margin-top:6px; }
+.app-shell .workspace-page:has(.portfolio-overview) .risk-track.danger { display:none; }
 .app-shell .portfolio-entitlements { padding:12px; }
 .app-shell .portfolio-entitlements .panel-title { margin-bottom:4px; }
 .app-shell .portfolio-entitlements>p { margin:3px 0 7px; }
