@@ -25,11 +25,27 @@
 .app-shell .screener-page .screener-filter-toolbar .screener-advanced-filters .date-field input:not([type=date]) { font:500 14px/1.4 var(--font-ui); }
 .app-shell .screener-page :is(.screener-tabs-secondary,.screener-tabs-tertiary) { border-left:0; padding-left:0; }
 
+/* Let each portfolio summary card fit its own content. */
+.app-shell .workspace-page:has(.portfolio-overview) .analytics-grid { align-items:start; gap:8px; }
+.app-shell .workspace-page:has(.portfolio-overview) .analytics-grid .analytic-card { min-height:0; height:auto; padding:12px; }
+.app-shell .workspace-page:has(.portfolio-overview) .analytics-grid .analytic-card h3 { margin:0 0 7px; }
+.app-shell .workspace-page:has(.portfolio-overview) .donut-wrap { margin-top:6px; gap:10px; }
+.app-shell .workspace-page:has(.portfolio-overview) .legend { gap:3px; }
+.app-shell .workspace-page:has(.portfolio-overview) .risk-number { margin-top:6px; }
+.app-shell .workspace-page:has(.portfolio-overview) .budget-label { margin-top:7px; }
+.app-shell .workspace-page:has(.portfolio-overview) .analytic-card p { margin:6px 0; }
+.app-shell .workspace-page:has(.portfolio-overview) .analytic-card .signal-preview { margin-top:6px; }
+.app-shell .portfolio-entitlements { padding:12px; }
+.app-shell .portfolio-entitlements .panel-title { margin-bottom:4px; }
+.app-shell .portfolio-entitlements>p { margin:3px 0 7px; }
+.app-shell .portfolio-entitlements .capital-ledger-row { padding-block:6px; }
+
 @media (max-width:1199px) {
   .app-shell .screener-page .screener-filter-buttons { grid-column:1/-1; justify-self:start; }
 }
 @media (max-width:760px) {
-  .app-shell .mobile-header { box-sizing:border-box; height:calc(65px + env(safe-area-inset-top, 0px)); padding-top:env(safe-area-inset-top, 0px); background:var(--surface); color:var(--text); opacity:1; }
+  .app-shell::before { display:none; }
+  .app-shell .mobile-header,html[data-theme="light"] .app-shell .mobile-header { box-sizing:border-box; z-index:90; height:calc(65px + env(safe-area-inset-top, 0px)); min-height:calc(65px + env(safe-area-inset-top, 0px)); padding-top:env(safe-area-inset-top, 0px); background:var(--app-top-surface)!important; color:var(--text); opacity:1; }
   .app-shell .mobile-header :is(.brand,.brand-copy,.icon-button,.theme-toggle,.mobile-live) { opacity:1; color:var(--text); }
   .app-shell .mobile-header .mobile-live { font-weight:600; }
   .app-shell .mobile-header .mobile-live { max-width:110px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
@@ -38,11 +54,13 @@
   .app-shell .overview-page .market-context-detail { grid-template-columns:minmax(0,1fr); }
   .app-shell .opportunities-compact .panel-title { grid-template-columns:minmax(0,1fr) auto; flex-wrap:nowrap; }
   .app-shell .opportunities-compact .panel-title>a { font-size:12px; }
-  .app-shell .market-sector-panel .market-sector-card { padding:8px 10px; }
-  .app-shell .market-sector-panel .market-sector-card header { min-height:22px; gap:5px; }
-  .app-shell .market-sector-panel .market-sector-card header>button:not(.card-details-button) { min-height:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:13px; }
-  .app-shell .market-sector-panel .market-sector-card header .card-details-button { flex:none; min-height:0; margin:0; padding:0; color:var(--control-accent); font:500 12px/1.4 var(--font-ui); }
-  .app-shell .market-sector-panel .market-sector-card p { margin-top:2px; }
+  .app-shell .market-sector-panel .market-period-switch { box-sizing:border-box; display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); grid-template-rows:minmax(0,1fr); height:44px; min-height:44px; padding:3px; overflow:hidden; }
+  .app-shell .market-sector-panel .market-period-switch button { box-sizing:border-box; display:flex; align-items:center; justify-content:center; height:100%; min-height:0; padding:0 4px; line-height:1; }
+  .app-shell .market-sector-panel .market-sector-card { padding:8px 10px; cursor:pointer; }
+  .app-shell .market-sector-panel .market-sector-card:focus-visible { outline:2px solid var(--control-accent); outline-offset:2px; }
+  .app-shell .market-sector-panel .market-sector-card header { min-height:0; gap:5px; line-height:1.3; }
+  .app-shell .market-sector-panel .market-sector-card .market-sector-title { display:block; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font:600 13px/1.3 var(--font-ui); }
+  .app-shell .market-sector-panel .market-sector-card p { margin-top:1px; }
   .app-shell .market-brief-panel .market-section-head { flex-direction:row; }
   .app-shell .market-brief-panel .market-section-head .market-link { font-size:12px; }
   .app-shell .quant-analysis .quant-page-header { flex-direction:row; align-items:center; justify-content:space-between; }
@@ -50,8 +68,8 @@
   .app-shell .quant-analysis .quant-workspace { display:flex; flex-direction:column; }
   .app-shell .quant-analysis :is(.quant-profile,.quant-main,.quant-side,.quant-context-grid,.quant-evidence-grid) { display:contents; }
   .app-shell .quant-analysis .quant-instrument { order:0; position:sticky; top:calc(65px + env(safe-area-inset-top, 0px)); z-index:20; width:100%; box-shadow:var(--elevation-1); }
-  .app-shell .quant-analysis .quant-instrument>p { position:relative; padding-right:120px; min-height:23px; }
-  .app-shell .quant-analysis .quant-instrument>p .quant-status { position:absolute; top:0; right:0; margin:0; white-space:nowrap; }
+  .app-shell .quant-analysis .quant-instrument-name { padding-right:125px; }
+  .app-shell .quant-analysis .quant-instrument-trend { position:absolute; top:8px; right:10px; margin:0; white-space:nowrap; }
   .app-shell .quant-analysis .quant-quote-strip { order:1; width:100%; }
   .app-shell .quant-analysis .quant-chart-panel { order:2; width:100%; }
   .app-shell .quant-analysis .quant-side>.quant-card:first-child { order:3; width:100%; }

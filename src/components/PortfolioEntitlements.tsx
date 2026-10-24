@@ -12,7 +12,7 @@ export function PortfolioEntitlements({entitlements,receipts,onSave}:{entitlemen
   const [busy,setBusy]=useState(false)
   const [error,setError]=useState('')
   if(!entitlements.length) return null
-  return <article className="panel"><div className="panel-title"><h3>Cổ tức và quyền</h3><span>{entitlements.length} sự kiện</span></div>
+  return <article className="panel portfolio-entitlements"><div className="panel-title"><h3>Cổ tức và quyền</h3><span>{entitlements.length} sự kiện</span></div>
     <p className="muted">Sự kiện theo nguồn dữ liệu, không chặn định giá. Cổ tức phải thu tính trước thuế và nằm riêng với tiền mặt. Tiền mặt chỉ tăng khi ghi nhận số tiền thực nhận; quyền cổ phiếu hiển thị riêng theo sổ giao dịch.</p>
     {entitlements.map(item=>{
       const key=String(item.symbol_id)+':'+item.ex_date+':'+item.action_type
