@@ -17,9 +17,10 @@ export function PortfolioEntitlements({entitlements,receipts,onSave}:{entitlemen
     {entitlements.map(item=>{
       const key=String(item.symbol_id)+':'+item.ex_date+':'+item.action_type
       const receipt=receipts.find(row=>String(row.symbol_id)===String(item.symbol_id)&&row.ex_date===item.ex_date)
-      return <div key={key} className="capital-ledger-row"><span><b>{item.symbol}</b> · Ngày quyền {formatDate(item.ex_date)}<small> · {item.action_type==='CASH_DIVIDEND'?'Cổ tức tiền mặt': 'Quyền cổ phiếu'} · {item.source.startsWith('VCI')?'VCI':'KBS'}</small></span>
-        <span>{item.action_type==='CASH_DIVIDEND'?(receipt?`Đã nhận ${formatVnd(Number(receipt.net_cash))} · ${formatDate(receipt.received_date)}`:`Phải thu ${item.expected_cash==null?'chưa có số tiền từ nguồn':formatVnd(Number(item.expected_cash))}`):`${Number(item.quantity).toLocaleString('vi-VN')} CP tại ngày quyền${item.ratio!=null?` · Tỷ lệ ${Number(item.ratio)*100}%`:''}`}</span>
-        {item.action_type==='CASH_DIVIDEND'&&<button className="text-button" onClick={()=>{setEditing(item);setDay(receipt?.received_date??todayInVietnam());setCash(receipt?Number(receipt.net_cash):0);setError('')}}>{receipt?'Sửa thực nhận':'Ghi tiền thực nhận'}</button>}
+      return <div key={key} className="capital-ledger-row portfolio-entitlement-row"><div className="portfolio-entitlement-head"><b>{item.symbol}</b>{item.action_type==='CASH_DIVIDEND'&&<button type="button" className="text-button portfolio-entitlement-action" onClick={()=>{setEditing(item);setDay(receipt?.received_date??todayInVietnam());setCash(receipt?Number(receipt.net_cash):0);setError('')}}>{receipt?'Sửa thực nhận':'Ghi tiền thực nhận'}</button>}</div>
+        <span className="portfolio-entitlement-date">Ngày quyền {formatDate(item.ex_date)}</span>
+        <small className="portfolio-entitlement-source">{item.action_type==='CASH_DIVIDEND'?'Cổ tức tiền mặt': 'Quyền cổ phiếu'} · {item.source.startsWith('VCI')?'VCI':'KBS'}</small>
+        <span className="portfolio-entitlement-value">{item.action_type==='CASH_DIVIDEND'?(receipt?`Đã nhận ${formatVnd(Number(receipt.net_cash))} · ${formatDate(receipt.received_date)}`:`Phải thu ${item.expected_cash==null?'chưa có số tiền từ nguồn':formatVnd(Number(item.expected_cash))}`):`${Number(item.quantity).toLocaleString('vi-VN')} CP tại ngày quyền${item.ratio!=null?` · Tỷ lệ ${Number(item.ratio)*100}%`:''}`}</span>
       </div>
     })}
     {editing&&<form className="rule-form" onSubmit={async event=>{event.preventDefault();if(busy)return;setBusy(true);setError('');try{await onSave(editing,day,cash);setEditing(null)}catch{setError('Không lưu được tiền thực nhận. Kiểm tra ngày và số tiền rồi thử lại.')}finally{setBusy(false)}}}>

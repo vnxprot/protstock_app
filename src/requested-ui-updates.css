@@ -4,8 +4,9 @@
 .app-shell .overview-page .market-context-chevron { display:block; grid-column:auto; grid-row:auto; transition:transform .2s ease; }
 .app-shell .overview-page .market-context-card[open] .market-context-chevron { transform:rotate(180deg); }
 .app-shell .overview-page .market-context-detail { grid-template-columns:repeat(2,minmax(0,1fr)); }
-.app-shell .overview-page .market-context-detail .health-method-details { grid-column:1/-1; min-width:0; padding:12px; border:1px solid var(--line); border-radius:10px; background:var(--surface); }
-.app-shell .overview-page .health-method-details summary { padding:0; }
+.app-shell .overview-page .market-context-detail .health-method-details { grid-column:1/-1; min-width:0; margin-top:0; padding:8px 10px; border:1px solid var(--line); border-radius:10px; background:var(--surface); }
+.app-shell .overview-page .health-method-details summary { align-items:start; padding:0; }
+.app-shell .overview-page .health-method-details summary>.card-details-label { align-self:start; }
 .app-shell .overview-page .health-method-details table { display:block; max-width:100%; overflow-x:auto; }
 .app-shell :is(.decision-zone header>a,.opportunities-compact .panel-title>a) { color:var(--control-accent); font:500 12px/1.4 var(--font-ui); text-decoration:none; white-space:nowrap; }
 .app-shell :is(.decision-zone header>a,.opportunities-compact .panel-title>a):hover { text-decoration:underline; }
@@ -39,11 +40,19 @@
 .app-shell .portfolio-entitlements .panel-title { margin-bottom:4px; }
 .app-shell .portfolio-entitlements>p { margin:3px 0 7px; }
 .app-shell .portfolio-entitlements .capital-ledger-row { padding-block:6px; }
+.app-shell .portfolio-entitlement-row { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:start; gap:2px 10px; }
+.app-shell .portfolio-entitlement-head { grid-column:1/-1; display:flex; align-items:flex-start; justify-content:space-between; gap:8px; min-width:0; }
+.app-shell .portfolio-entitlement-action { flex:none; align-self:flex-start; margin:0; padding:0; border:0; background:transparent; color:var(--lime)!important; font:600 12px/1.4 var(--font-ui); white-space:nowrap; }
+.app-shell .portfolio-entitlement-date { min-width:0; white-space:nowrap; font-variant-numeric:tabular-nums; }
+.app-shell .portfolio-entitlement-source { color:var(--muted); text-align:right; }
+.app-shell .portfolio-entitlement-value { grid-column:1/-1; }
 
 @media (max-width:1199px) {
   .app-shell .screener-page .screener-filter-buttons { grid-column:1/-1; justify-self:start; }
 }
 @media (max-width:760px) {
+  .app-shell .portfolio-entitlement-row { grid-template-columns:minmax(0,1fr); }
+  .app-shell .portfolio-entitlement-source { text-align:left; }
   .app-shell::before { display:none; }
   .app-shell .mobile-header,html[data-theme="light"] .app-shell .mobile-header { box-sizing:border-box; z-index:90; height:calc(65px + env(safe-area-inset-top, 0px)); min-height:calc(65px + env(safe-area-inset-top, 0px)); padding-top:env(safe-area-inset-top, 0px); background:var(--app-top-surface)!important; color:var(--text); opacity:1; }
   .app-shell .mobile-header :is(.brand,.brand-copy,.icon-button,.theme-toggle,.mobile-live) { opacity:1; color:var(--text); }
