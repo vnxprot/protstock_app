@@ -11,7 +11,6 @@ import { supabase } from '../lib/supabase'
 import '../market-page.css'
 import { HealthMethodDetails } from './HealthMethodDetails'
 import { SoftSelect } from './SoftSelect'
-import { IntradaySpikeRadar } from './IntradaySpikeRadar'
 
 type Membership = { symbol_id: number; status: string }
 type ChartPoint = { key: string; label: string; score: number | null; complete: boolean }
@@ -226,15 +225,13 @@ export function MarketPage({ authenticated }: { authenticated: boolean }) {
       {showMethod && <div className="market-method"><p><strong>Sức khỏe:</strong> điểm kỳ là trung vị điểm sức khỏe của các phiên đủ mẫu; “phiên khỏe” là tỷ lệ phiên có điểm ≥65. Điểm một phiên gồm các tỷ lệ trên SMA20/50/200, cấu trúc MA và số mã tăng.</p><p><strong>Sector Flow:</strong> điểm kỳ là trung vị điểm Flow ngành của các phiên đủ mẫu; “phiên dương” là tỷ lệ phiên có Flow &gt;0. Flow mỗi phiên có nền 20 phiên; không diễn giải điểm kỳ là lượng tiền vào ròng của cả tháng/quý.</p><p><strong>Phạm vi:</strong> mẫu số là các ngày giao dịch VN-Index có dữ liệu đến phiên đã công bố. Lịch sử tính theo Prot Universe và nhãn ngành hiện tại; nhóm đổi ngành hoặc mã mới niêm yết có thể có độ phủ thấp. Kỳ đang diễn ra là tạm thời.</p></div>}
     </section>
     <aside className="panel market-brief-panel" aria-label="Tóm tắt thị trường">
-      <div className="market-section-head"><div><span className="eyebrow">03 · TOÀN CẢNH</span><h2>Phiên thị trường</h2></div></div>
+      <div className="market-section-head"><div><span className="eyebrow">03 · TOÀN CẢNH</span><h2>Phiên thị trường</h2></div><a className="market-link" href="#analysis">Mở Phân tích mã <ArrowUpRight size={16}/></a></div>
       <dl className="market-brief-list">
         <div><dt>Phiên dữ liệu</dt><dd>{formatDate(day)}</dd></div>
         <div><dt>Market Health</dt><dd className={`market-health-value ${breadth?.market_health_state === 'RISK_ON' ? 'risk-on' : breadth?.market_health_state === 'RISK_OFF' ? 'risk-off' : breadth?.market_health_state === 'NEUTRAL' ? 'neutral' : ''}`}>{score(breadth?.market_health_score)} · {breadth?.market_health_state === 'RISK_ON' ? 'Tích cực' : breadth?.market_health_state === 'RISK_OFF' ? 'Phòng thủ' : breadth?.market_health_state === 'NEUTRAL' ? 'Trung tính' : 'Chờ dữ liệu'}</dd></div>
         <div><dt>Độ phủ</dt><dd>{breadth?.observed_count ?? '—'}/{breadth?.eligible_count ?? '—'} mã · {breadth?.coverage_ratio == null ? '—' : pct(breadth.coverage_ratio * 100)}</dd></div>
         <div><dt>Nhóm ngành trong kỳ</dt><dd>{visible.length} nhóm</dd></div>
       </dl>
-      <a className="market-link" href="#analysis">Mở Phân tích mã <ArrowUpRight size={16}/></a>
     </aside>
-    <IntradaySpikeRadar date={latestDate} authenticated={authenticated} mode="market"/>
   </section>
 }

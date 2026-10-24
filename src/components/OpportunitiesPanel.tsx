@@ -45,7 +45,7 @@ export function OpportunitiesPanel({ compact = false, authenticated = true }: { 
   const visible = rows.slice(0, compact ? 5 : limit)
   const fullLink = '#screener?section=opportunities' + (data?.trading_date ? '&date=' + data.trading_date : '') + (data?.id ? '&publication=' + data.id : '')
   return <article className={`panel opportunities-panel${compact ? ' opportunities-compact' : ''}`}>
-    <div className="panel-title"><div><h2>{compact ? 'Ưu tiên phiên tới' : 'Cơ hội phiên tới'}</h2><p className="muted">Danh sách nghiên cứu cho phiên giao dịch kế tiếp · tách riêng với quyết định mua/bán.</p></div>{compact && <a href={fullLink}>Xem tất cả <ArrowUpRight size={15}/></a>}</div>
+    <div className="panel-title"><div><h2>{compact ? 'Ưu tiên phiên tới' : 'Cơ hội phiên tới'}</h2><p className="muted">Danh sách nghiên cứu cho phiên giao dịch kế tiếp.</p></div>{compact && <a href={fullLink}>Xem tất cả <ArrowUpRight size={15}/></a>}</div>
     {!compact && <><div className="opportunity-toolbar">
       <div className="opportunity-search"><FilterField label="Tìm mã"><input type="search" aria-label="Tìm mã cơ hội phiên tới" value={query} placeholder="Tìm mã…" onChange={event => { setQuery(event.target.value); setLimit(25) }}/></FilterField></div>
       {filtersOpen && <div id="opportunity-filters" className="opportunity-filter-fields">
