@@ -25,11 +25,20 @@ def decide(mode: str, jobs: list[dict], breadth_exists: bool, *, force_rerun: bo
     if any(_fresh_job(job, now) for job in jobs):
         return "SKIP" if mode == "fast-lane" else "IN_PROGRESS"
     latest = next((job for job in jobs if job["job_type"] == "DERIVE_BARS"), None)
+    counts = (latest.get("counts") or {}) if latest else {}
+    pub_status = counts.get("publication_status")
+    covered_symbols = counts.get("covered_symbols")
+    # A publication is only complete if it actually covered symbols (> 0), never when 0 symbols were processed.
+    valid_publication = pub_status == "COMPLETE" or (
+        pub_status == "COMPLETE_WITH_MISSING" and (covered_symbols is None or covered_symbols > 0)
+    )
     complete = latest is not None and latest["status"] == "SUCCEEDED" \
-        and (latest.get("counts") or {}).get("publication_status") in {"COMPLETE", "COMPLETE_WITH_MISSING"} \
+        and valid_publication \
         and (source_revision is None or latest.get("source_revision") == source_revision) \
-        and (required_source_policy is None or (latest.get("counts") or {}).get("source_policy") == required_source_policy)
+        and (required_source_policy is None or counts.get("source_policy") == required_source_policy)
     if complete:
+        if repair_missing and pub_status == "COMPLETE_WITH_MISSING":
+            return "RUN" if mode == "fast-lane" else "DISPATCH_FAST_LANE"
         return "SKIP" if mode == "fast-lane" else "COMPLETE"
     # Two balanced shards per attempt; at most three automatic attempts/session.
     if not repair_missing and sum(job["job_type"] == "EOD_INGEST" for job in jobs) >= 6:
@@ -47,24 +56,32 @@ def main() -> None:
     mode = sys.argv[1]
     if mode not in {"fast-lane", "watchdog"}:
         raise ValueError(f"Unknown EOD guard mode: {mode}")
-    requested_day = os.environ.get("TRADING_DATE") or datetime.now(timezone(timedelta(hours=7))).date().isoformat()
+    vn_tz = timezone(timedelta(hours=7))
+    now_vn = datetime.now(vn_tz)
+    explicit_date = os.environ.get("TRADING_DATE")
+    requested_day = explicit_date or now_vn.date().isoformat()
     day = requested_day
     sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "pipeline"))
     from protstock.config import Settings
     from protstock.supabase_rest import SupabaseRestClient
     from protstock.eod import resolve_eod_session
     from protstock.analysis import ALGORITHM_VERSION
-    from datetime import date
+    from datetime import date, time
     session_client = SupabaseRestClient(Settings.from_env())
     try:
         day = resolve_eod_session(session_client, date.fromisoformat(day)).isoformat()
         symbols = session_client.active_symbols()
     finally:
         session_client.close()
-    if not os.environ.get("TRADING_DATE") and day != requested_day:
+    if not explicit_date and day != requested_day:
         with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
             output.write(f"action=SKIP\ntrading_date={day}\nmatrix={{\"include\": []}}\n")
         print(f"Market closed on {requested_day}; no automatic EOD dispatch")
+        return
+    if not explicit_date and day == now_vn.date().isoformat() and now_vn.time() < time(15, 0):
+        with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+            output.write(f"action=SKIP\ntrading_date={day}\nmatrix={{\"include\": []}}\n")
+        print(f"Market session {day} has not closed yet (current VN time: {now_vn.strftime('%H:%M:%S')}); no automatic EOD dispatch before 15:00")
         return
     key = os.environ["SUPABASE_SERVICE_ROLE_KEY"]
     headers = {"apikey": key, "Authorization": f"Bearer {key}"}

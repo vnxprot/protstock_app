@@ -40,6 +40,38 @@ def test_complete_publication_requires_current_revision_but_accepts_missing_cand
     assert eod_status.decide("watchdog", jobs, True, coverage_status="COMPLETE", source_revision="core-rules-v5.0.0") == "DISPATCH_FAST_LANE"
 
 
+def test_complete_with_zero_covered_symbols_is_not_treated_as_complete():
+    jobs = [{
+        "job_type": "DERIVE_BARS",
+        "status": "SUCCEEDED",
+        "source_revision": "core-rules-v4.0.0",
+        "counts": {
+            "publication_status": "COMPLETE_WITH_MISSING",
+            "covered_symbols": 0,
+            "expected_symbols": 277,
+            "skipped_missing_price": 277,
+        }
+    }]
+    assert eod_status.decide("fast-lane", jobs, False, source_revision="core-rules-v4.0.0") == "RUN"
+    assert eod_status.decide("watchdog", jobs, False, source_revision="core-rules-v4.0.0") == "DISPATCH_FAST_LANE"
+
+
+def test_repair_missing_runs_even_if_previously_complete_with_missing():
+    jobs = [{
+        "job_type": "DERIVE_BARS",
+        "status": "SUCCEEDED",
+        "source_revision": "core-rules-v4.0.0",
+        "counts": {
+            "publication_status": "COMPLETE_WITH_MISSING",
+            "covered_symbols": 270,
+            "expected_symbols": 277,
+        }
+    }]
+    assert eod_status.decide("fast-lane", jobs, True, source_revision="core-rules-v4.0.0") == "SKIP"
+    assert eod_status.decide("fast-lane", jobs, True, repair_missing=True, source_revision="core-rules-v4.0.0") == "RUN"
+    assert eod_status.decide("watchdog", jobs, True, repair_missing=True, source_revision="core-rules-v4.0.0") == "DISPATCH_FAST_LANE"
+
+
 def test_stale_running_job_recovers_but_fresh_heartbeat_preserves_lease():
     now = datetime(2026, 10, 2, 10, tzinfo=timezone.utc)
     jobs = [{"job_type": "EOD_INGEST", "status": "RUNNING", "started_at": "2026-10-02T08:00:00Z", "heartbeat_at": "2026-10-02T09:20:00Z"}]
