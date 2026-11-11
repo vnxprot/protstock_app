@@ -35,3 +35,12 @@
 .macd-divergence-list summary { grid-template-columns: minmax(65px,.5fr) minmax(0,2fr) minmax(0,1.5fr) minmax(0,1.5fr); line-height:1.5; }
 .macd-divergence-list summary > * { min-width:0; overflow-wrap:anywhere; }
 @media(max-width:760px) { .macd-divergence-tools .screener-field { max-width:none; } .macd-divergence-list summary { grid-template-columns:minmax(65px,.5fr) minmax(0,2fr); } }
+
+/* Symbol grouping for multi-scale display */
+.macd-symbol-group { border-bottom: 2px solid var(--line); }
+.macd-symbol-group:last-child { border-bottom: none; }
+.macd-symbol-group details { border-bottom: 1px solid color-mix(in srgb, var(--line) 50%, transparent); }
+.macd-symbol-group details:last-child { border-bottom: none; }
+.macd-symbol-header { display: flex; align-items: center; gap: .75rem; padding: 8px 14px 4px; background: color-mix(in srgb, var(--surface-2) 85%, var(--surface)); font-size: .93rem; border-bottom: 1px solid var(--line); }
+.macd-composite-badge { font-size: .82rem; padding: .18rem .5rem; border-radius: .4rem; background: color-mix(in srgb, var(--accent, #168459) 15%, transparent); color: var(--text); font-weight: 500; }
+.macd-zone-local-trigger { background: color-mix(in srgb, var(--accent, #168459) 8%, transparent); border-left: 3px solid var(--accent, #168459); padding-left: .5rem; border-radius: 0 .3rem .3rem 0; }

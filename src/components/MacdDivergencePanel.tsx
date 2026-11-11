@@ -11,7 +11,8 @@ type Zone = { start_date: string; end_date: string; price_date: string; price_lo
 type Evidence = { zones: Zone[]; strength: 'THIN' | 'ROBUST'; price_declines_pct: number[]; macd_rises_pct_points: number[];
   breakout_volume_ratio20?: number | null; trigger_age_sessions?: number | null; pending_lower_low_on?: string | null;
   invalidated_on?: string | null; latest_close: number; distance_to_trigger_pct: number;
-  sweep_reversal?: boolean; sweep_date?: string | null; lower_wick_ratio?: number; close_location?: number }
+  sweep_reversal?: boolean; sweep_date?: string | null; lower_wick_ratio?: number; close_location?: number;
+  gain_from_trough_pct?: number | null; local_trigger_price?: number | null; local_trigger_date?: string | null }
 type Row = { symbol_id: number; symbol: string; setup_id: string; swings: number; stage: string; confirmed_on: string | null;
   trigger_price: number; invalidation_price: number; trigger_date: string | null; evidence: Evidence }
 
@@ -84,6 +85,14 @@ function ZoneRow({ row, date, canJournal=false }: { row: Row; date: string; canJ
       {row.trigger_date !== date && ' Đây là sự kiện đã qua; rule không phát lệnh mua muộn.'}</p>}
     {evidence.pending_lower_low_on && <p className="macd-zone-note">Đáy mới ngày {evidence.pending_lower_low_on} đang chờ hai phiên đóng để cập nhật vùng; mẫu vẫn được theo dõi, chưa kích hoạt mua.</p>}
     {row.stage === 'INVALIDATED' && evidence.invalidated_on && <p className="macd-zone-note">Mẫu này bị thủng đáy bảo vệ trong phiên {evidence.invalidated_on}. Ngày lưu đánh giá có thể muộn hơn ngày giá thủng đáy.</p>}
+    {evidence.local_trigger_price != null && row.stage !== 'CONFIRMED' && (
+      <p className="macd-zone-note macd-zone-local-trigger">
+        📍 Kháng cự cục bộ gần nhất: <b>{price(evidence.local_trigger_price)}</b> ({evidence.local_trigger_date}) · Ngưỡng vượt hộp lớn: <b>{price(row.trigger_price)}</b>{evidence.gain_from_trough_pct != null ? ` · Giá đã tăng ${evidence.gain_from_trough_pct.toFixed(1)}% từ đáy phân kỳ` : ''}.
+      </p>
+    )}
+    {evidence.gain_from_trough_pct != null && evidence.local_trigger_price == null && row.stage !== 'CONFIRMED' && (
+      <p className="macd-zone-note">Giá đã tăng {evidence.gain_from_trough_pct.toFixed(1)}% từ đáy phân kỳ.</p>
+    )}
     <div className="macd-zone-chain">{evidence.zones.map((zone, index) => <div key={zone.start_date}>
       <b>Vùng {index + 1}</b><span>{zone.start_date}–{zone.end_date}</span>
       <span>Giá thấp nhất {zone.price_date}: <b>{price(zone.price_low)}</b></span>
@@ -91,9 +100,27 @@ function ZoneRow({ row, date, canJournal=false }: { row: Row; date: string; canJ
       {index > 0 && <small>Giá giảm {evidence.price_declines_pct[index - 1].toFixed(2)}% · MACD tăng {evidence.macd_rises_pct_points[index - 1].toFixed(3)} điểm %</small>}
       {zone.revisions.length > 1 && <small>Cập nhật đáy: {zone.revisions.map(item => item.date + ' (' + price(item.price_low) + ')').join(' → ')}</small>}
     </div>)}</div>
-    <p className="macd-zone-note">Hai đáy giá cách nhau 5–60 phiên. Các pivot chỉ gộp vào một vùng nếu cách tối đa 5 phiên và biên độ đáy trong vùng không quá 1%. Đáy giá và đáy đường MACD được tìm riêng; ngày có thể lệch nhau. Breakout là lần đầu đóng cửa trên đỉnh giữa hai đáy sau khi pivot được xác nhận, kể cả chính phiên xác nhận; volume cần ≥1,3× trung bình 20 phiên trước để xét mua. Sự kiện giá vẫn được lưu nếu volume thiếu; các bộ lọc rủi ro chung vẫn có thể chặn mua. Histogram không tham gia rule này.</p>
+    <p className="macd-zone-note">Hai đáy giá cách nhau 5–60 phiên. Các pivot chỉ gộp vào một vùng nếu cách tối đa 5 phiên và biên độ đáy trong vùng không quá 1%. Đáy giá và đáy đường MACD được tìm riêng; ngày có thể lệch nhau. Breakout là lần đầu đóng cửa trên đỉnh giữa hai đáy sau khi pivot được xác nhận, kể cả chính phiên xác nhận; volume cần ≥1,3× trung bình 20 phiên trước để xét mua. Sự kiện giá vẫn được lưu nếu volume thiếu; các bộ lọc rủi ro chung vẫn có thể chặn mua. Với cặp đáy cách nhau trên 20 phiên, hệ thống bổ sung kháng cự cục bộ (đỉnh hồi gần đáy 2) để xác định điểm vào sớm hợp lý hơn. Histogram không tham gia rule này.</p>
     <ZoneHistory row={row} date={date} open={open}/>{canJournal&&<JournalLink context={{symbol:row.symbol,source:'MACD',strategy:'Phân kỳ Dương · đường MACD',role:'CHAMPION',date,version:VERSION}}/>}
   </details>
+}
+
+function SymbolGroup({ symbol, rows, date, canJournal }: { symbol: string; rows: Row[]; date: string; canJournal: boolean }) {
+  const hasJustBroken = rows.some(r => r.stage === 'CONFIRMED' && r.trigger_date === date)
+  const hasRecentBreakout = rows.some(r => r.stage === 'CONFIRMED' && (r.evidence.trigger_age_sessions ?? 999) <= 5)
+  const hasWaiting = rows.some(r => r.stage === 'WATCH_PRICE_CONFIRMATION' || r.stage === 'WATCH_PIVOT_CONFIRMATION')
+  const hasConfirmed = rows.some(r => r.stage === 'CONFIRMED')
+  const badge = hasJustBroken ? '🟢 Vừa breakout'
+    : hasRecentBreakout ? '🟢 Breakout gần đây'
+    : hasWaiting && hasConfirmed ? '🔵 Đà tăng · đang tiếp diễn'
+    : hasConfirmed ? '🟢 Đã breakout'
+    : '🟡 Chờ giá breakout'
+  return (
+    <div className="macd-symbol-group">
+      {rows.length > 1 && <div className="macd-symbol-header"><strong>{symbol}</strong><span className="macd-composite-badge">{badge}</span></div>}
+      {rows.map(row => <ZoneRow key={row.symbol + ':' + row.swings} row={row} date={date} canJournal={canJournal} />)}
+    </div>
+  )
 }
 
 export function MacdDivergencePanel({ date, authenticated, focusSymbol = '', canJournal=false }: { date: string; authenticated: boolean; focusSymbol?: string; canJournal?:boolean }) {
@@ -131,13 +158,24 @@ export function MacdDivergencePanel({ date, authenticated, focusSymbol = '', can
         || Math.max(0, a.evidence.distance_to_trigger_pct) - Math.max(0, b.evidence.distance_to_trigger_pct)
         || b.swings - a.swings || (b.confirmed_on ?? '').localeCompare(a.confirmed_on ?? ''))
     if (segments !== 0) return matches
-    const seen = new Set<string>()
-    return matches.filter(row => { if (seen.has(row.symbol)) return false; seen.add(row.symbol); return true })
+    // Keep all rows; grouping is handled in the renderer (no dedup)
+    return matches
   }, [rows, symbol, stage, segments, date])
   const pages = Math.max(1, Math.ceil(filtered.length / pageSize))
   const current = Math.min(page, pages)
   const fresh = rows.filter(row => row.stage === 'CONFIRMED' && row.trigger_date === date).length
   const watching = new Set(rows.filter(row => row.stage === 'WATCH_PIVOT_CONFIRMATION' || row.stage === 'WATCH_PRICE_CONFIRMATION').map(row => row.symbol)).size
+  // Group paged rows by symbol for multi-scale display (segments===0 mode)
+  const pagedGroups = useMemo(() => {
+    const paged = filtered.slice((current - 1) * pageSize, current * pageSize)
+    if (segments !== 0) return null  // flat list in explicit segment mode
+    const groups = new Map<string, Row[]>()
+    for (const row of paged) {
+      if (!groups.has(row.symbol)) groups.set(row.symbol, [])
+      groups.get(row.symbol)!.push(row)
+    }
+    return [...groups.entries()]
+  }, [filtered, current, pageSize, segments])
   return <article className="panel macd-divergence-panel">
     <div className="panel-title"><div><h3>Phân kỳ Dương · đường MACD</h3>
       <p className="muted">1 đoạn = 2 vùng đáy · 2 đoạn = 3 vùng · 3 đoạn = 4 vùng. Ưu tiên breakout mới và mã gần ngưỡng giá.</p></div><span>{date}</span></div>
@@ -155,7 +193,9 @@ export function MacdDivergencePanel({ date, authenticated, focusSymbol = '', can
     {query.isLoading && <p className="muted">Đang tải phân kỳ theo vùng đáy…</p>}
     {query.isError && <p className="muted">Không đọc được dữ liệu phân kỳ.</p>}
     {!query.isLoading && !query.isError && <div className="macd-divergence-list">
-      {filtered.slice((current - 1) * pageSize, current * pageSize).map(row => <ZoneRow canJournal={canJournal} key={row.symbol + ':' + row.swings} row={row} date={date}/>)}
+      {pagedGroups
+        ? pagedGroups.map(([sym, symRows]) => <SymbolGroup key={sym} symbol={sym} rows={symRows} date={date} canJournal={canJournal} />)
+        : filtered.slice((current - 1) * pageSize, current * pageSize).map(row => <ZoneRow canJournal={canJournal} key={row.symbol + ':' + row.swings} row={row} date={date}/>)}
       {!filtered.length && <p className="muted">Chưa có mẫu hình khớp bộ lọc ở phiên này.</p>}
     </div>}
     <nav className="screener-pagination" aria-label="Phân trang phân kỳ MACD"><span>Hiển thị <SoftSelect aria-label="Số mẫu mỗi trang" value={pageSize} onChange={event=>{setPageSize(Number(event.target.value));setPage(1)}}><option value="25">25</option><option value="50">50</option><option value="100">100</option></SoftSelect> / trang · {filtered.length} mã/mẫu</span><div><button type="button" disabled={current===1} onClick={()=>setPage(1)}>Đầu</button><button type="button" disabled={current===1} onClick={()=>setPage(current-1)}>‹ Trước</button><b>Trang {current}/{pages}</b><button type="button" disabled={current===pages} onClick={()=>setPage(current+1)}>Sau ›</button><button type="button" disabled={current===pages} onClick={()=>setPage(pages)}>Cuối</button></div></nav>

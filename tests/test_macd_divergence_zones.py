@@ -128,3 +128,68 @@ def test_price_zone_divergence_accepts_sixty_sessions_but_not_sixty_one(monkeypa
         assert bool(pairs) is expected
         if expected:
             assert pairs[0]["evidence"]["zones"][-1]["price_date"] == rows[90]["date"]
+
+
+def test_breakout_captured_when_price_surges_before_confirmation(monkeypatch) -> None:
+    """NKG-style: price crosses trigger before pivot T+2 confirmation day."""
+    monkeypatch.setattr(zone_rule, "_macd_series", _line)
+    bars = _bars()
+    # Simulate price already above trigger at confirmation day (index 66).
+    # trigger = max High between indices 60+1..64 = 31.0 (all highs are 31.0 by default).
+    # Set close at index 65 (day before confirmed_index=66) already > 31.0.
+    bars[65] = {**bars[65], "close": 32.5, "high": 33.0}
+    # With old code: ordered[66-1]["close"] = 32.5 > trigger → condition never met → trigger_index = None.
+    # With new code: backtrack finds first cross at index 65 → CONFIRMED.
+    result = zone_rule.assess_macd_zone_divergence(7, bars[:67], "HOSE")
+    four = next(row for row in result if row["swings"] == 4)
+    assert four["stage"] == "CONFIRMED", "Trigger must be detected even if price surged before confirmation"
+    assert four["trigger_date"] is not None
+
+
+def test_get_tick_size_all_exchanges(monkeypatch) -> None:
+    """Tick size rules per exchange rulebook."""
+    tick = zone_rule.get_tick_size
+    # HOSE stock
+    assert tick(5.0, "HOSE") == 0.01
+    assert tick(10.0, "HOSE") == 0.05
+    assert tick(50.0, "HOSE") == 0.10
+    assert tick(100.0, "HOSE") == 0.10
+    # HOSE ETF/CW
+    assert tick(15.0, "HOSE", "ETF") == 0.01
+    assert tick(15.0, "HOSE", "CW") == 0.01
+    # HNX / UPCOM stock
+    assert tick(10.0, "HNX") == 0.10
+    assert tick(50.0, "UPCOM") == 0.10
+    # HNX ETF
+    assert tick(10.0, "HNX", "ETF") == 0.001
+    # Unknown exchange fallback
+    assert tick(30.0, None) == 0.05
+    # Backward-compat alias
+    assert zone_rule._quote_tick is zone_rule.get_tick_size
+
+
+def test_local_trigger_added_when_zone_gap_wide(monkeypatch) -> None:
+    """Local trigger is populated when two bottoms are more than 20 sessions apart."""
+    def line(closes: list[float]) -> tuple[list[float], list[float]]:
+        values = [0.0] * len(closes)
+        values[30] = -4.0
+        values[55] = -3.0
+        return [value * close / 100 for value, close in zip(values, closes)], [0.0] * len(closes)
+
+    monkeypatch.setattr(zone_rule, "_macd_series", line)
+    rows = [{"date": (date(2026, 3, 1) + timedelta(days=index)).isoformat(),
+             "open": 30.0, "high": 31.0, "low": 29.0, "close": 30.0, "volume": 100.0}
+            for index in range(80)]
+    rows[30]["low"] = 25.0
+    rows[55]["low"] = 24.0
+    # Place a local high near bottom 2 that is below major trigger
+    rows[50]["high"] = 28.5  # local resistance candidate
+    result = zone_rule.assess_macd_zone_divergence(7, rows, "HOSE")
+    pair = next((r for r in result if r["swings"] == 2), None)
+    assert pair is not None
+    ev = pair["evidence"]
+    # gap = 55 - 30 = 25 > 20 → local trigger should be populated
+    assert ev["local_trigger_price"] is not None, "local_trigger_price should be set for wide gap"
+    assert ev["local_trigger_date"] is not None
+    assert ev["local_trigger_price"] < pair["trigger_price"], "local trigger must be below major trigger"
+    assert ev["gain_from_trough_pct"] is not None

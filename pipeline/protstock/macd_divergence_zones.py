@@ -28,13 +28,28 @@ MIN_THIN_BREAKOUT_VOLUME = 1.3
 RECENT_BREAKOUT_SESSIONS = 5
 
 
-def _quote_tick(price: float, exchange: str | None) -> float:
-    """Price is in thousand VND; adjusted histories may have sub-tick values."""
-    if exchange == "HOSE":
-        return 0.01 if price < 10 else 0.05 if price < 50 else 0.1
-    if exchange in {"HNX", "UPCOM"}:
-        return 0.1
-    return max(0.01, price * 0.0005)
+def get_tick_size(price: float, exchange: str | None, asset_type: str = "STOCK") -> float:
+    """Tick size in thousand VND per the exchange rulebook.
+
+    HOSE: ETF/CW → 0.01; stock <10 → 0.01; <50 → 0.05; ≥50 → 0.10
+    HNX/UPCOM: ETF → 0.001; stock → 0.10
+    Unknown: fallback to 0.05 (conservative mid-range)
+    """
+    if asset_type in {"ETF", "CW"}:
+        return 0.01 if (exchange or "").upper() == "HOSE" else 0.001
+    exch = (exchange or "").upper()
+    if exch == "HOSE":
+        if price < 10.0:
+            return 0.01
+        if price < 50.0:
+            return 0.05
+        return 0.10
+    if exch in {"HNX", "UPCOM"}:
+        return 0.10
+    return 0.05
+
+
+_quote_tick = get_tick_size  # backward-compatible alias
 
 
 def _price_pivots(bars: Sequence[dict]) -> list[int]:
@@ -116,7 +131,7 @@ def assess_macd_zone_divergence(symbol_id: int, bars: Sequence[dict], exchange: 
             gap = later["price_index"] - earlier["price_index"]
             if not MIN_SEPARATION <= gap <= MAX_SEPARATION:
                 continue
-            minimum_decline = 2 * _quote_tick(earlier["price_low"], exchange)
+            minimum_decline = max(2 * get_tick_size(earlier["price_low"], exchange), earlier["price_low"] * 0.005)
             if earlier["price_low"] - later["price_low"] + 1e-8 < minimum_decline:
                 continue
             if later["macd_low"] <= earlier["macd_low"] + 1e-8:
@@ -146,19 +161,48 @@ def assess_macd_zone_divergence(symbol_id: int, bars: Sequence[dict], exchange: 
         stop = last["price_low"]
         confirmed_index = last["confirmed_index"]
         expiry_index = confirmed_index + MAX_SETUP_AGE
+        # --- Local trigger: near-term resistance when zone gap is wide (> 20 sessions) ---
+        zone_gap = last["price_index"] - selected[-2]["price_index"]
+        local_trigger_price: float | None = None
+        local_trigger_date: str | None = None
+        if zone_gap > 20:
+            local_win_start = max(selected[-2]["price_index"] + 1, last["price_index"] - min(10, zone_gap // 3))
+            local_win_end = last["price_index"]
+            if local_win_start < local_win_end:
+                local_bar = max(ordered[local_win_start:local_win_end], key=lambda b: float(b["high"]))
+                _lp = float(local_bar["high"])
+                if _lp < trigger - 1e-8:
+                    local_trigger_price = _lp
+                    local_trigger_date = local_bar["date"]
+        # --- Trigger scan: start from day after bottom-2 so pre-confirmation surges are captured ---
         trigger_index = invalidated_index = pending_index = None
-        for index in range(confirmed_index, len(ordered)):
+        scan_start = last["price_index"] + 1
+        for index in range(scan_start, len(ordered)):
             if index > expiry_index and trigger_index is None:
                 break
-            if float(ordered[index]["low"]) < stop - 1e-8:
+            bar_low = float(ordered[index]["low"])
+            bar_close = float(ordered[index]["close"])
+            prev_close = float(ordered[index - 1]["close"]) if index > 0 else 0.0
+            if bar_low < stop - 1e-8:
                 if trigger_index is not None or index <= len(ordered) - PIVOT_RADIUS - 1:
                     invalidated_index = index
                 else:
                     pending_index = index
                 break
-            if (trigger_index is None and float(ordered[index]["close"]) > trigger
-                    and float(ordered[index - 1]["close"]) <= trigger):
-                trigger_index = index
+            if trigger_index is None and bar_close > trigger:
+                if index < confirmed_index:
+                    # Pre-confirmation breakout: capture exact crossing bar
+                    if prev_close <= trigger:
+                        trigger_index = index
+                else:
+                    if prev_close <= trigger:
+                        trigger_index = index
+                    elif index == confirmed_index:
+                        # Price already above trigger at confirmation day: backtrack to find first cross
+                        for back in range(scan_start, confirmed_index + 1):
+                            if float(ordered[back]["close"]) > trigger:
+                                trigger_index = back
+                                break
         age = len(ordered) - 1 - confirmed_index
         stage = ("WATCH_PIVOT_CONFIRMATION" if age < 0 else
                  "INVALIDATED" if invalidated_index is not None else "CONFIRMED" if trigger_index is not None
@@ -199,6 +243,9 @@ def assess_macd_zone_divergence(symbol_id: int, bars: Sequence[dict], exchange: 
                 "pending_lower_low_on": ordered[pending_index]["date"] if pending_index is not None else None,
                 "invalidated_on": ordered[invalidated_index]["date"] if invalidated_index is not None else None,
                 "source_bar_date": ordered[-1]["date"],
+                "gain_from_trough_pct": round(100 * (closes[-1] - stop) / stop, 2) if stop > 0 else None,
+                "local_trigger_price": round(local_trigger_price, 4) if local_trigger_price is not None else None,
+                "local_trigger_date": local_trigger_date,
             },
         })
     return results
