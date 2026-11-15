@@ -73,6 +73,7 @@ function ZoneRow({ row, date, canJournal=false }: { row: Row; date: string; canJ
     : row.stage === 'CONFIRMED' ? (evidence.trigger_age_sessions ?? 999) <= 5 ? 'Breakout gần đây' : 'Đã breakout'
     : row.stage === 'WATCH_PIVOT_CONFIRMATION' ? 'Ứng viên đáy mới'
     : row.confirmed_on === date ? 'Vừa phát hiện'
+    : row.stage === 'WATCH_PRICE_CONFIRMATION' && evidence.local_volume_confirmed_on ? 'Đã vượt cản gần · chờ hộp lớn'
     : stages[row.stage] ?? row.stage
   return <details className={latest ? 'macd-zone-fresh' : ''} onToggle={event => setOpen(event.currentTarget.open)}>
     <summary><strong>{row.symbol}</strong><span>{row.swings - 1} đoạn · {row.swings} vùng đáy · đường MACD</span>
