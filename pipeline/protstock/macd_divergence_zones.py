@@ -174,6 +174,18 @@ def assess_macd_zone_divergence(symbol_id: int, bars: Sequence[dict], exchange: 
                 if _lp < trigger - 1e-8:
                     local_trigger_price = _lp
                     local_trigger_date = local_bar["date"]
+        local_cross_index = local_volume_index = None
+        if local_trigger_price is not None:
+            for index in range(max(last["price_index"] + 1, confirmed_index), min(len(ordered), expiry_index + 1)):
+                if float(ordered[index]["low"]) < stop - 1e-8:
+                    break
+                if local_cross_index is None and float(ordered[index]["close"]) > local_trigger_price:
+                    local_cross_index = index
+                if local_cross_index is not None and index <= local_cross_index + 2 and float(ordered[index]["close"]) > local_trigger_price:
+                    ratio = _breakout_volume(ordered, index)
+                    if ratio is not None and ratio >= MIN_THIN_BREAKOUT_VOLUME:
+                        local_volume_index = index
+                        break
         # --- Trigger scan: start from day after bottom-2 so pre-confirmation surges are captured ---
         trigger_index = invalidated_index = pending_index = None
         scan_start = last["price_index"] + 1
@@ -246,6 +258,9 @@ def assess_macd_zone_divergence(symbol_id: int, bars: Sequence[dict], exchange: 
                 "gain_from_trough_pct": round(100 * (closes[-1] - stop) / stop, 2) if stop > 0 else None,
                 "local_trigger_price": round(local_trigger_price, 4) if local_trigger_price is not None else None,
                 "local_trigger_date": local_trigger_date,
+                "local_cross_date": ordered[local_cross_index]["date"] if local_cross_index is not None else None,
+                "local_volume_confirmed_on": ordered[local_volume_index]["date"] if local_volume_index is not None else None,
+                "local_volume_ratio20": _breakout_volume(ordered, local_volume_index) if local_volume_index is not None else None,
             },
         })
     return results
