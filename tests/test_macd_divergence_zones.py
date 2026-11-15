@@ -182,8 +182,11 @@ def test_local_trigger_added_when_zone_gap_wide(monkeypatch) -> None:
             for index in range(80)]
     rows[30]["low"] = 25.0
     rows[55]["low"] = 24.0
-    # Place a local high near bottom 2 that is below major trigger
-    rows[50]["high"] = 28.5  # local resistance candidate
+    # Keep the near-bottom highs below the earlier 31.0 major resistance.
+    for index in range(47, 55):
+        rows[index]["high"] = 30.5
+    rows[50]["high"] = 30.6
+    rows[60].update(close=30.8, volume=150.0)
     result = zone_rule.assess_macd_zone_divergence(7, rows, "HOSE")
     pair = next((r for r in result if r["swings"] == 2), None)
     assert pair is not None
@@ -193,3 +196,6 @@ def test_local_trigger_added_when_zone_gap_wide(monkeypatch) -> None:
     assert ev["local_trigger_date"] is not None
     assert ev["local_trigger_price"] < pair["trigger_price"], "local trigger must be below major trigger"
     assert ev["gain_from_trough_pct"] is not None
+    assert ev["local_cross_date"] == rows[60]["date"]
+    assert ev["local_volume_confirmed_on"] == rows[60]["date"]
+    assert ev["local_volume_ratio20"] > 1.3
