@@ -193,3 +193,5 @@ def test_local_trigger_added_when_zone_gap_wide(monkeypatch) -> None:
     assert ev["local_trigger_date"] is not None
     assert ev["local_trigger_price"] < pair["trigger_price"], "local trigger must be below major trigger"
     assert ev["gain_from_trough_pct"] is not None
+    assert "local_cross_date" in ev
+    assert "local_volume_confirmed_on" in ev
