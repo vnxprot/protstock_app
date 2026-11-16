@@ -17,6 +17,10 @@ on:
         description: Start Radar recovery for this date only after migrations succeed
         required: false
         type: string
+      recover_intraday_symbols:
+        description: Optional comma-separated symbols for a published-session Radar repair
+        required: false
+        type: string
       opportunities_start:
         description: Optional stored-data shortlist rebuild start; never sends historical Telegram
         type: string
@@ -111,7 +115,13 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           TRADING_DATE: ${{ inputs.recover_intraday_date }}
-        run: gh workflow run intraday-spikes.yml --ref "$GITHUB_REF_NAME" -f trading_date="$TRADING_DATE" -f force_refresh=true
+          REPAIR_SYMBOLS: ${{ inputs.recover_intraday_symbols }}
+        run: |
+          args=(-f trading_date="$TRADING_DATE" -f notify=false)
+          if [ -n "$REPAIR_SYMBOLS" ]; then args+=(-f repair_symbols="$REPAIR_SYMBOLS")
+          else args+=(-f force_refresh=true)
+          fi
+          gh workflow run intraday-spikes.yml --ref "$GITHUB_REF_NAME" "${args[@]}"
       - name: Rebuild stored opportunities after migrations succeed
         if: success() && inputs.mode == 'deploy' && inputs.opportunities_start != '' && inputs.opportunities_end != ''
         env:

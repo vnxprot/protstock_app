@@ -95,6 +95,11 @@ def test_saved_minute_baseline_is_used_when_only_today_is_fetched(monkeypatch):
 
     class Client:
         def delete(self, *_args, **_kwargs): return Response()
+        def post(self, _path, *, json):
+            assert json["p_status"] == "COMPLETE"
+            assert json["p_baseline"] == 10
+            assert json["p_events"]
+            return Response()
 
     class Database:
         def __init__(self, *_args): self._client = Client()
@@ -106,7 +111,7 @@ def test_saved_minute_baseline_is_used_when_only_today_is_fetched(monkeypatch):
 
     fetches = []
 
-    def fetch(_symbol, start, end):
+    def fetch(_symbol, start, end, _exchange):
         fetches.append((start, end))
         return {today.isoformat(): new_bars}
 

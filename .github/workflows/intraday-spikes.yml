@@ -12,6 +12,10 @@ on:
         description: Completed trading date (YYYY-MM-DD); blank uses today in Vietnam
         required: false
         type: string
+      repair_symbols:
+        description: Comma-separated symbols to repair in a published session
+        required: false
+        type: string
       notify:
         description: Send a same-day opportunity digest after publication
         type: boolean
@@ -42,6 +46,7 @@ jobs:
           SUPABASE_URL: https://upmqxwktvvguegqeqibn.supabase.co
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           FORCE_REFRESH: ${{ inputs.force_refresh == true }}
+          REPAIR_SYMBOLS: ${{ inputs.repair_symbols }}
           TRADING_DATE: ${{ inputs.trading_date }}
         run: python .github/scripts/intraday_radar_schedule.py preflight
 
@@ -84,11 +89,12 @@ jobs:
           SUPABASE_URL: https://upmqxwktvvguegqeqibn.supabase.co
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           TRADING_DATE: ${{ needs.preflight.outputs.trading_date }}
+          REPAIR_SYMBOLS: ${{ inputs.repair_symbols }}
         run: python .github/scripts/intraday_radar_schedule.py finalize
 
   opportunities:
     needs: [preflight, finalize]
-    if: always() && (needs.finalize.result == 'success' || needs.preflight.outputs.action == 'DONE')
+    if: always() && inputs.repair_symbols == '' && (needs.finalize.result == 'success' || needs.preflight.outputs.action == 'DONE')
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:

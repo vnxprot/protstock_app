@@ -26,6 +26,11 @@ def write_output(**values):
             output.write(f"{key}={json.dumps(value, separators=(',', ':')) if isinstance(value, (dict, list)) else value}\n")
 
 
+def collect_matrix(day, pending):
+    shards = [{"shard": i + 1, "symbols": ",".join(pending[i::2])} for i in range(2) if pending[i::2]]
+    write_output(action="RUN" if shards else "FINALIZE_ONLY", trading_date=day, matrix={"include": shards})
+
+
 def preflight(client, day):
     jobs = read(client, "job_runs", {"select": "status,counts,finished_at", "job_type": "eq.DERIVE_BARS",
         "trading_date": f"eq.{day}", "order": "started_at.desc", "limit": "1"})
@@ -39,13 +44,17 @@ def preflight(client, day):
     session = read(client, "intraday_radar_sessions", {"select": "status,attempt_count,source_policy,updated_at", "trading_date": f"eq.{day}", "limit": "1"})
     previous = session[0] if session else {}
     force_refresh = os.getenv("FORCE_REFRESH") == "true"
+    repair_input = os.getenv("REPAIR_SYMBOLS", "").strip()
+    targets = {value.strip().upper() for value in repair_input.split(",") if value.strip()}
+    if repair_input and not targets:
+        raise ValueError("Provide at least one Radar symbol to repair")
     same_policy = previous.get("source_policy") == SOURCE_POLICY
     updated = previous.get("updated_at")
     fresh = bool(updated and datetime.now(timezone.utc) - datetime.fromisoformat(updated.replace("Z", "+00:00")) < timedelta(hours=4))
     if previous.get("status") == "PROCESSING" and fresh:
         write_output(action="IN_PROGRESS", trading_date=day, matrix={"include": []})
         return
-    if same_policy and previous.get("status") == "PUBLISHED" and not force_refresh:
+    if same_policy and previous.get("status") == "PUBLISHED" and not (force_refresh or targets):
         write_output(action="DONE", trading_date=day, matrix={"include": []})
         return
     symbols = client.active_symbols()
@@ -53,6 +62,17 @@ def preflight(client, day):
     price_ids = client.daily_price_symbol_ids(datetime.fromisoformat(day).date())
     eligible = [row for row in symbols if int(row["id"]) in snapshot_ids & price_ids]
     missing = [row for row in symbols if int(row["id"]) not in snapshot_ids & price_ids]
+    if targets:
+        if force_refresh or previous.get("status") != "PUBLISHED":
+            raise ValueError("Symbol repair requires a published session and no force refresh")
+        unknown = targets - {row["symbol"] for row in symbols}
+        if unknown:
+            raise ValueError(f"Unknown or inactive Radar symbols: {', '.join(sorted(unknown))}")
+        excluded = [row["symbol"] for row in missing if row["symbol"] in targets]
+        if excluded:
+            print(f"Radar {day}: awaiting EOD for {', '.join(excluded)}")
+        collect_matrix(day, [row["symbol"] for row in eligible if row["symbol"] in targets])
+        return
     states = read(client, "intraday_radar_symbol_status", {"select": "symbol_id,status,baseline_sessions,retryable,error",
         "trading_date": f"eq.{day}", "limit": "1000"})
     by_id = {int(row["symbol_id"]): row for row in states}
@@ -92,8 +112,7 @@ def preflight(client, day):
     if not pending:
         write_output(action="FINALIZE_ONLY", trading_date=day, attempt=attempt, matrix={"include": []})
         return
-    shards = [{"shard": i + 1, "symbols": ",".join(pending[i::2])} for i in range(2) if pending[i::2]]
-    write_output(action="RUN", trading_date=day, attempt=attempt, matrix={"include": shards})
+    collect_matrix(day, pending)
     print(f"Radar {day}: attempt {attempt}, {len(pending)} symbols pending")
 
 
@@ -103,10 +122,11 @@ def finalize(client, day):
         raise RuntimeError(f"Radar session {day} does not exist")
     all_states = read(client, "intraday_radar_symbol_status", {"select": "symbol_id,status,baseline_sessions,error,retryable",
         "trading_date": f"eq.{day}", "limit": "1000"})
+    repair = bool(os.getenv("REPAIR_SYMBOLS", "").strip())
     states = [row for row in all_states if row.get("error") != "EOD_MISSING_CANDLE"]
     complete = sum(row["status"] in {"COMPLETE", "BASELINE_SHORT"} for row in states)
     baseline = sum(row["baseline_sessions"] >= 10 and row["status"] == "COMPLETE" for row in states)
-    expected = sessions[0]["expected_symbols"]
+    expected = len(states) if repair else sessions[0]["expected_symbols"]
     published = expected > 0 and baseline / expected >= THRESHOLD
     technical = any(row.get("retryable") for row in states)
     names = {int(row["id"]): row["symbol"] for row in client.active_symbols()}
@@ -116,9 +136,14 @@ def finalize(client, day):
     payload = {"trading_date": day, "status": "PUBLISHED" if published else "FAILED" if technical else "INCOMPLETE",
         "complete_symbols": complete, "baseline_ready_symbols": baseline, "source_errors": errors,
         "updated_at": datetime.now(timezone.utc).isoformat()}
-    if published:
+    if repair:
+        payload.update(status="PUBLISHED", expected_symbols=expected)
+    elif published:
         payload["published_at"] = datetime.now(timezone.utc).isoformat()
     client.upsert("intraday_radar_sessions", [payload], "trading_date")
+    if repair:
+        print(f"Radar {day}: published coverage refreshed; ready {baseline}/{expected}")
+        return
     # Matrix collectors never execute the old whole-universe pruning branch.
     # Reclaim only minute-day cache outside the documented 50-day retention.
     cutoff = (datetime.fromisoformat(day) - timedelta(days=50)).date().isoformat()

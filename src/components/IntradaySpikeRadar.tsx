@@ -20,7 +20,9 @@ type MinuteBar = { t: string; o: number; h: number; l: number; c: number; v: num
 type MinuteDay = { bars: MinuteBar[]; coverage_status: string; bar_count: number; minute_volume: number; daily_volume: number | null }
 type RadarSession = { status: 'PROCESSING' | 'INCOMPLETE' | 'PUBLISHED' | 'FAILED'; attempt_count: number;
   expected_symbols: number; complete_symbols: number; baseline_ready_symbols: number;
+  updated_at: string;
   source_errors: { symbol: string; status: string; error: string | null }[] }
+type SymbolStatus = { status: string; baseline_sessions: number; error: string | null }
 type Mode = 'market' | 'screener'
 
 const directionName: Record<Direction, string> = {
@@ -31,6 +33,23 @@ const number = (value: number) => new Intl.NumberFormat('vi-VN').format(Math.rou
 const money = (value: number) => value >= 1_000_000_000 ? `${(value / 1_000_000_000).toFixed(2)} tỷ` : `${Math.round(value / 1_000_000)} triệu`
 const signed = (value: number) => `${value > 0 ? '+' : ''}${value.toFixed(2)}%`
 type SpikeResult = { rows: SpikeEvent[]; total: number; symbols: number }
+
+function symbolStatusMessage(result: SymbolStatus, published: boolean, empty: boolean, defaultFilters: boolean) {
+  if (result.error === 'EOD_MISSING_CANDLE') return 'Thiếu nến ngày.'
+  if (result.error === 'EOD_NO_MATCHES') return 'Không có khớp lệnh.'
+  if (result.error === 'COLLECTOR_NOT_FINISHED') return 'Chưa xử lý xong nến phút.'
+  switch (result.status) {
+    case 'BASELINE_SHORT': return `Thiếu phiên mốc (${result.baseline_sessions}/10).`
+    case 'PARTIAL': return 'Khối lượng nến phút không khớp dữ liệu ngày.'
+    case 'EMPTY': return 'Thiếu nến phút.'
+    case 'FAILED': return 'Xử lý dữ liệu phút thất bại.'
+    case 'COMPLETE':
+      if (published && empty) return defaultFilters
+        ? 'Đã chấm, không có sự kiện đạt ngưỡng.'
+        : 'Đã chấm, không có sự kiện khớp bộ lọc.'
+  }
+  return ''
+}
 
 function MiniChart({ bars, event }: { bars: MinuteBar[]; event: SpikeEvent }) {
   const active = bars.filter(bar => bar.t >= event.start_time && bar.t <= event.end_time)
@@ -68,12 +87,24 @@ export function IntradaySpikeRadar({ date, authenticated, mode }: { date: string
   const radarSession = useQuery({ queryKey: ['intraday-radar-session', coverageDate], enabled: authenticated && Boolean(supabase) && Boolean(coverageDate),
     queryFn: async (): Promise<RadarSession | null> => {
       const { data, error } = await supabase!.from('intraday_radar_sessions')
-        .select('status,attempt_count,expected_symbols,complete_symbols,baseline_ready_symbols,source_errors')
+        .select('status,attempt_count,expected_symbols,complete_symbols,baseline_ready_symbols,source_errors,updated_at')
         .eq('trading_date', coverageDate).maybeSingle()
       if (error) throw error
       return data as RadarSession | null
     }, refetchInterval: 60_000 })
-  const events = useQuery({ queryKey: ['intraday-spikes', mode, effectiveDate, fromDate, toDate, query, session, direction, minRatio, page, pageSize, radarSession.data?.status],
+  const symbol = query.trim().toUpperCase()
+  const symbolStatus = useQuery({
+    queryKey: ['intraday-spike-symbol-status', effectiveDate, symbol, radarSession.data?.updated_at],
+    enabled: authenticated && Boolean(supabase && effectiveDate) && /^[A-Z0-9]{2,20}$/.test(symbol),
+    queryFn: async (): Promise<SymbolStatus | null> => {
+      const { data, error } = await supabase!.from('intraday_radar_symbol_status')
+        .select('status,baseline_sessions,error,symbols!inner(symbol)')
+        .eq('trading_date', effectiveDate).eq('symbols.symbol', symbol).maybeSingle()
+      if (error) throw error
+      return data
+    },
+  })
+  const events = useQuery({ queryKey: ['intraday-spikes', mode, effectiveDate, fromDate, toDate, query, session, direction, minRatio, page, pageSize, radarSession.data?.updated_at],
     enabled: authenticated && Boolean(supabase) && Boolean(date),
     queryFn: async (): Promise<SpikeResult> => {
       const { data, error } = await supabase!.rpc('intraday_spike_history', {
@@ -108,6 +139,9 @@ export function IntradaySpikeRadar({ date, authenticated, mode }: { date: string
   const observed = radarSession.data?.expected_symbols ?? 0
   const ready = Boolean(events.data) && !radarSession.isLoading
   const uniqueSymbols = events.data?.symbols ?? 0
+  const statusMessage = symbolStatus.data ? symbolStatusMessage(symbolStatus.data,
+    radarSession.data?.status === 'PUBLISHED', events.data?.total === 0,
+    session === 'ALL' && direction === 'ALL' && minRatio === 3) : ''
   function resetPage() { setPage(1); setSelectedId(null) }
   function chooseExactDate(value: string) { setExactDate(value); setFromDate(''); setToDate(''); resetPage() }
   function chooseRange(setter: (value: string) => void, value: string) { setter(value); setExactDate(''); resetPage() }
@@ -139,6 +173,7 @@ export function IntradaySpikeRadar({ date, authenticated, mode }: { date: string
           ? `Thiếu dữ liệu phiên ${formatDate(coverageDate)} · ${completed}/${observed} mã đủ nến phút · ${baselineReady} mã đủ phiên mốc · lượt ${radarSession.data.attempt_count}/3.`
           : `Phiên ${formatDate(coverageDate)} chưa được khởi tạo Radar; đang chờ EOD hoặc hệ thống phục hồi. Chưa thể kết luận có giao dịch đột biến hay không.`}
       {radarSession.data?.source_errors?.length ? ` Lỗi/thiếu nguồn: ${radarSession.data.source_errors.slice(0, 3).map(item => `${item.symbol} (${item.error || item.status})`).join('; ')}${radarSession.data.source_errors.length > 3 ? '…' : ''}` : ''}</p>}
+    {statusMessage && <p className="spike-result-count" role="status"><strong>{symbol}</strong> · {statusMessage}</p>}
     {mode === 'screener' && ready && !events.isError && <p className="spike-result-count">{events.data?.total ? `${(page - 1) * pageSize + 1}–${Math.min(page * pageSize, events.data.total)} / ${events.data.total} sự kiện` : '0 sự kiện'}</p>}
     {ready && !events.isError && <div className="spike-list">
       {mode === 'screener' && displayed.length > 0 && <div className="spike-list-head"><span>Mã</span><span>Khoảng giao dịch</span><span>Đột biến · khối lượng</span><span>Diễn biến giá</span><span/></div>}
@@ -157,7 +192,7 @@ export function IntradaySpikeRadar({ date, authenticated, mode }: { date: string
               <a href="#analysis" onClick={() => { const symbol = event.symbol; localStorage.setItem('protstock-symbol', symbol); dispatchEvent(new CustomEvent('protstock:symbol', { detail: symbol })) }}>Xem phân tích mã <ArrowUpRight size={15}/></a></div>}
         </article>
       })}
-      {!filtered.length && <p className="spike-empty">{radarSession.data?.status === 'PUBLISHED' ? 'Không có sự kiện khớp bộ lọc và ngưỡng dữ liệu hiện tại.' : 'Phiên chưa công bố dữ liệu. Danh sách trống không có nghĩa là không phát sinh giao dịch đột biến.'}</p>}
+      {!filtered.length && !statusMessage && <p className="spike-empty">{radarSession.data?.status === 'PUBLISHED' ? 'Không có sự kiện khớp bộ lọc và ngưỡng dữ liệu hiện tại.' : 'Phiên chưa công bố dữ liệu. Danh sách trống không có nghĩa là không phát sinh giao dịch đột biến.'}</p>}
     </div>}
     {mode === 'screener' && ready && !events.isError && (events.data?.total ?? 0) > 0 && <ResearchPagination label="Phân trang giao dịch đột biến" page={page} pageSize={pageSize} total={events.data?.total ?? 0} onPage={value => { setPage(value); setSelectedId(null) }} onPageSize={value => { setPageSize(value); resetPage() }}/>}
     {mode === 'market' && ready && (events.data?.total ?? 0) > 12 && <a className="spike-more" href="#screener?tab=spikes">Xem toàn bộ trong Bộ lọc tín hiệu <ArrowUpRight size={15}/></a>}
