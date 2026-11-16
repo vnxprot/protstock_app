@@ -26,6 +26,17 @@
 .market-section-switch { display:inline-flex; flex:none; gap:3px; padding:4px; border:1px solid var(--line); border-radius:12px; background:var(--surface-2); }
 .market-section-switch button { min-height:34px; padding:0 12px; border:0; border-radius:8px; background:transparent; color:var(--muted); cursor:pointer; font-family:inherit; font-size:12px; font-weight:600; }
 .market-section-switch button.active { background:var(--lime); color:#14200d; }
+.market-main-tabs { justify-self:start; }
+.market-main-tabs button { padding-inline:16px; }
+.market-main-tabs button:focus-visible { outline:2px solid var(--mint); outline-offset:2px; }
+.market-sector-tab:not([hidden]) { display:grid; grid-template-columns:minmax(0,1fr); gap:18px; }
+.market-session-top { margin-top:14px; color:var(--muted); font-size:12px; }
+.market-session-top summary { width:max-content; max-width:100%; color:var(--mint); cursor:pointer; }
+.market-session-top .market-section-switch { margin-top:8px; }
+.market-session-top table { width:100%; margin-top:8px; border-collapse:collapse; font-variant-numeric:tabular-nums; }
+.market-session-top th,.market-session-top td { padding:6px 4px; border-bottom:1px solid var(--line); color:var(--text); text-align:right; overflow-wrap:anywhere; }
+.market-session-top th:first-child { text-align:left; }
+.market-session-top a { color:var(--mint); }
 .market-period-switch { display:inline-flex; gap:4px; padding:4px; border:1px solid var(--line); border-radius:11px; background:var(--surface-2); }
 .market-period-switch button { min-height:34px; padding:0 12px; border:0; border-radius:8px; color:var(--muted); background:transparent; font-family:inherit; font-size:12px; font-weight:600; cursor:pointer; }
 .market-period-switch button.active { color:#14200d; background:var(--lime); }

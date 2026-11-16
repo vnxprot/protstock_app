@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { ArrowUpRight, Search } from 'lucide-react'
 import { useSymbols } from '../hooks/useStockAnalysis'
 import { formatDate } from '../lib/date'
+import { formatMarketPrice } from '../lib/marketUnits'
 import { latestSignalPublication } from '../lib/signalPublication'
 import { calendarBounds, calendarKey, calendarLabel, sectorPeriodSummary, SECTOR_GRAINS, type SectorGrain } from '../lib/sectorCalendar'
 import type { BreadthRow, SectorRow, SectorView } from '../lib/sectorHistory'
@@ -88,8 +89,33 @@ function SectorChart({ points, grain, view, selectedKey, onSelect }: {
   </div>
 }
 
+function MarketSessionTop({ day, enabled }: { day: string; enabled: boolean }) {
+  const [open, setOpen] = useState(false)
+  const [order, setOrder] = useState('up')
+  const leaders = useQuery({
+    queryKey: ['market-session-top', day, order], enabled: enabled && open && Boolean(supabase && day), staleTime: 60_000,
+    queryFn: async () => {
+      const { data, error } = await supabase!.rpc('market_radar_rank', { p_dates: [day], p_exchange: 'all', p_category: 'price', p_method: 'total', p_order: order })
+      if (error) throw error
+      return data.rows as { symbol: string; exchange: string; change_pct: number | null; last_close: number; volume: number }[]
+    },
+  })
+  return <details className="market-session-top" onToggle={event => setOpen(event.currentTarget.open)}>
+    <summary>Top cổ phiếu theo phiên · Prot Universe</summary>
+    <div className="market-section-switch" role="group" aria-label="Xếp hạng cổ phiếu theo phiên">{[['up', 'Tăng mạnh'], ['down', 'Giảm mạnh'], ['volume', 'Khối lượng cao']].map(([id, label]) =>
+      <button key={id} type="button" className={order === id ? 'active' : ''} aria-pressed={order === id} onClick={() => setOrder(id)}>{label}</button>
+    )}</div>
+    {leaders.isError && <p className="market-empty" role="alert">Không tải được bảng xếp hạng phiên.</p>}
+    {!leaders.isError && !leaders.data?.length && <p className="market-empty" role="status">{leaders.isFetching ? 'Đang tải xếp hạng…' : 'Chưa có mã phù hợp.'}</p>}
+    {!!leaders.data?.length && <table><thead><tr><th scope="col">Mã / Sàn</th><th scope="col">Biến động</th><th scope="col">Đóng cửa</th><th scope="col">KL (CP)</th></tr></thead><tbody>
+      {leaders.data.map(row => <tr key={`${row.exchange}:${row.symbol}`}><th scope="row"><a href="#analysis" onClick={() => localStorage.setItem('protstock-symbol', row.symbol)}>{row.symbol}</a> <small>{row.exchange === 'UPCOM' ? 'UPCoM' : row.exchange}</small></th><td>{pct(row.change_pct)}</td><td>{formatMarketPrice(row.last_close)}</td><td>{row.volume.toLocaleString('vi-VN')}</td></tr>)}
+    </tbody></table>}
+  </details>
+}
+
 export function MarketPage({ authenticated }: { authenticated: boolean }) {
   const symbols = useSymbols(authenticated)
+  const [marketView, setMarketView] = useState<'sectors' | 'radar'>('sectors')
   const [anchorDate, setAnchorDate] = useState('')
   const [grain, setGrain] = useState<SectorGrain>('day')
   const [section, setSection] = useState<SectorView>('health')
@@ -123,7 +149,7 @@ export function MarketPage({ authenticated }: { authenticated: boolean }) {
   const scopeStart = grain === 'year' ? '2021-01-01' : grain === 'day' ? dayScopeStart : grain === 'week' ? calendarKey(`${selectedYear}-01-01`, 'week') : `${selectedYear}-01-01`
   const scopeEnd = grain === 'year' ? latestDate : grain === 'day' ? calendarBounds(activeDate.slice(0, 7), 'month').end : grain === 'week' ? calendarBounds(calendarKey(`${selectedYear}-12-31`, 'week'), 'week').end : `${selectedYear}-12-31`
   const history = useQuery({
-    queryKey: ['market-calendar-breadth', scopeStart, scopeEnd], enabled: authenticated && Boolean(supabase) && Boolean(scopeStart) && Boolean(scopeEnd), staleTime: 60_000, refetchInterval: 60_000,
+    queryKey: ['market-calendar-breadth', scopeStart, scopeEnd], enabled: marketView === 'sectors' && authenticated && Boolean(supabase) && Boolean(scopeStart) && Boolean(scopeEnd), staleTime: 60_000, refetchInterval: 60_000,
     queryFn: () => fetchBreadth(scopeStart, scopeEnd > latestDate ? latestDate : scopeEnd),
   })
   const scopeRows = history.data ?? []
@@ -133,7 +159,7 @@ export function MarketPage({ authenticated }: { authenticated: boolean }) {
   const day = breadth?.trading_date ?? ''
   const provisional = Boolean(selectedKey && latestDate && calendarBounds(selectedKey, grain).end > latestDate)
   const memberships = useQuery({
-    queryKey: ['market-universe-membership', day], enabled: authenticated && Boolean(supabase) && Boolean(day), staleTime: 60_000,
+    queryKey: ['market-universe-membership', day], enabled: marketView === 'sectors' && authenticated && Boolean(supabase) && Boolean(day), staleTime: 60_000,
     queryFn: async () => {
       const { data, error } = await supabase!.from('breadth_universe_memberships').select('symbol_id,status').eq('trading_date', day)
       if (error) throw error
@@ -192,8 +218,22 @@ export function MarketPage({ authenticated }: { authenticated: boolean }) {
   }
 
   return <section className="workspace-page market-page">
-    <header className="market-page-header"><div><span className="eyebrow">PROT MARKET INTELLIGENCE</span><h1>Thị trường</h1><p>Chọn một phiên hoặc một kỳ lịch để so sánh sức khỏe ngành và áp lực giá–khối lượng.</p></div><div className="market-date">Dữ liệu thị trường đến<strong>{formatDate(latestDate)}</strong></div></header>
-    <MarketFlowRadar authenticated={authenticated} tradingDates={marketDates}/>
+    <header className="market-page-header"><div><span className="eyebrow">PROT MARKET INTELLIGENCE</span><h1>Thị trường</h1></div><div className="market-date">Dữ liệu thị trường đến<strong>{formatDate(latestDate)}</strong></div></header>
+    <div className="market-section-switch market-main-tabs" role="tablist" aria-label="Thị trường" onKeyDown={event => {
+      if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return
+      event.preventDefault()
+      const next = event.key === 'Home' ? 'sectors' : event.key === 'End' ? 'radar' : marketView === 'sectors' ? 'radar' : 'sectors'
+      setMarketView(next)
+      event.currentTarget.querySelector<HTMLButtonElement>(`#market-view-${next}`)?.focus()
+    }}>
+      {(['sectors', 'radar'] as const).map(view => <button key={view} type="button" id={`market-view-${view}`} role="tab"
+        aria-controls={`market-panel-${view}`} aria-selected={marketView === view} tabIndex={marketView === view ? 0 : -1}
+        className={marketView === view ? 'active' : ''} onClick={() => setMarketView(view)}>{view === 'sectors' ? 'Nhóm ngành' : 'Radar dòng tiền'}</button>)}
+    </div>
+    <div id="market-panel-radar" role="tabpanel" aria-labelledby="market-view-radar" hidden={marketView !== 'radar'}>
+      <MarketFlowRadar authenticated={authenticated} active={marketView === 'radar'} tradingDates={marketDates}/>
+    </div>
+    <div id="market-panel-sectors" className="market-sector-tab" role="tabpanel" aria-labelledby="market-view-sectors" hidden={marketView !== 'sectors'}>
     {(symbols.isError || market.isError || history.isError || memberships.isError) && <p className="market-error" role="alert">Không tải được thống kê thị trường. Hãy thử tải lại trang.</p>}
     <section className="panel market-universe-panel" aria-label="Prot Universe"><div className="market-section-head"><div><span className="eyebrow">01 · PHẠM VI DỮ LIỆU</span><h2>Prot Universe</h2></div><a className="market-link" href="#universe">Danh sách cổ phiếu <ArrowUpRight size={16}/></a></div>
       <div className="market-universe-grid"><div><span>Core Engine quét</span><strong>{universe.length}</strong><small>Trading Universe</small></div><div><span>Market Health quan sát</span><strong>{breadth?.universe_size ?? '—'}</strong><small>Observation Universe</small></div><div><span>Phiên cuối trong kỳ</span><strong>{breadth?.observed_count ?? '—'}/{breadth?.eligible_count ?? '—'}</strong><small>{breadth?.coverage_ratio == null ? 'Chưa tính độ phủ' : `${formatDate(day)} · ${pct(breadth.coverage_ratio * 100)} đủ mẫu`}</small></div><div><span>Chưa tính được</span><strong>{missing + insufficient + qualityBlocked}</strong><small>{missing} thiếu giá · {insufficient} ít lịch sử · {qualityBlocked} chặn chất lượng</small></div></div>
@@ -233,6 +273,8 @@ export function MarketPage({ authenticated }: { authenticated: boolean }) {
         <div><dt>Độ phủ</dt><dd>{breadth?.observed_count ?? '—'}/{breadth?.eligible_count ?? '—'} mã · {breadth?.coverage_ratio == null ? '—' : pct(breadth.coverage_ratio * 100)}</dd></div>
         <div><dt>Nhóm ngành trong kỳ</dt><dd>{visible.length} nhóm</dd></div>
       </dl>
+      <MarketSessionTop day={activeDate} enabled={authenticated && marketView === 'sectors'}/>
     </aside>
+    </div>
   </section>
 }

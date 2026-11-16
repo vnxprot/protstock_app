@@ -1,6 +1,6 @@
 # Radar dòng tiền
 
-Mở **Thị trường → Radar dòng tiền**. Chọn cả ba sàn hoặc HOSE, HNX, UPCoM. Ngày kết thúc dựa trên lịch phiên VN-Index đã công bố trong PROT STOCK. Bảng xếp hạng có tối đa 20 mã. Mẫu giới hạn, số phiên quan sát và ngày dữ liệu được ghi trên giao diện.
+Mở **Thị trường → Radar dòng tiền** để chọn nhóm, sàn và chu kỳ bằng nút. Chu kỳ Tuỳ chọn lọc theo khoảng ngày. Bốn chỉ số tổng hợp tính theo nhóm, sàn và chu kỳ. Ô tìm mã và chế độ xếp hạng áp dụng cho bảng tối đa 20 mã, 10 mã mỗi trang. Bấm vào mã để xem độ phủ, nguồn và lịch sử giao dịch. Top giá và khối lượng nằm dưới **Nhóm ngành → Toàn cảnh**.
 
 | Nhóm | Nguồn và phạm vi |
 | --- | --- |
@@ -9,7 +9,7 @@ Mở **Thị trường → Radar dòng tiền**. Chọn cả ba sàn hoặc HOSE
 | Tự doanh | Báo cáo theo mã của HNX cho HNX và UPCoM. CafeF theo mã trong Prot Universe cho HOSE. Dữ liệu thu tự động của nhóm hiện là tổng mua bán. |
 | Ba nhóm giá trị khớp | Vietcap cho Prot Universe trên cả ba sàn. Khoảng giá trị được tính trên từng lần khớp liên tục, theo đồng. Mỗi mã dùng tối đa hai trang từ cuối phiên. Mẫu có khoảng trống theo khối lượng tích lũy được gắn nhãn mẫu giới hạn. Chiều chưa xác định được lưu riêng. |
 
-Giá mua bình quân dùng giá trị mua chia cho khối lượng mua. Tỷ lệ ròng trên thanh khoản chỉ tính khi có thanh khoản cùng phương thức giao dịch cho toàn bộ các phiên có giá trị mua/bán trong hàng. Bảng sở hữu lấy số liệu gần nhất trong kỳ và ghi ngày của số liệu. Nguồn tự động hiện có tỷ lệ sở hữu và room ngoại. Số cổ phiếu sở hữu tuyệt đối và số dư tự doanh đòi hỏi báo cáo vị thế. API lưu báo cáo chấp nhận các trường này khi có dữ liệu.
+Thị giá là giá đóng cửa phiên cuối kỳ nếu có trong PROT STOCK. Cột Giá nắm giữ hiển thị giá mua bình quân tham chiếu, tính bằng giá trị mua chia cho khối lượng mua. Hiệu suất tham chiếu tính bằng thị giá chia cho giá mua bình quân rồi trừ 1. Phần sở hữu lấy số liệu gần nhất trong kỳ và ghi ngày của số liệu. Nguồn tự động hiện có tỷ lệ sở hữu và room ngoại. Số cổ phiếu sở hữu tuyệt đối và số dư tự doanh đòi hỏi báo cáo vị thế. API lưu báo cáo chấp nhận các trường này khi có dữ liệu.
 
 ## Cập nhật dữ liệu
 
