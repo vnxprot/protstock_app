@@ -164,8 +164,7 @@ def assess_macd_zone_divergence(symbol_id: int, bars: Sequence[dict], exchange: 
         # --- Local trigger: near-term resistance when zone gap is wide (> 20 sessions) ---
         zone_gap = last["price_index"] - selected[-2]["price_index"]
         local_trigger_price: float | None = None
-        local_resistance_date: str | None = None
-        local_breakout_index: int | None = None
+        local_trigger_date: str | None = None
         if zone_gap > 20:
             local_win_start = max(selected[-2]["price_index"] + 1, last["price_index"] - min(10, zone_gap // 3))
             local_win_end = last["price_index"]
@@ -174,7 +173,19 @@ def assess_macd_zone_divergence(symbol_id: int, bars: Sequence[dict], exchange: 
                 _lp = float(local_bar["high"])
                 if _lp < trigger - 1e-8:
                     local_trigger_price = _lp
-                    local_resistance_date = local_bar["date"]
+                    local_trigger_date = local_bar["date"]
+        local_cross_index = local_volume_index = None
+        if local_trigger_price is not None:
+            for index in range(last["price_index"] + 1, min(len(ordered), expiry_index + 1)):
+                if float(ordered[index]["low"]) < stop - 1e-8:
+                    break
+                if local_cross_index is None and closes[index - 1] <= local_trigger_price < closes[index]:
+                    local_cross_index = index
+                if local_cross_index is not None and index <= local_cross_index + 2 and float(ordered[index]["close"]) > local_trigger_price:
+                    ratio = _breakout_volume(ordered, index)
+                    if ratio is not None and ratio >= MIN_THIN_BREAKOUT_VOLUME:
+                        local_volume_index = index
+                        break
         # --- Trigger scan: start from day after bottom-2 so pre-confirmation surges are captured ---
         trigger_index = invalidated_index = pending_index = None
         scan_start = last["price_index"] + 1
@@ -190,16 +201,13 @@ def assess_macd_zone_divergence(symbol_id: int, bars: Sequence[dict], exchange: 
                 else:
                     pending_index = index
                 break
-            if local_trigger_price is not None and local_breakout_index is None and prev_close <= local_trigger_price < bar_close:
-                local_breakout_index = index
             if trigger_index is None and prev_close <= trigger < bar_close:
                 trigger_index = index
         age = len(ordered) - 1 - confirmed_index
         stage = ("WATCH_PIVOT_CONFIRMATION" if age < 0 else
                  "INVALIDATED" if invalidated_index is not None else "CONFIRMED" if trigger_index is not None
                  else "EXPIRED" if age > MAX_SETUP_AGE else "WATCH_PRICE_CONFIRMATION")
-        # The crossing can predate pivot confirmation. The rule first knows
-        # both facts on the later session, using that session's available data.
+        # Both the crossing and the pivot are known on the later session.
         breakout_confirmed_index = max(confirmed_index, trigger_index) if stage == "CONFIRMED" else None
         pivot_bar = ordered[last["price_index"]]
         span = float(pivot_bar["high"]) - float(pivot_bar["low"])
@@ -241,9 +249,11 @@ def assess_macd_zone_divergence(symbol_id: int, bars: Sequence[dict], exchange: 
                 "source_bar_date": ordered[-1]["date"],
                 "gain_from_trough_pct": round(100 * (closes[-1] - stop) / stop, 2) if stop > 0 else None,
                 "local_trigger_price": round(local_trigger_price, 4) if local_trigger_price is not None else None,
-                "local_trigger_date": local_resistance_date,
-                "local_breakout_on": ordered[local_breakout_index]["date"] if local_breakout_index is not None else None,
-                "local_breakout_close": round(closes[local_breakout_index], 4) if local_breakout_index is not None else None,
+                "local_trigger_date": local_trigger_date,
+                "local_cross_date": ordered[local_cross_index]["date"] if local_cross_index is not None else None,
+                "local_cross_close": round(closes[local_cross_index], 4) if local_cross_index is not None else None,
+                "local_volume_confirmed_on": ordered[local_volume_index]["date"] if local_volume_index is not None else None,
+                "local_volume_ratio20": _breakout_volume(ordered, local_volume_index) if local_volume_index is not None else None,
             },
         })
     return results
