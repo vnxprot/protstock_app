@@ -9,6 +9,8 @@ Mở **Thị trường → Radar dòng tiền** để chọn nhóm, sàn và chu
 | Tự doanh | Báo cáo theo mã của HNX cho HNX và UPCoM. CafeF theo mã trong Prot Universe cho HOSE. Dữ liệu thu tự động của nhóm hiện là tổng mua bán. |
 | Ba nhóm giá trị khớp | Vietcap cho Prot Universe trên cả ba sàn, đối soát với khối lượng khớp lệnh cuối ngày của CafeF. Radar có Từng lần khớp, Cụm khớp và Định kỳ. Giao dịch thỏa thuận nằm ngoài phạm vi. |
 
+Bảng **Định kỳ** hiển thị giá khớp bình quân theo khối lượng, khối lượng, giá trị và số bản ghi Vietcap. Số liệu mở cửa và đóng cửa được lưu riêng từ băng khớp. Phiên cũ chỉ có tổng định kỳ vẫn hiển thị tổng, còn chi tiết từng đợt xuất hiện sau khi nạp lại được băng nguồn.
+
 Trong chế độ Từng lần khớp, ngưỡng áp lên giá × khối lượng của mỗi bản ghi. Chế độ Cụm khớp gộp các bản ghi khớp liên tục liền nhau cùng giây, cùng giá và cùng chiều chủ động rồi mới áp ngưỡng. Chế độ Định kỳ tính riêng ATO/ATC, thuộc nhóm chưa rõ chiều. Mỗi nhóm lưu riêng số lần, khối lượng và giá trị mua, bán và chưa rõ chiều. Giá trị ròng dùng mua chủ động trừ bán chủ động.
 
 Một mã đủ điều kiện xếp hạng và cộng vào thẻ tổng hợp khi mọi phiên áp dụng cho mã trong chu kỳ đã đối soát. Có thể tìm mã chưa đủ phiên để xem độ phủ. Mẫu cũ thiếu kết quả đối soát giữ trạng thái Thiếu băng khớp.

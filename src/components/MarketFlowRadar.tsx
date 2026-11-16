@@ -25,6 +25,7 @@ const decimal = new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 2 })
 const integer = new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 0 })
 
 type Leader = { symbol: string; exchange: string; net_value: number; net_volume: number | null }
+type AuctionBatch = { count: number; volume: number; value: number }
 type FlowRow = {
   symbol: string; exchange: string; company_name: string | null; last_close_vnd: number | null; avg_buy_price: number | null
   buy_value: number | null; sell_value: number | null; net_value: number | null
@@ -33,12 +34,13 @@ type FlowRow = {
   buy_count: number | null; sell_count: number | null; unknown_count: number | null; unknown_volume: number | null
   holdings: number | null; holdings_date: string | null; ownership_pct: number | null; ownership_date: string | null
   room_remaining: number | null; room_date: string | null; observed: number; expected: number | null; source: string | null; partial: boolean
+  auction_breakdown?: Partial<Record<'opening' | 'closing' | 'other', AuctionBatch>> | null
 }
 type Dashboard = {
   coverage: { exchange: string; latest: string | null; observed: number; partial: boolean; ready: number | null; universe: number | null }[]; rows: FlowRow[]
   net_value: number | null; net_volume: number | null; strongest_buy: Leader | null; strongest_sell: Leader | null
 }
-type FlowDay = { trading_date: string; buy_value: number | null; sell_value: number | null; unknown_value: number | null; partial: boolean; tape_volume: number | null; reference_volume: number | null }
+type FlowDay = { trading_date: string; buy_value: number | null; sell_value: number | null; unknown_value: number | null; unknown_volume: number | null; trade_count: number | null; partial: boolean; tape_volume: number | null; reference_volume: number | null }
 
 const dayLabel = (day: string | null) => day ? formatDate(day) : '—'
 const quantity = (value: number | null | undefined, signed = false) => value == null ? '—' : `${signed && value > 0 ? '+' : ''}${integer.format(value)}`
@@ -63,7 +65,23 @@ function LeaderCard({ title, leader, side }: { title: string; leader?: Leader | 
   </div>
 }
 
-function rowMetrics(row: FlowRow, countLabel: string) {
+function auctionPrice(value?: number | null, volume?: number | null) {
+  return value != null && volume ? price(value / volume) : '—'
+}
+
+function auctionBatch(batch?: AuctionBatch) {
+  return batch ? `${auctionPrice(batch.value, batch.volume)} nghìn · ${quantity(batch.volume)} CP · ${billions(batch.value)} tỷ · ${quantity(batch.count)} bản ghi` : '—'
+}
+
+function rowMetrics(row: FlowRow, countLabel: string, auction: boolean): { label: string; unit: string; value: string; primary: boolean; sign?: number }[] {
+  if (auction) return [
+    { label: 'Giá khớp BQ', unit: 'nghìn đ', value: auctionPrice(row.matched_value, row.unknown_volume), primary: true },
+    { label: 'KL khớp', unit: 'CP', value: quantity(row.unknown_volume), primary: true },
+    { label: 'GT khớp', unit: 'tỷ đ', value: billions(row.matched_value), primary: true },
+    { label: 'Số bản ghi nguồn', unit: '', value: quantity(row.trade_count), primary: true },
+    { label: 'Mở cửa', unit: '', value: auctionBatch(row.auction_breakdown?.opening), primary: false },
+    { label: 'Đóng cửa', unit: '', value: auctionBatch(row.auction_breakdown?.closing), primary: false },
+  ]
   const costComparison = row.last_close_vnd != null && row.avg_buy_price != null && row.avg_buy_price > 0
     ? (row.last_close_vnd / row.avg_buy_price - 1) * 100 : null
   return [
@@ -80,24 +98,29 @@ function rowMetrics(row: FlowRow, countLabel: string) {
   ]
 }
 
-function RowDetails({ row, expected, sized, countLabel, history, loading, error }: { row: FlowRow; expected: number; sized: boolean; countLabel: string; history?: FlowDay[]; loading: boolean; error: boolean }) {
+function RowDetails({ row, expected, sized, countLabel, auction, history, loading, error }: { row: FlowRow; expected: number; sized: boolean; countLabel: string; auction: boolean; history?: FlowDay[]; loading: boolean; error: boolean }) {
   return <div className="radar-details">
-    <dl className="radar-mobile-metrics">{rowMetrics(row, countLabel).filter(metric => !metric.primary).map(metric =>
-      <div key={metric.label}><dt>{metric.label} · {metric.unit}</dt><dd data-direction={metric.sign}>{metric.value}</dd></div>
+    <dl className="radar-mobile-metrics">{rowMetrics(row, countLabel, auction).filter(metric => !metric.primary).map(metric =>
+      <div key={metric.label}><dt>{metric.label}{metric.unit && ` · ${metric.unit}`}</dt><dd data-direction={metric.sign}>{metric.value}</dd></div>
     )}</dl>
     <p className="radar-meta">{row.source ?? 'Chưa có nguồn'} · {row.observed}/{expected} phiên{sized && ' đã đối soát'}{row.partial && (sized ? ' · Thiếu băng khớp' : ' · Mẫu giới hạn')}</p>
     {!sized && <p className="radar-meta">Sở hữu {quantity(row.holdings)} CP{row.holdings_date && ` (${dayLabel(row.holdings_date)})`}
       {row.ownership_pct != null && ` · ${decimal.format(row.ownership_pct)}% (${dayLabel(row.ownership_date)})`}
       {row.room_remaining != null && ` · Room ${quantity(row.room_remaining)} CP (${dayLabel(row.room_date)})`}</p>}
-    {sized && !row.partial && <p className="radar-meta">Mua {quantity(row.buy_count)} · Bán {quantity(row.sell_count)} · Chưa rõ chiều {quantity(row.unknown_count)}, {quantity(row.unknown_volume)} CP, {billions(row.unknown_value)} tỷ · Tổng giá trị khớp {billions(row.matched_value)} tỷ</p>}
+    {sized && !auction && !row.partial && <p className="radar-meta">Mua {quantity(row.buy_count)} · Bán {quantity(row.sell_count)} · Chưa rõ chiều {quantity(row.unknown_count)}, {quantity(row.unknown_volume)} CP, {billions(row.unknown_value)} tỷ · Tổng giá trị khớp {billions(row.matched_value)} tỷ</p>}
+    {auction && row.auction_breakdown?.other && <p className="radar-meta">Định kỳ khác · {auctionBatch(row.auction_breakdown.other)}</p>}
+    {auction && !row.partial && !row.auction_breakdown && <p className="radar-meta">Phiên đã lưu chỉ có tổng định kỳ. Chi tiết mở cửa và đóng cửa cần nạp lại băng nguồn.</p>}
     <details className="radar-history"><summary>{expected > 260 ? 'Lịch sử · tối đa 260 phiên có dữ liệu gần nhất' : 'Lịch sử từng phiên'}</summary>
       {loading && <p className="radar-meta" role="status">Đang tải lịch sử…</p>}
       {error && <p className="radar-meta" role="alert">Không tải được lịch sử.</p>}
-      {Boolean(history?.length) && <div className="radar-history-scroll"><table><thead><tr><th scope="col">Phiên</th><th scope="col">Mua (tỷ)</th><th scope="col">Bán (tỷ)</th><th scope="col">Ròng (tỷ)</th>{sized && <th scope="col">Chưa rõ chiều (tỷ)</th>}</tr></thead>
+      {Boolean(history?.length) && <div className="radar-history-scroll"><table><thead><tr><th scope="col">Phiên</th>{auction
+        ? <><th scope="col">Giá khớp BQ (nghìn đ)</th><th scope="col">KL khớp (CP)</th><th scope="col">GT khớp (tỷ)</th><th scope="col">Số bản ghi nguồn</th></>
+        : <><th scope="col">Mua (tỷ)</th><th scope="col">Bán (tỷ)</th><th scope="col">Ròng (tỷ)</th>{sized && <th scope="col">Chưa rõ chiều (tỷ)</th>}</>}</tr></thead>
         <tbody>{history?.map(day => {
           if (sized && (day.partial || day.reference_volume == null)) return <tr key={day.trading_date}>
             <th scope="row">{dayLabel(day.trading_date)}</th><td colSpan={4}>Thiếu băng khớp · {quantity(day.tape_volume)}/{quantity(day.reference_volume)} CP đối soát</td>
           </tr>
+          if (auction) return <tr key={day.trading_date}><th scope="row">{dayLabel(day.trading_date)}</th><td>{auctionPrice(day.unknown_value, day.unknown_volume)}</td><td>{quantity(day.unknown_volume)}</td><td>{billions(day.unknown_value)}</td><td>{quantity(day.trade_count)}</td></tr>
           const net = day.buy_value == null || day.sell_value == null ? null : day.buy_value - day.sell_value
           return <tr key={day.trading_date}><th scope="row">{dayLabel(day.trading_date)}</th><td>{billions(day.buy_value)}</td><td>{billions(day.sell_value)}</td><td data-direction={direction(net)}>{billions(net, true)}</td>{sized && <td>{billions(day.unknown_value)}</td>}</tr>
         })}</tbody></table></div>}
@@ -120,6 +143,7 @@ export function MarketFlowRadar({ authenticated, active, tradingDates }: { authe
   const latest = tradingDates.at(-1) ?? ''
   const sized = category !== 'foreign' && category !== 'proprietary'
   const method = sized ? tapeMode : 'total'
+  const auction = method === 'auction'
   const countLabel = sized ? tapeMode === 'continuous_cluster' ? 'SL cụm' : 'SL lần khớp' : 'SL lệnh'
   const earliest = tradingDates[0] ?? ''
   const rangeError = draftRange.start && draftRange.end && (draftRange.start > draftRange.end
@@ -136,7 +160,9 @@ export function MarketFlowRadar({ authenticated, active, tradingDates }: { authe
   const query = useQuery({
     queryKey: ['market-radar-dashboard', first, last, exchange, category, method, order, searchTerm], enabled: ready, staleTime: 60_000,
     queryFn: async () => {
-      const { data, error } = await supabase!.rpc('market_radar_dashboard_v2', { p_start: first, p_end: last, p_exchange: exchange, p_category: category, p_order: order, p_search: searchTerm, p_mode: method })
+      const args = { p_start: first, p_end: last, p_exchange: exchange, p_category: category, p_search: searchTerm }
+      const { data, error } = auction ? await supabase!.rpc('market_radar_auction', args)
+        : await supabase!.rpc('market_radar_dashboard_v2', { ...args, p_order: order, p_mode: method })
       if (error) throw error
       return data as Dashboard
     },
@@ -149,7 +175,7 @@ export function MarketFlowRadar({ authenticated, active, tradingDates }: { authe
   const history = useQuery({
     queryKey: ['market-radar-history', focused, category, method, first, last], enabled: ready && Boolean(focus), staleTime: 60_000,
     queryFn: async () => {
-      const { data, error } = await supabase!.from('market_radar_daily').select('trading_date,buy_value,sell_value,unknown_value,partial,tape_volume,reference_volume')
+      const { data, error } = await supabase!.from('market_radar_daily').select('trading_date,buy_value,sell_value,unknown_value,unknown_volume,trade_count,partial,tape_volume,reference_volume')
         .eq('exchange', focus!.exchange).eq('symbol', focus!.symbol).eq('category', category).eq('method', method)
         .gte('trading_date', first).lte('trading_date', last).order('trading_date', { ascending: false }).limit(260)
       if (error) throw error
@@ -205,12 +231,12 @@ export function MarketFlowRadar({ authenticated, active, tradingDates }: { authe
       <div className="radar-filter-group"><span className="radar-filter-label">Xếp hạng</span><Chips label="Xếp hạng" options={orderOptions} value={order} onChange={value => { setOrder(value); resetRows() }}/></div>
     </div>
 
-    <dl className="radar-summary" aria-label="Tổng hợp theo nhóm, sàn và chu kỳ">
+    {!auction && <dl className="radar-summary" aria-label="Tổng hợp theo nhóm, sàn và chu kỳ">
       <div className="radar-stat" data-direction={direction(query.data?.net_value)}><dt>Tổng mua ròng</dt><dd>{billions(query.data?.net_value, true)} <small>tỷ</small></dd></div>
       <div className="radar-stat" data-direction={direction(query.data?.net_volume)}><dt>Tổng khối lượng ròng</dt><dd>{quantity(query.data?.net_volume, true)} <small>CP</small></dd></div>
       <LeaderCard title="Gom ròng mạnh nhất" leader={query.data?.strongest_buy} side={1}/>
       <LeaderCard title="Xả ròng mạnh nhất" leader={query.data?.strongest_sell} side={-1}/>
-    </dl>
+    </dl>}
 
     <div className="radar-table-heading"><div><h3>{searchTerm ? 'Kết quả tìm mã' : `Top ${rows.length || 20} cổ phiếu`}</h3>
       {last && <p className="radar-meta">{first === last ? dayLabel(last) : `${dayLabel(first)} – ${dayLabel(last)}`} · {dates.length} phiên{sized && (tapeMode === 'auction' ? ' · Khớp định kỳ' : ' · Khớp lệnh liên tục')}</p>}</div>
@@ -224,22 +250,22 @@ export function MarketFlowRadar({ authenticated, active, tradingDates }: { authe
 
     {visible.length > 0 && <>
       <div className="radar-table-frame"><table className="market-radar-table">
-        <thead><tr><th scope="col">Mã / Sàn</th>{rowMetrics(visible[0], countLabel).map(metric =>
+        <thead><tr><th scope="col">Mã / Sàn</th>{rowMetrics(visible[0], countLabel, auction).map(metric =>
           <th key={metric.label} scope="col" className={metric.primary ? '' : 'radar-desktop-cell'}>{metric.label}{metric.unit && <span>{metric.unit}</span>}</th>
         )}</tr></thead>
         <tbody>{visible.map((row, index) => {
           const key = rowKey(row)
           const expanded = focused === key
-          const metrics = rowMetrics(row, countLabel)
+          const metrics = rowMetrics(row, countLabel, auction)
           return <Fragment key={key}><tr className="radar-stock-row">
             <th scope="row"><button type="button" className="radar-stock" aria-expanded={expanded} aria-label={`Chi tiết ${row.symbol}`} onClick={() => setFocused(expanded ? '' : key)}>
               <span className="radar-rank">{row.partial && sized ? '—' : currentPage * pageSize + index + 1}</span><span className="radar-stock-label"><strong>{row.symbol}</strong><small>{exchangeLabel(row.exchange)}{sized ? ` · ${row.observed}/${row.expected ?? dates.length} phiên${row.partial ? ' · Thiếu băng khớp' : ''}` : row.partial && ' · Mẫu giới hạn'}</small></span><ChevronDown size={14} aria-hidden="true"/>
             </button>{row.company_name && <small className="radar-company" title={row.company_name}>{row.company_name}</small>}</th>
             {metrics.map(metric => <td key={metric.label} className={metric.primary ? '' : 'radar-desktop-cell'} data-direction={metric.sign}>{metric.value}</td>)}
-          </tr>{expanded && <tr className="radar-detail-row"><td colSpan={metrics.length + 1}><RowDetails row={row} expected={row.expected ?? dates.length} sized={sized} countLabel={countLabel} history={history.data} loading={history.isFetching} error={history.isError}/></td></tr>}</Fragment>
+          </tr>{expanded && <tr className="radar-detail-row"><td colSpan={metrics.length + 1}><RowDetails row={row} expected={row.expected ?? dates.length} sized={sized} countLabel={countLabel} auction={auction} history={history.data} loading={history.isFetching} error={history.isError}/></td></tr>}</Fragment>
         })}</tbody>
       </table></div>
-      <div className="radar-table-footer"><p className="radar-meta">* Giá mua bình quân trong kỳ dùng để tham chiếu. Hiệu suất tính theo thị giá so với giá mua bình quân.</p>
+      <div className="radar-table-footer"><p className="radar-meta">{auction ? 'Giá khớp BQ tính theo khối lượng. Số bản ghi phản ánh mức gộp của Vietcap.' : '* Giá mua bình quân trong kỳ dùng để tham chiếu. Hiệu suất tính theo thị giá so với giá mua bình quân.'}</p>
         {maxPage > 0 && <nav className="radar-pages" aria-label="Trang bảng xếp hạng"><button type="button" aria-label="Trang trước" disabled={currentPage === 0} onClick={() => { setPage(currentPage - 1); setFocused('') }}><ChevronLeft size={16}/></button><span>{currentPage + 1}/{maxPage + 1}</span><button type="button" aria-label="Trang sau" disabled={currentPage === maxPage} onClick={() => { setPage(currentPage + 1); setFocused('') }}><ChevronRight size={16}/></button></nav>}
       </div>
     </>}

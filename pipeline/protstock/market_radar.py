@@ -19,7 +19,7 @@ CAFEF = 'https://cafef.vn/du-lieu/Ajax/PageNew/DataHistory/'
 HNX_REPORT = 'https://owa.hnx.vn/ftp///THONGKEGIAODICH//'
 FIELDS = ('buy_value', 'sell_value', 'buy_volume', 'sell_volume', 'unknown_value', 'trade_count',
           'market_value', 'holdings', 'ownership_pct', 'room_remaining')
-TAPE_FIELDS = ('buy_count', 'sell_count', 'unknown_count', 'unknown_volume', 'tape_volume', 'reference_volume', 'tape_reason')
+TAPE_FIELDS = ('buy_count', 'sell_count', 'unknown_count', 'unknown_volume', 'tape_volume', 'reference_volume', 'tape_reason', 'auction_breakdown')
 
 
 def market_row(day, exchange, symbol, category, method, source, *, partial=False, **values):

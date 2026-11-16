@@ -130,6 +130,7 @@ def classify(tape, exchange):
     for method, matches in scopes.items():
         totals = {group: {f'{side}_{field}': 0 for side in ('buy', 'sell', 'unknown')
                           for field in ('count', 'value', 'volume')} for group in TRADE_GROUPS}
+        breakdown = {group: {} for group in TRADE_GROUPS}
         for match in matches:
             value = match.price * match.volume
             group = 'large' if value >= 1_000_000_000 else 'medium' if value >= 200_000_000 else 'small'
@@ -137,9 +138,23 @@ def classify(tape, exchange):
             totals[group][f'{side}_count'] += 1
             totals[group][f'{side}_volume'] += match.volume
             totals[group][f'{side}_value'] += value
+            if method == 'auction':
+                at = match.stamp.time()
+                if match.side == 'ato' or (exchange == 'HOSE' and time(9) <= at <= time(9, 15)):
+                    session = 'opening'
+                elif match.side == 'atc' or (exchange != 'UPCOM' and time(14, 30) <= at <= time(14, 45)):
+                    session = 'closing'
+                else:
+                    session = 'other'
+                batch = breakdown[group].setdefault(session, dict(count=0, volume=0, value=0))
+                batch['count'] += 1
+                batch['volume'] += match.volume
+                batch['value'] += value
         turnover = sum(bucket[f'{side}_value'] for bucket in totals.values() for side in ('buy', 'sell', 'unknown'))
         for group, bucket in totals.items():
             bucket['trade_count'] = sum(bucket[f'{side}_count'] for side in ('buy', 'sell', 'unknown'))
             if bucket['unknown_count'] and not (bucket['buy_count'] or bucket['sell_count']):
                 bucket.update(buy_value=None, sell_value=None, buy_volume=None, sell_volume=None)
+            if method == 'auction':
+                bucket['auction_breakdown'] = breakdown[group]
             yield method, group, turnover, bucket
