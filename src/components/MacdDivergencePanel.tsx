@@ -12,7 +12,9 @@ type Evidence = { zones: Zone[]; strength: 'THIN' | 'ROBUST'; price_declines_pct
   breakout_volume_ratio20?: number | null; trigger_age_sessions?: number | null; pending_lower_low_on?: string | null;
   invalidated_on?: string | null; latest_close: number; distance_to_trigger_pct: number;
   sweep_reversal?: boolean; sweep_date?: string | null; lower_wick_ratio?: number; close_location?: number;
-  gain_from_trough_pct?: number | null; local_trigger_price?: number | null; local_trigger_date?: string | null }
+  breakout_close?: number | null; breakout_confirmed_on?: string | null;
+  gain_from_trough_pct?: number | null; local_trigger_price?: number | null; local_trigger_date?: string | null;
+  local_breakout_on?: string | null; local_breakout_close?: number | null }
 type Row = { symbol_id: number; symbol: string; setup_id: string; swings: number; stage: string; confirmed_on: string | null;
   trigger_price: number; invalidation_price: number; trigger_date: string | null; evidence: Evidence }
 
@@ -35,19 +37,20 @@ function priority(row: Row, date: string) {
 
 function ZoneHistory({ row, date, open }: { row: Row; date: string; open: boolean }) {
   const history = useQuery({
-    queryKey: ['macd-zone-history', row.symbol_id, row.swings, date],
+    queryKey: ['macd-zone-history', row.symbol_id, row.setup_id, date],
     enabled: open && Boolean(supabase),
     queryFn: async () => {
       const { data, error } = await supabase!.from('macd_divergence_assessments')
-        .select('as_of_date,setup_id,stage,trigger_date,evidence')
-        .eq('symbol_id', row.symbol_id).eq('version', VERSION).eq('swings', row.swings)
+        .select('as_of_date,setup_id,stage,trigger_date,trigger_price,evidence')
+        .eq('symbol_id', row.symbol_id).eq('version', VERSION).eq('swings', row.swings).eq('setup_id', row.setup_id)
         .lte('as_of_date', date).order('as_of_date', { ascending: false }).limit(120)
       if (error) throw error
       const chronological = [...(data ?? [])].reverse()
       return chronological.filter((item, index) => {
         const previous = chronological[index - 1]
         const last = item.evidence?.zones?.at(-1)?.price_low
-        return !previous || item.setup_id !== previous.setup_id || item.stage !== previous.stage
+        return !previous || item.stage !== previous.stage || item.trigger_date !== previous.trigger_date
+          || item.trigger_price !== previous.trigger_price || item.evidence?.local_breakout_on !== previous.evidence?.local_breakout_on
           || last !== previous.evidence?.zones?.at(-1)?.price_low
       }).slice(-8)
     },
@@ -56,10 +59,13 @@ function ZoneHistory({ row, date, open }: { row: Row; date: string; open: boolea
   return <div className="macd-zone-history"><strong>Diễn biến ghi nhận theo phiên</strong>
     {history.isLoading ? <p>Đang tải diễn biến…</p> : history.isError ? <p>Chưa đọc được diễn biến.</p>
       : history.data?.length ? <ol>{history.data.map(item => <li key={item.as_of_date + item.setup_id}>
-        <time>{item.as_of_date}</time><span>{stages[item.stage] ?? item.stage}
+        <time dateTime={item.as_of_date}>Phiên đánh giá {item.as_of_date}</time><span>{
+          item.stage === 'CONFIRMED' && item.trigger_date
+            ? `Vượt ngưỡng mẫu ${price(item.trigger_price)} ngày ${item.trigger_date}`
+            : stages[item.stage] ?? item.stage}
           {item.evidence?.zones?.at(-1)?.price_low != null ? ' · đáy ' + price(item.evidence.zones.at(-1).price_low) : ''}
           {item.stage === 'INVALIDATED' && item.evidence?.invalidated_on ? ' · thủng đáy ' + item.evidence.invalidated_on : ''}
-          {item.trigger_date === item.as_of_date ? ' · breakout' : ''}</span>
+          {item.evidence?.local_breakout_on && ` · Vượt kháng cự cục bộ ngày ${item.evidence.local_breakout_on}`}</span>
       </li>)}</ol> : <p>Chưa có phiên phân kỳ trước đó; từ phiên này hệ thống lưu diễn biến hằng ngày.</p>}</div>
 }
 
@@ -80,14 +86,16 @@ function ZoneRow({ row, date, canJournal=false }: { row: Row; date: string; canJ
     <p className="macd-zone-levels">Đóng cửa gần nhất <b>{price(evidence.latest_close)}</b> · {row.stage === 'CONFIRMED' ? 'Ngưỡng breakout đã ghi nhận' : 'Ngưỡng chờ breakout'} <b>{price(row.trigger_price)}</b> · Đáy bảo vệ <b>{price(row.invalidation_price)}</b></p>
     {row.stage === 'WATCH_PIVOT_CONFIRMATION' && <p className="macd-zone-note">Đáy giá mới chỉ là ứng viên. Cần đủ hai phiên giao dịch đóng sau đáy để xác nhận pivot; trong thời gian đó không tạo tín hiệu mua từ mẫu này.</p>}
     {evidence.sweep_reversal && <p className="macd-zone-note">Đáy {evidence.sweep_date} là nến quét đáy rút chân: râu dưới {((evidence.lower_wick_ratio ?? 0) * 100).toFixed(0)}% biên nến, đóng cửa ở {((evidence.close_location ?? 0) * 100).toFixed(0)}% biên nến. Giá thấp nhất vẫn là đáy kỹ thuật, nhưng phản ánh cú quét hơn là nhiều phiên tích lũy tại đáy.</p>}
-    {row.trigger_date && <p>Giá vượt ngày <b>{row.trigger_date}</b>
-      {evidence.breakout_volume_ratio20 != null ? ' · khối lượng ' + evidence.breakout_volume_ratio20.toFixed(1) + '× trung bình 20 phiên trước' : ''}.
-      {row.trigger_date !== date && ' Đây là sự kiện đã qua; rule không phát lệnh mua muộn.'}</p>}
+    {row.trigger_date && <p><b>{row.trigger_date}</b> · {evidence.breakout_close != null && `Đóng cửa ${price(evidence.breakout_close)} · `}Vượt ngưỡng mẫu {price(row.trigger_price)}
+      {evidence.breakout_volume_ratio20 != null ? ' · khối lượng ' + evidence.breakout_volume_ratio20.toFixed(1) + '× trung bình 20 phiên trước' : ''}.</p>}
+    {row.confirmed_on && <p>Xác nhận đáy ngày <b>{row.confirmed_on}</b>
+      {evidence.breakout_confirmed_on && ` · Xác nhận breakout theo mẫu ngày ${evidence.breakout_confirmed_on}`} · Phiên đánh giá {date}</p>}
     {evidence.pending_lower_low_on && <p className="macd-zone-note">Đáy mới ngày {evidence.pending_lower_low_on} đang chờ hai phiên đóng để cập nhật vùng; mẫu vẫn được theo dõi, chưa kích hoạt mua.</p>}
     {row.stage === 'INVALIDATED' && evidence.invalidated_on && <p className="macd-zone-note">Mẫu này bị thủng đáy bảo vệ trong phiên {evidence.invalidated_on}. Ngày lưu đánh giá có thể muộn hơn ngày giá thủng đáy.</p>}
-    {evidence.local_trigger_price != null && row.stage !== 'CONFIRMED' && (
+    {evidence.local_trigger_price != null && (
       <p className="macd-zone-note macd-zone-local-trigger">
-        📍 Kháng cự cục bộ gần nhất: <b>{price(evidence.local_trigger_price)}</b> ({evidence.local_trigger_date}) · Ngưỡng vượt hộp lớn: <b>{price(row.trigger_price)}</b>{evidence.gain_from_trough_pct != null ? ` · Giá đã tăng ${evidence.gain_from_trough_pct.toFixed(1)}% từ đáy phân kỳ` : ''}.
+        Kháng cự cục bộ <b>{price(evidence.local_trigger_price)}</b> (đỉnh ngày {evidence.local_trigger_date}).
+        {evidence.local_breakout_on && ` Vượt ngày ${evidence.local_breakout_on}${evidence.local_breakout_close != null ? ` ở giá đóng cửa ${price(evidence.local_breakout_close)}` : ''}.`}
       </p>
     )}
     {evidence.gain_from_trough_pct != null && evidence.local_trigger_price == null && row.stage !== 'CONFIRMED' && (
@@ -100,7 +108,7 @@ function ZoneRow({ row, date, canJournal=false }: { row: Row; date: string; canJ
       {index > 0 && <small>Giá giảm {evidence.price_declines_pct[index - 1].toFixed(2)}% · MACD tăng {evidence.macd_rises_pct_points[index - 1].toFixed(3)} điểm %</small>}
       {zone.revisions.length > 1 && <small>Cập nhật đáy: {zone.revisions.map(item => item.date + ' (' + price(item.price_low) + ')').join(' → ')}</small>}
     </div>)}</div>
-    <p className="macd-zone-note">Hai đáy giá cách nhau 5–60 phiên. Các pivot chỉ gộp vào một vùng nếu cách tối đa 5 phiên và biên độ đáy trong vùng không quá 1%. Đáy giá và đáy đường MACD được tìm riêng; ngày có thể lệch nhau. Breakout là lần đầu đóng cửa trên đỉnh giữa hai đáy sau khi pivot được xác nhận, kể cả chính phiên xác nhận; volume cần ≥1,3× trung bình 20 phiên trước để xét mua. Sự kiện giá vẫn được lưu nếu volume thiếu; các bộ lọc rủi ro chung vẫn có thể chặn mua. Với cặp đáy cách nhau trên 20 phiên, hệ thống bổ sung kháng cự cục bộ (đỉnh hồi gần đáy 2) để xác định điểm vào sớm hợp lý hơn. Histogram không tham gia rule này.</p>
+    <p className="macd-zone-note">Breakout theo mẫu là lần đầu giá đóng cửa vượt đỉnh giữa hai đáy, tính từ phiên sau đáy cuối. Hệ thống xét mua khi đáy và cú vượt đều đã được xác nhận, giá vẫn trên ngưỡng, và khối lượng phiên vượt đạt ít nhất 1,3× trung bình 20 phiên trước. Kháng cự cục bộ là mốc theo dõi riêng. Các bộ lọc rủi ro chung vẫn áp dụng.</p>
     <ZoneHistory row={row} date={date} open={open}/>{canJournal&&<JournalLink context={{symbol:row.symbol,source:'MACD',strategy:'Phân kỳ Dương · đường MACD',role:'CHAMPION',date,version:VERSION}}/>}
   </details>
 }

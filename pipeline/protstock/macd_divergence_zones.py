@@ -164,7 +164,8 @@ def assess_macd_zone_divergence(symbol_id: int, bars: Sequence[dict], exchange: 
         # --- Local trigger: near-term resistance when zone gap is wide (> 20 sessions) ---
         zone_gap = last["price_index"] - selected[-2]["price_index"]
         local_trigger_price: float | None = None
-        local_trigger_date: str | None = None
+        local_resistance_date: str | None = None
+        local_breakout_index: int | None = None
         if zone_gap > 20:
             local_win_start = max(selected[-2]["price_index"] + 1, last["price_index"] - min(10, zone_gap // 3))
             local_win_end = last["price_index"]
@@ -173,7 +174,7 @@ def assess_macd_zone_divergence(symbol_id: int, bars: Sequence[dict], exchange: 
                 _lp = float(local_bar["high"])
                 if _lp < trigger - 1e-8:
                     local_trigger_price = _lp
-                    local_trigger_date = local_bar["date"]
+                    local_resistance_date = local_bar["date"]
         # --- Trigger scan: start from day after bottom-2 so pre-confirmation surges are captured ---
         trigger_index = invalidated_index = pending_index = None
         scan_start = last["price_index"] + 1
@@ -189,24 +190,17 @@ def assess_macd_zone_divergence(symbol_id: int, bars: Sequence[dict], exchange: 
                 else:
                     pending_index = index
                 break
-            if trigger_index is None and bar_close > trigger:
-                if index < confirmed_index:
-                    # Pre-confirmation breakout: capture exact crossing bar
-                    if prev_close <= trigger:
-                        trigger_index = index
-                else:
-                    if prev_close <= trigger:
-                        trigger_index = index
-                    elif index == confirmed_index:
-                        # Price already above trigger at confirmation day: backtrack to find first cross
-                        for back in range(scan_start, confirmed_index + 1):
-                            if float(ordered[back]["close"]) > trigger:
-                                trigger_index = back
-                                break
+            if local_trigger_price is not None and local_breakout_index is None and prev_close <= local_trigger_price < bar_close:
+                local_breakout_index = index
+            if trigger_index is None and prev_close <= trigger < bar_close:
+                trigger_index = index
         age = len(ordered) - 1 - confirmed_index
         stage = ("WATCH_PIVOT_CONFIRMATION" if age < 0 else
                  "INVALIDATED" if invalidated_index is not None else "CONFIRMED" if trigger_index is not None
                  else "EXPIRED" if age > MAX_SETUP_AGE else "WATCH_PRICE_CONFIRMATION")
+        # The crossing can predate pivot confirmation. The rule first knows
+        # both facts on the later session, using that session's available data.
+        breakout_confirmed_index = max(confirmed_index, trigger_index) if stage == "CONFIRMED" else None
         pivot_bar = ordered[last["price_index"]]
         span = float(pivot_bar["high"]) - float(pivot_bar["low"])
         wick_ratio = (min(float(pivot_bar["open"]), float(pivot_bar["close"])) - float(pivot_bar["low"])) / span if span > 0 else 0
@@ -237,6 +231,8 @@ def assess_macd_zone_divergence(symbol_id: int, bars: Sequence[dict], exchange: 
                 "sweep_reversal": sweep_reversal, "sweep_date": last["price_date"] if sweep_reversal else None,
                 "lower_wick_ratio": round(wick_ratio, 3), "close_location": round(close_location, 3),
                 "breakout_volume_ratio20": _breakout_volume(ordered, trigger_index) if trigger_index is not None else None,
+                "breakout_close": round(closes[trigger_index], 4) if trigger_index is not None else None,
+                "breakout_confirmed_on": ordered[breakout_confirmed_index]["date"] if breakout_confirmed_index is not None else None,
                 "trigger_age_sessions": len(ordered) - 1 - trigger_index if trigger_index is not None else None,
                 "latest_close": round(closes[-1], 4),
                 "distance_to_trigger_pct": round(100 * (trigger - closes[-1]) / trigger, 3),
@@ -245,7 +241,9 @@ def assess_macd_zone_divergence(symbol_id: int, bars: Sequence[dict], exchange: 
                 "source_bar_date": ordered[-1]["date"],
                 "gain_from_trough_pct": round(100 * (closes[-1] - stop) / stop, 2) if stop > 0 else None,
                 "local_trigger_price": round(local_trigger_price, 4) if local_trigger_price is not None else None,
-                "local_trigger_date": local_trigger_date,
+                "local_trigger_date": local_resistance_date,
+                "local_breakout_on": ordered[local_breakout_index]["date"] if local_breakout_index is not None else None,
+                "local_breakout_close": round(closes[local_breakout_index], 4) if local_breakout_index is not None else None,
             },
         })
     return results

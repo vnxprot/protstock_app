@@ -305,7 +305,7 @@ def evaluate_macd_bullish_divergence_v3(context: dict[str, Any]) -> tuple[bool, 
 
 
 def evaluate_macd_bullish_divergence_v4(context: dict[str, Any]) -> tuple[bool, str, list[str]]:
-    """MACD-line-only zone setup; breakout is proposed only on its own day."""
+    """Evaluate the breakout when both the crossing and pivot are known."""
     if context.get("timeframe") != "D":
         return False, "WATCH", []
     rows = assess_macd_zone_divergence(context.get("symbol_id", 0), context.get("bars") or [],
@@ -318,7 +318,7 @@ def evaluate_macd_bullish_divergence_v4(context: dict[str, Any]) -> tuple[bool, 
     # A breakout today must be surfaced even when an older longer chain is
     # still on WATCH; within the same urgency, prefer the stronger structure.
     top = max(active, key=lambda row: (
-        row["stage"] == "CONFIRMED" and row["trigger_date"] == today,
+        row["stage"] == "CONFIRMED" and row["evidence"].get("breakout_confirmed_on") == today,
         row["swings"], row["confirmed_on"] or "",
     ))
     evidence = top["evidence"]
@@ -328,6 +328,7 @@ def evaluate_macd_bullish_divergence_v4(context: dict[str, Any]) -> tuple[bool, 
         "segments": top["swings"] - 1, "zones": evidence["zones"], "strength": evidence["strength"],
         "trigger_price": top["trigger_price"], "invalidation_price": top["invalidation_price"],
         "confirmed_on": top["confirmed_on"], "trigger_date": top["trigger_date"],
+        "breakout_confirmed_on": evidence.get("breakout_confirmed_on"),
         "breakout_volume_ratio20": evidence.get("breakout_volume_ratio20"),
         "sweep_reversal": evidence.get("sweep_reversal"),
     }
@@ -342,8 +343,10 @@ def evaluate_macd_bullish_divergence_v4(context: dict[str, Any]) -> tuple[bool, 
         return True, "WATCH", [*reasons, "ZONE_LOW_BEING_REVISED"]
     if top["stage"] == "WATCH_PRICE_CONFIRMATION":
         return True, "WATCH", [*reasons, "WAIT_PRICE_BREAKOUT"]
-    if top["trigger_date"] != today:
+    if evidence.get("breakout_confirmed_on") != today:
         return True, "WATCH", [*reasons, "RECENT_PRICE_BREAKOUT"]
+    if evidence["latest_close"] <= top["trigger_price"]:
+        return True, "WATCH", [*reasons, "WAIT_PRICE_BREAKOUT"]
     ratio = evidence.get("breakout_volume_ratio20")
     if ratio is None or ratio < MIN_THIN_BREAKOUT_VOLUME:
         return True, "WATCH", [*reasons, "PRICE_BREAKOUT_CONFIRMED", "BREAKOUT_VOLUME_UNCONFIRMED"]

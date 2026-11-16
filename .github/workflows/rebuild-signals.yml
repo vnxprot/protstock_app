@@ -12,6 +12,11 @@ on:
         required: true
         default: false
         type: boolean
+      start_date:
+        description: Optional first session for a historical rebuild through trading_date (YYYY-MM-DD)
+        required: false
+        default: ''
+        type: string
       symbol:
         description: Optional single symbol to rebuild first
         required: false
@@ -39,6 +44,8 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           TARGET_SYMBOL: ${{ inputs.symbol }}
           TRADING_DATE: ${{ inputs.trading_date }}
+          START_DATE: ${{ inputs.start_date }}
+          SEND_TELEGRAM: ${{ inputs.send_telegram }}
         run: |
           args=()
           if [ -n "$TARGET_SYMBOL" ]; then
@@ -59,8 +66,45 @@ jobs:
             )
             args+=(--symbol-offset "$offset" --symbol-limit 1)
           fi
-          python -m protstock.cli rebuild-signals --date "$TRADING_DATE" "${args[@]}"
+          if [ -z "$START_DATE" ]; then
+            python -m protstock.cli rebuild-signals --date "$TRADING_DATE" "${args[@]}"
+          else
+            if [ "$SEND_TELEGRAM" = true ]; then
+              echo 'Historical range rebuilds do not send Telegram alerts.' >&2
+              exit 1
+            fi
+            python - "${args[@]}" <<'PY'
+          import os
+          import subprocess
+          import sys
+          from datetime import date
+
+          from protstock.config import Settings
+          from protstock.supabase_rest import SupabaseRestClient
+
+          start = date.fromisoformat(os.environ['START_DATE'])
+          end = date.fromisoformat(os.environ['TRADING_DATE'])
+          client = SupabaseRestClient(Settings.from_env())
+          try:
+              index = client.market_index('VNINDEX')
+              sessions = sorted({row['trading_date'] for row in client.index_price_history(index['id'], 2600)
+                                 if start <= date.fromisoformat(row['trading_date']) <= end})
+          finally:
+              client.close()
+          if not sessions:
+              raise SystemExit('No stored VNINDEX sessions in the requested range')
+          failed = []
+          for session in sessions:
+              result = subprocess.run([sys.executable, '-m', 'protstock.cli', 'rebuild-signals',
+                                       '--date', session, '--historical', *sys.argv[1:]])
+              if result.returncode:
+                  failed.append(session)
+          if failed:
+              raise SystemExit('Failed sessions: ' + ', '.join(failed))
+          PY
+          fi
       - name: Verify MACD zone assessments
+        if: inputs.start_date == ''
         env:
           SUPABASE_URL: https://upmqxwktvvguegqeqibn.supabase.co
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
@@ -113,7 +157,7 @@ jobs:
                              for item in zones])
           PY
       - name: Send Telegram only when explicitly requested
-        if: inputs.send_telegram
+        if: inputs.send_telegram && inputs.start_date == ''
         env:
           SUPABASE_URL: https://upmqxwktvvguegqeqibn.supabase.co
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
