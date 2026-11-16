@@ -13,7 +13,7 @@ on:
         default: false
         type: boolean
       start_date:
-        description: Optional first session for a historical rebuild through trading_date (YYYY-MM-DD)
+        description: First unfinished session of a historical rebuild through trading_date (YYYY-MM-DD)
         required: false
         default: ''
         type: string
@@ -25,6 +25,7 @@ on:
 
 permissions:
   contents: read
+  actions: write
 
 concurrency:
   group: protstock-signal-rebuild-${{ inputs.symbol || 'all' }}
@@ -39,6 +40,7 @@ jobs:
         with: { python-version: "3.12", cache: pip }
       - run: python -m pip install -e "."
       - name: Rebuild signals from stored prices
+        id: rebuild
         env:
           SUPABASE_URL: https://upmqxwktvvguegqeqibn.supabase.co
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
@@ -48,6 +50,7 @@ jobs:
           SEND_TELEGRAM: ${{ inputs.send_telegram }}
         run: |
           args=()
+          offset=''
           if [ -n "$TARGET_SYMBOL" ]; then
             offset=$(python - <<'PY'
           import os
@@ -73,36 +76,61 @@ jobs:
               echo 'Historical range rebuilds do not send Telegram alerts.' >&2
               exit 1
             fi
-            python - "${args[@]}" <<'PY'
+            SYMBOL_OFFSET="$offset" python - <<'PY'
           import os
-          import subprocess
-          import sys
           from datetime import date
 
           from protstock.config import Settings
+          from protstock.eod import rebuild_signals
           from protstock.supabase_rest import SupabaseRestClient
 
           start = date.fromisoformat(os.environ['START_DATE'])
           end = date.fromisoformat(os.environ['TRADING_DATE'])
+          if start > end:
+              raise SystemExit('start_date must be on or before trading_date')
           client = SupabaseRestClient(Settings.from_env())
           try:
               index = client.market_index('VNINDEX')
-              sessions = sorted({row['trading_date'] for row in client.index_price_history(index['id'], 2600)
-                                 if start <= date.fromisoformat(row['trading_date']) <= end})
+              sessions = sorted(set(client.index_price_dates(index['id'], start, end)))
           finally:
               client.close()
           if not sessions:
               raise SystemExit('No stored VNINDEX sessions in the requested range')
-          failed = []
-          for session in sessions:
-              result = subprocess.run([sys.executable, '-m', 'protstock.cli', 'rebuild-signals',
-                                       '--date', session, '--historical', *sys.argv[1:]])
-              if result.returncode:
-                  failed.append(session)
-          if failed:
-              raise SystemExit('Failed sessions: ' + ', '.join(failed))
+
+          batch, remaining = sessions[:3], sessions[3:]
+          offset = os.environ['SYMBOL_OFFSET']
+          symbol_scope = {'symbol_offset': int(offset), 'symbol_limit': 1} if offset else {}
+
+          def checkpoint(message):
+              print(message, flush=True)
+              with open(os.environ['GITHUB_STEP_SUMMARY'], 'a', encoding='utf-8') as summary:
+                  summary.write(f'- {message}\n')
+
+          for session in batch:
+              checkpoint(f'Started {session}. If interrupted before completion, resume from {session}.')
+              result = rebuild_signals(date.fromisoformat(session), historical=True, **symbol_scope)
+              if result['status'] != 'SUCCEEDED' or not result['covered_symbols']:
+                  raise SystemExit(f"Rebuild incomplete for {session}; resume from {session} (job {result['job_id']})")
+              checkpoint(f"Completed {session}: {result['covered_symbols']}/{result['expected_symbols']} symbols "
+                         f"({result['publication_status']}, job {result['job_id']}).")
+
+          if remaining:
+              checkpoint(f'Next batch starts at {remaining[0]}.')
+              with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as output:
+                  output.write(f'next_start={remaining[0]}\n')
           PY
           fi
+      - name: Queue the next historical batch
+        if: steps.rebuild.outputs.next_start != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NEXT_START: ${{ steps.rebuild.outputs.next_start }}
+          TRADING_DATE: ${{ inputs.trading_date }}
+          TARGET_SYMBOL: ${{ inputs.symbol }}
+        run: |
+          gh workflow run rebuild-signals.yml --repo "$GITHUB_REPOSITORY" --ref "$GITHUB_REF_NAME" \
+            -f start_date="$NEXT_START" -f trading_date="$TRADING_DATE" \
+            -f symbol="$TARGET_SYMBOL" -f send_telegram=false
       - name: Verify MACD zone assessments
         if: inputs.start_date == ''
         env:
