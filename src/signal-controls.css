@@ -30,10 +30,14 @@
 .outcome-review article { display:grid; gap:6px; padding:12px; border-radius:12px; background:var(--control-surface); overflow-wrap:anywhere; }
 .outcome-review span,.outcome-review small { color:var(--muted); }
 .screener-field:focus-within { border-color:transparent !important; box-shadow:none !important; }
-input:focus,select:focus,textarea:focus,.soft-select-trigger:focus { outline:none; box-shadow:none; border-color:transparent; }
+input:focus,select:focus,textarea:focus,.soft-select-trigger:focus { outline:none; box-shadow:none; }
+input:focus:not([type="date"],[type="datetime-local"],[type="month"],[type="week"],.date-input-wrap>input),select:focus,textarea:focus,.soft-select-trigger:focus { border-color:transparent; }
 input:focus-visible,textarea:focus-visible,button:focus-visible,[role="combobox"]:focus-visible { outline:2px solid color-mix(in srgb,var(--control-accent) 55%,transparent); outline-offset:3px; }
-.app-shell :is(input,select,textarea):focus { outline:none !important; box-shadow:none !important; border-color:transparent !important; }
-:root[data-input-mode="keyboard"] .app-shell :is(input,textarea,button,[role="combobox"]):focus { outline:2px solid color-mix(in srgb,var(--control-accent) 55%,transparent) !important; outline-offset:3px; }
+.app-shell :is(input,select,textarea):focus { outline:none !important; box-shadow:none !important; }
+.app-shell :is(input,select,textarea):focus:not([type="date"],[type="datetime-local"],[type="month"],[type="week"],.date-input-wrap input) { border-color:transparent !important; }
+:root[data-input-mode="keyboard"] .app-shell :is(input,textarea,button,[role="combobox"]):focus:not([type="date"],[type="datetime-local"],[type="month"],[type="week"],.date-input-wrap input) { outline:2px solid color-mix(in srgb,var(--control-accent) 55%,transparent) !important; outline-offset:3px; }
+:root[data-input-mode="keyboard"] .app-shell :is(input[type="date"],input[type="datetime-local"],input[type="month"],input[type="week"]):focus:not(.date-input-wrap input),
+:root[data-input-mode="keyboard"] .app-shell .date-input-wrap:focus-within { outline:2px solid var(--muted) !important; outline-offset:2px; border-radius:var(--control-radius); }
 .screener-pagination .soft-select { width:80px; }
 .screener-field .soft-select-trigger { background:transparent; min-height:34px; padding:0; }
 @keyframes select-reveal { from { opacity:0; transform:translateY(-3px); } to { opacity:1; transform:translateY(0); } }

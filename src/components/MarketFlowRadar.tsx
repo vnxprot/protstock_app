@@ -4,6 +4,7 @@ import { ArrowDownRight, ArrowUpRight, CalendarDays, ChevronDown, ChevronLeft, C
 import { formatDate } from '../lib/date'
 import { MARKET_PRICE_TO_VND } from '../lib/marketUnits'
 import { supabase } from '../lib/supabase'
+import { DateField } from './DateField'
 import './market-flow-radar.css'
 
 type Option = readonly [string, string]
@@ -72,6 +73,7 @@ function rowMetrics(row: FlowRow) {
     { label: 'KL mua', unit: 'CP', value: quantity(row.buy_volume), primary: false },
     { label: 'KL bán', unit: 'CP', value: quantity(row.sell_volume), primary: false },
     { label: 'KL mua ròng', unit: 'CP', value: quantity(row.net_volume, true), sign: direction(row.net_volume), primary: true },
+    { label: 'SL lệnh', unit: 'lần khớp', value: quantity(row.trade_count), primary: true },
   ]
 }
 
@@ -84,7 +86,7 @@ function RowDetails({ row, expected, sized, history, loading, error }: { row: Fl
     {!sized && <p className="radar-meta">Sở hữu {quantity(row.holdings)} CP{row.holdings_date && ` (${dayLabel(row.holdings_date)})`}
       {row.ownership_pct != null && ` · ${decimal.format(row.ownership_pct)}% (${dayLabel(row.ownership_date)})`}
       {row.room_remaining != null && ` · Room ${quantity(row.room_remaining)} CP (${dayLabel(row.room_date)})`}</p>}
-    {sized && <p className="radar-meta">{quantity(row.trade_count)} lần khớp · {billions(row.matched_value)} tỷ · Chưa rõ chiều {billions(row.unknown_value)} tỷ</p>}
+    {sized && <p className="radar-meta">Giá trị khớp {billions(row.matched_value)} tỷ · Chưa rõ chiều {billions(row.unknown_value)} tỷ</p>}
     <details className="radar-history"><summary>{expected > 260 ? 'Lịch sử · tối đa 260 phiên có dữ liệu gần nhất' : 'Lịch sử từng phiên'}</summary>
       {loading && <p className="radar-meta" role="status">Đang tải lịch sử…</p>}
       {error && <p className="radar-meta" role="alert">Không tải được lịch sử.</p>}
@@ -102,17 +104,20 @@ export function MarketFlowRadar({ authenticated, active, tradingDates }: { authe
   const [category, setCategory] = useState<string>('foreign')
   const [period, setPeriod] = useState('1')
   const [order, setOrder] = useState('buy')
-  const [customStart, setCustomStart] = useState('')
-  const [customEnd, setCustomEnd] = useState('')
+  const [rangeOpen, setRangeOpen] = useState(false)
+  const [draftRange, setDraftRange] = useState({ start: '', end: '' })
+  const [appliedRange, setAppliedRange] = useState({ start: '', end: '' })
   const [search, setSearch] = useState('')
   const [focused, setFocused] = useState('')
   const [page, setPage] = useState(0)
   const latest = tradingDates.at(-1) ?? ''
   const sized = category !== 'foreign' && category !== 'proprietary'
   const method = sized ? 'continuous' : 'total'
-  const startDate = customStart || tradingDates.at(-20) || tradingDates[0] || ''
-  const endDate = customEnd || latest
-  const dates = period === 'custom' ? tradingDates.filter(day => day >= startDate && day <= endDate)
+  const earliest = tradingDates[0] ?? ''
+  const rangeError = draftRange.start && draftRange.end && (draftRange.start > draftRange.end
+    ? 'Ngày bắt đầu phải sớm hơn hoặc trùng ngày kết thúc.'
+    : draftRange.start < earliest || draftRange.end > latest ? 'Chọn ngày trong phạm vi lịch giao dịch đã công bố.' : '')
+  const dates = period === 'custom' ? tradingDates.filter(day => day >= appliedRange.start && day <= appliedRange.end)
     : period === 'ytd' ? tradingDates.filter(day => day.startsWith(latest.slice(0, 4)))
     : tradingDates.slice(-Number(period))
   const first = dates[0] ?? ''
@@ -145,6 +150,16 @@ export function MarketFlowRadar({ authenticated, active, tradingDates }: { authe
   })
   const scope = exchanges.filter(([id]) => id !== 'all' && (exchange === 'all' || exchange === id))
   function resetRows() { setPage(0); setFocused('') }
+  function choosePeriod(next: string) {
+    if (next === 'custom') {
+      if (!rangeOpen) setDraftRange(period === 'custom' ? appliedRange : { start: first, end: last })
+      setRangeOpen(true)
+      return
+    }
+    setRangeOpen(false)
+    setPeriod(next)
+    resetRows()
+  }
 
   return <section className="panel market-radar" aria-labelledby="market-radar-title">
     <header className="radar-heading">
@@ -160,14 +175,22 @@ export function MarketFlowRadar({ authenticated, active, tradingDates }: { authe
 
     <div className="radar-filter-bar">
       <div className="radar-filter-group"><span className="radar-filter-label"><CalendarDays size={15} aria-hidden="true"/> Chu kỳ</span>
-        <Chips label="Chu kỳ" options={periods} value={period} onChange={value => { setPeriod(value); resetRows() }}/>
+        <Chips label="Chu kỳ" options={periods} value={rangeOpen ? 'custom' : period} onChange={choosePeriod}/>
       </div>
       <label className="radar-search"><Search size={16} aria-hidden="true"/><input type="search" aria-label="Tìm mã cổ phiếu" placeholder="Tìm mã cổ phiếu…" value={search} maxLength={10} onChange={event => { setSearch(event.target.value); resetRows() }}/></label>
     </div>
-    {period === 'custom' && <div className="radar-custom-dates">
-      <label>Từ ngày<input type="date" value={startDate} min={tradingDates[0]} max={endDate} onChange={event => { setCustomStart(event.target.value); resetRows() }}/></label>
-      <label>Đến ngày<input type="date" value={endDate} min={startDate} max={latest} onChange={event => { setCustomEnd(event.target.value); resetRows() }}/></label>
-    </div>}
+    {rangeOpen && <form className="radar-custom-dates" aria-label="Khoảng ngày giao dịch" onSubmit={event => {
+      event.preventDefault()
+      if (!latest || !draftRange.start || !draftRange.end || rangeError) return
+      setAppliedRange(draftRange)
+      setPeriod('custom')
+      resetRows()
+    }}>
+      <DateField label="Từ ngày" value={draftRange.start} min={earliest} max={latest} required onChange={start => setDraftRange(range => ({ ...range, start }))}/>
+      <DateField label="Đến ngày" value={draftRange.end} min={earliest} max={latest} required onChange={end => setDraftRange(range => ({ ...range, end }))}/>
+      <button type="submit" className="secondary-button" disabled={!latest || !draftRange.start || !draftRange.end || Boolean(rangeError)}>Áp dụng</button>
+      {rangeError && <p className="radar-date-error" role="alert">{rangeError}</p>}
+    </form>}
     <div className="radar-filter-bar radar-filter-secondary">
       <div className="radar-filter-group"><span className="radar-filter-label">Sàn</span><Chips label="Sàn giao dịch" options={exchanges} value={exchange} onChange={value => { setExchange(value); resetRows() }}/></div>
       <div className="radar-filter-group"><span className="radar-filter-label">Xếp hạng</span><Chips label="Xếp hạng" options={orderOptions} value={order} onChange={value => { setOrder(value); resetRows() }}/></div>
@@ -198,18 +221,19 @@ export function MarketFlowRadar({ authenticated, active, tradingDates }: { authe
         <tbody>{visible.map((row, index) => {
           const key = rowKey(row)
           const expanded = focused === key
+          const metrics = rowMetrics(row)
           return <Fragment key={key}><tr className="radar-stock-row">
             <th scope="row"><button type="button" className="radar-stock" aria-expanded={expanded} aria-label={`Chi tiết ${row.symbol}`} onClick={() => setFocused(expanded ? '' : key)}>
               <span className="radar-rank">{currentPage * pageSize + index + 1}</span><span className="radar-stock-label"><strong>{row.symbol}</strong><small>{exchangeLabel(row.exchange)}{row.partial && ' · Mẫu giới hạn'}</small></span><ChevronDown size={14} aria-hidden="true"/>
             </button>{row.company_name && <small className="radar-company" title={row.company_name}>{row.company_name}</small>}</th>
-            {rowMetrics(row).map(metric => <td key={metric.label} className={metric.primary ? '' : 'radar-desktop-cell'} data-direction={metric.sign}>{metric.value}</td>)}
-          </tr>{expanded && <tr className="radar-detail-row"><td colSpan={10}><RowDetails row={row} expected={dates.length} sized={sized} history={history.data} loading={history.isFetching} error={history.isError}/></td></tr>}</Fragment>
+            {metrics.map(metric => <td key={metric.label} className={metric.primary ? '' : 'radar-desktop-cell'} data-direction={metric.sign}>{metric.value}</td>)}
+          </tr>{expanded && <tr className="radar-detail-row"><td colSpan={metrics.length + 1}><RowDetails row={row} expected={dates.length} sized={sized} history={history.data} loading={history.isFetching} error={history.isError}/></td></tr>}</Fragment>
         })}</tbody>
       </table></div>
       <div className="radar-table-footer"><p className="radar-meta">* Giá mua bình quân trong kỳ dùng để tham chiếu. Hiệu suất tính theo thị giá so với giá mua bình quân.</p>
         {maxPage > 0 && <nav className="radar-pages" aria-label="Trang bảng xếp hạng"><button type="button" aria-label="Trang trước" disabled={currentPage === 0} onClick={() => { setPage(currentPage - 1); setFocused('') }}><ChevronLeft size={16}/></button><span>{currentPage + 1}/{maxPage + 1}</span><button type="button" aria-label="Trang sau" disabled={currentPage === maxPage} onClick={() => { setPage(currentPage + 1); setFocused('') }}><ChevronRight size={16}/></button></nav>}
       </div>
     </>}
-    {sized && <p className="radar-meta radar-scope-note">Theo các mã trong Prot Universe. Chiều mua/bán chủ động do nguồn cung cấp.</p>}
+    <p className="radar-meta radar-scope-note">{sized ? 'Theo các mã trong Prot Universe. Chiều mua/bán chủ động do nguồn cung cấp.' : 'SL lệnh hiện — khi báo cáo của nhóm chỉ có số liệu mua/bán tổng hợp.'}</p>
   </section>
 }

@@ -52,7 +52,7 @@ html[data-theme] body { background-color:var(--app-top-surface); }
 .app-shell .spike-search svg { position:static; flex:none; }
 html[data-theme="light"] .app-shell main :is(.screener-field,.investment-primary-search-box,.radar-search-control,.spike-search,.market-sector-tools>label) :is(input,.soft-select-trigger) { background:transparent!important; }
 .app-shell .screener-filter-fields { grid-template-columns:repeat(2,minmax(0,1fr))!important; }
-.app-shell :is(.screener-field,.investment-primary-search-box,.spike-search,.ui-field):focus-within { outline:2px solid var(--control-accent); outline-offset:1px; }
+.app-shell :is(.screener-field,.investment-primary-search-box,.spike-search,.ui-field):not(.date-field):focus-within { outline:2px solid var(--control-accent); outline-offset:1px; }
 .app-shell :is(.advanced-toggle,.investment-primary-advanced,.spike-advanced-toggle,.journal-filter-toggle,.signal-funnel-filter-toggle,.opportunity-filter-toggle) {
   display:inline-flex; align-items:center; justify-content:flex-start; gap:6px;
   height:var(--field-height); min-height:var(--field-height)!important; padding:0 10px;

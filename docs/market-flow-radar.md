@@ -1,6 +1,6 @@
 # Radar dòng tiền
 
-Mở **Thị trường → Radar dòng tiền** để chọn nhóm, sàn và chu kỳ bằng nút. Chu kỳ Tuỳ chọn lọc theo khoảng ngày. Bốn chỉ số tổng hợp tính theo nhóm, sàn và chu kỳ. Ô tìm mã và chế độ xếp hạng áp dụng cho bảng tối đa 20 mã, 10 mã mỗi trang. Bấm vào mã để xem độ phủ, nguồn và lịch sử giao dịch. Top giá và khối lượng nằm dưới **Nhóm ngành → Toàn cảnh**.
+Mở **Thị trường → Radar dòng tiền** để chọn nhóm, sàn và chu kỳ bằng nút. Bấm **Tuỳ chọn**, nhập hoặc chọn **Từ ngày** và **Đến ngày**, rồi bấm **Áp dụng**. Bốn chỉ số tổng hợp tính theo nhóm, sàn và chu kỳ. Ô tìm mã và chế độ xếp hạng áp dụng cho bảng tối đa 20 mã, 10 mã mỗi trang. Cột **SL lệnh** đếm số lần khớp quan sát được trong nhóm đang xem và để trống khi báo cáo không có chỉ số này. Bấm vào mã để xem độ phủ, nguồn và lịch sử giao dịch. Top giá và khối lượng nằm dưới **Nhóm ngành → Toàn cảnh**.
 
 | Nhóm | Nguồn và phạm vi |
 | --- | --- |

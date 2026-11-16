@@ -6,8 +6,7 @@
 .opportunities-panel .opportunity-search .filter-field-label { display:none; }
 .opportunities-panel .opportunity-search .ui-field { gap:0; }
 .app-shell .opportunities-panel .opportunity-toolbar .ui-field:focus-within { outline:none; }
-.app-shell .opportunities-panel .opportunity-toolbar :is(.opportunity-search input,.date-input-wrap>input,.soft-select-trigger,.opportunity-filter-toggle):focus,
-.app-shell .opportunities-panel .opportunity-toolbar .date-input-wrap:focus-within>input {
+.app-shell .opportunities-panel .opportunity-toolbar :is(.opportunity-search input,.soft-select-trigger,.opportunity-filter-toggle):focus {
   outline:2px solid var(--control-accent)!important;
   outline-offset:1px;
   border-color:var(--control-accent)!important;
