@@ -18,6 +18,8 @@ const categories = [
 ] as const
 const periods = [['1', 'Phiên gần nhất'], ['5', '5 phiên'], ['20', '20 phiên'], ['50', '50 phiên'], ['200', '200 phiên'], ['ytd', 'YTD'], ['custom', 'Tuỳ chọn']] as const
 const orders = [['buy', 'Mua ròng'], ['sell', 'Bán ròng']] as const
+const tapeModes = [['continuous', 'Từng lần khớp'], ['continuous_cluster', 'Cụm khớp'], ['auction', 'Định kỳ']] as const
+const sizeOrder = ['size', 'Giá trị khớp'] as const
 const pageSize = 10
 const decimal = new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 2 })
 const integer = new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 0 })
@@ -28,14 +30,15 @@ type FlowRow = {
   buy_value: number | null; sell_value: number | null; net_value: number | null
   buy_volume: number | null; sell_volume: number | null; net_volume: number | null
   matched_value: number | null; unknown_value: number | null; trade_count: number | null
+  buy_count: number | null; sell_count: number | null; unknown_count: number | null; unknown_volume: number | null
   holdings: number | null; holdings_date: string | null; ownership_pct: number | null; ownership_date: string | null
-  room_remaining: number | null; room_date: string | null; observed: number; source: string; partial: boolean
+  room_remaining: number | null; room_date: string | null; observed: number; expected: number | null; source: string | null; partial: boolean
 }
 type Dashboard = {
-  coverage: { exchange: string; latest: string; observed: number; partial: boolean }[]; rows: FlowRow[]
+  coverage: { exchange: string; latest: string | null; observed: number; partial: boolean; ready: number | null; universe: number | null }[]; rows: FlowRow[]
   net_value: number | null; net_volume: number | null; strongest_buy: Leader | null; strongest_sell: Leader | null
 }
-type FlowDay = { trading_date: string; buy_value: number | null; sell_value: number | null }
+type FlowDay = { trading_date: string; buy_value: number | null; sell_value: number | null; unknown_value: number | null; partial: boolean; tape_volume: number | null; reference_volume: number | null }
 
 const dayLabel = (day: string | null) => day ? formatDate(day) : '—'
 const quantity = (value: number | null | undefined, signed = false) => value == null ? '—' : `${signed && value > 0 ? '+' : ''}${integer.format(value)}`
@@ -60,7 +63,7 @@ function LeaderCard({ title, leader, side }: { title: string; leader?: Leader | 
   </div>
 }
 
-function rowMetrics(row: FlowRow) {
+function rowMetrics(row: FlowRow, countLabel: string) {
   const costComparison = row.last_close_vnd != null && row.avg_buy_price != null && row.avg_buy_price > 0
     ? (row.last_close_vnd / row.avg_buy_price - 1) * 100 : null
   return [
@@ -73,27 +76,30 @@ function rowMetrics(row: FlowRow) {
     { label: 'KL mua', unit: 'CP', value: quantity(row.buy_volume), primary: false },
     { label: 'KL bán', unit: 'CP', value: quantity(row.sell_volume), primary: false },
     { label: 'KL mua ròng', unit: 'CP', value: quantity(row.net_volume, true), sign: direction(row.net_volume), primary: true },
-    { label: 'SL lệnh', unit: 'lần khớp', value: quantity(row.trade_count), primary: true },
+    { label: countLabel, unit: '', value: quantity(row.trade_count), primary: true },
   ]
 }
 
-function RowDetails({ row, expected, sized, history, loading, error }: { row: FlowRow; expected: number; sized: boolean; history?: FlowDay[]; loading: boolean; error: boolean }) {
+function RowDetails({ row, expected, sized, countLabel, history, loading, error }: { row: FlowRow; expected: number; sized: boolean; countLabel: string; history?: FlowDay[]; loading: boolean; error: boolean }) {
   return <div className="radar-details">
-    <dl className="radar-mobile-metrics">{rowMetrics(row).filter(metric => !metric.primary).map(metric =>
+    <dl className="radar-mobile-metrics">{rowMetrics(row, countLabel).filter(metric => !metric.primary).map(metric =>
       <div key={metric.label}><dt>{metric.label} · {metric.unit}</dt><dd data-direction={metric.sign}>{metric.value}</dd></div>
     )}</dl>
-    <p className="radar-meta">{row.source} · {row.observed}/{expected} phiên{row.partial && ' · Mẫu giới hạn'}</p>
+    <p className="radar-meta">{row.source ?? 'Chưa có nguồn'} · {row.observed}/{expected} phiên{sized && ' đã đối soát'}{row.partial && (sized ? ' · Thiếu băng khớp' : ' · Mẫu giới hạn')}</p>
     {!sized && <p className="radar-meta">Sở hữu {quantity(row.holdings)} CP{row.holdings_date && ` (${dayLabel(row.holdings_date)})`}
       {row.ownership_pct != null && ` · ${decimal.format(row.ownership_pct)}% (${dayLabel(row.ownership_date)})`}
       {row.room_remaining != null && ` · Room ${quantity(row.room_remaining)} CP (${dayLabel(row.room_date)})`}</p>}
-    {sized && <p className="radar-meta">Giá trị khớp {billions(row.matched_value)} tỷ · Chưa rõ chiều {billions(row.unknown_value)} tỷ</p>}
+    {sized && !row.partial && <p className="radar-meta">Mua {quantity(row.buy_count)} · Bán {quantity(row.sell_count)} · Chưa rõ chiều {quantity(row.unknown_count)}, {quantity(row.unknown_volume)} CP, {billions(row.unknown_value)} tỷ · Tổng giá trị khớp {billions(row.matched_value)} tỷ</p>}
     <details className="radar-history"><summary>{expected > 260 ? 'Lịch sử · tối đa 260 phiên có dữ liệu gần nhất' : 'Lịch sử từng phiên'}</summary>
       {loading && <p className="radar-meta" role="status">Đang tải lịch sử…</p>}
       {error && <p className="radar-meta" role="alert">Không tải được lịch sử.</p>}
-      {Boolean(history?.length) && <div className="radar-history-scroll"><table><thead><tr><th scope="col">Phiên</th><th scope="col">Mua (tỷ)</th><th scope="col">Bán (tỷ)</th><th scope="col">Ròng (tỷ)</th></tr></thead>
+      {Boolean(history?.length) && <div className="radar-history-scroll"><table><thead><tr><th scope="col">Phiên</th><th scope="col">Mua (tỷ)</th><th scope="col">Bán (tỷ)</th><th scope="col">Ròng (tỷ)</th>{sized && <th scope="col">Chưa rõ chiều (tỷ)</th>}</tr></thead>
         <tbody>{history?.map(day => {
+          if (sized && (day.partial || day.reference_volume == null)) return <tr key={day.trading_date}>
+            <th scope="row">{dayLabel(day.trading_date)}</th><td colSpan={4}>Thiếu băng khớp · {quantity(day.tape_volume)}/{quantity(day.reference_volume)} CP đối soát</td>
+          </tr>
           const net = day.buy_value == null || day.sell_value == null ? null : day.buy_value - day.sell_value
-          return <tr key={day.trading_date}><th scope="row">{dayLabel(day.trading_date)}</th><td>{billions(day.buy_value)}</td><td>{billions(day.sell_value)}</td><td data-direction={direction(net)}>{billions(net, true)}</td></tr>
+          return <tr key={day.trading_date}><th scope="row">{dayLabel(day.trading_date)}</th><td>{billions(day.buy_value)}</td><td>{billions(day.sell_value)}</td><td data-direction={direction(net)}>{billions(net, true)}</td>{sized && <td>{billions(day.unknown_value)}</td>}</tr>
         })}</tbody></table></div>}
     </details>
   </div>
@@ -102,6 +108,7 @@ function RowDetails({ row, expected, sized, history, loading, error }: { row: Fl
 export function MarketFlowRadar({ authenticated, active, tradingDates }: { authenticated: boolean; active: boolean; tradingDates: string[] }) {
   const [exchange, setExchange] = useState('all')
   const [category, setCategory] = useState<string>('foreign')
+  const [tapeMode, setTapeMode] = useState('continuous')
   const [period, setPeriod] = useState('1')
   const [order, setOrder] = useState('buy')
   const [rangeOpen, setRangeOpen] = useState(false)
@@ -112,7 +119,8 @@ export function MarketFlowRadar({ authenticated, active, tradingDates }: { authe
   const [page, setPage] = useState(0)
   const latest = tradingDates.at(-1) ?? ''
   const sized = category !== 'foreign' && category !== 'proprietary'
-  const method = sized ? 'continuous' : 'total'
+  const method = sized ? tapeMode : 'total'
+  const countLabel = sized ? tapeMode === 'continuous_cluster' ? 'SL cụm' : 'SL lần khớp' : 'SL lệnh'
   const earliest = tradingDates[0] ?? ''
   const rangeError = draftRange.start && draftRange.end && (draftRange.start > draftRange.end
     ? 'Ngày bắt đầu phải sớm hơn hoặc trùng ngày kết thúc.'
@@ -124,11 +132,11 @@ export function MarketFlowRadar({ authenticated, active, tradingDates }: { authe
   const last = dates.at(-1) ?? ''
   const ready = active && authenticated && Boolean(supabase && first && last)
   const searchTerm = search.trim().toUpperCase()
-  const orderOptions = sized ? [...orders, ['size', 'Giá trị khớp'] as const] : [...orders, category === 'foreign' ? ['ownership', 'Sở hữu (%)'] as const : ['holdings', 'SL nắm giữ'] as const]
+  const orderOptions = sized ? tapeMode === 'auction' ? [sizeOrder] : [...orders, sizeOrder] : [...orders, category === 'foreign' ? ['ownership', 'Sở hữu (%)'] as const : ['holdings', 'SL nắm giữ'] as const]
   const query = useQuery({
-    queryKey: ['market-radar-dashboard', first, last, exchange, category, order, searchTerm], enabled: ready, staleTime: 60_000,
+    queryKey: ['market-radar-dashboard', first, last, exchange, category, method, order, searchTerm], enabled: ready, staleTime: 60_000,
     queryFn: async () => {
-      const { data, error } = await supabase!.rpc('market_radar_dashboard', { p_start: first, p_end: last, p_exchange: exchange, p_category: category, p_order: order, p_search: searchTerm })
+      const { data, error } = await supabase!.rpc('market_radar_dashboard_v2', { p_start: first, p_end: last, p_exchange: exchange, p_category: category, p_order: order, p_search: searchTerm, p_mode: method })
       if (error) throw error
       return data as Dashboard
     },
@@ -139,9 +147,9 @@ export function MarketFlowRadar({ authenticated, active, tradingDates }: { authe
   const visible = rows.slice(currentPage * pageSize, (currentPage + 1) * pageSize)
   const focus = visible.find(row => rowKey(row) === focused)
   const history = useQuery({
-    queryKey: ['market-radar-history', focused, category, first, last], enabled: ready && Boolean(focus), staleTime: 60_000,
+    queryKey: ['market-radar-history', focused, category, method, first, last], enabled: ready && Boolean(focus), staleTime: 60_000,
     queryFn: async () => {
-      const { data, error } = await supabase!.from('market_radar_daily').select('trading_date,buy_value,sell_value')
+      const { data, error } = await supabase!.from('market_radar_daily').select('trading_date,buy_value,sell_value,unknown_value,partial,tape_volume,reference_volume')
         .eq('exchange', focus!.exchange).eq('symbol', focus!.symbol).eq('category', category).eq('method', method)
         .gte('trading_date', first).lte('trading_date', last).order('trading_date', { ascending: false }).limit(260)
       if (error) throw error
@@ -168,8 +176,8 @@ export function MarketFlowRadar({ authenticated, active, tradingDates }: { authe
     </header>
 
     <div className="radar-categories" role="group" aria-label="Nhóm dòng tiền">{categories.map(({ id, label, note, icon: Icon, tone }) =>
-      <button key={id} type="button" data-tone={tone} aria-pressed={category === id} onClick={() => { setCategory(id); setOrder('buy'); resetRows() }}>
-        <span className="radar-category-icon"><Icon size={17} aria-hidden="true"/></span><span><strong>{label}</strong><small>{note}</small></span>
+      <button key={id} type="button" data-tone={tone} aria-pressed={category === id} onClick={() => { setCategory(id); setOrder(id !== 'foreign' && id !== 'proprietary' && tapeMode === 'auction' ? 'size' : 'buy'); resetRows() }}>
+        <span className="radar-category-icon"><Icon size={17} aria-hidden="true"/></span><span><strong>{label}</strong><small>{['foreign', 'proprietary'].includes(id) || tapeMode !== 'continuous_cluster' ? note : 'Giá trị mỗi cụm khớp'}</small></span>
       </button>
     )}</div>
 
@@ -193,6 +201,7 @@ export function MarketFlowRadar({ authenticated, active, tradingDates }: { authe
     </form>}
     <div className="radar-filter-bar radar-filter-secondary">
       <div className="radar-filter-group"><span className="radar-filter-label">Sàn</span><Chips label="Sàn giao dịch" options={exchanges} value={exchange} onChange={value => { setExchange(value); resetRows() }}/></div>
+      {sized && <div className="radar-filter-group"><Chips label="Cách tính khớp lệnh" options={tapeModes} value={tapeMode} onChange={value => { setTapeMode(value); setOrder(value === 'auction' ? 'size' : 'buy'); resetRows() }}/></div>}
       <div className="radar-filter-group"><span className="radar-filter-label">Xếp hạng</span><Chips label="Xếp hạng" options={orderOptions} value={order} onChange={value => { setOrder(value); resetRows() }}/></div>
     </div>
 
@@ -204,10 +213,10 @@ export function MarketFlowRadar({ authenticated, active, tradingDates }: { authe
     </dl>
 
     <div className="radar-table-heading"><div><h3>{searchTerm ? 'Kết quả tìm mã' : `Top ${rows.length || 20} cổ phiếu`}</h3>
-      {last && <p className="radar-meta">{first === last ? dayLabel(last) : `${dayLabel(first)} – ${dayLabel(last)}`} · {dates.length} phiên{sized && ' · Khớp lệnh liên tục'}</p>}</div>
+      {last && <p className="radar-meta">{first === last ? dayLabel(last) : `${dayLabel(first)} – ${dayLabel(last)}`} · {dates.length} phiên{sized && (tapeMode === 'auction' ? ' · Khớp định kỳ' : ' · Khớp lệnh liên tục')}</p>}</div>
       {query.data && <div className="radar-coverage" aria-label="Độ phủ theo sàn">{scope.map(([id, name]) => {
         const item = query.data.coverage.find(entry => entry.exchange === id)
-        return <span key={id} title={item ? `Phiên mới nhất có dữ liệu ${dayLabel(item.latest)}` : 'Chưa có dữ liệu'}>{name} <b>{item?.observed ?? 0}/{dates.length}</b>{item?.partial && <small> · Mẫu giới hạn</small>}</span>
+        return <span key={id} title={item?.latest ? `Phiên mới nhất có dữ liệu ${dayLabel(item.latest)}` : 'Chưa có dữ liệu'}>{name} <b>{item?.observed ?? 0}/{dates.length} phiên</b>{sized && item?.universe != null ? <small> · {item.ready}/{item.universe} mã đủ kỳ</small> : item?.partial && <small> · Mẫu giới hạn</small>}</span>
       })}</div>}
     </div>
     {query.isError && <p className="market-error" role="alert">Không tải được Radar. <button type="button" className="secondary-button" onClick={() => void query.refetch()}>Thử lại</button></p>}
@@ -215,25 +224,25 @@ export function MarketFlowRadar({ authenticated, active, tradingDates }: { authe
 
     {visible.length > 0 && <>
       <div className="radar-table-frame"><table className="market-radar-table">
-        <thead><tr><th scope="col">Mã / Sàn</th>{rowMetrics(visible[0]).map(metric =>
-          <th key={metric.label} scope="col" className={metric.primary ? '' : 'radar-desktop-cell'}>{metric.label}<span>{metric.unit}</span></th>
+        <thead><tr><th scope="col">Mã / Sàn</th>{rowMetrics(visible[0], countLabel).map(metric =>
+          <th key={metric.label} scope="col" className={metric.primary ? '' : 'radar-desktop-cell'}>{metric.label}{metric.unit && <span>{metric.unit}</span>}</th>
         )}</tr></thead>
         <tbody>{visible.map((row, index) => {
           const key = rowKey(row)
           const expanded = focused === key
-          const metrics = rowMetrics(row)
+          const metrics = rowMetrics(row, countLabel)
           return <Fragment key={key}><tr className="radar-stock-row">
             <th scope="row"><button type="button" className="radar-stock" aria-expanded={expanded} aria-label={`Chi tiết ${row.symbol}`} onClick={() => setFocused(expanded ? '' : key)}>
-              <span className="radar-rank">{currentPage * pageSize + index + 1}</span><span className="radar-stock-label"><strong>{row.symbol}</strong><small>{exchangeLabel(row.exchange)}{row.partial && ' · Mẫu giới hạn'}</small></span><ChevronDown size={14} aria-hidden="true"/>
+              <span className="radar-rank">{row.partial && sized ? '—' : currentPage * pageSize + index + 1}</span><span className="radar-stock-label"><strong>{row.symbol}</strong><small>{exchangeLabel(row.exchange)}{sized ? ` · ${row.observed}/${row.expected ?? dates.length} phiên${row.partial ? ' · Thiếu băng khớp' : ''}` : row.partial && ' · Mẫu giới hạn'}</small></span><ChevronDown size={14} aria-hidden="true"/>
             </button>{row.company_name && <small className="radar-company" title={row.company_name}>{row.company_name}</small>}</th>
             {metrics.map(metric => <td key={metric.label} className={metric.primary ? '' : 'radar-desktop-cell'} data-direction={metric.sign}>{metric.value}</td>)}
-          </tr>{expanded && <tr className="radar-detail-row"><td colSpan={metrics.length + 1}><RowDetails row={row} expected={dates.length} sized={sized} history={history.data} loading={history.isFetching} error={history.isError}/></td></tr>}</Fragment>
+          </tr>{expanded && <tr className="radar-detail-row"><td colSpan={metrics.length + 1}><RowDetails row={row} expected={row.expected ?? dates.length} sized={sized} countLabel={countLabel} history={history.data} loading={history.isFetching} error={history.isError}/></td></tr>}</Fragment>
         })}</tbody>
       </table></div>
       <div className="radar-table-footer"><p className="radar-meta">* Giá mua bình quân trong kỳ dùng để tham chiếu. Hiệu suất tính theo thị giá so với giá mua bình quân.</p>
         {maxPage > 0 && <nav className="radar-pages" aria-label="Trang bảng xếp hạng"><button type="button" aria-label="Trang trước" disabled={currentPage === 0} onClick={() => { setPage(currentPage - 1); setFocused('') }}><ChevronLeft size={16}/></button><span>{currentPage + 1}/{maxPage + 1}</span><button type="button" aria-label="Trang sau" disabled={currentPage === maxPage} onClick={() => { setPage(currentPage + 1); setFocused('') }}><ChevronRight size={16}/></button></nav>}
       </div>
     </>}
-    <p className="radar-meta radar-scope-note">{sized ? 'Theo các mã trong Prot Universe. Chiều mua/bán chủ động do nguồn cung cấp.' : 'SL lệnh hiện — khi báo cáo của nhóm chỉ có số liệu mua/bán tổng hợp.'}</p>
+    <p className="radar-meta radar-scope-note">{sized ? `Top và tổng chỉ tính mã đủ phiên đã đối soát. ${tapeMode === 'continuous_cluster' ? 'Cụm gộp các lần khớp liên tiếp cùng giây, cùng giá và cùng chiều.' : tapeMode === 'auction' ? 'Khớp định kỳ chỉ có giá trị và khối lượng chưa rõ chiều.' : 'Chiều mua/bán chủ động theo Vietcap.'} Giao dịch thỏa thuận nằm ngoài phạm vi khớp lệnh.` : 'SL lệnh hiện — khi báo cáo của nhóm chỉ có số liệu mua/bán tổng hợp.'}</p>
   </section>
 }

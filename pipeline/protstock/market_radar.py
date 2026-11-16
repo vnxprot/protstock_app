@@ -1,9 +1,7 @@
 """Collect dated public market flow without storing individual trades."""
 from argparse import ArgumentParser
-from collections import defaultdict
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date, datetime, time, timedelta
-from decimal import Decimal, InvalidOperation
 from io import BytesIO
 import re
 
@@ -12,26 +10,16 @@ import pdfplumber
 
 from .config import Settings
 from .market_http import SourceUnavailable, request_json
-from .market_sources import VCI_BASE, VN, local_timestamp
+from .market_radar_tape import classify, integer, read_tape, tape_quality
+from .market_sources import VN
 from .supabase_rest import SupabaseRestClient
 
 EXCHANGES = ('HOSE', 'HNX', 'UPCOM')
 CAFEF = 'https://cafef.vn/du-lieu/Ajax/PageNew/DataHistory/'
-VCI_TAPE = VCI_BASE + '/market-watch/LEData/getAll'
 HNX_REPORT = 'https://owa.hnx.vn/ftp///THONGKEGIAODICH//'
-TRADE_GROUPS = ('large', 'medium', 'small')
 FIELDS = ('buy_value', 'sell_value', 'buy_volume', 'sell_volume', 'unknown_value', 'trade_count',
           'market_value', 'holdings', 'ownership_pct', 'room_remaining')
-
-
-def integer(value, *, allow_negative=False):
-    try:
-        number = Decimal(str(value))
-    except InvalidOperation as error:
-        raise ValueError('Expected a numeric field') from error
-    if not number.is_finite() or number != number.to_integral_value() or (number < 0 and not allow_negative):
-        raise ValueError('Expected an integer field')
-    return int(number)
+TAPE_FIELDS = ('buy_count', 'sell_count', 'unknown_count', 'unknown_volume', 'tape_volume', 'reference_volume', 'tape_reason')
 
 
 def market_row(day, exchange, symbol, category, method, source, *, partial=False, **values):
@@ -133,58 +121,41 @@ def hnx_proprietary(day, exchange):
     return result
 
 
-def tape_rows(day, exchange, symbol, records):
-    if not isinstance(records, list):
-        raise SourceUnavailable('VCI tape contract changed')
-    trades = {}
-    for item in records:
-        stamp = local_timestamp(item['truncTime'])
-        if stamp.date() != day:
-            continue
-        if item['symbol'] != symbol:
-            raise ValueError('VCI tape returned another symbol')
-        vol = integer(item['matchVol'])
-        value = vol * integer(item['matchPrice'])
-        cumulative = integer(item['accumulatedVolume'])
-        trade = (stamp, vol, value, cumulative, item['matchType'])
-        key = integer(item['id'])
-        if key in trades and trades[key] != trade:
-            raise ValueError('Conflicting VCI trade ID')
-        trades[key] = trade
-    if not trades:
-        return []
+def matched_reference(day, exchange, symbol):
+    payload = cafef_page('PriceHistory', exchange, day, day, symbol=symbol)
+    records = payload['Data']
+    if len(records) != 1:
+        return None
+    row = records[0]
+    if row['Symbol'] != symbol or row['Ngay'] != day.strftime('%d/%m/%Y'):
+        return None
+    # CafeF reports negotiated volume in a separate field, KLThoaThuan.
+    return integer(row['KhoiLuongKhopLenh'])
 
-    previous = 0
-    complete = True
-    totals = defaultdict(lambda: dict(buy_value=0, sell_value=0, buy_volume=0, sell_volume=0, unknown_value=0, trade_count=0))
-    for stamp, vol, value, cumulative, side in sorted(trades.values(), key=lambda trade: (trade[0], trade[3])):
-        complete &= cumulative - previous == vol
-        previous = cumulative
-        opening = time(9, 15) if exchange == 'HOSE' else time(9)
-        closing = time(15) if exchange == 'UPCOM' else time(14, 30)
-        afternoon = time(13) <= stamp.time() < closing or (exchange == 'UPCOM' and stamp.time() == closing)
-        if not (opening <= stamp.time() <= time(11, 30) or afternoon):
-            continue
-        if (exchange == 'HOSE' and stamp.time() == opening and side not in ('b', 's')) or side in ('ato', 'atc', 'pt', 'put'):
-            continue
-        category = 'large' if value >= 1_000_000_000 else 'medium' if value >= 200_000_000 else 'small'
-        bucket = totals[category]
-        bucket['trade_count'] += 1
-        if side in ('b', 's'):
-            direction = 'buy' if side == 'b' else 'sell'
-            bucket[f'{direction}_value'] += value
-            bucket[f'{direction}_volume'] += vol
-        else:
-            bucket['unknown_value'] += value
 
-    turnover = sum(row['buy_value'] + row['sell_value'] + row['unknown_value'] for row in totals.values())
+def fetch_tape(day, exchange, symbol):
+    reference = None
+    tape = []
+    reason = None
+    try:
+        reference = matched_reference(day, exchange, symbol)
+    except (SourceUnavailable, ValueError, KeyError, TypeError) as error:
+        print(f'{symbol} reference: {error}', flush=True)
+    if reference:
+        try:
+            tape = read_tape(day, symbol)
+        except (SourceUnavailable, ValueError, KeyError, TypeError) as error:
+            reason = 'source_unavailable'
+            print(f'{symbol} tape: {error}', flush=True)
+    volume, mismatch = tape_quality(tape, exchange, reference)
+    reason = reason or mismatch
     result = []
-    for category in TRADE_GROUPS:
-        bucket = totals[category]
-        if bucket['unknown_value'] and not (bucket['buy_volume'] or bucket['sell_volume']):
-            bucket.update(buy_value=None, sell_value=None, buy_volume=None, sell_volume=None)
-        result.append(market_row(day, exchange, symbol, category, 'continuous', 'Vietcap · Prot Universe',
-            partial=not complete, market_value=turnover if complete else None, **bucket))
+    for method, category, turnover, bucket in classify(tape, exchange):
+        values = bucket if reason is None else {}
+        row = market_row(day, exchange, symbol, category, method, 'Vietcap · đối soát CafeF',
+                         partial=reason is not None, market_value=turnover if reason is None else None, **values)
+        metrics = {**values, 'tape_volume': volume, 'reference_volume': reference, 'tape_reason': reason}
+        result.append({**row, **{field: metrics.get(field) for field in TAPE_FIELDS}})
     return result
 
 
@@ -208,7 +179,7 @@ def save_report(db, day, exchange, category, rows):
     response.raise_for_status()
 
 
-def collect(db, sessions, *, latest_tape):
+def collect(db, sessions):
     if not sessions:
         raise ValueError('No trading sessions found')
     symbols = [(row['symbol'], row['exchange']) for row in db.active_symbols() if row['exchange'] in EXCHANGES]
@@ -217,8 +188,6 @@ def collect(db, sessions, *, latest_tape):
     jobs = [(f'proprietary {exchange} {day}', hnx_proprietary, (day, exchange))
             for day in sessions for exchange in ('HNX', 'UPCOM')]
     jobs.extend((f'foreign {exchange} {day}', foreign_day, (day, exchange)) for day in sessions for exchange in EXCHANGES)
-    if latest_tape:
-        jobs.extend((f'tape {exchange} {symbol}', fetch_tape, (latest_tape, exchange, symbol)) for symbol, exchange in symbols)
     jobs.extend((f'proprietary {exchange} {symbol}', cafef_proprietary, (symbol, exchange, start, end, valid_days))
                 for symbol, exchange in symbols if exchange == 'HOSE')
     total = 0
@@ -243,35 +212,45 @@ def collect(db, sessions, *, latest_tape):
         raise SourceUnavailable('No radar data collected from any source')
 
 
-def fetch_tape(day, exchange, symbol):
-    def get_page(cursor):
-        return request_json('POST', VCI_TAPE, json={'symbol': symbol, 'limit': 100, 'truncTime': cursor})
-
-    records = get_page(None)
-    if isinstance(records, list) and records:
-        oldest = records[-1]
-        # The vendor cursor is exclusive. Include the boundary second and deduplicate by ID.
-        if local_timestamp(oldest['truncTime']).date() == day and integer(oldest['accumulatedVolume']) > integer(oldest['matchVol']):
-            page = get_page(integer(oldest['truncTime']) + 1)
-            if isinstance(page, list):
-                records += page
-    return tape_rows(day, exchange, symbol, records)
+def collect_tape(db, day, shard, shards):
+    symbols = [row for row in db.active_symbols() if row['exchange'] in EXCHANGES
+               and (not row['listed_from'] or row['listed_from'] <= day.isoformat())]
+    symbols = symbols[shard::shards]
+    verified = 0
+    with ThreadPoolExecutor(max_workers=5) as pool:
+        futures = [pool.submit(fetch_tape, day, row['exchange'], row['symbol']) for row in symbols]
+        for future in as_completed(futures):
+            rows = future.result()
+            response = db._request('POST', '/rpc/publish_market_radar_tape', json={'p_rows': rows})
+            response.raise_for_status()
+            verified += int(not rows[0]['partial'])
+    print(f'Tape {day} shard {shard}: {verified}/{len(symbols)} freshly verified', flush=True)
 
 
 def main():
     parser = ArgumentParser(description=__doc__)
     parser.add_argument('--sessions', type=int, choices=range(1, 21), default=1)
     parser.add_argument('--end', type=date.fromisoformat)
+    parser.add_argument('--tape-date', type=date.fromisoformat)
+    parser.add_argument('--shard', type=int, default=0)
+    parser.add_argument('--shards', type=int, default=1)
     args = parser.parse_args()
     now = datetime.now(VN)
     latest_closed = now.date() if now.time() >= time(16, 30) else now.date() - timedelta(days=1)
     db = SupabaseRestClient(Settings.from_env())
+    if args.tape_date:
+        if not 0 <= args.shard < args.shards or args.tape_date > latest_closed:
+            parser.error('Expected a valid shard and a closed tape date')
+        if session_dates(db, args.tape_date, 1) == [args.tape_date]:
+            collect_tape(db, args.tape_date, args.shard, args.shards)
+        else:
+            # VNINDEX publication may lag the exchange calendar on a regular weekday.
+            if args.tape_date.weekday() < 5:
+                collect_tape(db, args.tape_date, args.shard, args.shards)
+        return
     end = min(args.end or latest_closed, latest_closed)
     sessions = session_dates(db, end, args.sessions)
-    # Vietcap exposes the most recent tape. Its timestamps must match the chosen date.
-    # The daily VNINDEX job may still be running when today's tape is available.
-    tape_day = end if args.end is None and end.weekday() < 5 else None
-    collect(db, sessions, latest_tape=tape_day)
+    collect(db, sessions)
 
 
 if __name__ == '__main__':
