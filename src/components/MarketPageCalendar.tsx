@@ -9,6 +9,7 @@ import type { BreadthRow, SectorRow, SectorView } from '../lib/sectorHistory'
 import { supabase } from '../lib/supabase'
 import '../market-page.css'
 import { HealthMethodDetails } from './HealthMethodDetails'
+import { MarketFlowRadar } from './MarketFlowRadar'
 import { SoftSelect } from './SoftSelect'
 
 type Membership = { symbol_id: number; status: string }
@@ -192,6 +193,7 @@ export function MarketPage({ authenticated }: { authenticated: boolean }) {
 
   return <section className="workspace-page market-page">
     <header className="market-page-header"><div><span className="eyebrow">PROT MARKET INTELLIGENCE</span><h1>Thị trường</h1><p>Chọn một phiên hoặc một kỳ lịch để so sánh sức khỏe ngành và áp lực giá–khối lượng.</p></div><div className="market-date">Dữ liệu thị trường đến<strong>{formatDate(latestDate)}</strong></div></header>
+    <MarketFlowRadar authenticated={authenticated} tradingDates={marketDates}/>
     {(symbols.isError || market.isError || history.isError || memberships.isError) && <p className="market-error" role="alert">Không tải được thống kê thị trường. Hãy thử tải lại trang.</p>}
     <section className="panel market-universe-panel" aria-label="Prot Universe"><div className="market-section-head"><div><span className="eyebrow">01 · PHẠM VI DỮ LIỆU</span><h2>Prot Universe</h2></div><a className="market-link" href="#universe">Danh sách cổ phiếu <ArrowUpRight size={16}/></a></div>
       <div className="market-universe-grid"><div><span>Core Engine quét</span><strong>{universe.length}</strong><small>Trading Universe</small></div><div><span>Market Health quan sát</span><strong>{breadth?.universe_size ?? '—'}</strong><small>Observation Universe</small></div><div><span>Phiên cuối trong kỳ</span><strong>{breadth?.observed_count ?? '—'}/{breadth?.eligible_count ?? '—'}</strong><small>{breadth?.coverage_ratio == null ? 'Chưa tính độ phủ' : `${formatDate(day)} · ${pct(breadth.coverage_ratio * 100)} đủ mẫu`}</small></div><div><span>Chưa tính được</span><strong>{missing + insufficient + qualityBlocked}</strong><small>{missing} thiếu giá · {insufficient} ít lịch sử · {qualityBlocked} chặn chất lượng</small></div></div>
