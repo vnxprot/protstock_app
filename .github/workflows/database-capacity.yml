@@ -7,11 +7,11 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: Archive only first; cleanup archives again and verifies before deleting old data
+        description: Measure capacity, reclaim analysis history, or run legacy maintenance
         required: true
-        default: archive
+        default: audit
         type: choice
-        options: [archive, archive-and-clean, rollover]
+        options: [audit, reclaim-history, archive, archive-and-clean, rollover]
       repair_eod_date:
         description: Dispatch Fast Lane for this date after successful cleanup (YYYY-MM-DD)
         required: false
@@ -20,6 +20,7 @@ on:
 permissions:
   contents: read
   actions: write
+  statuses: read
 
 concurrency:
   group: protstock-eod
@@ -34,8 +35,8 @@ jobs:
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
       CAPACITY_MODE: ${{ github.event_name == 'schedule' && 'rollover' || inputs.mode }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
       - run: python -m pip install 'psycopg[binary]>=3.2,<4' 'httpx>=0.28,<1'
@@ -50,8 +51,35 @@ jobs:
               env.write(f'SUPABASE_DB_URL={url}\n')
           print(f'::add-mask::{url}')
           PY
+      - uses: supabase/setup-cli@v1
+        if: inputs.mode == 'reclaim-history'
+        with:
+          version: 2.120.0
+      - name: Apply the archive read policy and capacity RPC
+        if: inputs.mode == 'reclaim-history'
+        run: supabase db push --include-all --yes --db-url "$SUPABASE_DB_URL"
+      - name: Require the frontend archive reader before reclaiming history
+        if: inputs.mode == 'reclaim-history'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for attempt in {1..30}; do
+            state=$(gh api "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/status" --jq '.statuses[] | select(.context == "Vercel") | .state')
+            case "$state" in
+              success) exit 0 ;;
+              error|failure) echo 'Vercel deployment failed; archive changes deferred.'; exit 1 ;;
+            esac
+            sleep 15
+          done
+          echo 'Vercel deployment still pending; archive changes deferred.'
+          exit 1
       - name: Archive, verify, and optionally reclaim capacity
         run: python .github/scripts/database_capacity.py
+      - name: Queue Radar report backfill once space is available
+        if: success() && inputs.mode == 'reclaim-history'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run market-flow-radar.yml --ref "$GITHUB_REF_NAME" -f reports_backfill=true -f end="$(TZ=Asia/Ho_Chi_Minh date +%F)"
       - name: Resume EOD after capacity is reclaimed
         if: success() && inputs.mode == 'archive-and-clean' && inputs.repair_eod_date != ''
         env:

@@ -12,6 +12,8 @@ def archive_with_store(corrupt=False):
         key = request.url.path.split("/database-archives/")[-1]
         if "/bucket/" in request.url.path:
             return httpx.Response(200, json={"public": False})
+        if request.url.path == "/rest/v1/rpc/protstock_storage_bytes":
+            return httpx.Response(200, json=sum(map(len, objects.values())))
         if request.method == "POST":
             objects[key] = request.content
             return httpx.Response(200, json={})

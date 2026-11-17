@@ -3,6 +3,7 @@ import { Fragment, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Search, SlidersHorizontal } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import { restoreAnalysisHistory } from '../lib/analysisArchive'
 import { formatDate } from '../lib/date'
 import { formatMarketPrice } from '../lib/marketUnits'
 import { funnelGroups, funnelResult, inFunnelGroup, setupDate, setupNames, sortFunnelRows, type FunnelGroup, type FunnelRow } from '../lib/challengerFunnel'
@@ -44,7 +45,7 @@ export function ChallengerFunnelTable({ date, focusSymbol = '', canJournal=false
         .eq('trading_date', date).eq('engine_version', 'v0.0.0-challenger-trend1').eq('strategy_code', 'ADAPTIVE_FUNNEL')
         .order('symbol_id').range(from, from + 999)
       if (error) throw error
-      rows.push(...(data ?? []).map((row: any) => ({ ...row, evidence: row.evidence ?? {}, reasons: row.reasons ?? [],
+      rows.push(...(await restoreAnalysisHistory(data ?? [])).map((row: any) => ({ ...row, evidence: row.evidence ?? {}, reasons: row.reasons ?? [],
         symbol: (Array.isArray(row.symbols) ? row.symbols[0] : row.symbols)?.symbol ?? `#${row.symbol_id}` })))
       if ((data ?? []).length < 1000) break
     }

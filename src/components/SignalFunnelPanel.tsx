@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Filter, Search, SlidersHorizontal } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import { restoreAnalysisHistory } from '../lib/analysisArchive'
 import { SoftSelect } from './SoftSelect'
 import { MonthlyTrendEvidence, type MonthlyEvidence } from './MonthlyTrendEvidence'
 import { formatMarketPrice } from '../lib/marketUnits'
@@ -63,7 +64,7 @@ export function SignalFunnelPanel({ date, authenticated, focusSymbol = '', canJo
           .eq('as_of_date', date).eq('version', 'MTF_FUNNEL_SHADOW_V0_0_0_TREND1')
           .order('symbol_id').range(from, from + 999)
         if (error) throw error
-        result.push(...(data ?? []).map((item: any) => ({
+        result.push(...(await restoreAnalysisHistory(data ?? [])).map((item: any) => ({
         symbol: (Array.isArray(item.symbols) ? item.symbols[0] : item.symbols)?.symbol ?? '—',
         monthly_state: item.monthly_state,
         stage: item.stage,

@@ -73,6 +73,12 @@ def refresh_history(client: SupabaseRestClient, start: date, end: date, shard: i
               "symbols": len(symbols), "sessions": 0, "missing": [], "failed": [], "monthly_states": 0}
     first_period = start.replace(day=1) - timedelta(days=1)
     for symbol in symbols:
+        budget = client._request("POST", "/rpc/market_radar_storage", json={"p_prune": False})
+        budget.raise_for_status()
+        if int(budget.json()) + 10_000_000 >= 450_000_000:
+            counts["deferred"] = "Database reserve reached before historical rebuild"
+            print(f"::warning::{counts['deferred']}", flush=True)
+            break
         try:
             stored = _stock_rows_as_of(client.price_history(symbol["id"], _history_limit(end)), end)
             rows = [{**row, "date": row["trading_date"]} for row in with_volume_segments(stored, [], as_of_date=end)]

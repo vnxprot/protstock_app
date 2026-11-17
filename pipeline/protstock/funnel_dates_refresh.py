@@ -59,6 +59,11 @@ def refresh_dates(client: SupabaseRestClient, start: date, end: date | None, sha
                 "symbol_id": f"eq.{symbol['id']}", "strategy_code": "eq.ADAPTIVE_FUNNEL",
                 "engine_version": f"eq.{VERSION}", "order": "trading_date.asc",
                 "and": f"(trading_date.gte.{start},trading_date.lte.{end})"})
+            for row in existing:
+                evidence = row.get("evidence") or {}
+                if evidence.get("_historyObject"):
+                    archived = client._archive().analysis_payload(evidence["_historyObject"])
+                    row["evidence"] = archived[evidence["_historyKey"]]["evidence"]
             pending = [row for row in existing if (row.get("evidence") or {}).get("funnel_event_version") != 1]
             report["already_current"] += len(existing) - len(pending)
             if not pending:

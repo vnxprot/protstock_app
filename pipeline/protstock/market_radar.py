@@ -29,6 +29,7 @@ SSI_HISTORY = 'https://iboard-api.ssi.com.vn/statistics/company/ssmi/stock-info'
 SOURCE_ERRORS = (SourceUnavailable, httpx.HTTPError, ValueError, KeyError, TypeError)
 BACKFILL_SESSIONS = 50
 BACKFILL_BUDGET = 450_000_000
+REPORT_BATCH_RESERVE = 10_000_000
 FIELDS = ('buy_value', 'sell_value', 'buy_volume', 'sell_volume', 'unknown_value', 'trade_count',
           'market_value', 'holdings', 'ownership_pct', 'room_remaining')
 TAPE_FIELDS = ('buy_count', 'sell_count', 'unknown_count', 'unknown_volume', 'tape_volume', 'reference_volume', 'tape_reason', 'auction_breakdown')
@@ -311,8 +312,8 @@ def backfill_reports(db, end):
         if not pending:
             continue
         size = storage_used(db)
-        if size >= BACKFILL_BUDGET:
-            print(f'::warning::Radar backfill deferred: database {size:,} bytes, budget {BACKFILL_BUDGET:,}.', flush=True)
+        if size + REPORT_BATCH_RESERVE >= BACKFILL_BUDGET:
+            print(f'::warning::Radar backfill deferred: database {size:,} bytes + {REPORT_BATCH_RESERVE:,} reserve, budget {BACKFILL_BUDGET:,}.', flush=True)
             return
         try:
             collect(db, pending, completed)

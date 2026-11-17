@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
+import { restoreAnalysisHistory } from '../lib/analysisArchive'
 import { unsettledLotStates } from '../lib/signalTriage'
 import type { SectorStrength } from '../lib/signalTriage'
 import { ResearchPagination } from './ResearchPagination'
@@ -59,7 +60,7 @@ export function DualEngineComparePanel({ date, champion, mode }: {
         .select('symbol_id,trading_date,action,reasons,distance_to_base_pct,evidence')
         .eq('trading_date', date).eq('engine_version', 'v0.0.0-challenger-trend1').order('symbol_id').range(from, from + 999)
       if (error) throw error
-      rows.push(...((data ?? []) as ShadowRow[]))
+      rows.push(...await restoreAnalysisHistory((data ?? []) as ShadowRow[]))
       if ((data ?? []).length < 1000) break
     }
     return rows
@@ -83,7 +84,7 @@ export function DualEngineComparePanel({ date, champion, mode }: {
         .select('symbol_id,strategy_code,action,reasons,distance_to_base_pct,evidence')
         .eq('trading_date', date).eq('engine_version', 'v0.0.0-challenger-trend1').order('symbol_id').range(from, from + 999)
       if (error) throw error
-      rows.push(...((data ?? []) as StrategyRow[]))
+      rows.push(...await restoreAnalysisHistory((data ?? []) as StrategyRow[]))
       if ((data ?? []).length < 1000) break
     }
     return rows

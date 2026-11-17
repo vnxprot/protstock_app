@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { ArrowUpRight, ChevronDown, Search } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import { restoreAnalysisHistory } from '../lib/analysisArchive'
 import { isCurrentMacdLink, matchesRadarStage, radarMilestonesToday, radarOpportunityPriority } from '../lib/radarOverview'
 import { ResearchPagination } from './ResearchPagination'
 import { SoftSelect } from './SoftSelect'
@@ -79,7 +80,7 @@ export function MomentumRadarPanel({ date, championSignals, championLoading, cha
         .select('symbol_id,as_of_date,event_start_date,breakout_date,weekly_confirmed_date,reacceleration_date,breakout_level,structural_stop,stage,entry_status,evidence,symbols!inner(symbol)')
         .eq('as_of_date', date).eq('version', 'MOMENTUM_RADAR_V0_0_0_TREND1').order('symbol_id').range(from, from + 999)
       if (error) throw error
-      rows.push(...(data ?? []).map((item: any) => ({ ...item,
+      rows.push(...(await restoreAnalysisHistory(data ?? [])).map((item: any) => ({ ...item,
         symbol: (Array.isArray(item.symbols) ? item.symbols[0] : item.symbols)?.symbol ?? `#${item.symbol_id}` })))
       if ((data ?? []).length < 1000) break
     }
@@ -117,7 +118,7 @@ export function MomentumRadarPanel({ date, championSignals, championLoading, cha
         .select('symbol_id,action,evidence').eq('trading_date', date).eq('engine_version', 'v0.0.0-challenger-trend1')
         .eq('strategy_code', 'ADAPTIVE_FUNNEL').order('symbol_id').range(from, from + 999)
       if (error) throw error
-      rows.push(...(data ?? []) as AdaptiveRow[])
+      rows.push(...await restoreAnalysisHistory((data ?? []) as AdaptiveRow[]))
       if ((data ?? []).length < 1000) break
     }
     return rows

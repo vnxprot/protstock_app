@@ -2,6 +2,7 @@ import { JournalLink } from './JournalLink'
 import { useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
+import { restoreAnalysisHistory } from '../lib/analysisArchive'
 import { ResearchPagination } from './ResearchPagination'
 import { SoftSelect } from './SoftSelect'
 import { MonthlyTrendEvidence, type MonthlyEvidence } from './MonthlyTrendEvidence'
@@ -70,7 +71,7 @@ function ChallengerResearchCards({ date, tab, focusSymbol = '', canJournal=false
         .eq('trading_date', date).eq('engine_version', 'v0.0.0-challenger-trend1')
         .in('strategy_code', codes).order('symbol_id').range(from, from + 999)
       if (error) throw error
-      result.push(...(data ?? []).map((item: any) => ({ ...item,
+      result.push(...(await restoreAnalysisHistory(data ?? [])).map((item: any) => ({ ...item,
         symbol: (Array.isArray(item.symbols) ? item.symbols[0] : item.symbols)?.symbol ?? `#${item.symbol_id}` })))
       if ((data ?? []).length < 1000) break
     }

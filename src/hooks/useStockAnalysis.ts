@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
+import { restoreAnalysisHistory } from '../lib/analysisArchive'
 import { latestSignalPublication } from '../lib/signalPublication'
 import type { MonthlyEvidence } from '../components/MonthlyTrendEvidence'
 
@@ -111,13 +112,17 @@ export function useStockAnalysis(symbol: string | null, timeframe: 'D' | 'W' | '
       const { data, error } = await supabase.rpc('stock_analysis_data', { p_symbol: symbol, p_timeframe: timeframe, p_as_of_date: asOfDate || publication.data?.date || null, p_revision: asOfDate ? null : publication.data?.sourceRevision ?? null, p_history_limit: timeframe === 'D' ? 2600 : 500 })
       if (error) throw error
       const technical = (data.technical ?? []) as TechnicalSnapshot[]
+      const [patterns, zones] = await Promise.all([
+        restoreAnalysisHistory((data.patterns ?? []) as PatternInstance[]),
+        restoreAnalysisHistory((data.zones ?? []) as PriceZone[]),
+      ])
       const decision = data.decision as StockDecision | null
       return {
         symbol: data.symbol as { id: number; symbol: string; sector: string; exchange: string; company_name: string | null },
         prices: (data.prices ?? []) as PriceBar[], technical,
         decision: decision?.source_revision === technical[0]?.algorithm_version ? decision : null,
-        patterns: (data.patterns ?? []) as PatternInstance[],
-        zones: latestUniqueZones((data.zones ?? []) as PriceZone[], technical[0]?.as_of_date),
+        patterns,
+        zones: latestUniqueZones(zones, technical[0]?.as_of_date),
         disclosures: (data.disclosures ?? []) as Array<{ id: string; title: string; category: string; published_at: string; available_from: string; source: string; source_url: string | null }>,
         fundamentals: (data.fundamentals ?? []) as FundamentalPeriod[],
         publication: publication.data ?? null,

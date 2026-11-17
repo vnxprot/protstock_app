@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { X } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import { restoreAnalysisHistory } from '../lib/analysisArchive'
 import { todayInVietnam, formatDate } from '../lib/date'
 import { latestSignalPublication } from '../lib/signalPublication'
 import { journalContext, type JournalEvidenceSnapshot } from '../lib/journalEvidence'
@@ -40,7 +41,11 @@ export function JournalForm({userId,editing,launch,initialCycleId,transactions,e
   const snapshot=useQuery({queryKey:['journal-context',userId,selected?.id,evidenceDate,publication.data?.sourceRevision],enabled:Boolean(!editing&&selected&&evidenceDate&&supabase),queryFn:async()=>{
     const {data,error}=await supabase!.rpc('journal_capture_context',{p_symbol_id:selected!.id,p_date:evidenceDate,p_revision:publication.data?.date===evidenceDate?publication.data?.sourceRevision:null})
     if(error)throw error
-    return data as JournalEvidenceSnapshot
+    const context = data as JournalEvidenceSnapshot
+    const [challenger, radar, funnel] = await Promise.all([
+      restoreAnalysisHistory(context.challenger ?? []), restoreAnalysisHistory(context.radar ?? []), restoreAnalysisHistory(context.funnel ?? []),
+    ])
+    return { ...context, challenger, radar, funnel }
   }})
   const historical=Boolean(editing?.workflow), automatic=Boolean(editing?.transaction_id), conflict=journalConflict(editing?.evidence_snapshot??snapshot.data)
   const available=transactions.filter(tx=>Number(tx.symbol_id)===(editing?.symbol_id??selected?.id)

@@ -24,6 +24,29 @@ most assessment space was in earlier replay versions.
 
 ## Archive and cleanup
 
+The `audit` mode is read-only. It reports total PostgreSQL and Storage bytes,
+relation data and index sizes, estimated dead rows, and compressed candidate
+bytes. The `reclaim-history` mode applies the archive read policy, waits for the
+frontend to deploy, and moves evidence older than 20 VNINDEX sessions to private
+gzip objects, keyed by table, date and SHA-256. It covers Challenger, Momentum
+Radar, the signal funnel, patterns and zones. Reasons, row identities and
+outcome-linked Challenger strategy evidence stay online. Old analysis screens
+load the archived evidence on demand. Daily and derived price bars are excluded
+because the stock analysis view reads long price windows.
+
+Each batch is uploaded and read back before changing the corresponding rows.
+The transaction rechecks the exact rows under a write lock, then stores the
+archive path and record key in the original `evidence` column. Existing object
+names are reusable on retry. `VACUUM FULL` returns space to PostgreSQL after the
+update. The workflow reports the observed size and queues Radar report backfill
+only below 440 MB, leaving 10 MB of headroom per batch beneath its 450 MB limit.
+It reports a capacity error if compaction is insufficient. The recurring
+rollover also compacts eligible evidence when the database reaches 400 MB.
+
+Managed archive writes check the entire project's Storage usage against 450 MB
+before uploading, including the new object. Vendor snapshots skip unchanged
+content. Superseded archive objects are retained for recovery.
+
 Run the **Archive and reclaim database capacity** workflow first in `archive`
 mode. It creates a private `database-archives` Storage bucket if necessary,
 exports research prices and sync status plus superseded funnel/MACD, zone, and
