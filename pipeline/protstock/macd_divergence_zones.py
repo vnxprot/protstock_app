@@ -113,6 +113,33 @@ def _breakout_volume(bars: Sequence[dict], index: int) -> float | None:
     return round(float(bars[index].get("volume") or 0) / average, 3) if average else None
 
 
+def _recovery_breakouts(bars: Sequence[dict], closes: list[float], bottom_index: int,
+                        confirmed_index: int, end_index: int, trigger: float) -> list[dict]:
+    """Crossings of confirmed swing highs after the bottom, known before the crossing."""
+    events = []
+    resistance_index = None
+    broken_levels = {round(trigger, 4)}
+    for index in range(bottom_index + PIVOT_RADIUS + 2, end_index):
+        pivot = index - PIVOT_RADIUS - 1
+        high = float(bars[pivot]["high"])
+        if (all(high >= float(bars[other]["high"]) for other in range(pivot - PIVOT_RADIUS, pivot))
+                and all(high > float(bars[other]["high"]) for other in range(pivot + 1, index))):
+            resistance_index = pivot
+        if resistance_index is None:
+            continue
+        resistance = float(bars[resistance_index]["high"])
+        level = round(resistance, 4)
+        if level in broken_levels or not closes[index - 1] <= resistance < closes[index]:
+            continue
+        broken_levels.add(level)
+        events.append({
+            "date": bars[index]["date"], "confirmed_on": bars[max(index, confirmed_index)]["date"],
+            "price": level, "resistance_date": bars[resistance_index]["date"],
+            "close": round(closes[index], 4), "volume_ratio20": _breakout_volume(bars, index),
+        })
+    return events
+
+
 def assess_macd_zone_divergence(symbol_id: int, bars: Sequence[dict], exchange: str | None = None) -> list[dict]:
     """Latest 1/2/3-segment MACD-line setup, one row per length and date."""
     ordered = sorted(bars, key=lambda item: item["date"])
@@ -186,10 +213,9 @@ def assess_macd_zone_divergence(symbol_id: int, bars: Sequence[dict], exchange: 
                     if ratio is not None and ratio >= MIN_THIN_BREAKOUT_VOLUME:
                         local_volume_index = index
                         break
-        # --- Trigger scan: start from day after bottom-2 so pre-confirmation surges are captured ---
+        # The bar forming bottom-2 can itself close above the inter-bottom high.
         trigger_index = invalidated_index = pending_index = None
-        scan_start = last["price_index"] + 1
-        for index in range(scan_start, len(ordered)):
+        for index in range(last["price_index"], len(ordered)):
             if index > expiry_index and trigger_index is None:
                 break
             bar_low = float(ordered[index]["low"])
@@ -208,7 +234,19 @@ def assess_macd_zone_divergence(symbol_id: int, bars: Sequence[dict], exchange: 
                  "INVALIDATED" if invalidated_index is not None else "CONFIRMED" if trigger_index is not None
                  else "EXPIRED" if age > MAX_SETUP_AGE else "WATCH_PRICE_CONFIRMATION")
         # Both the crossing and the pivot are known on the later session.
-        breakout_confirmed_index = max(confirmed_index, trigger_index) if stage == "CONFIRMED" else None
+        breakout_confirmed_index = (
+            max(confirmed_index, trigger_index)
+            if age >= 0 and trigger_index is not None
+            and (invalidated_index is None or invalidated_index > confirmed_index) else None
+        )
+        recovery_end = min(len(ordered), expiry_index + 1)
+        for breach_index in (invalidated_index, pending_index):
+            if breach_index is not None:
+                recovery_end = min(recovery_end, breach_index)
+        recovery_breakouts = (
+            _recovery_breakouts(ordered, closes, last["price_index"], confirmed_index, recovery_end, trigger)
+            if age >= 0 else []
+        )
         pivot_bar = ordered[last["price_index"]]
         span = float(pivot_bar["high"]) - float(pivot_bar["low"])
         wick_ratio = (min(float(pivot_bar["open"]), float(pivot_bar["close"])) - float(pivot_bar["low"])) / span if span > 0 else 0
@@ -241,6 +279,7 @@ def assess_macd_zone_divergence(symbol_id: int, bars: Sequence[dict], exchange: 
                 "breakout_volume_ratio20": _breakout_volume(ordered, trigger_index) if trigger_index is not None else None,
                 "breakout_close": round(closes[trigger_index], 4) if trigger_index is not None else None,
                 "breakout_confirmed_on": ordered[breakout_confirmed_index]["date"] if breakout_confirmed_index is not None else None,
+                "recovery_breakouts": recovery_breakouts,
                 "trigger_age_sessions": len(ordered) - 1 - trigger_index if trigger_index is not None else None,
                 "latest_close": round(closes[-1], 4),
                 "distance_to_trigger_pct": round(100 * (trigger - closes[-1]) / trigger, 3),

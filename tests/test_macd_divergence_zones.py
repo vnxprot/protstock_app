@@ -146,6 +146,37 @@ def test_breakout_captured_when_price_surges_before_confirmation(monkeypatch) ->
     assert four["trigger_date"] is not None
 
 
+def test_bottom_bar_breakout_and_later_recovery_cross_have_distinct_dates(monkeypatch) -> None:
+    monkeypatch.setattr(zone_rule, "_macd_series", _line)
+    bars = _bars()
+    bars[64].update(close=32.0, high=33.0, volume=200.0)
+    bars[65].update(close=32.0, high=33.0)
+    bars[66].update(close=32.0, high=33.0)
+    bars[67].update(close=33.0, high=35.0)
+
+    def setup(size: int) -> dict:
+        return next(row for row in zone_rule.assess_macd_zone_divergence(7, bars[:size], "HOSE")
+                    if row["swings"] == 2)
+
+    assert setup(65)["stage"] == "WATCH_PIVOT_CONFIRMATION"
+    assert setup(65)["evidence"]["breakout_confirmed_on"] is None
+    confirmed = setup(67)
+    assert confirmed["stage"] == "CONFIRMED"
+    assert confirmed["trigger_date"] == bars[64]["date"]
+    assert confirmed["evidence"]["breakout_confirmed_on"] == bars[66]["date"]
+    assert confirmed["evidence"]["breakout_volume_ratio20"] == 2.0
+
+    for high, close in ((34.0, 33.0), (34.0, 33.0), (36.0, 36.0), (37.0, 36.0)):
+        date_value = date.fromisoformat(bars[-1]["date"]) + timedelta(days=1)
+        bars.append({**bars[66], "date": date_value.isoformat(), "high": high, "close": close})
+
+    assert setup(70)["evidence"]["recovery_breakouts"] == []
+    recovered = setup(len(bars))
+    assert recovered["trigger_date"] == bars[64]["date"]
+    assert [(item["date"], item["resistance_date"], item["price"])
+            for item in recovered["evidence"]["recovery_breakouts"]] == [(bars[70]["date"], bars[67]["date"], 35.0)]
+
+
 def test_get_tick_size_all_exchanges(monkeypatch) -> None:
     """Tick size rules per exchange rulebook."""
     tick = zone_rule.get_tick_size
