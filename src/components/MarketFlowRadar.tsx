@@ -7,6 +7,7 @@ import { MARKET_PRICE_TO_VND } from '../lib/marketUnits'
 import { supabase } from '../lib/supabase'
 import { useTheme } from '../lib/theme'
 import { DateField } from './DateField'
+import { RadarReplay } from './RadarReplay'
 import './market-flow-radar.css'
 
 type Option = readonly [string, string]
@@ -237,8 +238,10 @@ function historyValue(day: FlowDay | undefined, sized: boolean, auction: boolean
   return day.buy_value == null || day.sell_value == null ? null : day.buy_value - day.sell_value
 }
 
-function HistoryChart({ dates, history, sized, auction }: { dates: string[]; history: FlowDay[]; sized: boolean; auction: boolean }) {
+function HistoryChart({ dates, history, sized, auction, onOpenDay }: { dates: string[]; history: FlowDay[]; sized: boolean; auction: boolean; onOpenDay: (day: string) => void }) {
   const host = useRef<HTMLDivElement>(null)
+  const openDay = useRef(onOpenDay)
+  useEffect(() => { openDay.current = onOpenDay }, [onOpenDay])
   const theme = useTheme()
   const chartDates = dates.slice(-historyLimit)
   const hasValues = history.some(day => chartDates.includes(day.trading_date) && historyValue(day, sized, auction) != null)
@@ -294,6 +297,9 @@ function HistoryChart({ dates, history, sized, auction }: { dates: string[]; his
         if (index === 0) series.createPriceLine({ price: 0, color: color('--line-bright'), lineWidth: 1, axisLabelVisible: false })
       })
     }
+    chart.subscribeClick(({ time }) => {
+      if (typeof time === 'string' && chartDates.includes(time)) openDay.current(time)
+    })
     chart.timeScale().fitContent()
     return () => chart.remove()
   }, [auction, dates, hasValues, history, sized, theme])
@@ -306,45 +312,64 @@ function HistoryChart({ dates, history, sized, auction }: { dates: string[]; his
   </div>
 }
 
-function RowHistory({ row, sized, auction, dates, period, onPeriodChange, history, loading, error, retry, onClose }: {
+function RowHistory({ row, category, method, sized, auction, dates, recentDays, selectedDay, period, onPeriodChange, history, loading, error, retry, onClose }: {
+  category: string; method: string; recentDays: string[]; selectedDay: string
   row: FlowRow; sized: boolean; auction: boolean; dates: string[]; period: string; onPeriodChange: (value: string) => void
   history?: FlowDay[]; loading: boolean; error: boolean; retry: () => void; onClose: () => void
 }) {
   const dialog = useRef<HTMLDialogElement>(null)
   const titleId = useId()
+  const [mode, setMode] = useState('daily')
+  const [day, setDay] = useState(selectedDay)
   useLayoutEffect(() => {
     const element = dialog.current
     element?.showModal()
     return () => element?.close()
   }, [])
-  const title = `${row.symbol} · ${auction ? 'Lịch sử khớp định kỳ' : 'Lịch sử mua/bán ròng'}`
+  const intraday = mode === 'intraday'
+  const title = `${row.symbol} · ${intraday ? 'Dòng tiền trong phiên' : auction ? 'Lịch sử khớp định kỳ' : 'Lịch sử mua/bán ròng'}`
+  const groupLabel = ({ large: 'Từ 1 tỷ trở lên', medium: 'Từ 200 triệu đến dưới 1 tỷ', small: 'Dưới 200 triệu',
+    foreign: 'Khối ngoại', proprietary: 'Tự doanh' } as Record<string, string>)[category]
+  const methodLabel = tapeModes.find(([id]) => id === method)?.[1]
   const periodLabel = dates.length === 1 ? dayLabel(dates[0]) : `${dayLabel(dates[0])} – ${dayLabel(dates.at(-1) ?? null)}`
+  const covered = history?.filter(item => dates.includes(item.trading_date) && !item.partial && (!sized || item.reference_volume != null)).length
+  const openDay = (next: string) => { setDay(next); setMode('intraday') }
+  const dateCell = (value: string) => <th scope="row"><button type="button" className="radar-history-date-link"
+    aria-label={`Xem dòng tiền trong phiên ${dayLabel(value)}`} onClick={() => openDay(value)}>{dayLabel(value)}</button></th>
   return <dialog ref={dialog} className="radar-history radar-history-sheet" aria-labelledby={titleId}
     onCancel={event => { event.preventDefault(); onClose() }} onClick={event => { if (event.target === event.currentTarget) onClose() }}>
     <div className="radar-history-content">
-    <header className="radar-history-heading">
-      <div><h3 id={titleId}>{title}</h3><p className="radar-meta">{exchangeLabel(row.exchange)} · {periodLabel} · {history?.length ?? '—'}/{dates.length} phiên có bản ghi</p></div>
-      <button type="button" className="radar-history-action" aria-label="Đóng lịch sử" onClick={onClose}><X size={19} aria-hidden="true"/></button>
-    </header>
-    <Chips label="Chu kỳ lịch sử" options={historyPeriods} value={period} onChange={onPeriodChange}/>
+    <div className="radar-history-top">
+      <header className="radar-history-heading">
+        <div><h2 id={titleId}>{title}</h2><p className="radar-meta">{exchangeLabel(row.exchange)} · <strong>{intraday ? 'Ba nhóm giá trị khớp' : groupLabel}</strong>{!intraday && methodLabel && ` · ${methodLabel}`}</p></div>
+        <button type="button" className="icon-button radar-history-close" aria-label="Đóng lịch sử" onClick={onClose}><X size={19} aria-hidden="true"/></button>
+      </header>
+      <div className="radar-history-controls">
+        <Chips label="Chế độ lịch sử" options={[[ 'daily', 'Theo phiên' ], [ 'intraday', 'Trong phiên' ]]} value={mode} onChange={setMode}/>
+        {!intraday && <Chips label="Chu kỳ lịch sử" options={historyPeriods} value={period} onChange={onPeriodChange}/>}
+      </div>
+    </div>
+    {intraday ? <RadarReplay exchange={row.exchange} symbol={row.symbol} day={day} recentDays={recentDays} onDayChange={setDay}/> : <>
+      <p className="radar-meta">{periodLabel} · {sized ? 'Đã đối soát' : 'Có dữ liệu'} {covered ?? '—'}/{dates.length} phiên</p>
       {loading && <p className="radar-meta" role="status">Đang tải lịch sử…</p>}
       {error && <p className="radar-meta" role="alert">Không tải được lịch sử. <button type="button" className="secondary-button" onClick={retry}>Thử lại</button></p>}
       {!loading && !error && history?.length === 0 && <p className="radar-meta" role="status">Chưa có dữ liệu khi chọn khoảng phiên này.</p>}
       {dates.length > historyLimit && <p className="radar-meta">Hiển thị tối đa {historyLimit} phiên có bản ghi gần nhất.</p>}
       {history && history.length > 0 && <>
-      <HistoryChart dates={dates} history={history} sized={sized} auction={auction}/>
+      <HistoryChart dates={dates} history={history} sized={sized} auction={auction} onOpenDay={openDay}/>
       <details className="radar-history-data"><summary>Số liệu từng phiên</summary><div className="radar-history-scroll" tabIndex={0} aria-label="Bảng lịch sử từng phiên"><table><thead><tr><th scope="col">Phiên</th>{auction
         ? <><th scope="col">Giá khớp BQ (nghìn đ)</th><th scope="col">KL khớp (CP)</th><th scope="col">GT khớp (tỷ)</th><th scope="col">Số bản ghi nguồn</th></>
         : <><th scope="col">Mua (tỷ)</th><th scope="col">Bán (tỷ)</th><th scope="col">Ròng (tỷ)</th><th scope="col">KL ròng (CP)</th>{sized && <th scope="col">Chưa rõ chiều (tỷ)</th>}</>}</tr></thead>
         <tbody>{history?.map(day => {
           if (sized && (day.partial || day.reference_volume == null)) return <tr key={day.trading_date}>
-            <th scope="row">{dayLabel(day.trading_date)}</th><td colSpan={auction ? 4 : 5}>Thiếu băng khớp · {quantity(day.tape_volume)}/{quantity(day.reference_volume)} CP đối soát</td>
+            {dateCell(day.trading_date)}<td colSpan={auction ? 4 : 5}>Thiếu băng khớp · {quantity(day.tape_volume)}/{quantity(day.reference_volume)} CP đối soát</td>
           </tr>
-          if (auction) return <tr key={day.trading_date}><th scope="row">{dayLabel(day.trading_date)}</th><td>{auctionPrice(day.unknown_value, day.unknown_volume)}</td><td>{quantity(day.unknown_volume)}</td><td>{billions(day.unknown_value)}</td><td>{quantity(day.trade_count)}</td></tr>
+          if (auction) return <tr key={day.trading_date}>{dateCell(day.trading_date)}<td>{auctionPrice(day.unknown_value, day.unknown_volume)}</td><td>{quantity(day.unknown_volume)}</td><td>{billions(day.unknown_value)}</td><td>{quantity(day.trade_count)}</td></tr>
           const net = historyValue(day, sized, auction)
           const netVolume = day.buy_volume == null || day.sell_volume == null ? null : day.buy_volume - day.sell_volume
-          return <tr key={day.trading_date}><th scope="row">{dayLabel(day.trading_date)}</th><td>{billions(day.buy_value)}</td><td>{billions(day.sell_value)}</td><td data-direction={direction(net)}>{billions(net, true)}</td><td data-direction={direction(netVolume)}>{quantity(netVolume, true)}</td>{sized && <td>{billions(day.unknown_value)}</td>}</tr>
+          return <tr key={day.trading_date}>{dateCell(day.trading_date)}<td>{billions(day.buy_value)}</td><td>{billions(day.sell_value)}</td><td data-direction={direction(net)}>{billions(net, true)}</td><td data-direction={direction(netVolume)}>{quantity(netVolume, true)}</td>{sized && <td>{billions(day.unknown_value)}</td>}</tr>
         })}</tbody></table></div></details></>}
+    </>}
     </div>
   </dialog>
 }
@@ -517,7 +542,9 @@ export function MarketFlowRadar({ authenticated, active, tradingDates }: { authe
       </div>
     </>}
     <p className="radar-meta radar-scope-note">{sized ? `Top và tổng chỉ tính mã đủ phiên đã đối soát. ${tapeMode === 'continuous_cluster' ? 'Cụm gộp các lần khớp liên tiếp cùng giây, cùng giá và cùng chiều.' : tapeMode === 'auction' ? 'Khớp định kỳ chỉ có giá trị và khối lượng chưa rõ chiều.' : 'Chiều mua/bán chủ động theo nguồn băng khớp.'} Giao dịch thỏa thuận nằm ngoài phạm vi khớp lệnh.` : 'SL lệnh hiện — khi báo cáo của nhóm chỉ có số liệu mua/bán tổng hợp.'}</p>
-    {ready && historyRow && <RowHistory row={historyRow} sized={sized} auction={auction} dates={historyDates} period={historyPeriod} onPeriodChange={setHistoryPeriod} history={history.data} loading={history.isFetching} error={history.isError} retry={() => void history.refetch()} onClose={() => setHistoryRow(null)}/>}
+    {ready && historyRow && <RowHistory row={historyRow} category={category} method={method} sized={sized} auction={auction}
+      dates={historyDates} recentDays={tradingDates.slice(-5)} selectedDay={last} period={historyPeriod} onPeriodChange={setHistoryPeriod}
+      history={history.data} loading={history.isFetching} error={history.isError} retry={() => void history.refetch()} onClose={() => setHistoryRow(null)}/>}
     </>}
   </section>
 }

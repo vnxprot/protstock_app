@@ -16,6 +16,7 @@ import pdfplumber
 
 from .config import Settings
 from .market_http import SourceUnavailable, request_json
+from .market_radar_minutes import REPLAY_SESSIONS, prepare_replay, publish_replay, summarize_minutes
 from .market_radar_tape import classify, integer, read_tape, tape_integrity
 from .market_sources import VN
 from .supabase_rest import SupabaseRestClient
@@ -190,16 +191,19 @@ def matched_reference(day, exchange, symbol):
 
 def capture_tape(day, exchange, symbol):
     try:
-        return capture_matches(read_tape(day, symbol), exchange)
+        return capture_matches(read_tape(day, symbol), exchange, include_minutes=True)
     except SOURCE_ERRORS as error:
         print(f'{symbol} tape: {error}', flush=True)
         return {'volume': 0, 'reason': 'source_unavailable', 'groups': []}
 
 
-def capture_matches(tape, exchange):
+def capture_matches(tape, exchange, *, include_minutes=False):
     volume, complete = tape_integrity(tape, exchange)
-    return {'volume': volume, 'reason': None if complete else 'incomplete_tape',
-            'groups': list(classify(tape, exchange)) if complete else []}
+    capture = {'volume': volume, 'reason': None if complete else 'incomplete_tape',
+               'groups': list(classify(tape, exchange)) if complete else []}
+    if include_minutes and complete:
+        capture['minutes'] = summarize_minutes(tape, exchange)
+    return capture
 
 
 def reconcile_tape(day, exchange, symbol, capture, tape_source='Vietcap', reference_pair=None):
@@ -343,6 +347,7 @@ def ssi_closing_candidates(db, day):
 def collect_tape(db, day, shard, shards, file=None, stage=None, *, prefer_ssi=False):
     symbols = [row for row in db.active_symbols() if row['exchange'] in EXCHANGES
                and (not row['listed_from'] or row['listed_from'] <= day.isoformat())]
+    universe_size = len(symbols)
     symbols = symbols[shard::shards]
     captures = {}
     if file and file.is_file():
@@ -362,7 +367,7 @@ def collect_tape(db, day, shard, shards, file=None, stage=None, *, prefer_ssi=Fa
             for row in symbols:
                 symbol = row['symbol']
                 previous = captures.get(symbol)
-                if symbol in retry or not previous or not previous['volume'] or previous['reason']:
+                if symbol in retry or not previous or not previous['volume'] or previous['reason'] or 'minutes' not in previous:
                     futures[pool.submit(capture_tape, day, row['exchange'], symbol)] = symbol
             for future in as_completed(futures):
                 symbol = futures[future]
@@ -376,6 +381,16 @@ def collect_tape(db, day, shard, shards, file=None, stage=None, *, prefer_ssi=Fa
         if stage == 'capture':
             return
         verified = 0
+        replay_count = 0
+        replay_enabled = False
+        try:
+            days = session_dates(db, datetime.now(VN).date(), REPLAY_SESSIONS)
+            cutoff = sorted({day, *days})[-REPLAY_SESSIONS:][0]
+            replay_enabled = day >= cutoff and prepare_replay(db, cutoff, universe_size, prune=shard == 0)
+            if day >= cutoff and not replay_enabled:
+                print('::warning::Radar replay skipped to preserve Storage capacity', flush=True)
+        except httpx.HTTPError as error:
+            print(f'::warning::Radar replay preparation failed: {type(error).__name__}', flush=True)
         missing = {'volume': 0, 'reason': 'source_unavailable', 'groups': []}
         ssi = ssi_closing_candidates(db, day) if prefer_ssi else {}
 
@@ -392,13 +407,21 @@ def collect_tape(db, day, shard, shards, file=None, stage=None, *, prefer_ssi=Fa
                     return rows
             return reconcile_tape(day, exchange, symbol, captures.get(symbol, missing))
 
-        futures = [pool.submit(reconcile, row) for row in symbols]
+        futures = {pool.submit(reconcile, row): row for row in symbols}
         for future in as_completed(futures):
             rows = future.result()
             response = db._request('POST', '/rpc/publish_market_radar_tape', json={'p_rows': rows})
             response.raise_for_status()
             verified += int(not rows[0]['partial'])
-    print(f'Tape {day} shard {shard}: {verified}/{len(symbols)} freshly verified', flush=True)
+            row = futures[future]
+            symbol = row['symbol']
+            capture = captures.get(symbol, missing)
+            if replay_enabled and not rows[0]['partial'] and rows[0]['source'].startswith('Vietcap') and 'minutes' in capture:
+                try:
+                    replay_count += publish_replay(db, day, row['exchange'], symbol, capture, rows)
+                except httpx.HTTPError as error:
+                    print(f'::warning::Radar replay upload failed for {symbol}: {type(error).__name__}', flush=True)
+    print(f'Tape {day} shard {shard}: {verified}/{len(symbols)} freshly verified, {replay_count} replays uploaded', flush=True)
 
 
 def main():

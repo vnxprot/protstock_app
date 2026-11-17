@@ -158,8 +158,10 @@ jobs:
       - uses: actions/cache/restore@v4
         with:
           path: ${{ env.CAPTURE_FILE }}
-          key: radar-tape-v1-${{ env.TAPE_DATE }}-${{ matrix.shard }}-${{ github.run_id }}-${{ github.run_attempt }}
-          restore-keys: radar-tape-v1-${{ env.TAPE_DATE }}-${{ matrix.shard }}-
+          key: radar-tape-v2-${{ env.TAPE_DATE }}-${{ matrix.shard }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            radar-tape-v2-${{ env.TAPE_DATE }}-${{ matrix.shard }}-
+            radar-tape-v1-${{ env.TAPE_DATE }}-${{ matrix.shard }}-
       - name: Capture trade tape before the provider rolls the session
         env:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
@@ -167,7 +169,7 @@ jobs:
       - uses: actions/cache/save@v4
         with:
           path: ${{ env.CAPTURE_FILE }}
-          key: radar-tape-v1-${{ env.TAPE_DATE }}-${{ matrix.shard }}-${{ github.run_id }}-${{ github.run_attempt }}
+          key: radar-tape-v2-${{ env.TAPE_DATE }}-${{ matrix.shard }}-${{ github.run_id }}-${{ github.run_attempt }}
       - name: Reconcile and publish trade tape
         env:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}

@@ -127,6 +127,10 @@ def clusters(exchange, tape):
             yield replace(first, volume=first.volume + sum(match.volume for match in matches))
 
 
+def match_group(value):
+    return 'large' if value >= 1_000_000_000 else 'medium' if value >= 200_000_000 else 'small'
+
+
 def classify(tape, exchange):
     scopes = {
         'continuous': (match for match in tape if phase(exchange, match) == 'continuous'),
@@ -139,7 +143,7 @@ def classify(tape, exchange):
         breakdown = {group: {} for group in TRADE_GROUPS}
         for match in matches:
             value = match.price * match.volume
-            group = 'large' if value >= 1_000_000_000 else 'medium' if value >= 200_000_000 else 'small'
+            group = match_group(value)
             side = {'b': 'buy', 's': 'sell'}.get(match.side, 'unknown') if method != 'auction' else 'unknown'
             totals[group][f'{side}_count'] += 1
             totals[group][f'{side}_volume'] += match.volume

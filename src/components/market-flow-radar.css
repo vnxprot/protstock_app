@@ -79,11 +79,34 @@
 .radar-detail-row>td { background:var(--surface-2); }
 .radar-details { display:grid; gap:4px; padding:4px 8px; }
 .radar-mobile-metrics { display:none; }
-.radar-history-heading { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:6px 12px; }
-.radar-history-heading h3 { margin:0 0 4px; font-size:clamp(16px, 2.6vw, 22px); }
+.radar-history-heading { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; min-width:0; }
+.radar-history-heading h2 { margin:0 0 2px; font:var(--text-heading); }
+.radar-history-heading .radar-meta strong { color:var(--text); }
+.radar-history-close { flex:none; margin-left:auto; }
 .radar-history-sheet { position:fixed; inset:0; margin:auto; width:min(800px, calc(100% - 24px)); height:fit-content; max-width:none; max-height:calc(100dvh - 24px); padding:0; border:1px solid var(--line-bright); border-radius:16px; color:var(--text); background:var(--surface); box-shadow:var(--elevation-4); overflow:auto; overscroll-behavior:contain; }
 .radar-history-sheet::backdrop { background:#07130eb3; }
-.radar-history-content { display:grid; gap:12px; padding:clamp(12px, 2.5vw, 22px); }
+.radar-history-content { display:grid; gap:8px; padding:clamp(12px, 2vw, 18px); }
+.radar-history-top { display:grid; gap:7px; }
+.radar-history-controls { display:flex; flex-wrap:wrap; justify-content:space-between; gap:5px 12px; min-width:0; }
+.radar-history-date-link { border:0; padding:0; color:var(--mint); background:none; font:inherit; cursor:pointer; }
+.radar-history-date-link:hover { text-decoration:underline; }
+.radar-replay-date { display:flex; flex-wrap:wrap; align-items:center; gap:5px 8px; color:var(--muted); font-size:12px; }
+.radar-replay-date select { min-height:32px; max-width:100%; padding:4px 8px; border:1px solid var(--line); border-radius:8px; color:var(--text); background:var(--surface-2); font:inherit; }
+.radar-replay-date select:focus-visible { outline:2px solid var(--line-bright); outline-offset:2px; }
+.radar-history-sheet { --replay-large:#f0ad54; --replay-medium:#76b6f4; --replay-small:#bc9af4; }
+:root[data-theme='light'] .radar-history-sheet { --replay-large:#875006; --replay-medium:#205b9e; --replay-small:#663b9e; }
+.radar-replay-groups { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:5px; }
+.radar-replay-groups button { min-width:0; min-height:46px; padding:4px 6px; border:1px solid var(--line); border-radius:8px; color:var(--text); background:var(--surface-2); font:inherit; font-size:11px; line-height:1.3; text-align:left; cursor:pointer; }
+.radar-replay-groups button[data-group='large'] { --series-color:var(--replay-large); }
+.radar-replay-groups button[data-group='medium'] { --series-color:var(--replay-medium); }
+.radar-replay-groups button[data-group='small'] { --series-color:var(--replay-small); }
+.radar-replay-groups button[aria-pressed='true'] { border-color:var(--series-color); background:color-mix(in srgb,var(--series-color) 8%,var(--surface-2)); }
+.radar-replay-groups button:disabled,.radar-history-controls button:disabled { opacity:.55; cursor:default; }
+.radar-replay-groups button span,.radar-replay-groups button strong { display:block; overflow-wrap:anywhere; }
+.radar-replay-groups button span { color:var(--series-color); }
+.radar-replay-groups button strong { color:var(--radar-direction,var(--text)); font-size:12px; font-variant-numeric:tabular-nums; }
+.radar-replay-readout { display:flex; align-items:baseline; flex-wrap:wrap; gap:2px 10px; padding:2px 4px 4px; min-height:24px; color:var(--muted); font-size:11px; font-variant-numeric:tabular-nums; }
+.radar-replay-readout :is(b,strong) { color:var(--text); }
 .radar-history-chart-wrap { min-width:0; padding:6px; border:1px solid var(--line); border-radius:10px; }
 .radar-chart-legend { display:flex; flex-wrap:wrap; gap:6px 12px; padding:4px 6px; color:var(--muted); font-size:11px; }
 .radar-chart-legend [data-series]::before { display:inline-block; width:8px; height:8px; margin-right:5px; border-radius:2px; background:var(--series-color); content:''; }

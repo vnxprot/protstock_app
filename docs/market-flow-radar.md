@@ -19,6 +19,12 @@ Thị giá là giá đóng cửa phiên cuối kỳ nếu có trong PROT STOCK. 
 
 ## Cập nhật dữ liệu
 
+Trong sheet lịch sử, **Theo phiên** mở đúng nhóm và phương thức đang chọn. Chọn điểm ngày trên biểu đồ, ngày trong bảng, hoặc tab **Trong phiên** để xem lại dòng tiền theo phút. Biểu đồ trong phiên dùng ba nhóm của phương thức Từng lần khớp liên tục, có chế độ Giá trị, Khối lượng và Mua & Bán.
+
+Lượt thu VCI cuối ngày dùng chung một băng khớp để tổng hợp số cuối phiên và chuỗi phút. Bản xem lại được công bố sau đối soát, lưu nén theo mã và ngày trong bucket riêng tư `market-radar-minute-replay`. Lưu 5 phiên gần nhất, giới hạn 32 KiB mỗi mã mỗi phiên và dừng ghi khi dung lượng dự kiến chạm ngân sách Storage 450 MB của dự án. Các phiên đã có tổng hợp cũ chỉ có thể dựng lại theo phút khi thu lại được băng khớp nguồn.
+
+Có thể chạy `python -m protstock.market_radar_minutes` trong giờ khớp liên tục để thử VCI với HDB, OCB, SHS và BVB. Chương trình đọc trang mới nhất mỗi phút trong 5 lượt, in tuổi của bản ghi cuối, tính liên tục của khối lượng tích lũy trong trang và độ chồng lấp giữa các lượt. Lượt thử chạy đọc dữ liệu nguồn và in kết quả tại chỗ. Biểu đồ production hiện được cập nhật theo lịch cuối ngày.
+
 Workflow **Market Flow Radar** áp dụng migration khi đẩy lên `main` và làm mới năm phiên báo cáo gần nhất. Lịch ngày làm việc thu băng khớp lúc 16:35 giờ Việt Nam. Lượt 19:20 làm mới báo cáo hai phiên, thu bổ sung và đối soát lại băng khớp. Các mốc này là giờ lên lịch GitHub Actions. Sáu nhóm thu chạy song song theo giới hạn của workflow. Bộ thu phân trang về đầu phiên, loại bản ghi trùng theo ID và kiểm tra khối lượng tích lũy. Mỗi nhóm lưu tạm bản tổng hợp theo phiên trong cache của GitHub trước khi đối soát khối lượng cuối ngày. Khi hết ngân sách phân trang, con trỏ dừng hoặc hai nguồn lệch, mã giữ trạng thái chưa đủ cho phiên đó.
 
 Lượt nạp bù báo cáo kiểm tra 50 phiên VNINDEX đã công bố, bỏ qua các phạm vi đã đủ và xử lý từng lô tối đa năm phiên. Tác vụ chỉ bắt đầu lô tiếp theo khi PostgreSQL dưới 440 MB, chừa 10 MB dưới trần 450 MB, và sẽ thử lại theo lịch. Bảng Radar hiển thị số phiên lỗi nguồn theo sàn. Sau lượt thu báo cáo thường kỳ, hệ thống dọn dữ liệu Radar ngoài cửa sổ 50 phiên báo cáo và 20 phiên băng khớp.
