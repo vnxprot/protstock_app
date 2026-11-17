@@ -28,8 +28,8 @@ permissions:
   actions: write
 
 concurrency:
-  group: protstock-signal-rebuild-${{ inputs.symbol || 'all' }}
-  cancel-in-progress: false
+  group: protstock-rebuild-and-vci-production
+  queue: max
 
 jobs:
   rebuild:

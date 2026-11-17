@@ -13,8 +13,8 @@ permissions:
   contents: read
 
 concurrency:
-  group: protstock-canslim-vci
-  cancel-in-progress: false
+  group: protstock-rebuild-and-vci-production
+  queue: max
 
 jobs:
   migrate:
@@ -54,6 +54,7 @@ jobs:
     timeout-minutes: 60
     strategy:
       fail-fast: false
+      max-parallel: 1
       matrix:
         shard: [0, 1, 2, 3]
     steps:

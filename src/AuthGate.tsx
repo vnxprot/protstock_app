@@ -1,6 +1,6 @@
 import { Eye, EyeOff } from 'lucide-react'
 import { FormEvent, ReactNode, useEffect, useRef, useState } from 'react'
-import type { Session } from '@supabase/supabase-js'
+import { isAuthRetryableFetchError, type Session } from '@supabase/supabase-js'
 
 import { isSupabaseConfigured, supabase } from './lib/supabase'
 import { ThemeToggle } from './components/ThemeToggle'
@@ -64,7 +64,17 @@ export function AuthGate({ children }: AuthGateProps) {
       email: `${normalized}@protstock.local`,
       password,
     })
-    setMessage(error ? 'Tên đăng nhập hoặc mật khẩu không đúng.' : '')
+    if (error) {
+      if (isAuthRetryableFetchError(error) || (error.status ?? 0) >= 500 || error.status === 402) {
+        setMessage('Dịch vụ đăng nhập tạm thời không phản hồi. Vui lòng thử lại sau.')
+      } else if (error.status === 429) {
+        setMessage('Có quá nhiều yêu cầu đăng nhập. Vui lòng chờ rồi thử lại.')
+      } else if (error.code === 'invalid_credentials') {
+        setMessage('Tên đăng nhập hoặc mật khẩu không đúng.')
+      } else {
+        setMessage('Chưa đăng nhập được. Vui lòng thử lại sau.')
+      }
+    }
     setSubmitting(false)
   }
 
