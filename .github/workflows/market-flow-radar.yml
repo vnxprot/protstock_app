@@ -29,12 +29,16 @@ on:
         description: Fill the latest 50 report sessions subject to database headroom
         type: boolean
         default: false
+      tape_history:
+        description: Probe DNSE and fill missing trade tape for the latest 20 sessions
+        type: boolean
+        default: false
 
 permissions:
   contents: read
 
 concurrency:
-  group: market-flow-radar-production
+  group: ${{ inputs.tape_history && 'market-flow-radar-history' || 'market-flow-radar-production' }}
   cancel-in-progress: false
 
 jobs:
@@ -93,7 +97,7 @@ jobs:
 
   collect:
     needs: migrate
-    if: ${{ !cancelled() && github.event.schedule != '35 9 * * 1-5' && (needs.migrate.result == 'success' || needs.migrate.result == 'skipped') }}
+    if: ${{ !cancelled() && !inputs.tape_history && github.event.schedule != '35 9 * * 1-5' && (needs.migrate.result == 'success' || needs.migrate.result == 'skipped') }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
@@ -132,7 +136,7 @@ jobs:
 
   collect-tape:
     needs: [migrate, plan-tape]
-    if: ${{ !cancelled() && needs.plan-tape.outputs.day != '' && (needs.migrate.result == 'success' || needs.migrate.result == 'skipped') }}
+    if: ${{ !cancelled() && !inputs.tape_history && needs.plan-tape.outputs.day != '' && (needs.migrate.result == 'success' || needs.migrate.result == 'skipped') }}
     runs-on: ubuntu-latest
     timeout-minutes: 115
     strategy:
@@ -168,3 +172,64 @@ jobs:
         env:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: python -m protstock.market_radar --tape-date "$TAPE_DATE" --shard "$SHARD" --shards 6 --tape-cache "$CAPTURE_FILE" --tape-stage reconcile
+
+  probe-dnse:
+    needs: migrate
+    if: ${{ !cancelled() && inputs.tape_history && (needs.migrate.result == 'success' || needs.migrate.result == 'skipped') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    outputs:
+      available: ${{ steps.probe.outputs.available }}
+    env:
+      SUPABASE_URL: https://upmqxwktvvguegqeqibn.supabase.co
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      DNSE_API_KEY: ${{ secrets.DNSE_API_KEY }}
+      DNSE_API_SECRET: ${{ secrets.DNSE_API_SECRET }}
+      RADAR_DNSE_APPROVED: ${{ vars.RADAR_DNSE_APPROVED }}
+      END_DATE: ${{ inputs.end }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - id: probe
+        run: |
+          if [[ "$RADAR_DNSE_APPROVED" != true || -z "$DNSE_API_KEY" || -z "$DNSE_API_SECRET" ]]; then
+            echo '::warning::DNSE history deferred: DB publication rights, zero-cost use and API credentials must be confirmed.'
+            exit 0
+          fi
+          python -m pip install -e '.[radar]' 'dnse-sdk-openapi==2.4.1'
+          args=()
+          if [[ -n "$END_DATE" ]]; then args+=(--end "$END_DATE"); fi
+          python -m protstock.market_radar_history --probe "${args[@]}"
+          echo 'available=true' >> "$GITHUB_OUTPUT"
+
+  recover-tape-history:
+    needs: probe-dnse
+    if: needs.probe-dnse.outputs.available == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 115
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix:
+        shard: [0, 1, 2, 3, 4, 5]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - run: python -m pip install -e '.[radar]' 'dnse-sdk-openapi==2.4.1'
+      - name: Recover 20 sessions of verified trade flow
+        env:
+          SUPABASE_URL: https://upmqxwktvvguegqeqibn.supabase.co
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          DNSE_API_KEY: ${{ secrets.DNSE_API_KEY }}
+          DNSE_API_SECRET: ${{ secrets.DNSE_API_SECRET }}
+          RADAR_DNSE_APPROVED: ${{ vars.RADAR_DNSE_APPROVED }}
+          END_DATE: ${{ inputs.end }}
+          SHARD: ${{ matrix.shard }}
+        run: |
+          args=()
+          if [[ -n "$END_DATE" ]]; then args+=(--end "$END_DATE"); fi
+          python -m protstock.market_radar_history --shard "$SHARD" --shards 6 "${args[@]}"

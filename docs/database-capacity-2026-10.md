@@ -38,7 +38,8 @@ Each batch is uploaded and read back before changing the corresponding rows.
 The transaction rechecks the exact rows under a write lock, then stores the
 archive path and record key in the original `evidence` column. Existing object
 names are reusable on retry. `VACUUM FULL` returns space to PostgreSQL after the
-update. The workflow reports the observed size and queues Radar report backfill
+update. A changed or locked date is retried up to three times, then deferred so
+other dates can continue. The workflow reports the observed size and queues Radar report backfill
 only below 440 MB, leaving 10 MB of headroom per batch beneath its 450 MB limit.
 It reports a capacity error if compaction is insufficient. The recurring
 rollover also compacts eligible evidence when the database reaches 400 MB.

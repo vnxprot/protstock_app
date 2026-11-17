@@ -12,6 +12,7 @@ import json
 import os
 import sys
 from datetime import date, timedelta
+from time import sleep
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -119,6 +120,35 @@ def report_capacity(conn):
         print("Relation (schema, table, data and TOAST bytes, index bytes, live rows, dead rows):", row, flush=True)
 
 
+def archive_analysis_day(conn, storage, table, day, select, update, *, measure):
+    for attempt in range(3):
+        count, payloads = conn.execute(select, (day,)).fetchone()
+        if not count:
+            return 0, 0, 0
+        data = payloads.encode()
+        content = gzip.compress(data, compresslevel=6, mtime=0)
+        if measure:
+            return count, len(data), len(content)
+        if len(content) >= 45_000_000:
+            raise RuntimeError(f"Analysis archive must be split: {table} {day}")
+        object_key = f"analysis/v1/{table}/{day}/{hashlib.sha256(content).hexdigest()}.json.gz"
+        upload_verified(storage, object_key, content, reuse=True)
+        try:
+            with conn.transaction():
+                conn.execute("set local lock_timeout = '8s'")
+                conn.execute(f"lock table public.{table} in share row exclusive mode")
+                if conn.execute(select, (day,)).fetchone() == (count, payloads):
+                    if conn.execute(update, (object_key, day)).rowcount != count:
+                        raise RuntimeError(f"Analysis row count changed: {table} {day}")
+                    return count, len(data), len(content)
+        except psycopg.errors.LockNotAvailable:
+            pass
+        if attempt < 2:
+            sleep(2 ** attempt)
+    print(f"::warning::Analysis batch deferred after 3 attempts: {table} {day}", flush=True)
+    return 0, 0, 0
+
+
 def archive_analysis(conn, storage, *, measure=False, retry_vacuum=False):
     cutoff = conn.execute("""select min(ip.trading_date) from (
         select p.trading_date from public.market_index_prices p join public.market_indices i on i.id=p.index_id
@@ -137,40 +167,25 @@ def archive_analysis(conn, storage, *, measure=False, retry_vacuum=False):
         select = f"""select count(*), coalesce(jsonb_object_agg({key}, jsonb_build_object('evidence', t.evidence)), '{{}}'::jsonb)::text
             from public.{table} t
             where t.{day_column} = %s and {scope}"""
+        # Keep the monthly state read by the historical Opportunities SQL.
+        keep = "jsonb_strip_nulls(jsonb_build_object('monthly_state', t.evidence->'monthly_state')) ||" if table == "momentum_radar_assessments" else ""
+        update = f"""update public.{table} t set evidence = {keep}
+            jsonb_build_object('_historyObject', %s::text, '_historyKey', {key})
+            where t.{day_column} = %s and {scope}"""
         rows = compressed = raw = 0
         for (day,) in dates:
-            count, payloads = conn.execute(select, (day,)).fetchone()
-            if not count:
-                continue
-            data = payloads.encode()
-            content = gzip.compress(data, compresslevel=6, mtime=0)
-            raw += len(data)
-            compressed += len(content)
+            count, raw_bytes, compressed_bytes = archive_analysis_day(conn, storage, table, day, select, update, measure=measure)
+            raw += raw_bytes
+            compressed += compressed_bytes
             rows += count
-            if measure:
-                continue
-            if len(content) >= 45_000_000:
-                raise RuntimeError(f"Analysis archive must be split: {table} {day}")
-            object_key = f"analysis/v1/{table}/{day}/{hashlib.sha256(content).hexdigest()}.json.gz"
-            upload_verified(storage, object_key, content, reuse=True)
-            with conn.transaction():
-                conn.execute("set local lock_timeout = '8s'")
-                conn.execute(f"lock table public.{table} in share row exclusive mode")
-                if conn.execute(select, (day,)).fetchone() != (count, payloads):
-                    raise RuntimeError(f"Analysis changed after upload: {table} {day}; rerun to compact")
-                # Keep the monthly state read by the historical Opportunities SQL.
-                keep = "jsonb_strip_nulls(jsonb_build_object('monthly_state', t.evidence->'monthly_state')) ||" if table == "momentum_radar_assessments" else ""
-                changed = conn.execute(f"""update public.{table} t set evidence = {keep}
-                    jsonb_build_object('_historyObject', %s::text, '_historyKey', {key})
-                    where t.{day_column} = %s and {scope}""", (object_key, day))
-                if changed.rowcount != count:
-                    raise RuntimeError(f"Analysis row count changed: {table} {day}")
         print(f"{table}: {rows:,} rows, {raw:,} raw JSON bytes, {compressed:,} compressed bytes", flush=True)
         total += compressed
         if not measure and (rows or (retry_vacuum and database_bytes(conn) >= DATABASE_TARGET)):
             conn.execute("set lock_timeout = '8s'")
             try:
                 conn.execute(f"vacuum full public.{table}")
+            except psycopg.errors.LockNotAvailable:
+                print(f"::warning::Vacuum deferred for {table}: relation busy", flush=True)
             finally:
                 conn.execute("reset lock_timeout")
     return total

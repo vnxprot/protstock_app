@@ -190,16 +190,19 @@ def matched_reference(day, exchange, symbol):
 
 def capture_tape(day, exchange, symbol):
     try:
-        tape = read_tape(day, symbol)
-        volume, complete = tape_integrity(tape, exchange)
-        return {'volume': volume, 'reason': None if complete else 'incomplete_tape',
-                'groups': list(classify(tape, exchange)) if complete else []}
+        return capture_matches(read_tape(day, symbol), exchange)
     except SOURCE_ERRORS as error:
         print(f'{symbol} tape: {error}', flush=True)
         return {'volume': 0, 'reason': 'source_unavailable', 'groups': []}
 
 
-def reconcile_tape(day, exchange, symbol, capture):
+def capture_matches(tape, exchange):
+    volume, complete = tape_integrity(tape, exchange)
+    return {'volume': volume, 'reason': None if complete else 'incomplete_tape',
+            'groups': list(classify(tape, exchange)) if complete else []}
+
+
+def reconcile_tape(day, exchange, symbol, capture, tape_source='Vietcap'):
     reference, source = matched_reference(day, exchange, symbol)
     volume = capture['volume']
     reason = 'missing_reference' if reference is None else capture['reason'] or (
@@ -207,7 +210,7 @@ def reconcile_tape(day, exchange, symbol, capture):
     result = []
     for method, category, turnover, bucket in (capture['groups'] if not reason else classify([], exchange)):
         values = bucket if reason is None else {}
-        label = f'Vietcap · đối soát {source}' if source else 'Vietcap · thiếu tham chiếu'
+        label = f'{tape_source} · đối soát {source}' if source else f'{tape_source} · thiếu tham chiếu'
         row = market_row(day, exchange, symbol, category, method, label,
                          partial=reason is not None, market_value=turnover if reason is None else None, **values)
         metrics = {**values, 'tape_volume': volume, 'reference_volume': reference, 'tape_reason': reason}

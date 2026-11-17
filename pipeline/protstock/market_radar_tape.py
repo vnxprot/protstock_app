@@ -30,6 +30,7 @@ class Match:
     volume: int
     cumulative: int
     side: str
+    board: str = ''
 
 
 def tape_page(symbol, cursor):
@@ -115,7 +116,7 @@ def clusters(exchange, tape):
     def cluster_key(match):
         scope = phase(exchange, match)
         if scope == 'continuous' and match.side in ('b', 's'):
-            return match.stamp.replace(microsecond=0), match.price, match.side
+            return match.stamp.replace(microsecond=0), match.price, match.side, match.board
         return None
 
     for key, matches in groupby(tape, cluster_key):
