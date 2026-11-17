@@ -44,7 +44,7 @@ class SupabaseRestClient:
                     return response
                 retry_after = response.headers.get("retry-after", "")
                 delay = min(float(retry_after), 30) if retry_after.isdigit() else 2 ** attempt
-            except (httpx.TimeoutException, httpx.NetworkError):
+            except (httpx.TimeoutException, httpx.NetworkError, httpx.RemoteProtocolError):
                 if attempt == 2:
                     raise
                 delay = 2 ** attempt

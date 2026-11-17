@@ -61,7 +61,7 @@ jobs:
               date.fromisoformat(day)
           elif not os.environ.get('HISTORY_END'):
               now = datetime.now(timezone(timedelta(hours=7)))
-              closed = now.date() if now.time() >= time(16, 30) else now.date() - timedelta(days=1)
+              closed = now.date() if now.time() >= time(15, 15) else now.date() - timedelta(days=1)
               day = closed.isoformat() if closed.weekday() < 5 else ''
           with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
               print(f'value={day or ""}', file=output)
@@ -171,7 +171,11 @@ jobs:
       - name: Reconcile and publish trade tape
         env:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-        run: python -m protstock.market_radar --tape-date "$TAPE_DATE" --shard "$SHARD" --shards 6 --tape-cache "$CAPTURE_FILE" --tape-stage reconcile
+          RADAR_SSI_EOD: ${{ vars.RADAR_SSI_EOD }}
+        run: |
+          args=(--tape-date "$TAPE_DATE" --shard "$SHARD" --shards 6 --tape-cache "$CAPTURE_FILE" --tape-stage reconcile)
+          if [[ "$RADAR_SSI_EOD" == true ]]; then args+=(--prefer-ssi); fi
+          python -m protstock.market_radar "${args[@]}"
 
   probe-dnse:
     needs: migrate

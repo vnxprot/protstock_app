@@ -340,7 +340,7 @@ def ssi_closing_candidates(db, day):
         return {}
 
 
-def collect_tape(db, day, shard, shards, file=None, stage=None):
+def collect_tape(db, day, shard, shards, file=None, stage=None, *, prefer_ssi=False):
     symbols = [row for row in db.active_symbols() if row['exchange'] in EXCHANGES
                and (not row['listed_from'] or row['listed_from'] <= day.isoformat())]
     symbols = symbols[shard::shards]
@@ -377,7 +377,7 @@ def collect_tape(db, day, shard, shards, file=None, stage=None):
             return
         verified = 0
         missing = {'volume': 0, 'reason': 'source_unavailable', 'groups': []}
-        ssi = ssi_closing_candidates(db, day)
+        ssi = ssi_closing_candidates(db, day) if prefer_ssi else {}
 
         def reconcile(row):
             exchange, symbol = row['exchange'], row['symbol']
@@ -410,20 +410,20 @@ def main():
     parser.add_argument('--shards', type=int, default=1)
     parser.add_argument('--tape-cache', type=Path)
     parser.add_argument('--tape-stage', choices=('capture', 'reconcile'))
+    parser.add_argument('--prefer-ssi', action='store_true', help='Use a verified SSI closing tape ahead of Vietcap')
     parser.add_argument('--backfill-reports', action='store_true')
     args = parser.parse_args()
     now = datetime.now(VN)
     latest_closed = now.date() if now.time() >= time(16, 30) else now.date() - timedelta(days=1)
     db = SupabaseRestClient(Settings.from_env())
     if args.tape_date:
-        if not 0 <= args.shard < args.shards or args.tape_date > latest_closed:
+        latest_tape = now.date() if now.time() >= time(15, 15) else now.date() - timedelta(days=1)
+        if not 0 <= args.shard < args.shards or args.tape_date > latest_tape:
             parser.error('Expected a valid shard and a closed tape date')
-        if session_dates(db, args.tape_date, 1) == [args.tape_date]:
-            collect_tape(db, args.tape_date, args.shard, args.shards, args.tape_cache, args.tape_stage)
-        else:
-            # VNINDEX publication may lag the exchange calendar on a regular weekday.
-            if args.tape_date.weekday() < 5:
-                collect_tape(db, args.tape_date, args.shard, args.shards, args.tape_cache, args.tape_stage)
+        # VNINDEX publication may lag the exchange calendar on a regular weekday.
+        if session_dates(db, args.tape_date, 1) == [args.tape_date] or args.tape_date.weekday() < 5:
+            collect_tape(db, args.tape_date, args.shard, args.shards, args.tape_cache, args.tape_stage,
+                         prefer_ssi=args.prefer_ssi)
         return
     end = min(args.end or latest_closed, latest_closed)
     if args.backfill_reports:
