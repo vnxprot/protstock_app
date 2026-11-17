@@ -1,5 +1,5 @@
-.market-page .market-radar { --radar-selected-bg:var(--lime); --radar-selected-text:#14200d; --radar-selected-border:var(--lime); --radar-auction-color:#76a6ed; min-width:0; padding:clamp(12px, 1.8vw, 22px); container-type:inline-size; }
-:root[data-theme='light'] .market-page .market-radar { --radar-selected-bg:#e3f1d6; --radar-selected-text:#25451b; --radar-selected-border:#759952; --radar-auction-color:#245db5; --sky:#245db5; --violet:#6542a1; }
+.market-page .market-radar { --radar-selected-bg:var(--lime); --radar-selected-text:#14200d; --radar-selected-border:var(--lime); --radar-history-color:#76a6ed; min-width:0; padding:clamp(12px, 1.8vw, 22px); container-type:inline-size; }
+:root[data-theme='light'] .market-page .market-radar { --radar-selected-bg:#e3f1d6; --radar-selected-text:#25451b; --radar-selected-border:#759952; --radar-history-color:#245db5; --sky:#245db5; --violet:#6542a1; }
 :root[data-theme='light'] .market-radar :is(.radar-chips button:not([aria-pressed='true']),.radar-pages button) { color:var(--text); }
 .radar-heading,.radar-title,.radar-filter-bar,.radar-filter-group,.radar-filter-label,.radar-table-heading,.radar-table-footer { display:flex; align-items:center; gap:9px; }
 .radar-heading,.radar-filter-bar,.radar-table-heading,.radar-table-footer { justify-content:space-between; }
@@ -87,9 +87,7 @@
 .radar-history-chart-wrap { min-width:0; padding:6px; border:1px solid var(--line); border-radius:10px; }
 .radar-chart-legend { display:flex; flex-wrap:wrap; gap:6px 12px; padding:4px 6px; color:var(--muted); font-size:11px; }
 .radar-chart-legend [data-series]::before { display:inline-block; width:8px; height:8px; margin-right:5px; border-radius:2px; background:var(--series-color); content:''; }
-.radar-chart-legend [data-series='buy'] { --series-color:var(--mint); }
-.radar-chart-legend [data-series='sell'] { --series-color:var(--red); }
-.radar-chart-legend [data-series='auction'] { --series-color:var(--radar-auction-color); }
+.radar-chart-legend [data-series] { --series-color:var(--radar-history-color); }
 .radar-history-chart { width:100%; height:clamp(190px, 38dvh, 340px); }
 .radar-history-data { color:var(--text); font-size:12px; }
 .radar-history-data summary { width:fit-content; color:var(--mint); cursor:pointer; }

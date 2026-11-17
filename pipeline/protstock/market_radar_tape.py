@@ -92,13 +92,18 @@ def phase(exchange, match):
     return 'other'
 
 
-def tape_quality(tape, exchange, reference_volume):
+def tape_integrity(tape, exchange):
     previous = 0
     chain_complete = True
     for match in tape:
         chain_complete &= match.cumulative - previous == match.volume
         previous = match.cumulative
     volume = sum(match.volume for match in tape if phase(exchange, match) != 'negotiated')
+    return volume, chain_complete
+
+
+def tape_quality(tape, exchange, reference_volume):
+    volume, chain_complete = tape_integrity(tape, exchange)
     if reference_volume is None:
         return volume, 'missing_reference'
     if not chain_complete or volume != reference_volume:

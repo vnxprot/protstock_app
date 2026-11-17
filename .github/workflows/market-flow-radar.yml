@@ -7,6 +7,7 @@ on:
       - .github/workflows/market-flow-radar.yml
       - supabase/migrations/*_market_flow_radar.sql
   schedule:
+    - cron: '35 9 * * 1-5'
     - cron: '20 12 * * 1-5'
   workflow_dispatch:
     inputs:
@@ -22,6 +23,10 @@ on:
         type: string
       migrate:
         description: Apply Supabase migrations before collection
+        type: boolean
+        default: false
+      reports_backfill:
+        description: Fill the latest 50 report sessions subject to database headroom
         type: boolean
         default: false
 
@@ -88,7 +93,7 @@ jobs:
 
   collect:
     needs: migrate
-    if: ${{ always() && (needs.migrate.result == 'success' || needs.migrate.result == 'skipped') }}
+    if: ${{ !cancelled() && github.event.schedule != '35 9 * * 1-5' && (needs.migrate.result == 'success' || needs.migrate.result == 'skipped') }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
@@ -108,6 +113,23 @@ jobs:
           if [[ -n "$END_DATE" ]]; then args+=(--end "$END_DATE"); fi
           python -m protstock.market_radar "${args[@]}"
 
+  backfill-reports:
+    needs: [migrate, collect]
+    if: ${{ !cancelled() && needs.collect.result == 'success' && (github.event_name == 'push' || github.event_name == 'schedule' || inputs.reports_backfill) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 85
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install -e '.[radar]'
+      - name: Fill missing report sessions in five-session batches
+        env:
+          SUPABASE_URL: https://upmqxwktvvguegqeqibn.supabase.co
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: python -m protstock.market_radar --backfill-reports
+
   collect-tape:
     needs: [migrate, plan-tape]
     if: ${{ !cancelled() && needs.plan-tape.outputs.day != '' && (needs.migrate.result == 'success' || needs.migrate.result == 'skipped') }}
@@ -118,16 +140,31 @@ jobs:
       max-parallel: 4
       matrix:
         shard: [0, 1, 2, 3, 4, 5]
+    env:
+      SUPABASE_URL: https://upmqxwktvvguegqeqibn.supabase.co
+      TAPE_DATE: ${{ needs.plan-tape.outputs.day }}
+      SHARD: ${{ matrix.shard }}
+      CAPTURE_FILE: .radar-candidate.json.gz
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
       - run: python -m pip install -e '.[radar]'
-      - name: Collect and reconcile trade tape
+      - uses: actions/cache/restore@v4
+        with:
+          path: ${{ env.CAPTURE_FILE }}
+          key: radar-tape-v1-${{ env.TAPE_DATE }}-${{ matrix.shard }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: radar-tape-v1-${{ env.TAPE_DATE }}-${{ matrix.shard }}-
+      - name: Capture trade tape before the provider rolls the session
         env:
-          SUPABASE_URL: https://upmqxwktvvguegqeqibn.supabase.co
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          TAPE_DATE: ${{ needs.plan-tape.outputs.day }}
-          SHARD: ${{ matrix.shard }}
-        run: python -m protstock.market_radar --tape-date "$TAPE_DATE" --shard "$SHARD" --shards 6
+        run: python -m protstock.market_radar --tape-date "$TAPE_DATE" --shard "$SHARD" --shards 6 --tape-cache "$CAPTURE_FILE" --tape-stage capture
+      - uses: actions/cache/save@v4
+        with:
+          path: ${{ env.CAPTURE_FILE }}
+          key: radar-tape-v1-${{ env.TAPE_DATE }}-${{ matrix.shard }}-${{ github.run_id }}-${{ github.run_attempt }}
+      - name: Reconcile and publish trade tape
+        env:
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: python -m protstock.market_radar --tape-date "$TAPE_DATE" --shard "$SHARD" --shards 6 --tape-cache "$CAPTURE_FILE" --tape-stage reconcile

@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { ColorType, HistogramSeries, createChart } from 'lightweight-charts'
+import { ColorType, HistogramSeries, LineSeries, createChart, type AutoscaleInfo, type LineData, type LineSeriesPartialOptions } from 'lightweight-charts'
 import { ArrowDownRight, ArrowUpRight, CalendarDays, ChevronDown, ChevronLeft, ChevronRight, Globe, Landmark, Radar, RefreshCw, RotateCcwClock, Search, X } from 'lucide-react'
 import { formatDate } from '../lib/date'
 import { MARKET_PRICE_TO_VND } from '../lib/marketUnits'
@@ -140,14 +140,46 @@ function HistoryChart({ dates, history, sized, auction }: { dates: string[]; his
       rightPriceScale: { borderColor: color('--line') }, timeScale: { borderColor: color('--line') },
       localization: { locale: 'vi-VN', priceFormatter: (value: number) => decimal.format(value) },
     })
-    const series = chart.addSeries(HistogramSeries, { priceLineVisible: false, lastValueVisible: false, base: 0 })
     const byDate = new Map(history.map(day => [day.trading_date, day]))
-    const up = color('--mint'), down = color('--red'), neutral = color('--radar-auction-color')
-    series.setData(dates.slice(-historyLimit).map(time => {
+    const points = dates.slice(-historyLimit).map(time => {
       const value = historyValue(byDate.get(time), sized, auction)
-      return value == null ? { time } : { time, value: value / 1e9, color: auction ? neutral : value < 0 ? down : up }
-    }))
-    if (!auction) series.createPriceLine({ price: 0, color: color('--line-bright'), lineWidth: 1, axisLabelVisible: false })
+      return { time, value: value == null ? null : value / 1e9 }
+    })
+    const common = { priceLineVisible: false, lastValueVisible: false }
+    if (auction) {
+      const series = chart.addSeries(HistogramSeries, { ...common, base: 0, color: color('--radar-history-color') })
+      series.setData(points.map(({ time, value }) => value == null ? { time } : { time, value }))
+    } else {
+      const timeline = chart.addSeries(LineSeries, common)
+      timeline.setData(points.map(({ time }) => ({ time })))
+      const segments: LineData[][] = []
+      let segment: LineData[] | undefined
+      for (const { time, value } of points) {
+        if (value == null) {
+          segment = undefined
+          continue
+        }
+        if (!segment) {
+          segment = []
+          segments.push(segment)
+        }
+        segment.push({ time, value })
+      }
+      const options: LineSeriesPartialOptions = {
+        ...common, color: color('--radar-history-color'), lineWidth: 2, pointMarkersVisible: true, pointMarkersRadius: 2,
+        autoscaleInfoProvider: (original: () => AutoscaleInfo | null) => {
+          const info = original()
+          if (!info?.priceRange) return info
+          const { minValue, maxValue } = info.priceRange
+          return { ...info, priceRange: { minValue: Math.min(0, minValue), maxValue: Math.max(0, maxValue) } }
+        },
+      }
+      segments.forEach((data, index) => {
+        const series = chart.addSeries(LineSeries, options)
+        series.setData(data)
+        if (index === 0) series.createPriceLine({ price: 0, color: color('--line-bright'), lineWidth: 1, axisLabelVisible: false })
+      })
+    }
     chart.timeScale().fitContent()
     return () => chart.remove()
   }, [auction, dates, hasValues, history, sized, theme])
@@ -155,7 +187,7 @@ function HistoryChart({ dates, history, sized, auction }: { dates: string[]; his
   return <div className="radar-history-chart-wrap">
     <div className="radar-chart-legend">{auction
       ? <span data-series="auction">Giá trị khớp (tỷ đồng)</span>
-      : <><span data-series="buy">Mua ròng</span><span data-series="sell">Bán ròng</span><span>Tỷ đồng mỗi phiên</span></>}</div>
+      : <span data-series="net">Giá trị mua/bán ròng (tỷ đồng)</span>}</div>
     <div ref={host} className="radar-history-chart" role="img" aria-label={auction ? 'Biểu đồ giá trị khớp định kỳ theo phiên' : 'Biểu đồ giá trị mua hoặc bán ròng theo phiên'}/>
   </div>
 }
@@ -244,6 +276,15 @@ export function MarketFlowRadar({ authenticated, active, tradingDates }: { authe
       return data as Dashboard
     },
   })
+  const reportFailures = useQuery({
+    queryKey: ['market-radar-report-failures', first, last, category], enabled: ready && !sized, staleTime: 60_000,
+    queryFn: async ({ signal }) => {
+      const { data, error } = await supabase!.from('market_radar_source_status').select('trading_date,exchange')
+        .eq('category', category).eq('status', 'failed').gte('trading_date', first).lte('trading_date', last).abortSignal(signal)
+      if (error) throw error
+      return data as { trading_date: string; exchange: string }[]
+    },
+  })
   const rows = query.data?.rows ?? []
   const maxPage = Math.max(0, Math.ceil(rows.length / pageSize) - 1)
   const currentPage = Math.min(page, maxPage)
@@ -324,7 +365,8 @@ export function MarketFlowRadar({ authenticated, active, tradingDates }: { authe
       {last && <p className="radar-meta">{first === last ? dayLabel(last) : `${dayLabel(first)} – ${dayLabel(last)}`} · {dates.length} phiên{sized && (tapeMode === 'auction' ? ' · Khớp định kỳ' : ' · Khớp lệnh liên tục')}</p>}</div>
       {query.data && <div className="radar-coverage" aria-label="Độ phủ theo sàn">{scope.map(([id, name]) => {
         const item = query.data.coverage.find(entry => entry.exchange === id)
-        return <span key={id} title={item?.latest ? `Phiên mới nhất có dữ liệu ${dayLabel(item.latest)}` : 'Chưa có dữ liệu'}>{name} <b>{item?.observed ?? 0}/{dates.length} phiên</b>{sized && item?.universe != null ? <small> · {item.ready}/{item.universe} mã đủ kỳ</small> : item?.partial && <small> · Mẫu giới hạn</small>}</span>
+        const failures = reportFailures.data?.filter(entry => entry.exchange === id && dates.includes(entry.trading_date)).length ?? 0
+        return <span key={id} title={item?.latest ? `Phiên mới nhất có dữ liệu ${dayLabel(item.latest)}` : 'Chưa có dữ liệu'}>{name} <b>{item?.observed ?? 0}/{dates.length} phiên</b>{sized && item?.universe != null ? <small> · {item.ready}/{item.universe} mã đủ kỳ đối soát</small> : item?.partial && <small> · Mẫu giới hạn</small>}{failures > 0 && <small> · {failures} phiên lỗi nguồn</small>}</span>
       })}</div>}
     </div>
     {query.isError && <p className="market-error" role="alert">Không tải được Radar. <button type="button" className="secondary-button" onClick={() => void query.refetch()}>Thử lại</button></p>}

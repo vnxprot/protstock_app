@@ -7,7 +7,7 @@ Mở **Thị trường → Radar dòng tiền** để chọn nhóm, sàn và chu
 | Top giá và khối lượng | `daily_prices` của các mã đang hoạt động trong Prot Universe. Xếp hạng biến động dùng giá đóng cửa của phiên liền trước và giá cuối kỳ, với đủ phiên và cùng nguồn. |
 | Khối ngoại | CafeF theo sàn và phiên. Giá trị, khối lượng, tỷ lệ sở hữu và room theo công bố của nguồn. Room âm được giữ nguyên. |
 | Tự doanh | Báo cáo theo mã của HNX cho HNX và UPCoM. CafeF theo mã trong Prot Universe cho HOSE. Dữ liệu thu tự động của nhóm hiện là tổng mua bán. |
-| Ba nhóm giá trị khớp | Vietcap cho Prot Universe trên cả ba sàn, đối soát với khối lượng khớp lệnh cuối ngày của CafeF. Radar có Từng lần khớp, Cụm khớp và Định kỳ. Giao dịch thỏa thuận nằm ngoài phạm vi. |
+| Ba nhóm giá trị khớp | Vietcap cho Prot Universe trên cả ba sàn. Khối lượng khớp lệnh cuối ngày dùng CafeF trước trên HOSE và SSI iBoard trước trên HNX, UPCoM, với nguồn còn lại làm dự phòng khi thiếu số liệu. Radar có Từng lần khớp, Cụm khớp và Định kỳ. Giao dịch thỏa thuận nằm ngoài phạm vi. |
 
 Bảng **Định kỳ** hiển thị giá khớp bình quân theo khối lượng, khối lượng, giá trị và số bản ghi Vietcap. Số liệu mở cửa và đóng cửa được lưu riêng từ băng khớp. Phiên cũ chỉ có tổng định kỳ vẫn hiển thị tổng, còn chi tiết từng đợt xuất hiện sau khi nạp lại được băng nguồn.
 
@@ -19,8 +19,8 @@ Thị giá là giá đóng cửa phiên cuối kỳ nếu có trong PROT STOCK. 
 
 ## Cập nhật dữ liệu
 
-Workflow **Market Flow Radar** chạy sau khi đẩy migration lên `main`, áp dụng migration rồi nạp năm phiên khối ngoại và tự doanh gần nhất. Lịch thường kỳ chạy 19:20 giờ Việt Nam vào ngày làm việc và làm mới hai phiên. Sáu nhóm thu băng khớp xử lý phiên đã chốt. Bộ thu phân trang về đầu phiên, loại bản ghi trùng theo ID, kiểm tra khối lượng tích lũy rồi so với khối lượng khớp cuối ngày. Khi hết ngân sách phân trang, con trỏ dừng hoặc hai nguồn lệch, mã giữ trạng thái chưa đủ cho phiên đó.
+Workflow **Market Flow Radar** áp dụng migration khi đẩy lên `main` và làm mới năm phiên báo cáo gần nhất. Lịch ngày làm việc thu băng khớp lúc 16:35 giờ Việt Nam. Lượt 19:20 làm mới báo cáo hai phiên, thu bổ sung và đối soát lại băng khớp. Các mốc này là giờ lên lịch GitHub Actions. Sáu nhóm thu chạy song song theo giới hạn của workflow. Bộ thu phân trang về đầu phiên, loại bản ghi trùng theo ID và kiểm tra khối lượng tích lũy. Mỗi nhóm lưu tạm bản tổng hợp theo phiên trong cache của GitHub trước khi đối soát khối lượng cuối ngày. Khi hết ngân sách phân trang, con trỏ dừng hoặc hai nguồn lệch, mã giữ trạng thái chưa đủ cho phiên đó.
 
-Workflow chạy thủ công cho tối đa 20 phiên báo cáo khối ngoại và tự doanh một lần. Đặt `tape_date` để thử phục hồi một phiên khớp cụ thể khi Vietcap còn trả băng của ngày đó. Lần chạy lại với dữ liệu thiếu giữ bản đã đối soát trước đó. Các bản ghi khớp nguyên gốc chỉ tồn tại trong bộ nhớ của tác vụ.
+Lượt nạp bù báo cáo kiểm tra 50 phiên VNINDEX đã công bố, bỏ qua các phạm vi đã đủ và xử lý từng lô tối đa năm phiên. Tác vụ chỉ bắt đầu lô tiếp theo khi PostgreSQL còn dưới 450 MB và sẽ thử lại theo lịch. Bảng Radar hiển thị số phiên lỗi nguồn theo sàn. Sau lượt thu báo cáo thường kỳ, hệ thống dọn dữ liệu Radar ngoài cửa sổ 50 phiên báo cáo và 20 phiên băng khớp. Băng khớp lịch sử chỉ có thể phục hồi nếu Vietcap còn trả dữ liệu đúng ngày hoặc đã có bản tổng hợp tạm hợp lệ.
 
-Job dùng `SUPABASE_DB_PASSWORD` để áp migration và `SUPABASE_SERVICE_ROLE_KEY` để ghi. Báo cáo đầy đủ thay thế nguyên tử phạm vi sàn, nhóm, phương thức và phiên. Mẫu theo mã dùng khóa duy nhất để chạy lại. Supabase lưu số tổng hợp và độ phủ. Dữ liệu từng lần khớp chỉ được xử lý trong bộ nhớ của job.
+Workflow chạy thủ công cho phép làm mới tối đa 20 phiên báo cáo hoặc bật `reports_backfill` để nạp bù trong cửa sổ 50 phiên. Đặt `tape_date` cho một phiên khớp cụ thể. Lần chạy lại với dữ liệu thiếu giữ bản đã đối soát trước đó. Dữ liệu từng lần khớp chỉ được xử lý trong bộ nhớ của job. Supabase lưu số tổng hợp và độ phủ. Báo cáo đầy đủ thay thế nguyên tử phạm vi sàn, nhóm, phương thức và phiên. Mẫu theo mã dùng khóa duy nhất để chạy lại.
