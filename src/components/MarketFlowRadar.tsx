@@ -1,9 +1,11 @@
-import { Fragment, useState } from 'react'
+import { Fragment, useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { ArrowDownRight, ArrowUpRight, CalendarDays, ChevronDown, ChevronLeft, ChevronRight, Globe, History, Landmark, Radar, RefreshCw, Search } from 'lucide-react'
+import { ColorType, HistogramSeries, createChart } from 'lightweight-charts'
+import { ArrowDownRight, ArrowUpRight, CalendarDays, ChevronDown, ChevronLeft, ChevronRight, Globe, Landmark, Radar, RefreshCw, RotateCcwClock, Search, X } from 'lucide-react'
 import { formatDate } from '../lib/date'
 import { MARKET_PRICE_TO_VND } from '../lib/marketUnits'
 import { supabase } from '../lib/supabase'
+import { useTheme } from '../lib/theme'
 import { DateField } from './DateField'
 import './market-flow-radar.css'
 
@@ -43,7 +45,6 @@ type Dashboard = {
   net_value: number | null; net_volume: number | null; strongest_buy: Leader | null; strongest_sell: Leader | null
 }
 type FlowDay = { trading_date: string; buy_value: number | null; sell_value: number | null; buy_volume: number | null; sell_volume: number | null; unknown_value: number | null; unknown_volume: number | null; trade_count: number | null; partial: boolean; tape_volume: number | null; reference_volume: number | null }
-type RowView = { key: string; panel: 'details' | 'history' }
 
 const dayLabel = (day: string | null) => day ? formatDate(day) : '—'
 const quantity = (value: number | null | undefined, signed = false) => value == null ? '—' : `${signed && value > 0 ? '+' : ''}${integer.format(value)}`
@@ -116,22 +117,77 @@ function RowDetails({ row, expected, sized, countLabel, auction }: { row: FlowRo
   </div>
 }
 
-function RowHistory({ row, sized, auction, dates, period, onPeriodChange, history, loading, error, retry }: {
+function historyValue(day: FlowDay | undefined, sized: boolean, auction: boolean) {
+  if (!day || (sized && (day.partial || day.reference_volume == null))) return null
+  if (auction) return day.unknown_value
+  return day.buy_value == null || day.sell_value == null ? null : day.buy_value - day.sell_value
+}
+
+function HistoryChart({ dates, history, sized, auction }: { dates: string[]; history: FlowDay[]; sized: boolean; auction: boolean }) {
+  const host = useRef<HTMLDivElement>(null)
+  const theme = useTheme()
+  const chartDates = dates.slice(-historyLimit)
+  const hasValues = history.some(day => chartDates.includes(day.trading_date) && historyValue(day, sized, auction) != null)
+  useEffect(() => {
+    const element = host.current
+    if (!element || !hasValues) return
+    const palette = getComputedStyle(element)
+    const color = (name: string) => palette.getPropertyValue(name).trim()
+    const chart = createChart(element, {
+      autoSize: true,
+      layout: { background: { type: ColorType.Solid, color: color('--surface') }, textColor: color('--muted'), fontFamily: 'Inter, sans-serif' },
+      grid: { vertLines: { visible: false }, horzLines: { color: color('--line') } },
+      rightPriceScale: { borderColor: color('--line') }, timeScale: { borderColor: color('--line') },
+      localization: { locale: 'vi-VN', priceFormatter: (value: number) => decimal.format(value) },
+    })
+    const series = chart.addSeries(HistogramSeries, { priceLineVisible: false, lastValueVisible: false, base: 0 })
+    const byDate = new Map(history.map(day => [day.trading_date, day]))
+    const up = color('--mint'), down = color('--red'), neutral = color('--radar-auction-color')
+    series.setData(dates.slice(-historyLimit).map(time => {
+      const value = historyValue(byDate.get(time), sized, auction)
+      return value == null ? { time } : { time, value: value / 1e9, color: auction ? neutral : value < 0 ? down : up }
+    }))
+    if (!auction) series.createPriceLine({ price: 0, color: color('--line-bright'), lineWidth: 1, axisLabelVisible: false })
+    chart.timeScale().fitContent()
+    return () => chart.remove()
+  }, [auction, dates, hasValues, history, sized, theme])
+  if (!hasValues) return <p className="radar-meta">Chưa có giá trị đủ dữ liệu để vẽ biểu đồ.</p>
+  return <div className="radar-history-chart-wrap">
+    <div className="radar-chart-legend">{auction
+      ? <span data-series="auction">Giá trị khớp (tỷ đồng)</span>
+      : <><span data-series="buy">Mua ròng</span><span data-series="sell">Bán ròng</span><span>Tỷ đồng mỗi phiên</span></>}</div>
+    <div ref={host} className="radar-history-chart" role="img" aria-label={auction ? 'Biểu đồ giá trị khớp định kỳ theo phiên' : 'Biểu đồ giá trị mua hoặc bán ròng theo phiên'}/>
+  </div>
+}
+
+function RowHistory({ row, sized, auction, dates, period, onPeriodChange, history, loading, error, retry, onClose }: {
   row: FlowRow; sized: boolean; auction: boolean; dates: string[]; period: string; onPeriodChange: (value: string) => void
-  history?: FlowDay[]; loading: boolean; error: boolean; retry: () => void
+  history?: FlowDay[]; loading: boolean; error: boolean; retry: () => void; onClose: () => void
 }) {
+  const dialog = useRef<HTMLDialogElement>(null)
+  const titleId = useId()
+  useLayoutEffect(() => {
+    const element = dialog.current
+    element?.showModal()
+    return () => element?.close()
+  }, [])
   const title = `${row.symbol} · ${auction ? 'Lịch sử khớp định kỳ' : 'Lịch sử mua/bán ròng'}`
   const periodLabel = dates.length === 1 ? dayLabel(dates[0]) : `${dayLabel(dates[0])} – ${dayLabel(dates.at(-1) ?? null)}`
-  return <section className="radar-details radar-history" aria-label={title}>
+  return <dialog ref={dialog} className="radar-history radar-history-sheet" aria-labelledby={titleId}
+    onCancel={event => { event.preventDefault(); onClose() }} onClick={event => { if (event.target === event.currentTarget) onClose() }}>
+    <div className="radar-history-content">
     <header className="radar-history-heading">
-      <div><h4>{title}</h4><p className="radar-meta">{exchangeLabel(row.exchange)} · {periodLabel} · {history?.length ?? '—'}/{dates.length} phiên có bản ghi</p></div>
-      <Chips label="Chu kỳ lịch sử" options={historyPeriods} value={period} onChange={onPeriodChange}/>
+      <div><h3 id={titleId}>{title}</h3><p className="radar-meta">{exchangeLabel(row.exchange)} · {periodLabel} · {history?.length ?? '—'}/{dates.length} phiên có bản ghi</p></div>
+      <button type="button" className="radar-history-action" aria-label="Đóng lịch sử" onClick={onClose}><X size={19} aria-hidden="true"/></button>
     </header>
+    <Chips label="Chu kỳ lịch sử" options={historyPeriods} value={period} onChange={onPeriodChange}/>
       {loading && <p className="radar-meta" role="status">Đang tải lịch sử…</p>}
       {error && <p className="radar-meta" role="alert">Không tải được lịch sử. <button type="button" className="secondary-button" onClick={retry}>Thử lại</button></p>}
       {!loading && !error && history?.length === 0 && <p className="radar-meta" role="status">Chưa có dữ liệu khi chọn khoảng phiên này.</p>}
       {dates.length > historyLimit && <p className="radar-meta">Hiển thị tối đa {historyLimit} phiên có bản ghi gần nhất.</p>}
-      {Boolean(history?.length) && <div className="radar-history-scroll" tabIndex={0} aria-label="Bảng lịch sử từng phiên"><table><thead><tr><th scope="col">Phiên</th>{auction
+      {history && history.length > 0 && <>
+      <HistoryChart dates={dates} history={history} sized={sized} auction={auction}/>
+      <details className="radar-history-data"><summary>Số liệu từng phiên</summary><div className="radar-history-scroll" tabIndex={0} aria-label="Bảng lịch sử từng phiên"><table><thead><tr><th scope="col">Phiên</th>{auction
         ? <><th scope="col">Giá khớp BQ (nghìn đ)</th><th scope="col">KL khớp (CP)</th><th scope="col">GT khớp (tỷ)</th><th scope="col">Số bản ghi nguồn</th></>
         : <><th scope="col">Mua (tỷ)</th><th scope="col">Bán (tỷ)</th><th scope="col">Ròng (tỷ)</th><th scope="col">KL ròng (CP)</th>{sized && <th scope="col">Chưa rõ chiều (tỷ)</th>}</>}</tr></thead>
         <tbody>{history?.map(day => {
@@ -139,11 +195,12 @@ function RowHistory({ row, sized, auction, dates, period, onPeriodChange, histor
             <th scope="row">{dayLabel(day.trading_date)}</th><td colSpan={auction ? 4 : 5}>Thiếu băng khớp · {quantity(day.tape_volume)}/{quantity(day.reference_volume)} CP đối soát</td>
           </tr>
           if (auction) return <tr key={day.trading_date}><th scope="row">{dayLabel(day.trading_date)}</th><td>{auctionPrice(day.unknown_value, day.unknown_volume)}</td><td>{quantity(day.unknown_volume)}</td><td>{billions(day.unknown_value)}</td><td>{quantity(day.trade_count)}</td></tr>
-          const net = day.buy_value == null || day.sell_value == null ? null : day.buy_value - day.sell_value
+          const net = historyValue(day, sized, auction)
           const netVolume = day.buy_volume == null || day.sell_volume == null ? null : day.buy_volume - day.sell_volume
           return <tr key={day.trading_date}><th scope="row">{dayLabel(day.trading_date)}</th><td>{billions(day.buy_value)}</td><td>{billions(day.sell_value)}</td><td data-direction={direction(net)}>{billions(net, true)}</td><td data-direction={direction(netVolume)}>{quantity(netVolume, true)}</td>{sized && <td>{billions(day.unknown_value)}</td>}</tr>
-        })}</tbody></table></div>}
-  </section>
+        })}</tbody></table></div></details></>}
+    </div>
+  </dialog>
 }
 
 export function MarketFlowRadar({ authenticated, active, tradingDates }: { authenticated: boolean; active: boolean; tradingDates: string[] }) {
@@ -156,7 +213,8 @@ export function MarketFlowRadar({ authenticated, active, tradingDates }: { authe
   const [draftRange, setDraftRange] = useState({ start: '', end: '' })
   const [appliedRange, setAppliedRange] = useState({ start: '', end: '' })
   const [search, setSearch] = useState('')
-  const [rowView, setRowView] = useState<RowView | null>(null)
+  const [expandedRow, setExpandedRow] = useState('')
+  const [historyRow, setHistoryRow] = useState<FlowRow | null>(null)
   const [historyPeriod, setHistoryPeriod] = useState('selection')
   const [page, setPage] = useState(0)
   const latest = tradingDates.at(-1) ?? ''
@@ -190,7 +248,6 @@ export function MarketFlowRadar({ authenticated, active, tradingDates }: { authe
   const maxPage = Math.max(0, Math.ceil(rows.length / pageSize) - 1)
   const currentPage = Math.min(page, maxPage)
   const visible = rows.slice(currentPage * pageSize, (currentPage + 1) * pageSize)
-  const historyRow = rowView?.panel === 'history' ? visible.find(row => rowKey(row) === rowView.key) : undefined
   const historyDates = historyPeriod === 'selection' ? dates : tradingDates.filter(day => day <= last).slice(-Number(historyPeriod))
   const historyStart = historyDates[0]
   const history = useQuery({
@@ -204,11 +261,10 @@ export function MarketFlowRadar({ authenticated, active, tradingDates }: { authe
     },
   })
   const scope = exchanges.filter(([id]) => id !== 'all' && (exchange === 'all' || exchange === id))
-  function resetRows() { setPage(0); setRowView(null) }
-  function toggleRow(key: string, panel: RowView['panel']) {
-    if (rowView?.key === key && rowView.panel === panel) { setRowView(null); return }
-    if (panel === 'history') setHistoryPeriod(dates.length > 1 ? 'selection' : '20')
-    setRowView({ key, panel })
+  function resetRows() { setPage(0); setExpandedRow(''); setHistoryRow(null) }
+  function openHistory(row: FlowRow) {
+    setHistoryPeriod(dates.length > 1 ? 'selection' : '20')
+    setHistoryRow(row)
   }
   function choosePeriod(next: string) {
     if (next === 'custom') {
@@ -281,28 +337,27 @@ export function MarketFlowRadar({ authenticated, active, tradingDates }: { authe
         )}<th scope="col" className="radar-actions">Hành động</th></tr></thead>
         <tbody>{visible.map((row, index) => {
           const key = rowKey(row)
-          const panel = rowView?.key === key ? rowView.panel : null
-          const panelId = `market-radar-${row.exchange}-${row.symbol}-${panel}`
+          const expanded = expandedRow === key
+          const panelId = `market-radar-${row.exchange}-${row.symbol}-details`
           const historyLabel = auction ? `Xem lịch sử khớp định kỳ của ${row.symbol}` : `Xem lịch sử mua/bán ròng của ${row.symbol}`
           const metrics = rowMetrics(row, countLabel, auction)
           return <Fragment key={key}><tr className="radar-stock-row">
-            <th scope="row"><button type="button" className="radar-stock" aria-expanded={panel === 'details'} aria-controls={panel === 'details' ? panelId : undefined} aria-label={`Chi tiết ${row.symbol}`} onClick={() => toggleRow(key, 'details')}>
+            <th scope="row"><button type="button" className="radar-stock" aria-expanded={expanded} aria-controls={expanded ? panelId : undefined} aria-label={`Chi tiết ${row.symbol}`} onClick={() => setExpandedRow(expanded ? '' : key)}>
               <span className="radar-rank">{row.partial && sized ? '—' : currentPage * pageSize + index + 1}</span><span className="radar-stock-label"><strong>{row.symbol}</strong><small>{exchangeLabel(row.exchange)}{sized ? ` · ${row.observed}/${row.expected ?? dates.length} phiên${row.partial ? ' · Thiếu băng khớp' : ''}` : row.partial && ' · Mẫu giới hạn'}</small></span><ChevronDown size={14} aria-hidden="true"/>
             </button>{row.company_name && <small className="radar-company" title={row.company_name}>{row.company_name}</small>}</th>
             {metrics.map(metric => <td key={metric.label} className={metric.primary ? '' : 'radar-desktop-cell'} data-direction={metric.sign}>{metric.value}</td>)}
             <td className="radar-actions"><div><button type="button" className="radar-history-action" aria-label={historyLabel} title={historyLabel}
-              aria-expanded={panel === 'history'} aria-controls={panel === 'history' ? panelId : undefined} onClick={() => toggleRow(key, 'history')}>
-              <History size={15} aria-hidden="true"/><span>Lịch sử</span>
+              aria-haspopup="dialog" onClick={() => openHistory(row)}>
+              <RotateCcwClock size={17} aria-hidden="true"/>
             </button></div></td>
-          </tr>{panel && <tr id={panelId} className="radar-detail-row"><td colSpan={metrics.length + 2}>{panel === 'history'
-            ? <RowHistory row={row} sized={sized} auction={auction} dates={historyDates} period={historyPeriod} onPeriodChange={setHistoryPeriod} history={history.data} loading={history.isFetching} error={history.isError} retry={() => void history.refetch()}/>
-            : <RowDetails row={row} expected={row.expected ?? dates.length} sized={sized} countLabel={countLabel} auction={auction}/>}</td></tr>}</Fragment>
+          </tr>{expanded && <tr id={panelId} className="radar-detail-row"><td colSpan={metrics.length + 2}><RowDetails row={row} expected={row.expected ?? dates.length} sized={sized} countLabel={countLabel} auction={auction}/></td></tr>}</Fragment>
         })}</tbody>
       </table></div>
       <div className="radar-table-footer"><p className="radar-meta">{auction ? 'Giá khớp BQ tính theo khối lượng. Số bản ghi phản ánh mức gộp của Vietcap.' : '* Giá mua bình quân trong kỳ dùng để tham chiếu. Hiệu suất tính theo thị giá so với giá mua bình quân.'}</p>
-        {maxPage > 0 && <nav className="radar-pages" aria-label="Trang bảng xếp hạng"><button type="button" aria-label="Trang trước" disabled={currentPage === 0} onClick={() => { setPage(currentPage - 1); setRowView(null) }}><ChevronLeft size={16}/></button><span>{currentPage + 1}/{maxPage + 1}</span><button type="button" aria-label="Trang sau" disabled={currentPage === maxPage} onClick={() => { setPage(currentPage + 1); setRowView(null) }}><ChevronRight size={16}/></button></nav>}
+        {maxPage > 0 && <nav className="radar-pages" aria-label="Trang bảng xếp hạng"><button type="button" aria-label="Trang trước" disabled={currentPage === 0} onClick={() => { setPage(currentPage - 1); setExpandedRow('') }}><ChevronLeft size={16}/></button><span>{currentPage + 1}/{maxPage + 1}</span><button type="button" aria-label="Trang sau" disabled={currentPage === maxPage} onClick={() => { setPage(currentPage + 1); setExpandedRow('') }}><ChevronRight size={16}/></button></nav>}
       </div>
     </>}
     <p className="radar-meta radar-scope-note">{sized ? `Top và tổng chỉ tính mã đủ phiên đã đối soát. ${tapeMode === 'continuous_cluster' ? 'Cụm gộp các lần khớp liên tiếp cùng giây, cùng giá và cùng chiều.' : tapeMode === 'auction' ? 'Khớp định kỳ chỉ có giá trị và khối lượng chưa rõ chiều.' : 'Chiều mua/bán chủ động theo Vietcap.'} Giao dịch thỏa thuận nằm ngoài phạm vi khớp lệnh.` : 'SL lệnh hiện — khi báo cáo của nhóm chỉ có số liệu mua/bán tổng hợp.'}</p>
+    {ready && historyRow && <RowHistory row={historyRow} sized={sized} auction={auction} dates={historyDates} period={historyPeriod} onPeriodChange={setHistoryPeriod} history={history.data} loading={history.isFetching} error={history.isError} retry={() => void history.refetch()} onClose={() => setHistoryRow(null)}/>}
   </section>
 }

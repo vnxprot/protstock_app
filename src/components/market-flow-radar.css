@@ -1,4 +1,6 @@
-.market-page .market-radar { min-width:0; padding:clamp(12px, 1.8vw, 22px); container-type:inline-size; }
+.market-page .market-radar { --radar-selected-bg:var(--lime); --radar-selected-text:#14200d; --radar-selected-border:var(--lime); --radar-auction-color:#76a6ed; min-width:0; padding:clamp(12px, 1.8vw, 22px); container-type:inline-size; }
+:root[data-theme='light'] .market-page .market-radar { --radar-selected-bg:#e3f1d6; --radar-selected-text:#25451b; --radar-selected-border:#759952; --radar-auction-color:#245db5; --sky:#245db5; --violet:#6542a1; }
+:root[data-theme='light'] .market-radar :is(.radar-chips button:not([aria-pressed='true']),.radar-pages button) { color:var(--text); }
 .radar-heading,.radar-title,.radar-filter-bar,.radar-filter-group,.radar-filter-label,.radar-table-heading,.radar-table-footer { display:flex; align-items:center; gap:9px; }
 .radar-heading,.radar-filter-bar,.radar-table-heading,.radar-table-footer { justify-content:space-between; }
 .radar-heading { margin-bottom:14px; }
@@ -26,7 +28,7 @@
 .radar-filter-label { gap:5px; flex:none; color:var(--muted); font-size:11px; font-weight:650; }
 .radar-chips { display:flex; flex-wrap:wrap; min-width:0; gap:4px; }
 .radar-chips button,.radar-pages button { display:inline-flex; align-items:center; justify-content:center; min-height:30px; padding:3px 8px; border:1px solid var(--line); border-radius:8px; background:var(--surface-2); color:var(--muted); font:inherit; font-size:11px; font-weight:650; line-height:1.25; cursor:pointer; }
-.radar-chips button[aria-pressed='true'] { background:var(--lime); color:#14200d; border-color:var(--lime); }
+.market-radar .radar-chips button[aria-pressed='true'] { background:var(--radar-selected-bg); color:var(--radar-selected-text); border-color:var(--radar-selected-border); }
 .radar-chips button:hover:not([aria-pressed='true']),.radar-pages button:hover:not(:disabled) { border-color:var(--mint); color:var(--text); }
 .radar-search { display:flex; align-items:center; gap:6px; flex:0 1 175px; max-width:100%; min-height:32px; padding:0 8px; border:1px solid var(--line-bright); border-radius:9px; background:var(--surface-2); color:var(--muted); }
 .radar-search svg { flex:none; }
@@ -60,10 +62,10 @@
 .market-radar-table thead th { background:var(--surface-2); color:var(--muted); font-size:11px; line-height:1.2; }
 .market-radar-table thead span { display:block; margin-top:2px; font-size:10px; font-weight:500; }
 .market-radar-table thead th:first-child { width:14%; }
-.market-radar-table .radar-actions { width:88px; text-align:center; }
+.market-radar-table .radar-actions { width:64px; text-align:center; }
 .radar-actions>div { display:flex; flex-wrap:wrap; justify-content:center; gap:4px; }
-.radar-history-action { display:inline-flex; align-items:center; justify-content:center; gap:5px; min-height:30px; padding:3px 6px; border:1px solid var(--line); border-radius:8px; color:var(--mint); background:var(--surface-2); white-space:nowrap; font:inherit; cursor:pointer; }
-.radar-history-action:hover,.radar-history-action[aria-expanded='true'] { border-color:var(--mint); }
+.radar-history-action { display:inline-grid; place-items:center; width:34px; height:34px; padding:0; border:1px solid var(--line); border-radius:8px; color:var(--mint); background:var(--surface-2); cursor:pointer; }
+.radar-history-action:hover { border-color:var(--mint); background:var(--surface-3); }
 .market-radar-table tr:last-child>th,.market-radar-table tr:last-child>td,.radar-history tr:last-child>td { border-bottom:0; }
 .market-radar-table td[data-direction] { color:var(--radar-direction,var(--text)); font-weight:700; }
 .radar-stock-row:hover { background:var(--surface-2); }
@@ -78,7 +80,19 @@
 .radar-details { display:grid; gap:4px; padding:4px 8px; }
 .radar-mobile-metrics { display:none; }
 .radar-history-heading { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:6px 12px; }
-.radar-history-heading h4 { margin:0 0 2px; font-size:13px; }
+.radar-history-heading h3 { margin:0 0 4px; font-size:clamp(16px, 2.6vw, 22px); }
+.radar-history-sheet { position:fixed; inset:0; margin:auto; width:min(800px, calc(100% - 24px)); height:fit-content; max-width:none; max-height:calc(100dvh - 24px); padding:0; border:1px solid var(--line-bright); border-radius:16px; color:var(--text); background:var(--surface); box-shadow:var(--elevation-4); overflow:auto; overscroll-behavior:contain; }
+.radar-history-sheet::backdrop { background:#07130eb3; }
+.radar-history-content { display:grid; gap:12px; padding:clamp(12px, 2.5vw, 22px); }
+.radar-history-chart-wrap { min-width:0; padding:6px; border:1px solid var(--line); border-radius:10px; }
+.radar-chart-legend { display:flex; flex-wrap:wrap; gap:6px 12px; padding:4px 6px; color:var(--muted); font-size:11px; }
+.radar-chart-legend [data-series]::before { display:inline-block; width:8px; height:8px; margin-right:5px; border-radius:2px; background:var(--series-color); content:''; }
+.radar-chart-legend [data-series='buy'] { --series-color:var(--mint); }
+.radar-chart-legend [data-series='sell'] { --series-color:var(--red); }
+.radar-chart-legend [data-series='auction'] { --series-color:var(--radar-auction-color); }
+.radar-history-chart { width:100%; height:clamp(190px, 38dvh, 340px); }
+.radar-history-data { color:var(--text); font-size:12px; }
+.radar-history-data summary { width:fit-content; color:var(--mint); cursor:pointer; }
 .radar-history td[data-direction] { color:var(--radar-direction,var(--text)); }
 .radar-history-scroll { max-height:240px; overflow:auto; margin-top:5px; }
 .radar-table-footer { gap:5px 12px; margin-top:7px; }
@@ -104,7 +118,6 @@
   .radar-company { display:none; }
   .market-radar-table { font-size:11px; }
   .market-radar-table .radar-actions { width:50px; }
-  .radar-history-action span { display:none; }
   .radar-rank { display:none; }
   .radar-table-footer { flex-wrap:wrap; }
   .radar-custom-dates { grid-template-columns:repeat(2,minmax(0,1fr)); }
@@ -113,5 +126,6 @@
 @media (pointer:coarse) {
   .radar-chips button,.radar-pages button,.radar-refresh,.radar-search { min-height:38px; }
   .radar-search input { font-size:16px; }
-  .radar-stock,.radar-history-action { min-height:34px; }
+  .radar-stock { min-height:34px; }
+  .radar-history-action { width:40px; height:40px; }
 }
