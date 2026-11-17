@@ -44,6 +44,10 @@ def unpack_minute_bars(value: list[dict] | dict) -> list[dict]:
     return bars
 
 
+def minute_baseline(bars: list[dict]) -> list[dict]:
+    return [{"t": bar["t"], "v": bar["v"], **({"cv": bar["cv"]} if "cv" in bar else {})} for bar in bars]
+
+
 def retryable_failure(error: Exception) -> bool:
     """Retry transport/rate/server failures, never schema or baseline errors."""
     if isinstance(error, (httpx.TimeoutException, httpx.NetworkError)):
@@ -288,7 +292,7 @@ def run_intraday_spikes(trading_date: date, *, symbol_offset: int = 0, symbol_li
                                    if item["trading_date"] not in good_stored or
                                    (item["coverage_status"] == "COMPLETE" and (family != "VCI" or minute_source == SOURCE))]
                 if history_updates:
-                    db.upsert("intraday_minute_days", [{**item, "bars": pack_minute_bars(item["bars"])}
+                    db.upsert("intraday_minute_days", [{**item, "bars": pack_minute_bars(minute_baseline(item["bars"]))}
                               for item in history_updates], "symbol_id,trading_date")
                 status = current["coverage_status"] if current else "EMPTY"
                 symbol_status = status
@@ -319,7 +323,7 @@ def run_intraday_spikes(trading_date: date, *, symbol_offset: int = 0, symbol_li
                     "p_day": trading_date.isoformat(), "p_symbol_id": symbol_id, "p_version": VERSION,
                     "p_status": symbol_status, "p_baseline": baseline_count, "p_source": minute_source,
                     "p_error": error, "p_retryable": retryable,
-                    "p_minute_day": {**current, "bars": pack_minute_bars(current["bars"])} if current else None,
+                    "p_minute_day": {**current, "bars": pack_minute_bars(minute_baseline(current["bars"]))} if current else None,
                     "p_events": events})
                 response.raise_for_status()
                 if symbol_status == "COMPLETE":

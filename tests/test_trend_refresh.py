@@ -1,6 +1,7 @@
 import csv
 from datetime import date
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -34,6 +35,9 @@ def test_history_refresh_only_writes_dependent_research_and_respects_cutoff(monk
                     for day in ('2026-09-30', '2026-10-01', '2026-10-02')]
         def _pages(self, *args):
             return []
+        def _request(self, method, path, *, json):
+            assert (method, path, json) == ('POST', '/rpc/market_radar_storage', {'p_prune': False})
+            return SimpleNamespace(raise_for_status=lambda: None, json=lambda: 390_000_000)
         def upsert(self, table, rows, conflict):
             self.writes.append((table, rows))
     client = Client()

@@ -12,9 +12,11 @@ const db = new PGlite({ extensions: { pgcrypto } })
 const owner = '11111111-1111-4111-8111-111111111111'
 const other = '22222222-2222-4222-8222-222222222222'
 try {
- await db.exec(`create schema extensions; create schema auth;
+ await db.exec(`create schema extensions; create schema auth; create schema storage;
  create role authenticated; create role anon; create role service_role bypassrls;
  create table auth.users(id uuid primary key,email text);
+ create table storage.objects(bucket_id text not null, name text not null, metadata jsonb);
+ alter table storage.objects enable row level security;
  create function auth.uid() returns uuid language sql stable as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;
  create function auth.role() returns text language sql stable as $$select coalesce(nullif(current_setting('request.jwt.claim.role',true),''),current_user)$$;
  grant usage on schema auth,extensions to authenticated,service_role;

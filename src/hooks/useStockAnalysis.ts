@@ -111,11 +111,13 @@ export function useStockAnalysis(symbol: string | null, timeframe: 'D' | 'W' | '
       if (publication.error) throw publication.error
       const { data, error } = await supabase.rpc('stock_analysis_data', { p_symbol: symbol, p_timeframe: timeframe, p_as_of_date: asOfDate || publication.data?.date || null, p_revision: asOfDate ? null : publication.data?.sourceRevision ?? null, p_history_limit: timeframe === 'D' ? 2600 : 500 })
       if (error) throw error
-      const technical = (data.technical ?? []) as TechnicalSnapshot[]
-      const [patterns, zones] = await Promise.all([
+      const snapshots = (data.technical ?? []) as TechnicalSnapshot[]
+      const [patterns, zones, monthlyContexts] = await Promise.all([
         restoreAnalysisHistory((data.patterns ?? []) as PatternInstance[]),
         restoreAnalysisHistory((data.zones ?? []) as PriceZone[]),
+        restoreAnalysisHistory(snapshots.map(snapshot => ({ evidence: snapshot.monthly_context }))),
       ])
+      const technical = snapshots.map((snapshot, index) => ({ ...snapshot, monthly_context: monthlyContexts[index].evidence }))
       const decision = data.decision as StockDecision | null
       return {
         symbol: data.symbol as { id: number; symbol: string; sector: string; exchange: string; company_name: string | null },

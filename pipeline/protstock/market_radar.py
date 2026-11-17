@@ -202,8 +202,8 @@ def capture_matches(tape, exchange):
             'groups': list(classify(tape, exchange)) if complete else []}
 
 
-def reconcile_tape(day, exchange, symbol, capture, tape_source='Vietcap'):
-    reference, source = matched_reference(day, exchange, symbol)
+def reconcile_tape(day, exchange, symbol, capture, tape_source='Vietcap', reference_pair=None):
+    reference, source = reference_pair if reference_pair is not None else matched_reference(day, exchange, symbol)
     volume = capture['volume']
     reason = 'missing_reference' if reference is None else capture['reason'] or (
         ('incomplete_tape' if volume == 0 else 'volume_mismatch') if volume != reference else None)
@@ -324,6 +324,22 @@ def backfill_reports(db, end):
             print(f'::warning::Radar report batch {min(pending)} to {max(pending)}: {error}', flush=True)
 
 
+def ssi_closing_candidates(db, day):
+    settings = db._settings
+    headers = {'apikey': settings.service_role_key, 'Authorization': f'Bearer {settings.service_role_key}'}
+    try:
+        response = httpx.get(f'{settings.supabase_url}/storage/v1/object/authenticated/market-radar-live/closing.json.gz',
+                             headers=headers, timeout=15)
+        if response.status_code in (400, 404):
+            return {}
+        response.raise_for_status()
+        payload = json.loads(gzip.decompress(response.content))
+        return payload['symbols'] if payload['day'] == day.isoformat() else {}
+    except (OSError, ValueError, KeyError, httpx.HTTPError) as error:
+        print(f'::warning::SSI closing candidate unavailable: {type(error).__name__}', flush=True)
+        return {}
+
+
 def collect_tape(db, day, shard, shards, file=None, stage=None):
     symbols = [row for row in db.active_symbols() if row['exchange'] in EXCHANGES
                and (not row['listed_from'] or row['listed_from'] <= day.isoformat())]
@@ -361,8 +377,22 @@ def collect_tape(db, day, shard, shards, file=None, stage=None):
             return
         verified = 0
         missing = {'volume': 0, 'reason': 'source_unavailable', 'groups': []}
-        futures = [pool.submit(reconcile_tape, day, row['exchange'], row['symbol'], captures.get(row['symbol'], missing))
-                   for row in symbols]
+        ssi = ssi_closing_candidates(db, day)
+
+        def reconcile(row):
+            exchange, symbol = row['exchange'], row['symbol']
+            if symbol in ssi:
+                try:
+                    reference = ssi_reference(day, exchange, symbol)
+                except SOURCE_ERRORS:
+                    reference = None
+                pair = (reference, 'SSI iBoard') if reference is not None else None
+                rows = reconcile_tape(day, exchange, symbol, ssi[symbol], 'SSI WebSocket', pair)
+                if not rows[0]['partial']:
+                    return rows
+            return reconcile_tape(day, exchange, symbol, captures.get(symbol, missing))
+
+        futures = [pool.submit(reconcile, row) for row in symbols]
         for future in as_completed(futures):
             rows = future.result()
             response = db._request('POST', '/rpc/publish_market_radar_tape', json={'p_rows': rows})

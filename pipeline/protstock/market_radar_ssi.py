@@ -37,26 +37,34 @@ def sample_totals(session, trades, counters):
     return results
 
 
-def probe(reference_day, stream_seconds):
-    from ssi_sdk import Auth, Config, Data, Stream
-    from ssi_sdk.models.streaming import TradeMessage
-
+def ssi_config():
+    from ssi_sdk import Config
     key = os.getenv("SSI_API_KEY")
     secret = os.getenv("SSI_API_SECRET")
     if not key or not secret:
         raise ValueError("SSI Market Data credentials are required")
-    config = Config(client_id=os.getenv("SSI_CLIENT_ID", ""), api_key=key, api_secret=secret)
-    with Auth(config) as auth:
+    return Config(client_id=os.getenv("SSI_CLIENT_ID", ""), api_key=key, api_secret=secret)
+
+
+def closed_reference(data, day, symbol):
+    formatted = day.strftime("%Y/%m/%d")
+    records = data.market_data.get_securities_summary_historical(symbol, formatted, formatted)
+    matching = [row for row in records if row.symbol == symbol and row.trading_date[:10].replace("/", "-") == day.isoformat()]
+    return matching[0] if len(matching) == 1 else None
+
+
+def probe(reference_day, stream_seconds):
+    from ssi_sdk import Auth, Data, Stream
+    from ssi_sdk.models.streaming import TradeMessage
+
+    with Auth(ssi_config()) as auth:
         auth.authenticate()
         data = Data(auth)
-        formatted = reference_day.strftime("%Y/%m/%d")
         for symbol, exchange in SYMBOLS.items():
-            records = data.market_data.get_securities_summary_historical(symbol, formatted, formatted)
-            matching = [row for row in records if row.symbol == symbol and row.trading_date[:10].replace("/", "-") == reference_day.isoformat()]
-            if len(matching) != 1:
+            row = closed_reference(data, reference_day, symbol)
+            if row is None:
                 print(json.dumps({"source": "SSI EOD", "symbol": symbol, "date": str(reference_day), "status": "missing"}))
                 continue
-            row = matching[0]
             print(json.dumps({"source": "SSI EOD", "symbol": symbol, "exchange": exchange, "date": str(reference_day),
                               "matched_volume": row.total_match, "matched_value": row.total_match_value,
                               "foreign_buy_volume": row.total_foreign_buy, "foreign_sell_volume": row.total_foreign_sell,

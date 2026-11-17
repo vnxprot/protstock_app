@@ -88,6 +88,7 @@
 .radar-chart-legend { display:flex; flex-wrap:wrap; gap:6px 12px; padding:4px 6px; color:var(--muted); font-size:11px; }
 .radar-chart-legend [data-series]::before { display:inline-block; width:8px; height:8px; margin-right:5px; border-radius:2px; background:var(--series-color); content:''; }
 .radar-chart-legend [data-series] { --series-color:var(--radar-history-color); }
+.radar-live-summary { grid-template-columns:repeat(3,minmax(0,1fr)); }
 .radar-history-chart { width:100%; height:clamp(190px, 38dvh, 340px); }
 .radar-history-data { color:var(--text); font-size:12px; }
 .radar-history-data summary { width:fit-content; color:var(--mint); cursor:pointer; }

@@ -22,7 +22,7 @@ from psycopg.types.json import Jsonb
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "pipeline"))
 from protstock.research_archive import ResearchArchive, check_storage_budget
-from protstock.intraday_spikes import pack_minute_bars, unpack_minute_bars
+from protstock.intraday_spikes import minute_baseline, pack_minute_bars, unpack_minute_bars
 
 
 PROJECT_URL = "https://upmqxwktvvguegqeqibn.supabase.co"
@@ -39,13 +39,14 @@ HOT_ANALYSIS_SESSIONS = 10
 JOB_DETAIL_RETENTION_DAYS = 21
 ANALYSIS_ARCHIVES = (
     ("challenger_strategy_assessments", "trading_date", ("symbol_id", "engine_version", "strategy_code"),
-     "t.trading_date < (now() at time zone 'Asia/Ho_Chi_Minh')::date - 14 and not exists (select 1 from public.challenger_strategy_tplus_outcomes o where o.symbol_id=t.symbol_id and o.signal_date=t.trading_date and o.engine_version=t.engine_version and o.strategy_code=t.strategy_code)"),
+     "t.trading_date < (now() at time zone 'Asia/Ho_Chi_Minh')::date - 14"),
     ("challenger_signal_assessments", "trading_date", ("id",), "true"),
     ("support_resistance_zones", "as_of_date", ("id",), "true"),
     ("pattern_instances", "as_of_date", ("id",), "true"),
     ("momentum_radar_assessments", "as_of_date", ("symbol_id", "version"), "true"),
     ("signal_funnel_assessments", "as_of_date", ("symbol_id", "version"), "true"),
     ("macd_divergence_assessments", "as_of_date", ("symbol_id", "version", "oscillator", "swings"), "true"),
+    ("technical_snapshots", "as_of_date", ("symbol_id", "timeframe", "algorithm_version"), "true"),
 )
 ARCHIVES = (
     ("research_price_bars", "public.research_price_bars", "true"),
@@ -148,27 +149,34 @@ def reclaim_core_bloat(conn):
         print(f"Core relation {table}: database {before:,} -> {database_bytes(conn):,} bytes", flush=True)
 
 
-def compact_minute_history(conn, *, measure=False):
+def compact_minute_history(conn, storage, *, measure=False):
     days = conn.execute("select distinct trading_date from public.intraday_minute_days order by 1").fetchall()
     count = estimated = 0
     for (day,) in days:
         packed = []
+        original = {}
         for symbol_id, version, bars, size in conn.execute("""select symbol_id, xmin::text, bars, pg_column_size(bars)
-                from public.intraday_minute_days where trading_date = %s and jsonb_typeof(bars) = 'array'
-                and bars <> '[]'::jsonb""", (day,)):
-            value = pack_minute_bars(bars)
-            if isinstance(value, list):
+                from public.intraday_minute_days where trading_date = %s and bars <> '[]'::jsonb""", (day,)):
+            decoded = unpack_minute_bars(bars)
+            baseline = minute_baseline(decoded)
+            if baseline == decoded:
                 continue
-            new_size = len(value['gzip_v1']) + 32
+            value = pack_minute_bars(baseline)
+            new_size = len(json.dumps(value, separators=(',', ':')).encode()) + 12
             if new_size >= size:
                 continue
-            if unpack_minute_bars(value) != bars:
+            if unpack_minute_bars(value) != baseline:
                 raise RuntimeError(f"Minute history compression changed data: {symbol_id} {day}")
             packed.append({"symbol_id": symbol_id, "version": version, "bars": value})
+            original[symbol_id] = decoded
             estimated += size - new_size
         if measure:
             count += len(packed)
         elif packed:
+            payload = json.dumps(original, sort_keys=True, separators=(',', ':')).encode()
+            content = gzip.compress(payload, compresslevel=6, mtime=0)
+            digest = hashlib.sha256(content).hexdigest()
+            upload_verified(storage, f"capacity/minute-baseline/v1/{day}/{digest}.json.gz", content, reuse=True)
             result = conn.execute("""update public.intraday_minute_days t set bars = p.bars
                 from jsonb_to_recordset(%s) as p(symbol_id bigint, version text, bars jsonb)
                 where t.trading_date = %s and t.symbol_id = p.symbol_id and t.xmin::text = p.version""", (Jsonb(packed), day))
@@ -248,10 +256,11 @@ def archive_analysis(conn, storage, *, measure=False, retry_vacuum=False):
     total = 0
     for table, day_column, identity, protected_scope in ANALYSIS_ARCHIVES:
         key = f"concat_ws(':', {', '.join('t.' + column for column in identity)})"
-        scope = f"t.evidence <> '{{}}'::jsonb and not (t.evidence ? '_historyObject') and ({protected_scope})"
+        field = "monthly_context" if table == "technical_snapshots" else "evidence"
+        scope = f"t.{field} <> '{{}}'::jsonb and not (t.{field} ? '_historyObject') and ({protected_scope})"
         dates = conn.execute(f"""select distinct t.{day_column} from public.{table} t
             where t.{day_column} < %s and {scope} order by 1""", cutoff).fetchall()
-        select = f"""select count(*), coalesce(jsonb_object_agg({key}, jsonb_build_object('evidence', t.evidence)), '{{}}'::jsonb)::text
+        select = f"""select count(*), coalesce(jsonb_object_agg({key}, jsonb_build_object('evidence', t.{field})), '{{}}'::jsonb)::text
             from public.{table} t
             where t.{day_column} = %s and {scope}"""
         # Keep the monthly state read by the historical Opportunities SQL.
@@ -263,7 +272,9 @@ def archive_analysis(conn, storage, *, measure=False, retry_vacuum=False):
                     jsonb_build_object('price_low', t.evidence->'zones' -> -1 -> 'price_low')) end,
                 'recovery_breakouts', case when t.evidence->'recovery_breakouts' -> -1 is not null
                     then jsonb_build_array(t.evidence->'recovery_breakouts' -> -1) end)) ||"""
-        update = f"""update public.{table} t set evidence = {keep}
+        if table == "technical_snapshots":
+            keep = "jsonb_strip_nulls(jsonb_build_object('state', t.monthly_context->'state')) ||"
+        update = f"""update public.{table} t set {field} = {keep}
             jsonb_build_object('_historyObject', %s::text, '_historyKey', {key})
             where t.{day_column} = %s and {scope}"""
         rows = compressed = raw = 0
@@ -291,13 +302,13 @@ def main() -> None:
         run_id = os.environ["GITHUB_RUN_ID"] + "-" + os.environ.get("GITHUB_RUN_ATTEMPT", "1")
         report_capacity(conn)
         if mode == "audit":
-            compact_minute_history(conn, measure=True)
+            compact_minute_history(conn, storage, measure=True)
             compact_job_details(conn, storage, directory, run_id, measure=True)
             archive_analysis(conn, storage, measure=True)
             return
         ensure_private_bucket(storage)
         if mode == "reclaim-history":
-            compact_minute_history(conn)
+            compact_minute_history(conn, storage)
             compact_job_details(conn, storage, directory, run_id)
             projected = archive_analysis(conn, storage, measure=True)
             if projected:

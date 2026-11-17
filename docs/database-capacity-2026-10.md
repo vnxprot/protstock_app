@@ -30,13 +30,15 @@ bytes. The `reclaim-history` mode applies the archive read policy, waits for the
 frontend to deploy, and moves evidence older than 10 VNINDEX sessions to private
 gzip objects, keyed by table, date and SHA-256. It covers Challenger, Momentum
 Radar, MACD divergence, the signal funnel, patterns and zones. Reasons, row identities,
-the Challenger strategy outcome lookback and outcome-linked evidence stay online. Old analysis screens
+outcome links and evidence within the Challenger strategy outcome lookback stay online. Old analysis screens
 load the archived evidence on demand. Daily and derived price bars are excluded
 because the stock analysis view reads long price windows.
 
-The same workflow verifies lossless compression of existing spike minute baselines
-before rewriting each row. New spike-minute inputs use the compressed format;
-readers accept both formats and the baseline window stays the same. Completed
+The same workflow verifies a private archive of existing spike minute prices
+before rewriting each row to the minute and volume fields used by historical
+baselines. The baseline window and the current-session price-based event
+calculation stay the same. Old technical monthly context uses the shared archive
+reader and retains the state used by the opportunity builder. Completed
 job item details older than 21 days are moved to a verified archive. Job summaries
 and recent item details remain in PostgreSQL.
 

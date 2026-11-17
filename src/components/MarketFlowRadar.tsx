@@ -2,7 +2,7 @@ import { Fragment, useEffect, useId, useLayoutEffect, useRef, useState } from 'r
 import { useQuery } from '@tanstack/react-query'
 import { ColorType, HistogramSeries, LineSeries, createChart, type AutoscaleInfo, type LineData, type LineSeriesPartialOptions } from 'lightweight-charts'
 import { ArrowDownRight, ArrowUpRight, CalendarDays, ChevronDown, ChevronLeft, ChevronRight, Globe, Landmark, Radar, RefreshCw, RotateCcwClock, Search, X } from 'lucide-react'
-import { formatDate } from '../lib/date'
+import { formatDate, todayInVietnam } from '../lib/date'
 import { MARKET_PRICE_TO_VND } from '../lib/marketUnits'
 import { supabase } from '../lib/supabase'
 import { useTheme } from '../lib/theme'
@@ -45,6 +45,18 @@ type Dashboard = {
   net_value: number | null; net_volume: number | null; strongest_buy: Leader | null; strongest_sell: Leader | null
 }
 type FlowDay = { trading_date: string; buy_value: number | null; sell_value: number | null; buy_volume: number | null; sell_volume: number | null; unknown_value: number | null; unknown_volume: number | null; trade_count: number | null; partial: boolean; tape_volume: number | null; reference_volume: number | null }
+type LiveGroup = 'large' | 'medium' | 'small'
+type LiveAmounts = [number, number, number, number, number]
+type LiveMinute = [number, LiveGroup, number, number]
+type LiveRow = { symbol: string; price: number; partial: boolean; groups: Partial<Record<LiveGroup, LiveAmounts>>; minutes?: LiveMinute[] }
+type LiveSnapshot = { exchange: string; day: string; updated_at: string; last_tick: number; rows: LiveRow[] }
+const liveGroups: { id: LiveGroup; label: string; color: string }[] = [
+  { id: 'large', label: '≥ 1 tỷ', color: '#b97813' },
+  { id: 'medium', label: '200 tr – dưới 1 tỷ', color: '#377fce' },
+  { id: 'small', label: '< 200 tr', color: '#8356bb' },
+]
+const liveEmpty: LiveAmounts = [0, 0, 0, 0, 0]
+const vnTime = new Intl.DateTimeFormat('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
 
 const dayLabel = (day: string | null) => day ? formatDate(day) : '—'
 const quantity = (value: number | null | undefined, signed = false) => value == null ? '—' : `${signed && value > 0 ? '+' : ''}${integer.format(value)}`
@@ -59,6 +71,108 @@ function Chips({ label, options, value, onChange }: { label: string; options: re
   return <div className="radar-chips" role="group" aria-label={label}>{options.map(([key, text]) =>
     <button key={key} type="button" aria-pressed={value === key} onClick={() => onChange(key)}>{text}</button>
   )}</div>
+}
+
+function LiveHistory({ row, close }: { row: LiveRow; close: () => void }) {
+  const dialog = useRef<HTMLDialogElement>(null)
+  const host = useRef<HTMLDivElement>(null)
+  const [unit, setUnit] = useState('value')
+  const theme = useTheme()
+  const available = Boolean(row.minutes?.length && !row.partial)
+  useEffect(() => {
+    const element = dialog.current
+    element?.showModal()
+    return () => element?.close()
+  }, [])
+  useEffect(() => {
+    const element = host.current
+    if (!element || !available) return
+    const palette = getComputedStyle(element)
+    const color = (name: string) => palette.getPropertyValue(name).trim()
+    const timeLabel = (time: number | string | object) => typeof time === 'number' ? vnTime.format(time * 1000) : ''
+    const chart = createChart(element, { autoSize: true,
+      layout: { background: { type: ColorType.Solid, color: color('--surface') }, textColor: color('--muted') },
+      grid: { vertLines: { visible: false }, horzLines: { color: color('--line') } },
+      localization: { timeFormatter: timeLabel, priceFormatter: (value: number) => decimal.format(value) },
+      timeScale: { timeVisible: true, secondsVisible: false, tickMarkFormatter: timeLabel },
+    })
+    const points = new Map<number, Map<LiveGroup, number>>()
+    for (const [time, group, value, volume] of row.minutes ?? []) {
+      if (!points.has(time)) points.set(time, new Map())
+      points.get(time)!.set(group, unit === 'value' ? value / 1e9 : volume)
+    }
+    liveGroups.forEach(({ id, color }, index) => {
+      const line = chart.addSeries(LineSeries, { color, lineWidth: 2, priceLineVisible: false, pointMarkersVisible: points.size === 1 })
+      let cumulative = 0
+      line.setData([...points].map(([time, values]) => ({ time: time as import('lightweight-charts').UTCTimestamp, value: cumulative += values.get(id) ?? 0 })))
+      if (!index) line.createPriceLine({ price: 0, color: palette.getPropertyValue('--line-bright').trim(), lineWidth: 1, axisLabelVisible: false })
+    })
+    chart.timeScale().fitContent()
+    return () => chart.remove()
+  }, [available, row.minutes, theme, unit])
+  return <dialog ref={dialog} className="radar-history-dialog" onClose={close} aria-label={`Mua bán ròng trong phiên ${row.symbol}`}>
+    <div className="radar-history"><header className="radar-table-heading"><h3>{row.symbol} · Ròng tích lũy trong phiên</h3>
+      <button type="button" className="secondary-button" aria-label="Đóng biểu đồ" onClick={close}><X size={17}/></button></header>
+      {available ? <><Chips label="Đơn vị" options={[[ 'value', 'Tỷ đồng' ], [ 'volume', 'Cổ phiếu' ]]} value={unit} onChange={setUnit}/>
+        <div className="radar-chart-legend">{liveGroups.map(group => <span key={group.id} style={{ color: group.color }}>{group.label}</span>)}</div>
+        <div ref={host} className="radar-history-chart" role="img" aria-label="Biểu đồ đường ba nhóm giá trị khớp SSI"/></>
+        : <p className="radar-meta">{row.partial ? 'Băng khớp có khoảng thiếu. Chưa vẽ đường tích lũy.' : 'Mã chưa có bản tổng hợp từng phút trong danh sách theo dõi.'}</p>}
+    </div>
+  </dialog>
+}
+
+function LiveRadar({ authenticated, active }: { authenticated: boolean; active: boolean }) {
+  const [exchange, setExchange] = useState('all')
+  const [group, setGroup] = useState<LiveGroup>('large')
+  const [sort, setSort] = useState('buy')
+  const [search, setSearch] = useState('')
+  const [selected, setSelected] = useState<string | null>(null)
+  const day = todayInVietnam()
+  const query = useQuery({ queryKey: ['ssi-market-radar-live'], enabled: Boolean(supabase && authenticated && active), retry: false,
+    staleTime: 60_000, refetchInterval: 60_000, queryFn: async () => {
+      const results = await Promise.all(exchanges.slice(1).map(async ([exchange]) => {
+        const { data, error } = await supabase!.storage.from('market-radar-live').download(`${exchange}.json.gz`)
+        if (error) {
+          if (/not found|does not exist/i.test(error.message)) return null
+          throw error
+        }
+        const stream = data.stream().pipeThrough(new DecompressionStream('gzip'))
+        return { ...(await new Response(stream).json()), exchange } as LiveSnapshot
+      }))
+      return results.filter((row): row is LiveSnapshot => Boolean(row))
+    } })
+  const snapshots = (query.data ?? []).filter(item => item.day === day && (exchange === 'all' || item.exchange === exchange))
+  const updated = snapshots.map(item => Date.parse(item.updated_at)).filter(Number.isFinite)
+  const latestTrade = snapshots.length ? Math.max(...snapshots.map(item => item.last_tick)) : 0
+  const rows = snapshots.flatMap(item => item.rows.map(row => ({ ...row, exchange: item.exchange })))
+  const current = rows.find(row => row.symbol === selected)
+  const summary = liveGroups.map(({ id, label }) => ({ label,
+    value: rows.filter(row => !row.partial).reduce((sum, row) => { const [buy, sell] = row.groups[id] ?? liveEmpty; return sum + buy - sell }, 0) }))
+  const visible = rows.filter(row => search ? row.symbol.includes(search.trim().toUpperCase()) : !row.partial).sort((a, b) => {
+    const [ab, as] = a.groups[group] ?? liveEmpty
+    const [bb, bs] = b.groups[group] ?? liveEmpty
+    return ((bb - bs) - (ab - as)) * (sort === 'buy' ? 1 : -1)
+  }).slice(0, 10)
+  return <>
+    <div className="radar-filter-bar radar-filter-secondary">
+      <Chips label="Sàn trong phiên" options={exchanges} value={exchange} onChange={setExchange}/>
+      <Chips label="Nhóm giá trị khớp" options={liveGroups.map(({ id, label }) => [id, label])} value={group} onChange={key => setGroup(key as LiveGroup)}/>
+      <Chips label="Xếp hạng trong phiên" options={orders} value={sort} onChange={setSort}/>
+      <label className="radar-search"><Search size={14}/><input type="search" placeholder="Tìm mã" aria-label="Tìm mã trong phiên" maxLength={10} value={search} onChange={event => setSearch(event.target.value)}/></label>
+    </div>
+    {snapshots.length ? <>
+      <dl className="radar-summary radar-live-summary">{summary.map(item => <div key={item.label} className="radar-stat" data-direction={direction(item.value)}>
+        <dt>{item.label}</dt><dd>{billions(item.value, true)} <small>tỷ ròng</small></dd></div>)}</dl>
+      <p className="radar-meta">SSI · Tạm tính · {updated.length ? `Bản chụp ${vnTime.format(Math.min(...updated))}` : 'Thiếu giờ cập nhật'}{latestTrade > 0 && ` · Khớp mới nhất ${vnTime.format(latestTrade * 1000)}`} · {rows.filter(row => !row.partial).length}/{rows.length} mã liền mạch {updated.length && Date.now() - Math.min(...updated) > 180_000 ? ' · Dữ liệu đã cũ' : ''}</p>
+      {visible.length ? <div className="radar-table-frame"><table className="market-radar-table"><thead><tr><th>Mã / Sàn</th><th>Giá</th><th>GT mua<span>tỷ đ</span></th><th>GT bán<span>tỷ đ</span></th><th>GT ròng<span>tỷ đ</span></th><th>KL ròng<span>CP</span></th><th>Lần khớp</th><th className="radar-actions">Biểu đồ</th></tr></thead>
+        <tbody>{visible.map(row => { const [buy, sell, buyQty, sellQty, count] = row.groups[group] ?? liveEmpty
+          return <tr key={row.symbol}><th scope="row">{row.symbol}<small className="radar-company">{exchangeLabel(row.exchange)}{row.partial && ' · Thiếu băng'}</small></th>
+            <td>{price(row.price)}</td><td>{billions(buy)}</td><td>{billions(sell)}</td><td data-direction={direction(buy - sell)}>{billions(buy - sell, true)}</td>
+            <td data-direction={direction(buyQty - sellQty)}>{quantity(buyQty - sellQty, true)}</td><td>{quantity(count)}</td><td className="radar-actions"><button type="button" className="radar-history-action" aria-label={`Biểu đồ ${row.symbol}`} aria-haspopup="dialog" onClick={() => setSelected(row.symbol)}><RotateCcwClock size={16}/></button></td></tr> })}</tbody>
+      </table></div> : <p className="market-empty">Chưa có mã đủ dữ liệu hoặc phù hợp bộ lọc.</p>}
+    </> : <p className="market-empty" role="status">{query.isFetching ? 'Đang đọc bản chụp SSI…' : query.isError ? 'Không tải được bản chụp SSI.' : 'Chưa có dữ liệu SSI trong phiên này.'}</p>}
+    {current && <LiveHistory row={current} close={() => setSelected(null)}/>}
+  </>
 }
 
 function LeaderCard({ title, leader, side }: { title: string; leader?: Leader | null; side: 1 | -1 }) {
@@ -236,6 +350,7 @@ function RowHistory({ row, sized, auction, dates, period, onPeriodChange, histor
 }
 
 export function MarketFlowRadar({ authenticated, active, tradingDates }: { authenticated: boolean; active: boolean; tradingDates: string[] }) {
+  const [view, setView] = useState('daily')
   const [exchange, setExchange] = useState('all')
   const [category, setCategory] = useState<string>('foreign')
   const [tapeMode, setTapeMode] = useState('continuous')
@@ -263,7 +378,7 @@ export function MarketFlowRadar({ authenticated, active, tradingDates }: { authe
     : tradingDates.slice(-Number(period))
   const first = dates[0] ?? ''
   const last = dates.at(-1) ?? ''
-  const ready = active && authenticated && Boolean(supabase && first && last)
+  const ready = view === 'daily' && active && authenticated && Boolean(supabase && first && last)
   const searchTerm = search.trim().toUpperCase()
   const orderOptions = sized ? tapeMode === 'auction' ? [sizeOrder] : [...orders, sizeOrder] : [...orders, category === 'foreign' ? ['ownership', 'Sở hữu (%)'] as const : ['holdings', 'SL nắm giữ'] as const]
   const query = useQuery({
@@ -320,10 +435,12 @@ export function MarketFlowRadar({ authenticated, active, tradingDates }: { authe
 
   return <section className="panel market-radar" aria-labelledby="market-radar-title">
     <header className="radar-heading">
-      <div className="radar-title"><span><Radar size={22} aria-hidden="true"/></span><div><h2 id="market-radar-title">Radar dòng tiền</h2><p>Dữ liệu cuối ngày · HOSE, HNX và UPCoM</p></div></div>
-      <button type="button" className="secondary-button radar-refresh" disabled={!ready || query.isFetching} onClick={() => void query.refetch()}><RefreshCw size={15} aria-hidden="true"/> Làm mới</button>
+      <div className="radar-title"><span><Radar size={22} aria-hidden="true"/></span><div><h2 id="market-radar-title">Radar dòng tiền</h2><p>HOSE, HNX và UPCoM</p></div></div>
+      <Chips label="Chế độ Radar" options={[[ 'daily', 'Theo phiên' ], [ 'live', 'Trong phiên' ]]} value={view} onChange={next => { setView(next); resetRows() }}/>
+      {view === 'daily' && <button type="button" className="secondary-button radar-refresh" disabled={!ready || query.isFetching} onClick={() => void query.refetch()}><RefreshCw size={15} aria-hidden="true"/> Làm mới</button>}
     </header>
 
+    {view === 'live' ? <LiveRadar authenticated={authenticated} active={active}/> : <>
     <div className="radar-categories" role="group" aria-label="Nhóm dòng tiền">{categories.map(({ id, label, note, icon: Icon, tone }) =>
       <button key={id} type="button" data-tone={tone} aria-pressed={category === id} onClick={() => { setCategory(id); setOrder(id !== 'foreign' && id !== 'proprietary' && tapeMode === 'auction' ? 'size' : 'buy'); resetRows() }}>
         <span className="radar-category-icon"><Icon size={17} aria-hidden="true"/></span><span><strong>{label}</strong><small>{['foreign', 'proprietary'].includes(id) || tapeMode !== 'continuous_cluster' ? note : 'Giá trị mỗi cụm khớp'}</small></span>
@@ -401,5 +518,6 @@ export function MarketFlowRadar({ authenticated, active, tradingDates }: { authe
     </>}
     <p className="radar-meta radar-scope-note">{sized ? `Top và tổng chỉ tính mã đủ phiên đã đối soát. ${tapeMode === 'continuous_cluster' ? 'Cụm gộp các lần khớp liên tiếp cùng giây, cùng giá và cùng chiều.' : tapeMode === 'auction' ? 'Khớp định kỳ chỉ có giá trị và khối lượng chưa rõ chiều.' : 'Chiều mua/bán chủ động theo nguồn băng khớp.'} Giao dịch thỏa thuận nằm ngoài phạm vi khớp lệnh.` : 'SL lệnh hiện — khi báo cáo của nhóm chỉ có số liệu mua/bán tổng hợp.'}</p>
     {ready && historyRow && <RowHistory row={historyRow} sized={sized} auction={auction} dates={historyDates} period={historyPeriod} onPeriodChange={setHistoryPeriod} history={history.data} loading={history.isFetching} error={history.isError} retry={() => void history.refetch()} onClose={() => setHistoryRow(null)}/>}
+    </>}
   </section>
 }
