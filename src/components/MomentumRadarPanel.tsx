@@ -106,7 +106,7 @@ export function MomentumRadarPanel({ date, championSignals, championLoading, cha
         .eq('as_of_date', date).eq('version', 'MACD_BULLISH_DIVERGENCE_ZONE_V0_0_0').eq('oscillator', 'MACD_LINE')
         .order('symbol_id').range(from, from + 999)
       if (error) throw error
-      rows.push(...(data ?? []) as MacdRow[])
+      rows.push(...await restoreAnalysisHistory((data ?? []) as MacdRow[]))
       if ((data ?? []).length < 1000) break
     }
     return rows

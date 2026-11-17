@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Filter, Search } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import { restoreAnalysisHistory } from '../lib/analysisArchive'
 import { SoftSelect } from './SoftSelect'
 import './MacdDivergencePanel.css'
 
@@ -220,7 +221,7 @@ export function MacdDivergencePanel({ date: latestDate, authenticated, focusSymb
           .eq('as_of_date', date).eq('version', VERSION).eq('oscillator', 'MACD_LINE')
           .eq('symbols.active', true).order('symbol_id').order('swings').range(from, from + 999)
         if (error) throw error
-        rows.push(...(data ?? []).map((item: any) => ({ ...item,
+        rows.push(...(await restoreAnalysisHistory(data ?? [])).map((item: any) => ({ ...item,
           symbol: (Array.isArray(item.symbols) ? item.symbols[0] : item.symbols)?.symbol ?? '—' })))
         if ((data ?? []).length < 1000) break
       }

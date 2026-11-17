@@ -2,7 +2,10 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from base64 import b64decode, b64encode
 from datetime import date, datetime, timedelta, timezone
+import gzip
+import json
 from statistics import median
 from time import sleep
 
@@ -22,6 +25,23 @@ MIN_BASELINE_SESSIONS = 10
 MIN_VALUE_VND = 100_000_000
 MIN_RATIO = 3.0
 RETENTION_DAYS = 50  # About 30 trading sessions; event history is retained.
+
+
+def pack_minute_bars(bars: list[dict]) -> list[dict] | dict:
+    if not bars:
+        return bars
+    raw = json.dumps(bars, separators=(",", ":"), allow_nan=False).encode()
+    encoded = b64encode(gzip.compress(raw, mtime=0)).decode("ascii")
+    return {"gzip_v1": encoded} if len(encoded) + 32 < len(raw) else bars
+
+
+def unpack_minute_bars(value: list[dict] | dict) -> list[dict]:
+    if isinstance(value, list):
+        return value
+    bars = json.loads(gzip.decompress(b64decode(value["gzip_v1"], validate=True)))
+    if not isinstance(bars, list):
+        raise ValueError("Invalid minute-day archive")
+    return bars
 
 
 def retryable_failure(error: Exception) -> bool:
@@ -268,7 +288,8 @@ def run_intraday_spikes(trading_date: date, *, symbol_offset: int = 0, symbol_li
                                    if item["trading_date"] not in good_stored or
                                    (item["coverage_status"] == "COMPLETE" and (family != "VCI" or minute_source == SOURCE))]
                 if history_updates:
-                    db.upsert("intraday_minute_days", history_updates, "symbol_id,trading_date")
+                    db.upsert("intraday_minute_days", [{**item, "bars": pack_minute_bars(item["bars"])}
+                              for item in history_updates], "symbol_id,trading_date")
                 status = current["coverage_status"] if current else "EMPTY"
                 symbol_status = status
                 counts[status.lower()] += 1
@@ -286,7 +307,7 @@ def run_intraday_spikes(trading_date: date, *, symbol_offset: int = 0, symbol_li
                                                           "baseline_sessions": baseline_count})
                     events = detect_events(
                         symbol_id, trading_date.isoformat(), current["bars"],
-                        [item["bars"] for item in previous[:30]], exchange,
+                        [unpack_minute_bars(item["bars"]) for item in previous[:30]], exchange,
                     )
                     events = [{**event, "source": minute_source} for event in events]
             except Exception as exc:
@@ -297,7 +318,9 @@ def run_intraday_spikes(trading_date: date, *, symbol_offset: int = 0, symbol_li
                 response = db._client.post("/rpc/save_intraday_spike_result", json={
                     "p_day": trading_date.isoformat(), "p_symbol_id": symbol_id, "p_version": VERSION,
                     "p_status": symbol_status, "p_baseline": baseline_count, "p_source": minute_source,
-                    "p_error": error, "p_retryable": retryable, "p_minute_day": current, "p_events": events})
+                    "p_error": error, "p_retryable": retryable,
+                    "p_minute_day": {**current, "bars": pack_minute_bars(current["bars"])} if current else None,
+                    "p_events": events})
                 response.raise_for_status()
                 if symbol_status == "COMPLETE":
                     counts["events"] += len(events)

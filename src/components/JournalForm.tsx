@@ -42,10 +42,11 @@ export function JournalForm({userId,editing,launch,initialCycleId,transactions,e
     const {data,error}=await supabase!.rpc('journal_capture_context',{p_symbol_id:selected!.id,p_date:evidenceDate,p_revision:publication.data?.date===evidenceDate?publication.data?.sourceRevision:null})
     if(error)throw error
     const context = data as JournalEvidenceSnapshot
-    const [challenger, radar, funnel] = await Promise.all([
+    const [challenger, radar, funnel, macd] = await Promise.all([
       restoreAnalysisHistory(context.challenger ?? []), restoreAnalysisHistory(context.radar ?? []), restoreAnalysisHistory(context.funnel ?? []),
+      restoreAnalysisHistory(context.macd ?? []),
     ])
-    return { ...context, challenger, radar, funnel }
+    return { ...context, challenger, radar, funnel, macd }
   }})
   const historical=Boolean(editing?.workflow), automatic=Boolean(editing?.transaction_id), conflict=journalConflict(editing?.evidence_snapshot??snapshot.data)
   const available=transactions.filter(tx=>Number(tx.symbol_id)===(editing?.symbol_id??selected?.id)

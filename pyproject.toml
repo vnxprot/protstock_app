@@ -15,6 +15,7 @@ dependencies = [
 dev = ["pytest>=8.3,<9"]
 data = []
 radar = ["pdfplumber>=0.11,<1"]
+ssi = ["ssi-sdk==3.3.2"]
 
 [project.scripts]
 protstock = "protstock.cli:main"

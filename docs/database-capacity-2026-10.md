@@ -27,12 +27,18 @@ most assessment space was in earlier replay versions.
 The `audit` mode is read-only. It reports total PostgreSQL and Storage bytes,
 relation data and index sizes, estimated dead rows, and compressed candidate
 bytes. The `reclaim-history` mode applies the archive read policy, waits for the
-frontend to deploy, and moves evidence older than 20 VNINDEX sessions to private
+frontend to deploy, and moves evidence older than 10 VNINDEX sessions to private
 gzip objects, keyed by table, date and SHA-256. It covers Challenger, Momentum
-Radar, the signal funnel, patterns and zones. Reasons, row identities and
-outcome-linked Challenger strategy evidence stay online. Old analysis screens
+Radar, MACD divergence, the signal funnel, patterns and zones. Reasons, row identities,
+the Challenger strategy outcome lookback and outcome-linked evidence stay online. Old analysis screens
 load the archived evidence on demand. Daily and derived price bars are excluded
 because the stock analysis view reads long price windows.
+
+The same workflow verifies lossless compression of existing spike minute baselines
+before rewriting each row. New spike-minute inputs use the compressed format;
+readers accept both formats and the baseline window stays the same. Completed
+job item details older than 21 days are moved to a verified archive. Job summaries
+and recent item details remain in PostgreSQL.
 
 Each batch is uploaded and read back before changing the corresponding rows.
 The transaction rechecks the exact rows under a write lock, then stores the

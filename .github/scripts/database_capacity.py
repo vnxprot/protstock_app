@@ -18,9 +18,11 @@ from tempfile import TemporaryDirectory
 
 import httpx
 import psycopg
+from psycopg.types.json import Jsonb
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "pipeline"))
 from protstock.research_archive import ResearchArchive, check_storage_budget
+from protstock.intraday_spikes import pack_minute_bars, unpack_minute_bars
 
 
 PROJECT_URL = "https://upmqxwktvvguegqeqibn.supabase.co"
@@ -33,14 +35,17 @@ RESEARCH_RETENTION_DAYS = 400
 ASSESSMENT_RETENTION_DAYS = 180
 DATABASE_TARGET = 400_000_000
 RADAR_START_LIMIT = 440_000_000
+HOT_ANALYSIS_SESSIONS = 10
+JOB_DETAIL_RETENTION_DAYS = 21
 ANALYSIS_ARCHIVES = (
     ("challenger_strategy_assessments", "trading_date", ("symbol_id", "engine_version", "strategy_code"),
-     "not exists (select 1 from public.challenger_strategy_tplus_outcomes o where o.symbol_id=t.symbol_id and o.signal_date=t.trading_date and o.engine_version=t.engine_version and o.strategy_code=t.strategy_code)"),
+     "t.trading_date < (now() at time zone 'Asia/Ho_Chi_Minh')::date - 14 and not exists (select 1 from public.challenger_strategy_tplus_outcomes o where o.symbol_id=t.symbol_id and o.signal_date=t.trading_date and o.engine_version=t.engine_version and o.strategy_code=t.strategy_code)"),
     ("challenger_signal_assessments", "trading_date", ("id",), "true"),
     ("support_resistance_zones", "as_of_date", ("id",), "true"),
     ("pattern_instances", "as_of_date", ("id",), "true"),
     ("momentum_radar_assessments", "as_of_date", ("symbol_id", "version"), "true"),
     ("signal_funnel_assessments", "as_of_date", ("symbol_id", "version"), "true"),
+    ("macd_divergence_assessments", "as_of_date", ("symbol_id", "version", "oscillator", "swings"), "true"),
 )
 ARCHIVES = (
     ("research_price_bars", "public.research_price_bars", "true"),
@@ -120,6 +125,88 @@ def report_capacity(conn):
         print("Relation (schema, table, data and TOAST bytes, index bytes, live rows, dead rows):", row, flush=True)
 
 
+def compact_relation(conn, table):
+    conn.execute("set lock_timeout = '8s'")
+    try:
+        conn.execute(f"vacuum full public.{table}")
+    except psycopg.errors.LockNotAvailable:
+        print(f"::warning::Vacuum deferred for {table}: relation busy", flush=True)
+    finally:
+        conn.execute("reset lock_timeout")
+
+
+def reclaim_core_bloat(conn):
+    relations = conn.execute("""select relname from pg_stat_user_tables
+        where schemaname = 'public' and relname in ('daily_prices', 'derived_bars', 'technical_snapshots')
+        and n_dead_tup >= 1000 and n_dead_tup >= n_live_tup * 0.02
+        order by pg_total_relation_size(relid) desc""").fetchall()
+    for (table,) in relations:
+        if database_bytes(conn) < DATABASE_TARGET:
+            break
+        before = database_bytes(conn)
+        compact_relation(conn, table)
+        print(f"Core relation {table}: database {before:,} -> {database_bytes(conn):,} bytes", flush=True)
+
+
+def compact_minute_history(conn, *, measure=False):
+    days = conn.execute("select distinct trading_date from public.intraday_minute_days order by 1").fetchall()
+    count = estimated = 0
+    for (day,) in days:
+        packed = []
+        for symbol_id, version, bars, size in conn.execute("""select symbol_id, xmin::text, bars, pg_column_size(bars)
+                from public.intraday_minute_days where trading_date = %s and jsonb_typeof(bars) = 'array'
+                and bars <> '[]'::jsonb""", (day,)):
+            value = pack_minute_bars(bars)
+            if isinstance(value, list):
+                continue
+            new_size = len(value['gzip_v1']) + 32
+            if new_size >= size:
+                continue
+            if unpack_minute_bars(value) != bars:
+                raise RuntimeError(f"Minute history compression changed data: {symbol_id} {day}")
+            packed.append({"symbol_id": symbol_id, "version": version, "bars": value})
+            estimated += size - new_size
+        if measure:
+            count += len(packed)
+        elif packed:
+            result = conn.execute("""update public.intraday_minute_days t set bars = p.bars
+                from jsonb_to_recordset(%s) as p(symbol_id bigint, version text, bars jsonb)
+                where t.trading_date = %s and t.symbol_id = p.symbol_id and t.xmin::text = p.version""", (Jsonb(packed), day))
+            count += result.rowcount
+    print(f"Minute history {'eligible' if measure else 'compacted'}: {count:,} rows, estimated {estimated:,} payload bytes reclaimed", flush=True)
+    if not measure and (count or database_bytes(conn) >= DATABASE_TARGET):
+        compact_relation(conn, "intraday_minute_days")
+
+
+def compact_job_details(conn, storage, directory, run_id, *, measure=False):
+    cutoff = conn.execute("select (now() at time zone 'Asia/Ho_Chi_Minh')::date - %s", (JOB_DETAIL_RETENTION_DAYS,)).fetchone()[0]
+    predicate = f"created_at < timestamptz '{cutoff} 00:00:00+07' and exists (select 1 from public.job_runs j where j.id=t.job_run_id and j.finished_at < timestamptz '{cutoff} 00:00:00+07' and j.status <> 'RUNNING')"
+    entry = archive_table(conn, directory, "old_job_run_items", "public.job_run_items", predicate)
+    print(f"Job detail archive: {entry['rows']:,} rows, {entry['bytes']:,} compressed bytes", flush=True)
+    if measure or not entry['rows']:
+        return
+    if entry['bytes'] >= 45_000_000:
+        raise RuntimeError("Job detail archive must be split before cleanup")
+    prefix = f"capacity/{run_id}/job-details"
+    upload_verified(storage, f"{prefix}/{entry['filename']}", (directory / entry['filename']).read_bytes())
+    upload_verified(storage, f"{prefix}/manifest.json", json.dumps(entry).encode(), content_type="application/json")
+    try:
+        with conn.transaction():
+            conn.execute("set local lock_timeout = '8s'")
+            conn.execute("lock table public.job_runs in share mode")
+            conn.execute("lock table public.job_run_items in share row exclusive mode")
+            count, fingerprint = conn.execute(f"""select count(*), coalesce(sum(hashtextextended(row_to_json(t)::text,0)::numeric),0)::text
+                from public.job_run_items t where {predicate}""").fetchone()
+            if (count, fingerprint) != (entry['rows'], entry['fingerprint']):
+                print("::warning::Job detail cleanup deferred because the archive selection changed", flush=True)
+                return
+            conn.execute(f"delete from public.job_run_items t where {predicate}")
+    except psycopg.errors.LockNotAvailable:
+        print("::warning::Job detail cleanup deferred because the table is busy", flush=True)
+        return
+    compact_relation(conn, "job_run_items")
+
+
 def archive_analysis_day(conn, storage, table, day, select, update, *, measure):
     for attempt in range(3):
         count, payloads = conn.execute(select, (day,)).fetchone()
@@ -153,10 +240,10 @@ def archive_analysis(conn, storage, *, measure=False, retry_vacuum=False):
     cutoff = conn.execute("""select min(ip.trading_date) from (
         select p.trading_date from public.market_index_prices p join public.market_indices i on i.id=p.index_id
         where i.code='VNINDEX' and p.trading_date <= (now() at time zone 'Asia/Ho_Chi_Minh')::date
-        order by p.trading_date desc limit 20) ip
-        having count(*)=20""").fetchone()
+        order by p.trading_date desc limit %s) ip
+        having count(*)=%s""", (HOT_ANALYSIS_SESSIONS, HOT_ANALYSIS_SESSIONS)).fetchone()
     if cutoff is None:
-        print("No complete 20-session calendar for analysis retention", flush=True)
+        print("No complete hot-session calendar for analysis retention", flush=True)
         return 0
     total = 0
     for table, day_column, identity, protected_scope in ANALYSIS_ARCHIVES:
@@ -169,6 +256,13 @@ def archive_analysis(conn, storage, *, measure=False, retry_vacuum=False):
             where t.{day_column} = %s and {scope}"""
         # Keep the monthly state read by the historical Opportunities SQL.
         keep = "jsonb_strip_nulls(jsonb_build_object('monthly_state', t.evidence->'monthly_state')) ||" if table == "momentum_radar_assessments" else ""
+        if table == "macd_divergence_assessments":
+            keep = """jsonb_strip_nulls(jsonb_build_object('latest_close', t.evidence->'latest_close',
+                'local_cross_date', t.evidence->'local_cross_date', 'invalidated_on', t.evidence->'invalidated_on',
+                'zones', case when t.evidence->'zones' -> -1 is not null then jsonb_build_array(
+                    jsonb_build_object('price_low', t.evidence->'zones' -> -1 -> 'price_low')) end,
+                'recovery_breakouts', case when t.evidence->'recovery_breakouts' -> -1 is not null
+                    then jsonb_build_array(t.evidence->'recovery_breakouts' -> -1) end)) ||"""
         update = f"""update public.{table} t set evidence = {keep}
             jsonb_build_object('_historyObject', %s::text, '_historyKey', {key})
             where t.{day_column} = %s and {scope}"""
@@ -181,13 +275,7 @@ def archive_analysis(conn, storage, *, measure=False, retry_vacuum=False):
         print(f"{table}: {rows:,} rows, {raw:,} raw JSON bytes, {compressed:,} compressed bytes", flush=True)
         total += compressed
         if not measure and (rows or (retry_vacuum and database_bytes(conn) >= DATABASE_TARGET)):
-            conn.execute("set lock_timeout = '8s'")
-            try:
-                conn.execute(f"vacuum full public.{table}")
-            except psycopg.errors.LockNotAvailable:
-                print(f"::warning::Vacuum deferred for {table}: relation busy", flush=True)
-            finally:
-                conn.execute("reset lock_timeout")
+            compact_relation(conn, table)
     return total
 
 
@@ -200,16 +288,22 @@ def main() -> None:
     headers = {"apikey": key, "Authorization": f"Bearer {key}"}
     with psycopg.connect(db_url, autocommit=True) as conn, httpx.Client(base_url=PROJECT_URL, headers=headers, timeout=180) as storage, TemporaryDirectory() as temp:
         directory = Path(temp)
+        run_id = os.environ["GITHUB_RUN_ID"] + "-" + os.environ.get("GITHUB_RUN_ATTEMPT", "1")
         report_capacity(conn)
         if mode == "audit":
+            compact_minute_history(conn, measure=True)
+            compact_job_details(conn, storage, directory, run_id, measure=True)
             archive_analysis(conn, storage, measure=True)
             return
         ensure_private_bucket(storage)
         if mode == "reclaim-history":
+            compact_minute_history(conn)
+            compact_job_details(conn, storage, directory, run_id)
             projected = archive_analysis(conn, storage, measure=True)
             if projected:
                 check_storage_budget(storage, projected)
             archive_analysis(conn, storage, retry_vacuum=True)
+            reclaim_core_bloat(conn)
             report_capacity(conn)
             size = database_bytes(conn)
             if size >= RADAR_START_LIMIT:
@@ -218,7 +312,6 @@ def main() -> None:
                 print("::warning::PostgreSQL remains above the 400 MB operating target", flush=True)
             return
         # A unique path prevents a failed or partial attempt from overwriting an earlier archive.
-        run_id = os.environ["GITHUB_RUN_ID"] + "-" + os.environ.get("GITHUB_RUN_ATTEMPT", "1")
         cutoff = date.today() - timedelta(days=RESEARCH_RETENTION_DAYS)
         assessment_cutoff = date.today() - timedelta(days=ASSESSMENT_RETENTION_DAYS)
         archive_specs = [(name, table, predicate.format(assessment_cutoff=assessment_cutoff.isoformat()))
@@ -284,6 +377,7 @@ def main() -> None:
             for table in ("public.research_price_bars", "public.challenger_strategy_assessments"):
                 conn.execute(f"vacuum (analyze) {table}")
             if database_bytes(conn) >= DATABASE_TARGET:
+                compact_job_details(conn, storage, directory, run_id)
                 archive_analysis(conn, storage)
         with conn.cursor() as cursor:
             cursor.execute("select pg_database_size(current_database())")

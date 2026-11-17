@@ -28,3 +28,9 @@ Workflow chạy thủ công cho phép làm mới tối đa 20 phiên báo cáo h
 Bật `tape_history` để kiểm tra mẫu OCB, SHS và BVB và nạp các phiên băng khớp còn thiếu trong 20 phiên gần nhất bằng DNSE LightSpeed. Cần các GitHub Secrets `DNSE_API_KEY`, `DNSE_API_SECRET` và biến `RADAR_DNSE_APPROVED=true` sau khi xác nhận nguồn không phát sinh phí và cho phép phạm vi sử dụng trong PROT STOCK. Bộ thu đọc bảng G1 và G4, duyệt tất cả trang, kiểm tra chuỗi khối lượng tích lũy và đối soát khối lượng cuối ngày bằng nguồn độc lập. Cụm khớp không gộp chéo hai bảng G1/G4. Bộ nạp bỏ qua phiên đã đủ ba phương thức, phiên không đối soát được và lô vượt ngân sách.
 
 Có thể nạp bản xuất được phép sử dụng bằng `python -m protstock.market_radar_history --csv-directory <directory>`. Mỗi tập tin `YYYY-MM-DD.csv` hoặc `YYYY-MM-DD.csv.gz` chứa `exchange,symbol,board,timestamp,price_vnd,quantity,cumulative_volume,side`. Dùng `G1` hoặc `G4`, thời gian ISO 8601 kèm múi giờ, khối lượng cổ phiếu và chiều `BUY`, `SELL`, `UNSPECIFIED`, `ATO` hoặc `ATC`. Bản nhập dùng cùng bộ đối soát với API. Tệp nguồn ở bên ngoài repo.
+
+## Kiểm tra SSI FastConnect
+
+Cài phần phụ thuộc `pip install -e '.[ssi]'`. Dùng biến môi trường cục bộ `SSI_API_KEY`, `SSI_API_SECRET` và `SSI_CLIENT_ID` nếu SSI cấp Client ID. Dùng khóa Production chỉ đọc Market Data.
+
+Chạy `python -m protstock.market_radar_ssi --reference-date 2026-11-16 --stream-seconds 60` trong phiên để kiểm tra HDB, SHS và BVB. Chương trình đọc tổng khớp và giao dịch khối ngoại của ngày tham chiếu qua REST, sau đó phân nhóm mẫu WebSocket và in khối lượng tích lũy để đánh giá độ phủ. Bỏ `--stream-seconds` để chỉ đọc REST. Bộ kiểm tra không cập nhật dữ liệu production. Phiên mẫu bắt đầu giữa giờ giao dịch có thể thiếu các giao dịch trước thời điểm kết nối.
