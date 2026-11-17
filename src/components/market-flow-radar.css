@@ -60,6 +60,10 @@
 .market-radar-table thead th { background:var(--surface-2); color:var(--muted); font-size:11px; line-height:1.2; }
 .market-radar-table thead span { display:block; margin-top:2px; font-size:10px; font-weight:500; }
 .market-radar-table thead th:first-child { width:14%; }
+.market-radar-table .radar-actions { width:88px; text-align:center; }
+.radar-actions>div { display:flex; flex-wrap:wrap; justify-content:center; gap:4px; }
+.radar-history-action { display:inline-flex; align-items:center; justify-content:center; gap:5px; min-height:30px; padding:3px 6px; border:1px solid var(--line); border-radius:8px; color:var(--mint); background:var(--surface-2); white-space:nowrap; font:inherit; cursor:pointer; }
+.radar-history-action:hover,.radar-history-action[aria-expanded='true'] { border-color:var(--mint); }
 .market-radar-table tr:last-child>th,.market-radar-table tr:last-child>td,.radar-history tr:last-child>td { border-bottom:0; }
 .market-radar-table td[data-direction] { color:var(--radar-direction,var(--text)); font-weight:700; }
 .radar-stock-row:hover { background:var(--surface-2); }
@@ -73,7 +77,9 @@
 .radar-detail-row>td { background:var(--surface-2); }
 .radar-details { display:grid; gap:4px; padding:4px 8px; }
 .radar-mobile-metrics { display:none; }
-.radar-history summary { width:max-content; max-width:100%; color:var(--mint); font-size:11px; cursor:pointer; }
+.radar-history-heading { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:6px 12px; }
+.radar-history-heading h4 { margin:0 0 2px; font-size:13px; }
+.radar-history td[data-direction] { color:var(--radar-direction,var(--text)); }
 .radar-history-scroll { max-height:240px; overflow:auto; margin-top:5px; }
 .radar-table-footer { gap:5px 12px; margin-top:7px; }
 .radar-pages { display:flex; align-items:center; gap:5px; flex:none; color:var(--muted); font-size:11px; }
@@ -97,6 +103,8 @@
   .radar-summary { grid-template-columns:repeat(2,minmax(0,1fr)); }
   .radar-company { display:none; }
   .market-radar-table { font-size:11px; }
+  .market-radar-table .radar-actions { width:50px; }
+  .radar-history-action span { display:none; }
   .radar-rank { display:none; }
   .radar-table-footer { flex-wrap:wrap; }
   .radar-custom-dates { grid-template-columns:repeat(2,minmax(0,1fr)); }
@@ -105,5 +113,5 @@
 @media (pointer:coarse) {
   .radar-chips button,.radar-pages button,.radar-refresh,.radar-search { min-height:38px; }
   .radar-search input { font-size:16px; }
-  .radar-stock { min-height:34px; }
+  .radar-stock,.radar-history-action { min-height:34px; }
 }

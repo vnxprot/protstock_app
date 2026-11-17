@@ -1,6 +1,6 @@
 import { Fragment, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { ArrowDownRight, ArrowUpRight, CalendarDays, ChevronDown, ChevronLeft, ChevronRight, Globe, Landmark, Radar, RefreshCw, Search } from 'lucide-react'
+import { ArrowDownRight, ArrowUpRight, CalendarDays, ChevronDown, ChevronLeft, ChevronRight, Globe, History, Landmark, Radar, RefreshCw, Search } from 'lucide-react'
 import { formatDate } from '../lib/date'
 import { MARKET_PRICE_TO_VND } from '../lib/marketUnits'
 import { supabase } from '../lib/supabase'
@@ -20,7 +20,9 @@ const periods = [['1', 'Phiên gần nhất'], ['5', '5 phiên'], ['20', '20 phi
 const orders = [['buy', 'Mua ròng'], ['sell', 'Bán ròng']] as const
 const tapeModes = [['continuous', 'Từng lần khớp'], ['continuous_cluster', 'Cụm khớp'], ['auction', 'Định kỳ']] as const
 const sizeOrder = ['size', 'Giá trị khớp'] as const
+const historyPeriods = [['selection', 'Theo bộ lọc Radar'], ['20', '20 phiên'], ['50', '50 phiên'], ['200', '200 phiên']] as const
 const pageSize = 10
+const historyLimit = 260
 const decimal = new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 2 })
 const integer = new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 0 })
 
@@ -40,7 +42,8 @@ type Dashboard = {
   coverage: { exchange: string; latest: string | null; observed: number; partial: boolean; ready: number | null; universe: number | null }[]; rows: FlowRow[]
   net_value: number | null; net_volume: number | null; strongest_buy: Leader | null; strongest_sell: Leader | null
 }
-type FlowDay = { trading_date: string; buy_value: number | null; sell_value: number | null; unknown_value: number | null; unknown_volume: number | null; trade_count: number | null; partial: boolean; tape_volume: number | null; reference_volume: number | null }
+type FlowDay = { trading_date: string; buy_value: number | null; sell_value: number | null; buy_volume: number | null; sell_volume: number | null; unknown_value: number | null; unknown_volume: number | null; trade_count: number | null; partial: boolean; tape_volume: number | null; reference_volume: number | null }
+type RowView = { key: string; panel: 'details' | 'history' }
 
 const dayLabel = (day: string | null) => day ? formatDate(day) : '—'
 const quantity = (value: number | null | undefined, signed = false) => value == null ? '—' : `${signed && value > 0 ? '+' : ''}${integer.format(value)}`
@@ -98,7 +101,7 @@ function rowMetrics(row: FlowRow, countLabel: string, auction: boolean): { label
   ]
 }
 
-function RowDetails({ row, expected, sized, countLabel, auction, history, loading, error }: { row: FlowRow; expected: number; sized: boolean; countLabel: string; auction: boolean; history?: FlowDay[]; loading: boolean; error: boolean }) {
+function RowDetails({ row, expected, sized, countLabel, auction }: { row: FlowRow; expected: number; sized: boolean; countLabel: string; auction: boolean }) {
   return <div className="radar-details">
     <dl className="radar-mobile-metrics">{rowMetrics(row, countLabel, auction).filter(metric => !metric.primary).map(metric =>
       <div key={metric.label}><dt>{metric.label}{metric.unit && ` · ${metric.unit}`}</dt><dd data-direction={metric.sign}>{metric.value}</dd></div>
@@ -110,22 +113,37 @@ function RowDetails({ row, expected, sized, countLabel, auction, history, loadin
     {sized && !auction && !row.partial && <p className="radar-meta">Mua {quantity(row.buy_count)} · Bán {quantity(row.sell_count)} · Chưa rõ chiều {quantity(row.unknown_count)}, {quantity(row.unknown_volume)} CP, {billions(row.unknown_value)} tỷ · Tổng giá trị khớp {billions(row.matched_value)} tỷ</p>}
     {auction && row.auction_breakdown?.other && <p className="radar-meta">Định kỳ khác · {auctionBatch(row.auction_breakdown.other)}</p>}
     {auction && !row.partial && !row.auction_breakdown && <p className="radar-meta">Phiên đã lưu chỉ có tổng định kỳ. Chi tiết mở cửa và đóng cửa cần nạp lại băng nguồn.</p>}
-    <details className="radar-history"><summary>{expected > 260 ? 'Lịch sử · tối đa 260 phiên có dữ liệu gần nhất' : 'Lịch sử từng phiên'}</summary>
+  </div>
+}
+
+function RowHistory({ row, sized, auction, dates, period, onPeriodChange, history, loading, error, retry }: {
+  row: FlowRow; sized: boolean; auction: boolean; dates: string[]; period: string; onPeriodChange: (value: string) => void
+  history?: FlowDay[]; loading: boolean; error: boolean; retry: () => void
+}) {
+  const title = `${row.symbol} · ${auction ? 'Lịch sử khớp định kỳ' : 'Lịch sử mua/bán ròng'}`
+  const periodLabel = dates.length === 1 ? dayLabel(dates[0]) : `${dayLabel(dates[0])} – ${dayLabel(dates.at(-1) ?? null)}`
+  return <section className="radar-details radar-history" aria-label={title}>
+    <header className="radar-history-heading">
+      <div><h4>{title}</h4><p className="radar-meta">{exchangeLabel(row.exchange)} · {periodLabel} · {history?.length ?? '—'}/{dates.length} phiên có bản ghi</p></div>
+      <Chips label="Chu kỳ lịch sử" options={historyPeriods} value={period} onChange={onPeriodChange}/>
+    </header>
       {loading && <p className="radar-meta" role="status">Đang tải lịch sử…</p>}
-      {error && <p className="radar-meta" role="alert">Không tải được lịch sử.</p>}
-      {Boolean(history?.length) && <div className="radar-history-scroll"><table><thead><tr><th scope="col">Phiên</th>{auction
+      {error && <p className="radar-meta" role="alert">Không tải được lịch sử. <button type="button" className="secondary-button" onClick={retry}>Thử lại</button></p>}
+      {!loading && !error && history?.length === 0 && <p className="radar-meta" role="status">Chưa có dữ liệu khi chọn khoảng phiên này.</p>}
+      {dates.length > historyLimit && <p className="radar-meta">Hiển thị tối đa {historyLimit} phiên có bản ghi gần nhất.</p>}
+      {Boolean(history?.length) && <div className="radar-history-scroll" tabIndex={0} aria-label="Bảng lịch sử từng phiên"><table><thead><tr><th scope="col">Phiên</th>{auction
         ? <><th scope="col">Giá khớp BQ (nghìn đ)</th><th scope="col">KL khớp (CP)</th><th scope="col">GT khớp (tỷ)</th><th scope="col">Số bản ghi nguồn</th></>
-        : <><th scope="col">Mua (tỷ)</th><th scope="col">Bán (tỷ)</th><th scope="col">Ròng (tỷ)</th>{sized && <th scope="col">Chưa rõ chiều (tỷ)</th>}</>}</tr></thead>
+        : <><th scope="col">Mua (tỷ)</th><th scope="col">Bán (tỷ)</th><th scope="col">Ròng (tỷ)</th><th scope="col">KL ròng (CP)</th>{sized && <th scope="col">Chưa rõ chiều (tỷ)</th>}</>}</tr></thead>
         <tbody>{history?.map(day => {
           if (sized && (day.partial || day.reference_volume == null)) return <tr key={day.trading_date}>
-            <th scope="row">{dayLabel(day.trading_date)}</th><td colSpan={4}>Thiếu băng khớp · {quantity(day.tape_volume)}/{quantity(day.reference_volume)} CP đối soát</td>
+            <th scope="row">{dayLabel(day.trading_date)}</th><td colSpan={auction ? 4 : 5}>Thiếu băng khớp · {quantity(day.tape_volume)}/{quantity(day.reference_volume)} CP đối soát</td>
           </tr>
           if (auction) return <tr key={day.trading_date}><th scope="row">{dayLabel(day.trading_date)}</th><td>{auctionPrice(day.unknown_value, day.unknown_volume)}</td><td>{quantity(day.unknown_volume)}</td><td>{billions(day.unknown_value)}</td><td>{quantity(day.trade_count)}</td></tr>
           const net = day.buy_value == null || day.sell_value == null ? null : day.buy_value - day.sell_value
-          return <tr key={day.trading_date}><th scope="row">{dayLabel(day.trading_date)}</th><td>{billions(day.buy_value)}</td><td>{billions(day.sell_value)}</td><td data-direction={direction(net)}>{billions(net, true)}</td>{sized && <td>{billions(day.unknown_value)}</td>}</tr>
+          const netVolume = day.buy_volume == null || day.sell_volume == null ? null : day.buy_volume - day.sell_volume
+          return <tr key={day.trading_date}><th scope="row">{dayLabel(day.trading_date)}</th><td>{billions(day.buy_value)}</td><td>{billions(day.sell_value)}</td><td data-direction={direction(net)}>{billions(net, true)}</td><td data-direction={direction(netVolume)}>{quantity(netVolume, true)}</td>{sized && <td>{billions(day.unknown_value)}</td>}</tr>
         })}</tbody></table></div>}
-    </details>
-  </div>
+  </section>
 }
 
 export function MarketFlowRadar({ authenticated, active, tradingDates }: { authenticated: boolean; active: boolean; tradingDates: string[] }) {
@@ -138,7 +156,8 @@ export function MarketFlowRadar({ authenticated, active, tradingDates }: { authe
   const [draftRange, setDraftRange] = useState({ start: '', end: '' })
   const [appliedRange, setAppliedRange] = useState({ start: '', end: '' })
   const [search, setSearch] = useState('')
-  const [focused, setFocused] = useState('')
+  const [rowView, setRowView] = useState<RowView | null>(null)
+  const [historyPeriod, setHistoryPeriod] = useState('selection')
   const [page, setPage] = useState(0)
   const latest = tradingDates.at(-1) ?? ''
   const sized = category !== 'foreign' && category !== 'proprietary'
@@ -171,19 +190,26 @@ export function MarketFlowRadar({ authenticated, active, tradingDates }: { authe
   const maxPage = Math.max(0, Math.ceil(rows.length / pageSize) - 1)
   const currentPage = Math.min(page, maxPage)
   const visible = rows.slice(currentPage * pageSize, (currentPage + 1) * pageSize)
-  const focus = visible.find(row => rowKey(row) === focused)
+  const historyRow = rowView?.panel === 'history' ? visible.find(row => rowKey(row) === rowView.key) : undefined
+  const historyDates = historyPeriod === 'selection' ? dates : tradingDates.filter(day => day <= last).slice(-Number(historyPeriod))
+  const historyStart = historyDates[0]
   const history = useQuery({
-    queryKey: ['market-radar-history', focused, category, method, first, last], enabled: ready && Boolean(focus), staleTime: 60_000,
-    queryFn: async () => {
-      const { data, error } = await supabase!.from('market_radar_daily').select('trading_date,buy_value,sell_value,unknown_value,unknown_volume,trade_count,partial,tape_volume,reference_volume')
-        .eq('exchange', focus!.exchange).eq('symbol', focus!.symbol).eq('category', category).eq('method', method)
-        .gte('trading_date', first).lte('trading_date', last).order('trading_date', { ascending: false }).limit(260)
+    queryKey: ['market-radar-history', historyRow && rowKey(historyRow), category, method, historyStart, last], enabled: ready && Boolean(historyRow && historyStart), staleTime: 60_000,
+    queryFn: async ({ signal }) => {
+      const { data, error } = await supabase!.from('market_radar_daily').select('trading_date,buy_value,sell_value,buy_volume,sell_volume,unknown_value,unknown_volume,trade_count,partial,tape_volume,reference_volume')
+        .eq('exchange', historyRow!.exchange).eq('symbol', historyRow!.symbol).eq('category', category).eq('method', method)
+        .gte('trading_date', historyStart).lte('trading_date', last).order('trading_date', { ascending: false }).limit(historyLimit).abortSignal(signal)
       if (error) throw error
       return data as FlowDay[]
     },
   })
   const scope = exchanges.filter(([id]) => id !== 'all' && (exchange === 'all' || exchange === id))
-  function resetRows() { setPage(0); setFocused('') }
+  function resetRows() { setPage(0); setRowView(null) }
+  function toggleRow(key: string, panel: RowView['panel']) {
+    if (rowView?.key === key && rowView.panel === panel) { setRowView(null); return }
+    if (panel === 'history') setHistoryPeriod(dates.length > 1 ? 'selection' : '20')
+    setRowView({ key, panel })
+  }
   function choosePeriod(next: string) {
     if (next === 'custom') {
       if (!rangeOpen) setDraftRange(period === 'custom' ? appliedRange : { start: first, end: last })
@@ -252,21 +278,29 @@ export function MarketFlowRadar({ authenticated, active, tradingDates }: { authe
       <div className="radar-table-frame"><table className="market-radar-table">
         <thead><tr><th scope="col">Mã / Sàn</th>{rowMetrics(visible[0], countLabel, auction).map(metric =>
           <th key={metric.label} scope="col" className={metric.primary ? '' : 'radar-desktop-cell'}>{metric.label}{metric.unit && <span>{metric.unit}</span>}</th>
-        )}</tr></thead>
+        )}<th scope="col" className="radar-actions">Hành động</th></tr></thead>
         <tbody>{visible.map((row, index) => {
           const key = rowKey(row)
-          const expanded = focused === key
+          const panel = rowView?.key === key ? rowView.panel : null
+          const panelId = `market-radar-${row.exchange}-${row.symbol}-${panel}`
+          const historyLabel = auction ? `Xem lịch sử khớp định kỳ của ${row.symbol}` : `Xem lịch sử mua/bán ròng của ${row.symbol}`
           const metrics = rowMetrics(row, countLabel, auction)
           return <Fragment key={key}><tr className="radar-stock-row">
-            <th scope="row"><button type="button" className="radar-stock" aria-expanded={expanded} aria-label={`Chi tiết ${row.symbol}`} onClick={() => setFocused(expanded ? '' : key)}>
+            <th scope="row"><button type="button" className="radar-stock" aria-expanded={panel === 'details'} aria-controls={panel === 'details' ? panelId : undefined} aria-label={`Chi tiết ${row.symbol}`} onClick={() => toggleRow(key, 'details')}>
               <span className="radar-rank">{row.partial && sized ? '—' : currentPage * pageSize + index + 1}</span><span className="radar-stock-label"><strong>{row.symbol}</strong><small>{exchangeLabel(row.exchange)}{sized ? ` · ${row.observed}/${row.expected ?? dates.length} phiên${row.partial ? ' · Thiếu băng khớp' : ''}` : row.partial && ' · Mẫu giới hạn'}</small></span><ChevronDown size={14} aria-hidden="true"/>
             </button>{row.company_name && <small className="radar-company" title={row.company_name}>{row.company_name}</small>}</th>
             {metrics.map(metric => <td key={metric.label} className={metric.primary ? '' : 'radar-desktop-cell'} data-direction={metric.sign}>{metric.value}</td>)}
-          </tr>{expanded && <tr className="radar-detail-row"><td colSpan={metrics.length + 1}><RowDetails row={row} expected={row.expected ?? dates.length} sized={sized} countLabel={countLabel} auction={auction} history={history.data} loading={history.isFetching} error={history.isError}/></td></tr>}</Fragment>
+            <td className="radar-actions"><div><button type="button" className="radar-history-action" aria-label={historyLabel} title={historyLabel}
+              aria-expanded={panel === 'history'} aria-controls={panel === 'history' ? panelId : undefined} onClick={() => toggleRow(key, 'history')}>
+              <History size={15} aria-hidden="true"/><span>Lịch sử</span>
+            </button></div></td>
+          </tr>{panel && <tr id={panelId} className="radar-detail-row"><td colSpan={metrics.length + 2}>{panel === 'history'
+            ? <RowHistory row={row} sized={sized} auction={auction} dates={historyDates} period={historyPeriod} onPeriodChange={setHistoryPeriod} history={history.data} loading={history.isFetching} error={history.isError} retry={() => void history.refetch()}/>
+            : <RowDetails row={row} expected={row.expected ?? dates.length} sized={sized} countLabel={countLabel} auction={auction}/>}</td></tr>}</Fragment>
         })}</tbody>
       </table></div>
       <div className="radar-table-footer"><p className="radar-meta">{auction ? 'Giá khớp BQ tính theo khối lượng. Số bản ghi phản ánh mức gộp của Vietcap.' : '* Giá mua bình quân trong kỳ dùng để tham chiếu. Hiệu suất tính theo thị giá so với giá mua bình quân.'}</p>
-        {maxPage > 0 && <nav className="radar-pages" aria-label="Trang bảng xếp hạng"><button type="button" aria-label="Trang trước" disabled={currentPage === 0} onClick={() => { setPage(currentPage - 1); setFocused('') }}><ChevronLeft size={16}/></button><span>{currentPage + 1}/{maxPage + 1}</span><button type="button" aria-label="Trang sau" disabled={currentPage === maxPage} onClick={() => { setPage(currentPage + 1); setFocused('') }}><ChevronRight size={16}/></button></nav>}
+        {maxPage > 0 && <nav className="radar-pages" aria-label="Trang bảng xếp hạng"><button type="button" aria-label="Trang trước" disabled={currentPage === 0} onClick={() => { setPage(currentPage - 1); setRowView(null) }}><ChevronLeft size={16}/></button><span>{currentPage + 1}/{maxPage + 1}</span><button type="button" aria-label="Trang sau" disabled={currentPage === maxPage} onClick={() => { setPage(currentPage + 1); setRowView(null) }}><ChevronRight size={16}/></button></nav>}
       </div>
     </>}
     <p className="radar-meta radar-scope-note">{sized ? `Top và tổng chỉ tính mã đủ phiên đã đối soát. ${tapeMode === 'continuous_cluster' ? 'Cụm gộp các lần khớp liên tiếp cùng giây, cùng giá và cùng chiều.' : tapeMode === 'auction' ? 'Khớp định kỳ chỉ có giá trị và khối lượng chưa rõ chiều.' : 'Chiều mua/bán chủ động theo Vietcap.'} Giao dịch thỏa thuận nằm ngoài phạm vi khớp lệnh.` : 'SL lệnh hiện — khi báo cáo của nhóm chỉ có số liệu mua/bán tổng hợp.'}</p>
