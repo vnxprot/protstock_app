@@ -34,6 +34,7 @@ from .challenger_engine import assess_challenger, assess_challenger_strategies, 
 from .wyckoff import classify_wyckoff_timeframe
 from .price_basis import canonical_price_rows, same_source_window, source_family, source_version, with_volume_segments, price_row_usable, latest_coherent_revision
 from .ssi_price_rollout import archive_price_window, verify_price_window
+from .ssi_universe_history import cutover_history
 from .release_naming import release_core_rule_name
 
 # VNINDEX's first session was 28/07/2000. This keeps its benchmark history full
@@ -184,7 +185,7 @@ def run_eod(
                 symbol = symbol_row["symbol"]
                 if symbol in candidates and symbol_source != "SSI" and stored:
                     try:
-                        replacement = MarketDataProvider("SSI").history(symbol, HISTORY_START, trading_date)
+                        replacement = cutover_history(client, MarketDataProvider("SSI"), symbol, trading_date)
                         if not replacement or replacement[-1].trading_date != trading_date:
                             raise ValueError("SSI is missing the current session")
                         verify_price_window(stored, replacement)

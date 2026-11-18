@@ -13,12 +13,13 @@ from protstock.price_basis import source_family, source_version
 from protstock.provider_market import INDEX_PRICE_UNIT, MarketDataProvider
 from protstock.ssi_market_data import configured
 from protstock.ssi_price_rollout import archive_price_window, rollout_symbols, verify_price_window
+from protstock.ssi_universe_history import cutover_history
 from protstock.supabase_rest import SupabaseRestClient
 
 
 def prepare_ssi_rollout():
     day = date.fromisoformat(os.environ["TRADING_DATE"])
-    limit = int(os.getenv("SSI_PRICE_BATCH") or 4)
+    limit = int(os.getenv("SSI_PRICE_BATCH") or 12)
     if not configured() or not 1 <= limit <= 12 or day != datetime.now(VN).date():
         return
     db = SupabaseRestClient(Settings.from_env())
@@ -31,7 +32,7 @@ def prepare_ssi_rollout():
         window = [row for row in stored if HISTORY_START.isoformat() <= row["trading_date"] <= day.isoformat()]
         if window and source_family(window[-1]["source"]) != "SSI":
             try:
-                bars = MarketDataProvider("SSI").history("VNINDEX", HISTORY_START, day)
+                bars = cutover_history(db, MarketDataProvider("SSI"), "VNINDEX", day)
                 if not bars or bars[-1].trading_date != day:
                     raise ValueError("SSI VNINDEX is missing the current session")
                 verify_price_window(window, bars)
