@@ -14,6 +14,8 @@ SSI FastConnect là nguồn ưu tiên cho dữ liệu thị trường có đủ 
 
 ## Máy thu SSI trong phiên
 
+Workflow **SSI Radar live** chạy trên GitHub Actions vào ngày thường và không cần bật máy cá nhân. Hai job chia phiên tại giờ nghỉ trưa, truyền bản ghi SQLite mã hóa với thời hạn một ngày và công bố bản cập nhật 15 phút một lần. Khi khởi chạy giữa phiên, bản live có thể thiếu giao dịch trước lúc kết nối. Radar chỉ dùng băng SSI cuối ngày cho mã có dữ liệu đủ để đối chiếu.
+
 Máy Windows hoặc máy thu đang dùng chạy `python -m protstock.market_radar_ssi_live --directory <thu-muc-rieng> --universe --publish` từ 08:45 đến 15:15 trong ngày giao dịch. Máy thu cần key SSI, cấu hình Supabase phía máy chủ và `RADAR_SSI_APPROVED=true`. Bộ thu giữ SQLite tại chỗ, công bố mỗi 15 phút và chuyển bản chốt sang GitHub Actions. Máy thu có thể tắt ngoài khung giờ này. Khi máy thu vắng, phiên cuối ngày vẫn thử băng Vietcap.
 
 ## Dung lượng và khôi phục

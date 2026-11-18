@@ -21,6 +21,7 @@ from .market_radar_minutes import REPLAY_SESSIONS, prepare_replay, publish_repla
 from .market_radar_tape import classify, integer, read_tape, tape_integrity
 from .market_sources import VN
 from .ssi_market_data import configured as ssi_configured, market_data
+from .ssi_price_rollout import ROLLOUT_LIMIT
 from .supabase_rest import SupabaseRestClient
 
 EXCHANGES = ('HOSE', 'HNX', 'UPCOM')
@@ -31,7 +32,7 @@ HNX_INTERMEDIATE_SHA256 = 'b676ffa3179e8812093a1b5eafee876ae7a6aaf231078dad1bfb2
 SSI_HISTORY = 'https://iboard-api.ssi.com.vn/statistics/company/ssmi/stock-info'
 SOURCE_ERRORS = (SourceUnavailable, httpx.HTTPError, ValueError, KeyError, TypeError)
 BACKFILL_SESSIONS = 50
-BACKFILL_BUDGET = 450_000_000
+BACKFILL_BUDGET = ROLLOUT_LIMIT
 REPORT_BATCH_RESERVE = 10_000_000
 FIELDS = ('buy_value', 'sell_value', 'buy_volume', 'sell_volume', 'unknown_value', 'trade_count',
           'market_value', 'holdings', 'ownership_pct', 'room_remaining')

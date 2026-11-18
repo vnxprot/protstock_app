@@ -182,11 +182,11 @@ def stage_close(db, client, conn, day):
     print(f"SSI closing candidate staged: {day} · {len(captures)} symbols", flush=True)
 
 
-def capture(directory, db, client, symbols, watched, day, publish):
+def capture(directory, db, client, symbols, watched, day, publish, *, morning=False):
     from ssi_sdk import Auth, Stream
     from ssi_sdk.models.streaming import TradeMessage
 
-    end = datetime.combine(day, time(15, 15), VN)
+    end = datetime.combine(day, time(11, 35) if morning else time(15, 15), VN)
     queue = Queue(maxsize=50_000)
     lost = Event()
 
@@ -215,6 +215,7 @@ def capture(directory, db, client, symbols, watched, day, publish):
             stream.streaming.connect()
             for offset in range(0, len(symbols), 45):
                 stream.streaming.subscribe_symbol_trade(list(symbols)[offset:offset + 45])
+            print(f"SSI WebSocket capture started for {len(symbols)} symbols through {end:%H:%M}", flush=True)
             next_snapshot = monotonic() + 15 * 60
             while datetime.now(VN) < end:
                 batch = []
@@ -233,7 +234,7 @@ def capture(directory, db, client, symbols, watched, day, publish):
                 if publish and monotonic() >= next_snapshot:
                     try:
                         if not publish_snapshot(db, client, conn, datetime.now(VN), watched):
-                            print("Live publication deferred: PostgreSQL is at or above 400 MB", flush=True)
+                            print(f"Live publication deferred at {ROLLOUT_LIMIT:,} PostgreSQL bytes", flush=True)
                     except (httpx.HTTPError, RuntimeError, ValueError) as error:
                         print(f"Live publication deferred: {type(error).__name__}", flush=True)
                     next_snapshot = monotonic() + 15 * 60
@@ -242,12 +243,15 @@ def capture(directory, db, client, symbols, watched, day, publish):
             remaining.append(queue.get_nowait())
         if remaining:
             record(conn, symbols, remaining)
+        covered = conn.execute("select count(distinct symbol) from ticks").fetchone()[0]
+        print(f"SSI tape has trades for {covered}/{len(symbols)} symbols", flush=True)
         if lost.is_set():
             with conn:
                 conn.execute("insert or ignore into gaps values(?)", (int(end.timestamp()),))
         if publish:
             try:
-                stage_close(db, client, conn, day)
+                if not morning:
+                    stage_close(db, client, conn, day)
                 publish_snapshot(db, client, conn, datetime.now(VN), watched)
             except (httpx.HTTPError, RuntimeError, ValueError) as error:
                 print(f"Final live snapshot deferred: {type(error).__name__}", flush=True)
@@ -257,7 +261,7 @@ def finalize(directory, db, day):
     from ssi_sdk import Auth, Data
 
     if storage_used(db) >= ROLLOUT_LIMIT:
-        print("SSI end-of-day publication deferred: PostgreSQL is at or above 440 MB", flush=True)
+        print(f"SSI end-of-day publication deferred at {ROLLOUT_LIMIT:,} PostgreSQL bytes", flush=True)
         return
     now = datetime.now(VN)
     closed = now.date() if now.time() >= time(16, 30) else now.date() - timedelta(days=1)
@@ -294,6 +298,7 @@ def main():
     parser.add_argument("--directory", type=Path, required=True)
     parser.add_argument("--universe", action="store_true")
     parser.add_argument("--publish", action="store_true")
+    parser.add_argument("--morning", action="store_true", help="Stop at the lunch break for runner handoff")
     parser.add_argument("--watch", default=",".join(SYMBOLS))
     parser.add_argument("--finalize", type=date.fromisoformat)
     args = parser.parse_args()
@@ -314,13 +319,15 @@ def main():
                 finalize(args.directory, db, args.finalize)
                 return
             now = datetime.now(VN)
-            if now.weekday() > 4 or not time(8, 40) <= now.time() < time(15, 15):
+            cutoff = time(11, 35) if args.morning else time(15, 15)
+            if now.weekday() > 4 or not time(8, 40) <= now.time() < cutoff:
+                print("SSI streaming is outside the capture window", flush=True)
                 return
             prune_local_tapes(args.directory, now.date())
             symbols = {row["symbol"]: row["exchange"] for row in db.active_symbols() if row["exchange"] in EXCHANGES} if args.universe else SYMBOLS
             if args.publish and storage_used(db) < ROLLOUT_LIMIT:
                 ensure_bucket(client)
-            capture(args.directory, db, client, symbols, watched, now.date(), args.publish)
+            capture(args.directory, db, client, symbols, watched, now.date(), args.publish, morning=args.morning)
     except Exception as error:
         raise SystemExit(f"SSI recorder stopped: {type(error).__name__}") from None
 

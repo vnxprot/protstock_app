@@ -3,6 +3,7 @@ from datetime import date
 from functools import lru_cache
 from io import BytesIO
 import os
+import re
 from threading import Lock
 from time import monotonic, sleep
 from urllib.parse import urljoin, urlsplit
@@ -12,6 +13,19 @@ import httpx
 from .market_http import SourceUnavailable
 
 BASE_URL = 'https://api.ssi.com.vn'
+
+
+class MarketDataHTTPError(SourceUnavailable):
+    def __init__(self, path, response):
+        self.path = path
+        self.status = response.status_code
+        try:
+            payload = response.json()
+        except ValueError:
+            payload = {}
+        code = str(payload.get('code', '')) if isinstance(payload, dict) else ''
+        detail = f' (SSI {code})' if re.fullmatch(r'[0-9]{3,6}', code) else ''
+        super().__init__(f'SSI {path} HTTP {self.status}{detail}')
 
 
 def configured():
@@ -68,7 +82,7 @@ class MarketData:
                 response.raise_for_status()
                 return response
             except httpx.HTTPStatusError as error:
-                raise SourceUnavailable(f'SSI {address.path} HTTP {error.response.status_code}') from None
+                raise MarketDataHTTPError(address.path, error.response) from None
             except httpx.RequestError as error:
                 if attempt:
                     raise SourceUnavailable(f'SSI Market Data: {type(error).__name__}') from None
@@ -113,8 +127,8 @@ class MarketData:
     def candles(self, symbol, start, end, *, minute=False):
         pattern = '%Y/%m/%d'
         return list(self._pages('ohlc', {
-            'symbol': symbol, 'from': start.strftime(pattern) + (' 00:00:00' if minute else ''),
-            'to': end.strftime(pattern) + (' 23:59:59' if minute else ''), 'timeFrame': '1m' if minute else '1d',
+            'symbol': symbol, 'from': start.strftime(pattern) + ' 00:00:00',
+            'to': end.strftime(pattern) + ' 23:59:59', 'timeFrame': '1m' if minute else '1d',
         }))
 
     def _file_rows(self, params, *, expect_one=False):
@@ -137,8 +151,13 @@ class MarketData:
         return list(self._file_rows({'symbol': symbol, 'timeFrame': '1d'}, expect_one=True))
 
     def minute_history(self, symbol, start, end):
-        rows = list(self._file_rows({'symbol': symbol, 'timeFrame': '1m',
-                                     'fromDate': start.strftime('%Y/%m/%d'), 'toDate': end.strftime('%Y/%m/%d')})) if start < end else []
+        try:
+            rows = list(self._file_rows({'symbol': symbol, 'timeFrame': '1m',
+                                         'fromDate': start.strftime('%Y/%m/%d'), 'toDate': end.strftime('%Y/%m/%d')})) if start < end else []
+        except MarketDataHTTPError as error:
+            if error.status not in {400, 403, 404}:
+                raise
+            return self.candles(symbol, start, end, minute=True)
         if not any(ssi_date(row['tradingDate']) == end for row in rows):
             rows.extend(self.candles(symbol, end, end, minute=True))
         return rows

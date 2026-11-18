@@ -7,7 +7,7 @@ from typing import Any
 from .market_http import SourceUnavailable, request_json
 from .market_sources import KBS_BASE, VCI_CHART, vci_candles
 from .models import DailyBar
-from .ssi_market_data import market_data, ssi_date
+from .ssi_market_data import MarketDataHTTPError, market_data, ssi_date
 
 KBS_SOURCE_VERSION = "KBS_PUBLIC_V2_20260930"
 VCI_SOURCE_VERSION = "VCI_DIRECT_V1"
@@ -48,11 +48,11 @@ class MarketDataProvider:
         if use_file:
             try:
                 records = data.daily_file(symbol)
-            except SourceUnavailable as error:
+            except MarketDataHTTPError as error:
                 # Some symbols have REST history before a daily file is available.
-                if str(error) not in {"SSI /api/v3/data/file HTTP 400", "SSI /api/v3/data/file HTTP 403",
-                                      "SSI /api/v3/data/file HTTP 404"}:
+                if error.path not in {"/api/v3/data/file", "/api/v3/data/download"} or error.status not in {400, 403, 404}:
                     raise
+                print(f"SSI_FILE_FALLBACK:{symbol}:{error}", file=sys.stderr, flush=True)
                 records = data.candles(symbol, start, end)
         else:
             records = data.candles(symbol, start, end)

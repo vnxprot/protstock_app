@@ -1,0 +1,92 @@
+name: SSI Radar live
+
+on:
+  schedule:
+    # 08:42 in Vietnam, before the opening auction.
+    - cron: '42 1 * * 1-5'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: protstock-ssi-radar-live
+  cancel-in-progress: false
+
+env:
+  SUPABASE_URL: https://upmqxwktvvguegqeqibn.supabase.co
+
+jobs:
+  morning:
+    runs-on: ubuntu-latest
+    timeout-minutes: 195
+    outputs:
+      checkpoint: ${{ steps.checkpoint.outputs.ready }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+          cache: pip
+      - run: python -m pip install -e '.[ssi]'
+      - name: Capture morning trades
+        env:
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SSI_API_KEY: ${{ secrets.SSI_API_KEY }}
+          SSI_API_SECRET: ${{ secrets.SSI_API_SECRET }}
+          RADAR_SSI_APPROVED: 'true'
+        run: python -m protstock.market_radar_ssi_live --directory "$RUNNER_TEMP/ssi-tape" --universe --publish --morning
+      - name: Encrypt lunch checkpoint
+        id: checkpoint
+        if: ${{ !cancelled() }}
+        env:
+          SSI_API_SECRET: ${{ secrets.SSI_API_SECRET }}
+        run: |
+          day=$(TZ=Asia/Ho_Chi_Minh date +%F)
+          tape="$RUNNER_TEMP/ssi-tape/ssi-radar-$day.sqlite3"
+          if [[ ! -s "$tape" ]]; then exit 0; fi
+          gpg --batch --pinentry-mode loopback --passphrase-fd 0 --cipher-algo AES256 --symmetric \
+            --output "$RUNNER_TEMP/ssi-tape.gpg" "$tape" <<< "$SSI_API_SECRET"
+          echo 'ready=true' >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() && steps.checkpoint.outputs.ready == 'true' }}
+        with:
+          name: encrypted-ssi-lunch-checkpoint
+          path: ${{ runner.temp }}/ssi-tape.gpg
+          if-no-files-found: error
+          overwrite: true
+          retention-days: 1
+
+  afternoon:
+    needs: morning
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 235
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+          cache: pip
+      - run: python -m pip install -e '.[ssi]'
+      - uses: actions/download-artifact@v4
+        if: needs.morning.outputs.checkpoint == 'true'
+        with:
+          name: encrypted-ssi-lunch-checkpoint
+          path: ${{ runner.temp }}
+      - name: Restore lunch checkpoint
+        if: needs.morning.outputs.checkpoint == 'true'
+        env:
+          SSI_API_SECRET: ${{ secrets.SSI_API_SECRET }}
+        run: |
+          day=$(TZ=Asia/Ho_Chi_Minh date +%F)
+          mkdir -p "$RUNNER_TEMP/ssi-tape"
+          gpg --batch --pinentry-mode loopback --passphrase-fd 0 --decrypt \
+            --output "$RUNNER_TEMP/ssi-tape/ssi-radar-$day.sqlite3" "$RUNNER_TEMP/ssi-tape.gpg" <<< "$SSI_API_SECRET"
+      - name: Capture afternoon trades and stage closing tape
+        env:
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SSI_API_KEY: ${{ secrets.SSI_API_KEY }}
+          SSI_API_SECRET: ${{ secrets.SSI_API_SECRET }}
+          RADAR_SSI_APPROVED: 'true'
+        run: python -m protstock.market_radar_ssi_live --directory "$RUNNER_TEMP/ssi-tape" --universe --publish
