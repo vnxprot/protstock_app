@@ -134,6 +134,7 @@ jobs:
           SSI_API_SECRET: ${{ secrets.SSI_API_SECRET }}
           SSI_PRICE_BATCH: ${{ vars.SSI_PRICE_BATCH }}
           PROTSTOCK_CHALLENGER_ENABLED: ${{ vars.PROTSTOCK_CHALLENGER_ENABLED }}
+          PROTSTOCK_PRICE_CUTOVER: ${{ vars.PROTSTOCK_PRICE_CUTOVER }}
         run: python .github/scripts/eod_parallel.py
       - name: Hand off same-run computations
         if: always()
@@ -149,7 +150,7 @@ jobs:
 
   finalize:
     needs: [preflight, check-universe, ingest]
-    if: always() && needs.preflight.outputs.action == 'RUN' && needs.check-universe.result == 'success' && (needs.ingest.outputs.source_ready == 'success' || inputs.publish_only == true)
+    if: always() && vars.PROTSTOCK_PRICE_CUTOVER != 'true' && needs.preflight.outputs.action == 'RUN' && needs.check-universe.result == 'success' && (needs.ingest.outputs.source_ready == 'success' || inputs.publish_only == true)
     runs-on: ubuntu-latest
     outputs:
       trading_date: ${{ steps.finalize.outputs.trading_date }}
@@ -199,7 +200,7 @@ jobs:
 
   report:
     needs: [preflight, check-universe, ingest, finalize]
-    if: always() && (needs.preflight.outputs.action == 'RUN' || needs.preflight.result == 'failure')
+    if: always() && vars.PROTSTOCK_PRICE_CUTOVER != 'true' && (needs.preflight.outputs.action == 'RUN' || needs.preflight.result == 'failure')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -217,7 +218,7 @@ jobs:
 
   research-refresh:
     needs: [preflight, ingest, finalize]
-    if: always() && inputs.refresh_research == true && needs.preflight.outputs.action == 'RUN' && needs.ingest.outputs.source_ready == 'success'
+    if: always() && vars.PROTSTOCK_PRICE_CUTOVER != 'true' && inputs.refresh_research == true && needs.preflight.outputs.action == 'RUN' && needs.ingest.outputs.source_ready == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 180
     steps:
@@ -235,7 +236,7 @@ jobs:
 
   compact-source-refresh:
     needs: [research-refresh, finalize]
-    if: always() && inputs.refresh_research == true
+    if: always() && vars.PROTSTOCK_PRICE_CUTOVER != 'true' && inputs.refresh_research == true
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:

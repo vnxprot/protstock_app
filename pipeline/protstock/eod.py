@@ -34,7 +34,7 @@ from .challenger_engine import assess_challenger, assess_challenger_strategies, 
 from .wyckoff import classify_wyckoff_timeframe
 from .price_basis import canonical_price_rows, same_source_window, source_family, source_version, with_volume_segments, price_row_usable, latest_coherent_revision
 from .ssi_price_rollout import archive_price_window, verify_price_window
-from .ssi_universe_history import cutover_history
+from .ssi_universe_history import cutover_history, ssi_index_provider
 from .release_naming import release_core_rule_name
 
 # VNINDEX's first session was 28/07/2000. This keeps its benchmark history full
@@ -84,7 +84,10 @@ def run_eod(
     missing_only: bool = False,
     symbol_names: set[str] | None = None,
     prepared_dir: Path | None = None,
+    prices_only: bool = False,
 ) -> dict[str, Any]:
+    if prices_only:
+        write_breadth_snapshot = False
     client = SupabaseRestClient(Settings.from_env())
     try:
         trading_date = resolve_eod_session(client, trading_date)
@@ -101,8 +104,8 @@ def run_eod(
     pending_signals = []
     try:
         symbols = client.active_symbols()
-        active_rules = client.active_rule_versions()
-        closed_snapshot_keys = getattr(client, "active_closed_snapshot_keys", lambda *_: set())(trading_date, ALGORITHM_VERSION)
+        active_rules = [] if prices_only else client.active_rule_versions()
+        closed_snapshot_keys = set() if prices_only else getattr(client, "active_closed_snapshot_keys", lambda *_: set())(trading_date, ALGORITHM_VERSION)
         counts["engine_stats"] = _initialize_engine_stats(active_rules)
         benchmark_daily: list[dict] = []
         benchmark_history: list[dict] = []
@@ -134,7 +137,7 @@ def run_eod(
                     or (index_bars and source_family(stored_index[-1].get("source")) != source_family(index_bars[-1].source))
                     or _benchmark_overlap_changed(stored_index, index_bars)):
                 selected_index_source = source_family(index_bars[-1].source) if index_bars else index_source
-                index_provider = MarketDataProvider(selected_index_source)
+                index_provider = ssi_index_provider(client) if selected_index_source == "SSI" else MarketDataProvider(selected_index_source)
                 index_bars = _fetch_requested_session(index_provider, selected_index_source, "VNINDEX", HISTORY_START, trading_date)
                 index_rows = [{
                     "index_id": index["id"], "trading_date": bar.trading_date.isoformat(),
@@ -271,7 +274,7 @@ def run_eod(
                 if any(not price_row_usable(row) for row in history):
                     raise ValueError("INVALID_PRICE_BAR_IN_CALCULATION_WINDOW")
                 analysis_rows = [{**row, "date": row["trading_date"]} for row in history]
-                if analysis_rows:
+                if analysis_rows and not prices_only:
                     try:
                         client.upsert("momentum_radar_assessments", [assess_momentum_radar(
                             symbol_row["id"], analysis_rows,
@@ -385,7 +388,8 @@ def run_eod(
             counts["expected_symbols"] = breadth["eligible_count"]
         if status == "SUCCEEDED" and write_breadth_snapshot and symbol_offset == 0 and symbol_limit is None and benchmark_daily and benchmark_daily[-1]["date"] == trading_date.isoformat():
             counts["published_signals"] = client.consolidated_signal_count(trading_date, ALGORITHM_VERSION)
-        _persist_engine_stats(client, job["id"], trading_date, counts)
+        if not prices_only:
+            _persist_engine_stats(client, job["id"], trading_date, counts)
         client.finish_job(job["id"], {"status": status, "finished_at": _now(), "counts": counts, "warnings": warnings})
         return {"job_id": job["id"], "status": status, **counts}
     except Exception as exc:

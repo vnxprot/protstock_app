@@ -21,6 +21,7 @@ concurrency:
 
 jobs:
   recover:
+    if: vars.PROTSTOCK_PRICE_CUTOVER != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:

@@ -30,6 +30,7 @@ concurrency:
 
 jobs:
   preflight:
+    if: vars.PROTSTOCK_PRICE_CUTOVER != 'true'
     runs-on: ubuntu-latest
     outputs:
       action: ${{ steps.guard.outputs.action }}

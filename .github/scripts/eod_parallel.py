@@ -76,5 +76,6 @@ def run_lots(manifest: dict) -> int:
 
 
 if __name__ == "__main__":
-    prepare_ssi_rollout()
+    if os.getenv("PROTSTOCK_PRICE_CUTOVER") != "true":
+        prepare_ssi_rollout()
     raise SystemExit(run_lots(json.loads(os.environ["SHARD_MATRIX"])))

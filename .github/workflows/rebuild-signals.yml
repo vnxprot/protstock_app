@@ -33,7 +33,7 @@ concurrency:
 
 jobs:
   rebuild:
-    if: inputs.start_date == '' || vars.PROTSTOCK_ALLOW_RANGE_REBUILD == 'true'
+    if: vars.PROTSTOCK_PRICE_CUTOVER != 'true' && (inputs.start_date == '' || vars.PROTSTOCK_ALLOW_RANGE_REBUILD == 'true')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

@@ -6,6 +6,7 @@ from decimal import Decimal
 import gzip
 from hashlib import sha256
 import json
+import os
 
 import httpx
 
@@ -23,6 +24,8 @@ from .supabase_rest import SupabaseRestClient
 
 PRICES_START = date(2021, 1, 1)
 FLOW_START = date(2026, 9, 11)
+VNINDEX_REPAIR_DAY = date(2021, 8, 23)
+VNINDEX_REPAIR_SOURCE = "SSI_VNINDEX_VCI_REPAIR"
 FOREIGN_FIELDS = {
     "buy_volume": "totalForeignBuy", "sell_volume": "totalForeignSell",
     "buy_value": "totalForeignBuyValue", "sell_value": "totalForeignSellValue",
@@ -61,7 +64,26 @@ def publish_staged(db, payload):
 
 
 def pack(bar):
-    return [bar.trading_date.isoformat(), *[str(getattr(bar, field)) for field in ("open", "high", "low", "close")], bar.volume]
+    return [bar.trading_date.isoformat(), *[str(getattr(bar, field)) for field in ("open", "high", "low", "close")], bar.volume, bar.source]
+
+
+def ssi_index_provider(db):
+    index = db.market_index("VNINDEX")
+    rows = db._pages("market_index_prices", {
+        "index_id": f"eq.{index['id']}", "trading_date": f"eq.{VNINDEX_REPAIR_DAY}",
+        "select": "open,high,low,close,volume,source",
+    })
+    if rows and rows[0]["source"] in {"VCI_DIRECT", VNINDEX_REPAIR_SOURCE}:
+        row = rows[0]
+        repair = DailyBar.create(symbol="VNINDEX", trading_date=VNINDEX_REPAIR_DAY, open=row["open"],
+                                 high=row["high"], low=row["low"], close=row["close"], volume=row["volume"],
+                                 source=VNINDEX_REPAIR_SOURCE)
+        # MBS's closing report confirms 1,298.86; VNDirect also identifies close as session low.
+        close = Decimal("1298.86")
+        tolerance = Decimal("0.015")
+        if not repair.validate() and abs(repair.close - close) <= tolerance and abs(repair.low - close) <= tolerance:
+            return MarketDataProvider("SSI", vnindex_repair=repair)
+    return MarketDataProvider("SSI")
 
 
 def cutover_history(db, provider, symbol, end):
@@ -73,8 +95,8 @@ def cutover_history(db, provider, symbol, end):
     if payload and payload["prices"]:
         stamp = datetime.fromisoformat(payload["created_at"])
         saved = [DailyBar(symbol, date.fromisoformat(day), Decimal(o), Decimal(h), Decimal(l),
-                          Decimal(c), volume, "SSI_FASTCONNECT", stamp)
-                 for day, o, h, l, c, volume in payload["prices"] if day <= end.isoformat()]
+                          Decimal(c), volume, source[0] if source else "SSI_FASTCONNECT", stamp)
+                 for day, o, h, l, c, volume, *source in payload["prices"] if day <= end.isoformat()]
         if saved and end - saved[-1].trading_date <= timedelta(days=14):
             latest = provider.history(symbol, saved[-1].trading_date, end)
             if latest and pack(saved[-1]) == pack(latest[0]) and latest[-1].trading_date == end:
@@ -124,6 +146,7 @@ def run(db, shard, shards):
     _, days = latest_sessions(db)
     day = date.fromisoformat(days[-1])
     provider = MarketDataProvider("SSI")
+    prices_only = os.getenv("PROTSTOCK_PRICE_CUTOVER") == "true"
     universe = [{"symbol": "VNINDEX"}, *db.active_symbols()]
     staged = 0
     for item in universe[shard::shards]:
@@ -132,7 +155,7 @@ def run(db, shard, shards):
         try:
             payload = read_staged(db, symbol)
             if not payload or payload["end"] < (day - timedelta(days=7)).isoformat():
-                prices = provider.history(symbol, PRICES_START, day)
+                prices = (provider if is_stock else ssi_index_provider(db)).history(symbol, PRICES_START, day)
                 if not prices:
                     raise ValueError("No SSI daily candles")
                 payload = {"symbol": symbol, "prices_start": PRICES_START.isoformat(), "flow_start": FLOW_START.isoformat(),
@@ -140,11 +163,11 @@ def run(db, shard, shards):
                            "prices": [pack(bar) for bar in prices], "foreign": {}}
                 publish_staged(db, payload)
             staged += 1
-            if is_stock and payload.get("foreign_end") != payload["end"]:
+            if is_stock and not prices_only and payload.get("foreign_end") != payload["end"]:
                 payload["foreign"] = foreign_window(symbol, date.fromisoformat(payload["end"]))
                 payload["foreign_end"] = payload["end"]
                 publish_staged(db, payload)
-            reports = publish_foreign_window(db, item, payload, set(days)) if is_stock else 0
+            reports = publish_foreign_window(db, item, payload, set(days)) if is_stock and not prices_only else 0
             print(f"{symbol}: {len(payload['prices'])} price sessions, {len(payload['foreign'])} foreign reports staged, {reports} reports published", flush=True)
         except Exception as error:
             report_deferred(symbol, error)
@@ -174,7 +197,7 @@ def promote(db, limit):
     })
     if index_rows and source_family(index_rows[-1]["source"]) != "SSI":
         try:
-            bars = cutover_history(db, provider, "VNINDEX", day)
+            bars = cutover_history(db, ssi_index_provider(db), "VNINDEX", day)
             if not bars or bars[-1].trading_date != day:
                 raise ProviderDataError("VNINDEX missing the latest completed session")
             verify_price_window(index_rows, bars)

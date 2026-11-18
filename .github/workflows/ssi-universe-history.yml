@@ -62,6 +62,7 @@ jobs:
           SSI_API_KEY: ${{ secrets.SSI_API_KEY }}
           SSI_API_SECRET: ${{ secrets.SSI_API_SECRET }}
           SHARD: ${{ matrix.shard }}
+          PROTSTOCK_PRICE_CUTOVER: ${{ vars.PROTSTOCK_PRICE_CUTOVER }}
         run: python -m protstock.ssi_universe_history --shard "$SHARD" --shards 6
 
   publish:

@@ -24,8 +24,9 @@ class MarketDataProvider:
     """VCI first; operational failures may select a complete KBS window."""
     API_BASE = KBS_BASE
 
-    def __init__(self, source: str = "AUTO") -> None:
+    def __init__(self, source: str = "AUTO", *, vnindex_repair: DailyBar | None = None) -> None:
         self.source = source.upper()
+        self.vnindex_repair = vnindex_repair
         if self.source not in {"AUTO", "SSI", "VCI", "KBS"}:
             raise ValueError("source must be AUTO, SSI, VCI, or KBS")
 
@@ -71,8 +72,15 @@ class MarketDataProvider:
                                   high=float(row["high"]) / scale, low=float(row["low"]) / scale,
                                   close=float(row["close"]) / scale, volume=int(row["volume"]),
                                   source="SSI_FASTCONNECT", collected_at=collected_at)
-            if bar.validate():
-                raise ProviderDataError(f"Invalid SSI bar for {symbol} on {day}")
+            problems = bar.validate()
+            if problems:
+                detail = (f"Invalid SSI bar for {symbol} on {day}: {','.join(problems)} "
+                          f"O={bar.open} H={bar.high} L={bar.low} C={bar.close} V={bar.volume}")
+                repair = self.vnindex_repair
+                if symbol != "VNINDEX" or repair is None or day != repair.trading_date:
+                    raise ProviderDataError(detail)
+                print(f"SSI_VNINDEX_REPAIR:{detail}; verified VCI bar retained", file=sys.stderr, flush=True)
+                bar = repair
             previous = bars.setdefault(day, bar)
             if previous != bar:
                 raise ProviderDataError(f"Conflicting SSI bars for {symbol} on {day}")

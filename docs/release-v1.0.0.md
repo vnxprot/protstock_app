@@ -20,6 +20,8 @@ Máy Windows hoặc máy thu đang dùng chạy `python -m protstock.market_rada
 
 ## Dung lượng và khôi phục
 
+Trong đợt ưu tiên chuyển OHLCV, đặt biến Actions `PROTSTOCK_PRICE_CUTOVER=true`. Fast Lane nạp giá ngày và VNINDEX. Rebuild, backtest, đánh giá kết quả, Radar lịch sử và các tác vụ tính bổ sung sẽ chờ đến khi đặt lại biến thành `false`. Workflow đồng bộ SSI tải OHLCV trong Storage rồi công bố từng lô theo dung lượng còn lại. Khi cần, có thể thu hồi dung lượng bằng chế độ `reclaim-history`. Nến VNINDEX 23/08/2021 được giữ từ Vietcap với dấu vết nguồn riêng nếu phản hồi SSI sai và bản Vietcap vượt qua kiểm tra.
+
 Các tác vụ ghi dữ liệu SSI tạm dừng ở ngưỡng vận hành 480 MB PostgreSQL, chừa 20 MB dưới hạn mức miễn phí. Giữ bản xem lại 5 phiên trong Storage, báo cáo Radar theo cửa sổ 50 phiên và các nhóm băng khớp theo cửa sổ 20 phiên. Kho lưu riêng tư dùng ngân sách 450 MB toàn dự án. Lưu tick gốc trên máy thu trong 7 ngày.
 
 Khi cần dừng đợt chuyển, đặt `SSI_PRICE_BATCH=0`. Khôi phục một mã bằng bản nén đã xác minh trong `ssi-cutover/daily_prices/<symbol_id>/` rồi chạy Fast Lane cho phiên đang phục vụ. Phần VNINDEX dùng thư mục `ssi-cutover/market_index_prices/`. Cờ `RADAR_SSI_EOD=false` dừng tiếp nhận ứng viên SSI mới.
