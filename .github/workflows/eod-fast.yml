@@ -133,6 +133,7 @@ jobs:
           SSI_API_KEY: ${{ secrets.SSI_API_KEY }}
           SSI_API_SECRET: ${{ secrets.SSI_API_SECRET }}
           SSI_PRICE_BATCH: ${{ vars.SSI_PRICE_BATCH }}
+          PROTSTOCK_CHALLENGER_ENABLED: ${{ vars.PROTSTOCK_CHALLENGER_ENABLED }}
         run: python .github/scripts/eod_parallel.py
       - name: Hand off same-run computations
         if: always()

@@ -21,11 +21,10 @@ from .market_radar_ssi import SYMBOLS, closed_reference, ssi_config, trade_recor
 from .market_radar_tape import Match, phase
 from .market_sources import VN
 from .research_archive import check_storage_budget
+from .ssi_price_rollout import ROLLOUT_LIMIT
 from .supabase_rest import SupabaseRestClient
 
 LIVE_BUCKET = "market-radar-live"
-LIVE_LIMIT = 400_000_000
-EOD_LIMIT = 440_000_000
 MAX_SNAPSHOT_BYTES = 512_000
 LOCAL_DAYS = 7
 
@@ -130,7 +129,7 @@ def ensure_bucket(client):
 
 
 def publish_snapshot(db, client, conn, now, watched):
-    if storage_used(db) >= LIVE_LIMIT:
+    if storage_used(db) >= ROLLOUT_LIMIT:
         return False
     files = {exchange: gzip.compress(json.dumps(value, separators=(",", ":")).encode(), mtime=0)
              for exchange, value in snapshot(conn, now, watched).items() if value["rows"]}
@@ -152,7 +151,7 @@ def captured_trades(conn, symbol):
 
 
 def stage_close(db, client, conn, day):
-    if storage_used(db) >= LIVE_LIMIT or conn.execute("select 1 from gaps limit 1").fetchone():
+    if storage_used(db) >= ROLLOUT_LIMIT or conn.execute("select 1 from gaps limit 1").fetchone():
         return
     captures = {}
     invalid = {row[0] for row in conn.execute("select symbol from invalid")}
@@ -257,7 +256,7 @@ def capture(directory, db, client, symbols, watched, day, publish):
 def finalize(directory, db, day):
     from ssi_sdk import Auth, Data
 
-    if storage_used(db) >= EOD_LIMIT:
+    if storage_used(db) >= ROLLOUT_LIMIT:
         print("SSI end-of-day publication deferred: PostgreSQL is at or above 440 MB", flush=True)
         return
     now = datetime.now(VN)
@@ -319,7 +318,7 @@ def main():
                 return
             prune_local_tapes(args.directory, now.date())
             symbols = {row["symbol"]: row["exchange"] for row in db.active_symbols() if row["exchange"] in EXCHANGES} if args.universe else SYMBOLS
-            if args.publish and storage_used(db) < LIVE_LIMIT:
+            if args.publish and storage_used(db) < ROLLOUT_LIMIT:
                 ensure_bucket(client)
             capture(args.directory, db, client, symbols, watched, now.date(), args.publish)
     except Exception as error:

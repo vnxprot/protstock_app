@@ -13,7 +13,23 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  authorize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - run: python -m pip install -e .
+      - name: Verify SSI Market Data credentials
+        env:
+          SSI_API_KEY: ${{ secrets.SSI_API_KEY }}
+          SSI_API_SECRET: ${{ secrets.SSI_API_SECRET }}
+        run: python -c 'from protstock.ssi_market_data import market_data; market_data().authenticate()'
+
   stage:
+    needs: authorize
     runs-on: ubuntu-latest
     timeout-minutes: 65
     strategy:
@@ -36,3 +52,27 @@ jobs:
           SSI_API_SECRET: ${{ secrets.SSI_API_SECRET }}
           SHARD: ${{ matrix.shard }}
         run: python -m protstock.ssi_universe_history --shard "$SHARD" --shards 6
+
+  publish:
+    needs: [authorize, stage]
+    if: ${{ !cancelled() && needs.authorize.result == 'success' && vars.SSI_PRICE_BATCH != '0' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 95
+    concurrency:
+      group: protstock-eod
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+          cache: pip
+      - run: python -m pip install -e '.[ssi]'
+      - name: Publish complete SSI price series
+        env:
+          SUPABASE_URL: https://upmqxwktvvguegqeqibn.supabase.co
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SSI_API_KEY: ${{ secrets.SSI_API_KEY }}
+          SSI_API_SECRET: ${{ secrets.SSI_API_SECRET }}
+          SSI_PRICE_BATCH: ${{ vars.SSI_PRICE_BATCH || '30' }}
+        run: python -m protstock.ssi_universe_history --promote "$SSI_PRICE_BATCH"

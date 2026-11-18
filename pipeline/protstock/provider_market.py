@@ -45,7 +45,17 @@ class MarketDataProvider:
     def _ssi_history(self, symbol: str, start: date, end: date) -> list[DailyBar]:
         data = market_data()
         use_file = (end - start).days > 90 and symbol != "VNINDEX"
-        records = data.daily_file(symbol) if use_file else data.candles(symbol, start, end)
+        if use_file:
+            try:
+                records = data.daily_file(symbol)
+            except SourceUnavailable as error:
+                # Some symbols have REST history before a daily file is available.
+                if str(error) not in {"SSI /api/v3/data/file HTTP 400", "SSI /api/v3/data/file HTTP 403",
+                                      "SSI /api/v3/data/file HTTP 404"}:
+                    raise
+                records = data.candles(symbol, start, end)
+        else:
+            records = data.candles(symbol, start, end)
         if use_file and not any(ssi_date(row["tradingDate"]) == end for row in records):
             records.extend(data.candles(symbol, max(start, end - timedelta(days=14)), end))
         scale = 1 if symbol.upper().endswith("INDEX") else 1000

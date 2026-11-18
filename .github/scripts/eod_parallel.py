@@ -20,7 +20,7 @@ from protstock.supabase_rest import SupabaseRestClient
 def prepare_ssi_rollout():
     day = date.fromisoformat(os.environ["TRADING_DATE"])
     limit = int(os.getenv("SSI_PRICE_BATCH") or 12)
-    if not configured() or not 1 <= limit <= 12 or day != datetime.now(VN).date():
+    if not configured() or not 1 <= limit <= 30 or day != datetime.now(VN).date():
         return
     db = SupabaseRestClient(Settings.from_env())
     try:

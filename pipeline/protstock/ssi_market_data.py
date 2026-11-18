@@ -29,7 +29,7 @@ class MarketData:
         self.token = ''
         self.refresh_at = 0
 
-    def _token(self):
+    def authenticate(self):
         if not configured():
             raise SourceUnavailable('SSI Market Data credentials are unavailable')
         with self.lock:
@@ -40,7 +40,9 @@ class MarketData:
                     })
                     response.raise_for_status()
                     self.token = response.json()['accessToken']
-                except (httpx.HTTPError, ValueError, KeyError) as error:
+                except httpx.HTTPStatusError as error:
+                    raise SourceUnavailable(f'SSI authentication HTTP {error.response.status_code}') from None
+                except (httpx.RequestError, ValueError, KeyError) as error:
                     raise SourceUnavailable(f'SSI authentication: {type(error).__name__}') from None
                 if not self.token:
                     raise SourceUnavailable('SSI authentication returned an empty token')
@@ -55,7 +57,7 @@ class MarketData:
         for attempt in range(2):
             try:
                 response = self.client.get(path, params=params, headers={
-                    'Authorization': f'Bearer {token or self._token()}', 'Content-Type': 'application/json',
+                    'Authorization': f'Bearer {token or self.authenticate()}', 'Content-Type': 'application/json',
                 })
                 if attempt == 0 and response.status_code in (429, 502, 503, 504):
                     retry = response.headers.get('Retry-After', '')
@@ -66,7 +68,7 @@ class MarketData:
                 response.raise_for_status()
                 return response
             except httpx.HTTPStatusError as error:
-                raise SourceUnavailable(f'SSI Market Data HTTP {error.response.status_code}') from None
+                raise SourceUnavailable(f'SSI {address.path} HTTP {error.response.status_code}') from None
             except httpx.RequestError as error:
                 if attempt:
                     raise SourceUnavailable(f'SSI Market Data: {type(error).__name__}') from None
@@ -118,7 +120,7 @@ class MarketData:
     def _file_rows(self, params, *, expect_one=False):
         from pyarrow.parquet import read_table
 
-        token = self._token()
+        token = self.authenticate()
         files = self._get('/api/v3/data/file', params, token=token).json()['files']
         if expect_one and len(files) != 1:
             raise SourceUnavailable('Expected one SSI daily file')

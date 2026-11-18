@@ -17,6 +17,7 @@ concurrency:
 
 jobs:
   shadow:
+    if: vars.PROTSTOCK_CHALLENGER_ENABLED == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 120
     steps:
@@ -31,6 +32,7 @@ jobs:
           SUPABASE_URL: https://upmqxwktvvguegqeqibn.supabase.co
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           TRADING_DATE: ${{ inputs.trading_date }}
+          PROTSTOCK_CHALLENGER_ENABLED: ${{ vars.PROTSTOCK_CHALLENGER_ENABLED }}
         run: |
           args=()
           if [ -n "$TRADING_DATE" ]; then args+=(--date "$TRADING_DATE"); fi

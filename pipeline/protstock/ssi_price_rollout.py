@@ -10,7 +10,7 @@ import httpx
 from .provider_market import ProviderDataError
 from .research_archive import BUCKET, check_storage_budget
 
-ROLLOUT_LIMIT = 400_000_000
+ROLLOUT_LIMIT = 480_000_000
 
 
 def verify_price_window(stored, fetched):
@@ -31,7 +31,7 @@ def rollout_symbols(db, day, limit):
     response = db._request("POST", "/rpc/market_radar_storage", json={"p_prune": False})
     response.raise_for_status()
     if int(response.json()) >= ROLLOUT_LIMIT:
-        print("::notice::SSI price cutover deferred while PostgreSQL is at or above 400 MB", flush=True)
+        print(f"::notice::SSI price cutover deferred at {ROLLOUT_LIMIT // 1_000_000} MB PostgreSQL", flush=True)
         return []
     migrated = db._pages("daily_prices", {"select": "symbol_id", "source": "eq.SSI_FASTCONNECT",
         "trading_date": f"gte.{(day - timedelta(days=60)).isoformat()}", "order": "trading_date.desc,symbol_id.asc"})
@@ -39,7 +39,7 @@ def rollout_symbols(db, day, limit):
     ids = {item["symbol_id"] for item in migrated}
     pending = [item["symbol"] for item in active if item["id"] not in ids]
     pending.sort(key=lambda symbol: sha256(f"{day}:{symbol}".encode()).digest())
-    return pending[:limit]
+    return pending[:limit] if limit is not None else pending
 
 
 def archive_price_window(db, table, key, rows):

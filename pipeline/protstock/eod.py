@@ -1084,9 +1084,16 @@ def _write_analysis(
         client.delete_consolidated_signal(symbol_id, timeframe, context.get("evaluation_date", result["as_of_date"]))
 
 
+def challenger_enabled() -> bool:
+    return os.getenv("PROTSTOCK_CHALLENGER_ENABLED", "").lower() == "true"
+
+
 def _write_challenger_shadow(client, pending_signals: list, market_context: dict, trading_date: date,
                              counts: dict, warnings: list[str]) -> None:
     """Best-effort isolated persistence: shadow failures never change Champion publication."""
+    if not challenger_enabled():
+        counts["challenger_status"] = "PAUSED"
+        return
     day = trading_date.isoformat()
     expected = sum(timeframe == "D" and bool(rows) and rows[-1]["date"] == day
                    for _symbol_id, timeframe, rows, *_rest in pending_signals)

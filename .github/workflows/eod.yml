@@ -72,6 +72,7 @@ jobs:
           SOURCE: ${{ inputs.source || 'AUTO' }}
           SSI_API_KEY: ${{ secrets.SSI_API_KEY }}
           SSI_API_SECRET: ${{ secrets.SSI_API_SECRET }}
+          PROTSTOCK_CHALLENGER_ENABLED: ${{ vars.PROTSTOCK_CHALLENGER_ENABLED }}
         run: |
           args=()
           if [ -n "$TRADING_DATE" ]; then args+=(--date "$TRADING_DATE"); fi

@@ -15,6 +15,7 @@ try {
  await db.exec(`create schema extensions; create schema auth; create schema storage;
  create role authenticated; create role anon; create role service_role bypassrls;
  create table auth.users(id uuid primary key,email text);
+ create table storage.buckets(id text primary key, name text not null, public boolean, file_size_limit bigint, allowed_mime_types text[]);
  create table storage.objects(bucket_id text not null, name text not null, metadata jsonb);
  alter table storage.objects enable row level security;
  create function auth.uid() returns uuid language sql stable as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;

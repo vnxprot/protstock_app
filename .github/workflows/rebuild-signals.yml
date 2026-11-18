@@ -49,6 +49,7 @@ jobs:
           TRADING_DATE: ${{ inputs.trading_date }}
           START_DATE: ${{ inputs.start_date }}
           SEND_TELEGRAM: ${{ inputs.send_telegram }}
+          PROTSTOCK_CHALLENGER_ENABLED: ${{ vars.PROTSTOCK_CHALLENGER_ENABLED }}
         run: |
           args=()
           offset=''

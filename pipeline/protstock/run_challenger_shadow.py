@@ -6,7 +6,7 @@ import argparse
 from datetime import date
 
 from .config import Settings
-from .eod import _write_challenger_shadow, _history_limit, _confirmed_week_end, _confirmed_month_end
+from .eod import _write_challenger_shadow, _history_limit, _confirmed_week_end, _confirmed_month_end, challenger_enabled
 from .challenger_engine import recovery_status
 from .indicators import calculate_indicators
 from .period_signals import monthly_trend
@@ -17,6 +17,8 @@ from .price_basis import with_volume_segments, price_row_usable
 
 
 def run_shadow_session(client: SupabaseRestClient, trading_date: str | None = None) -> dict:
+    if not challenger_enabled():
+        return {"challenger_status": "PAUSED"}
     breadth_rows = client._pages("market_breadth_snapshots", {
         "select": "*", **({"trading_date": f"eq.{trading_date}"} if trading_date else {}),
         "order": "trading_date.desc", "limit": "1"}, limit=1)
