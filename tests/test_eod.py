@@ -60,7 +60,7 @@ def test_current_core_stats_use_restart_label() -> None:
     stats = _initialize_engine_stats([{"id": "version", "dsl": {"timeframes": ["D"]},
                                       "rules": {"id": "rule", "kind": "CORE_PACK",
                                                 "name": "Prot Core Engine v2.0"}}])
-    assert stats["version"]["engine_name"] == "Prot Core Engine · Đa khung v1.0.0"
+    assert stats["version"]["engine_name"] == "Prot Core Engine · Đa khung v0.0.0"
 
 
 def test_prepared_analysis_rejects_other_session_or_revision(tmp_path) -> None:

@@ -1,11 +1,11 @@
 // Presentation labels only. Persisted engine names and revision IDs remain intact
 // so historical signals, EOD publication joins, and backtests stay reproducible.
-export const STRUCTURE_VERSION = 'v1.0.0'
+export const STRUCTURE_VERSION = 'v0.0.0'
 
 const coreEngineLabels: Record<string, string> = {
-  'Prot Core Engine v0.0': 'Prot Core Engine · Mẫu hình v1.0.0',
-  'Prot Core Engine v1.0': 'Prot Core Engine · Nền tảng v1.0.0',
-  'Prot Core Engine v2.0': 'Prot Core Engine · Đa khung v1.0.0',
+  'Prot Core Engine v0.0': 'Prot Core Engine · Mẫu hình v0.0.0',
+  'Prot Core Engine v1.0': 'Prot Core Engine · Nền tảng v0.0.0',
+  'Prot Core Engine v2.0': 'Prot Core Engine · Đa khung v0.0.0',
 }
 
 export function displayStructureName(name: string): string {

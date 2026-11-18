@@ -33,7 +33,6 @@ concurrency:
 
 jobs:
   rebuild:
-    if: vars.PROTSTOCK_PRICE_CUTOVER != 'true' && (inputs.start_date == '' || vars.PROTSTOCK_ALLOW_RANGE_REBUILD == 'true')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -49,7 +48,6 @@ jobs:
           TRADING_DATE: ${{ inputs.trading_date }}
           START_DATE: ${{ inputs.start_date }}
           SEND_TELEGRAM: ${{ inputs.send_telegram }}
-          PROTSTOCK_CHALLENGER_ENABLED: ${{ vars.PROTSTOCK_CHALLENGER_ENABLED }}
         run: |
           args=()
           offset=''

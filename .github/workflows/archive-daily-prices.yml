@@ -1,0 +1,79 @@
+name: Archive Vietcap OHLCV and restore EOD
+
+on:
+  workflow_dispatch:
+    inputs:
+      trading_date:
+        description: Optional session to recompute after restoring Vietcap
+        type: string
+  schedule:
+    - cron: '45 2 * * 0'
+
+permissions:
+  contents: read
+  statuses: read
+  actions: write
+
+concurrency:
+  group: protstock-eod
+  cancel-in-progress: false
+
+jobs:
+  archive:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      SUPABASE_URL: https://upmqxwktvvguegqeqibn.supabase.co
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+          cache: pip
+      - run: python -m pip install -e . 'psycopg[binary]>=3.2,<4'
+      - name: Wait for chart reader deployment and archive migration
+        id: ready
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for attempt in {1..40}; do
+            state=$(gh api "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/status" --jq '.statuses[] | select(.context == "Vercel") | .state')
+            case "$state" in
+              failure|error) exit 1 ;;
+              success)
+                if curl -fsS --max-time 10 -o /dev/null \
+                  -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
+                  "$SUPABASE_URL/rest/v1/daily_price_archives?select=symbol_id&limit=1"; then exit 0; fi ;;
+            esac
+            sleep 15
+          done
+          echo '::error::The price reader or Supabase migration is still pending.'
+          exit 1
+      - name: Archive older prices and restore Vietcap OHLCV
+        env:
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          python - <<'PY'
+          import os
+          import subprocess
+          import sys
+          from urllib.parse import quote
+          password = quote(os.environ.pop("SUPABASE_DB_PASSWORD"), safe="")
+          if not password:
+              raise SystemExit("Missing database password")
+          url = f"postgresql://postgres.upmqxwktvvguegqeqibn:{password}@aws-0-ap-southeast-1.pooler.supabase.com:5432/postgres"
+          print(f"::add-mask::{url}", flush=True)
+          subprocess.run([sys.executable, ".github/scripts/archive_daily_prices.py"],
+                         env={**os.environ, "SUPABASE_DB_URL": url}, check=True)
+          PY
+      - name: Recompute the requested session
+        if: ${{ !cancelled() && steps.ready.outcome == 'success' && inputs.trading_date != '' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TRADING_DATE: ${{ inputs.trading_date }}
+        run: |
+          gh workflow run eod-fast.yml --ref "$GITHUB_REF_NAME" -f trading_date="$TRADING_DATE" \
+            -f force_rerun=true -f skip_alerts=true -f skip_backtests=true
+          gh workflow run market-flow-radar.yml --ref "$GITHUB_REF_NAME" -f sessions=1 \
+            -f end="$TRADING_DATE" -f tape_date="$TRADING_DATE"

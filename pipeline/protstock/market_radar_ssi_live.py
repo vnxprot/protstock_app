@@ -1,4 +1,4 @@
-"""Capture SSI market trades locally, publish bounded snapshots, and finalize closed sessions."""
+"""Capture SSI WebSocket trades and publish compact live Radar snapshots."""
 from argparse import ArgumentParser
 from contextlib import closing, ExitStack
 from dataclasses import replace
@@ -15,13 +15,11 @@ from time import monotonic
 import httpx
 
 from .config import Settings
-from .market_radar import (EXCHANGES, capture_matches, reconcile_tape, session_dates,
-                           storage_used)
-from .market_radar_ssi import SYMBOLS, closed_reference, ssi_config, trade_record
+from .market_radar import EXCHANGES
+from .market_radar_ssi import SYMBOLS, ssi_config, trade_record
 from .market_radar_tape import Match, phase
 from .market_sources import VN
 from .research_archive import check_storage_budget
-from .ssi_price_rollout import ROLLOUT_LIMIT
 from .supabase_rest import SupabaseRestClient
 
 LIVE_BUCKET = "market-radar-live"
@@ -119,18 +117,12 @@ def storage_client(settings):
 
 def ensure_bucket(client):
     response = client.get(f"/storage/v1/bucket/{LIVE_BUCKET}")
-    if response.status_code == 404:
-        client.post("/storage/v1/bucket", json={"id": LIVE_BUCKET, "name": LIVE_BUCKET, "public": False,
-            "file_size_limit": MAX_SNAPSHOT_BYTES, "allowed_mime_types": ["application/gzip"]}).raise_for_status()
-        return
     response.raise_for_status()
     if response.json().get("public") is not False:
         raise ValueError("Radar snapshot bucket must be private")
 
 
-def publish_snapshot(db, client, conn, now, watched):
-    if storage_used(db) >= ROLLOUT_LIMIT:
-        return False
+def publish_snapshot(client, conn, now, watched):
     files = {exchange: gzip.compress(json.dumps(value, separators=(",", ":")).encode(), mtime=0)
              for exchange, value in snapshot(conn, now, watched).items() if value["rows"]}
     if any(len(content) >= MAX_SNAPSHOT_BYTES for content in files.values()):
@@ -144,45 +136,7 @@ def publish_snapshot(db, client, conn, now, watched):
     return True
 
 
-def captured_trades(conn, symbol):
-    return [Match(datetime.fromtimestamp(stamp, VN), price, quantity, cumulative, side) for
-            stamp, price, quantity, cumulative, side in conn.execute("""select stamp,price,quantity,cumulative,side
-            from ticks where symbol=? order by stamp,cumulative""", (symbol,))]
-
-
-def stage_close(db, client, conn, day):
-    if storage_used(db) >= ROLLOUT_LIMIT or conn.execute("select 1 from gaps limit 1").fetchone():
-        return
-    captures = {}
-    invalid = {row[0] for row in conn.execute("select symbol from invalid")}
-    for symbol, exchange in conn.execute("select symbol,exchange from symbols"):
-        if symbol in invalid:
-            continue
-        tape = captured_trades(conn, symbol)
-        summary = capture_matches(tape, exchange, include_minutes=True)
-        if not summary['reason'] and summary['volume']:
-            captures[symbol] = summary
-    if not captures:
-        return
-    def packed(value):
-        return gzip.compress(json.dumps(value, separators=(",", ":")).encode(), mtime=0)
-
-    items = list(captures.items())
-    # Two rotating sets keep the previously published manifest readable during upload.
-    slot = day.toordinal() % 2
-    files = {f"closing/{slot}/{offset // 10}.json.gz": packed({"day": day.isoformat(), "symbols": dict(items[offset:offset + 10])})
-             for offset in range(0, len(items), 10)}
-    files["closing.json.gz"] = packed({"day": day.isoformat(), "parts": list(files)})
-    if any(len(content) >= MAX_SNAPSHOT_BYTES for content in files.values()):
-        raise ValueError("SSI closing candidate exceeds file budget")
-    check_storage_budget(client, sum(map(len, files.values())))
-    for key, content in files.items():
-        client.post(f"/storage/v1/object/{LIVE_BUCKET}/{key}", content=content,
-                    headers={"x-upsert": "true", "Content-Type": "application/gzip", "Cache-Control": "no-cache"}).raise_for_status()
-    print(f"SSI closing candidate staged: {day} · {len(captures)} symbols", flush=True)
-
-
-def capture(directory, db, client, symbols, watched, day, publish, *, morning=False):
+def capture(directory, client, symbols, watched, day, publish, *, morning=False):
     from ssi_sdk import Auth, Stream
     from ssi_sdk.models.streaming import TradeMessage
 
@@ -233,8 +187,7 @@ def capture(directory, db, client, symbols, watched, day, publish, *, morning=Fa
                     lost.clear()
                 if publish and monotonic() >= next_snapshot:
                     try:
-                        if not publish_snapshot(db, client, conn, datetime.now(VN), watched):
-                            print(f"Live publication deferred at {ROLLOUT_LIMIT:,} PostgreSQL bytes", flush=True)
+                        publish_snapshot(client, conn, datetime.now(VN), watched)
                     except (httpx.HTTPError, RuntimeError, ValueError) as error:
                         print(f"Live publication deferred: {type(error).__name__}", flush=True)
                     next_snapshot = monotonic() + 15 * 60
@@ -250,47 +203,9 @@ def capture(directory, db, client, symbols, watched, day, publish, *, morning=Fa
                 conn.execute("insert or ignore into gaps values(?)", (int(end.timestamp()),))
         if publish:
             try:
-                if not morning:
-                    stage_close(db, client, conn, day)
-                publish_snapshot(db, client, conn, datetime.now(VN), watched)
+                publish_snapshot(client, conn, datetime.now(VN), watched)
             except (httpx.HTTPError, RuntimeError, ValueError) as error:
                 print(f"Final live snapshot deferred: {type(error).__name__}", flush=True)
-
-
-def finalize(directory, db, day):
-    from ssi_sdk import Auth, Data
-
-    if storage_used(db) >= ROLLOUT_LIMIT:
-        print(f"SSI end-of-day publication deferred at {ROLLOUT_LIMIT:,} PostgreSQL bytes", flush=True)
-        return
-    now = datetime.now(VN)
-    closed = now.date() if now.time() >= time(16, 30) else now.date() - timedelta(days=1)
-    if day not in session_dates(db, closed, 20):
-        raise ValueError("Expected a closed session in the retained 20-session calendar")
-    if not tape_path(directory, day).is_file():
-        raise ValueError("No local SSI tape for this date")
-    with closing(open_tape(directory, day)) as conn, Auth(ssi_config()) as auth:
-        if conn.execute("select 1 from gaps limit 1").fetchone():
-            raise ValueError("Local buffer lost events; keep the session for recovery")
-        auth.authenticate()
-        data = Data(auth)
-        verified = count = 0
-        for symbol, exchange in conn.execute("select symbol,exchange from symbols order by symbol"):
-            count += 1
-            if conn.execute("select 1 from invalid where symbol=?", (symbol,)).fetchone():
-                continue
-            ref = closed_reference(data, day, symbol)
-            if ref is None:
-                continue
-            tape = captured_trades(conn, symbol)
-            rows = reconcile_tape(day, exchange, symbol, capture_matches(tape, exchange), tape_source="SSI WebSocket",
-                                  reference_pair=(ref.total_match, "SSI FastConnect EOD"))
-            if rows[0]["partial"]:
-                print(f"{day} {symbol}: {rows[0]['tape_reason']}", flush=True)
-                continue
-            db._request("POST", "/rpc/publish_market_radar_tape", json={"p_rows": rows}).raise_for_status()
-            verified += 1
-        print(f"SSI end-of-day {day}: {verified}/{count} symbols reconciled", flush=True)
 
 
 def main():
@@ -299,37 +214,49 @@ def main():
     parser.add_argument("--universe", action="store_true")
     parser.add_argument("--publish", action="store_true")
     parser.add_argument("--morning", action="store_true", help="Stop at the lunch break for runner handoff")
+    parser.add_argument("--check-startup", action="store_true", help="Check Storage and SSI connection outside market hours")
     parser.add_argument("--watch", default=",".join(SYMBOLS))
-    parser.add_argument("--finalize", type=date.fromisoformat)
     args = parser.parse_args()
     watched = {symbol.strip().upper() for symbol in args.watch.split(",") if symbol.strip()}
     if len(watched) > 24:
         parser.error("Use at most 24 published minute charts")
-    if (args.publish or args.finalize) and os.getenv("RADAR_SSI_APPROVED") != "true":
+    if args.publish and os.getenv("RADAR_SSI_APPROVED") != "true":
         parser.error("Confirm SSI data use and the pilot before enabling publication")
+    stage = "configuration"
     try:
         with ExitStack() as stack:
             db = client = None
-            if args.universe or args.publish or args.finalize:
+            if args.universe or args.publish:
                 settings = Settings.from_env()
                 db = stack.enter_context(closing(SupabaseRestClient(settings)))
                 if args.publish:
                     client = stack.enter_context(storage_client(settings))
-            if args.finalize:
-                finalize(args.directory, db, args.finalize)
-                return
             now = datetime.now(VN)
             cutoff = time(11, 35) if args.morning else time(15, 15)
-            if now.weekday() > 4 or not time(8, 40) <= now.time() < cutoff:
+            if not args.check_startup and (now.weekday() > 4 or not time(8, 40) <= now.time() < cutoff):
                 print("SSI streaming is outside the capture window", flush=True)
                 return
             prune_local_tapes(args.directory, now.date())
+            stage = "Supabase universe"
             symbols = {row["symbol"]: row["exchange"] for row in db.active_symbols() if row["exchange"] in EXCHANGES} if args.universe else SYMBOLS
-            if args.publish and storage_used(db) < ROLLOUT_LIMIT:
+            if args.publish:
+                stage = "Supabase live bucket"
                 ensure_bucket(client)
-            capture(args.directory, db, client, symbols, watched, now.date(), args.publish, morning=args.morning)
+            stage = "SSI WebSocket"
+            if args.check_startup:
+                from ssi_sdk import Auth, Stream
+                with Auth(ssi_config()) as auth:
+                    auth.authenticate()
+                    with Stream(auth) as stream:
+                        stream.streaming.connect()
+                        stream.streaming.subscribe_symbol_trade(["HDB"])
+                print("SSI live startup check completed", flush=True)
+                return
+            capture(args.directory, client, symbols, watched, now.date(), args.publish, morning=args.morning)
+    except httpx.HTTPStatusError as error:
+        raise SystemExit(f"Radar startup {stage}: HTTP {error.response.status_code}") from None
     except Exception as error:
-        raise SystemExit(f"SSI recorder stopped: {type(error).__name__}") from None
+        raise SystemExit(f"Radar startup {stage}: {type(error).__name__}") from None
 
 
 if __name__ == "__main__":

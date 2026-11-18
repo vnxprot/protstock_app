@@ -49,7 +49,7 @@ jobs:
 
   refresh:
     needs: migrate
-    if: always() && vars.PROTSTOCK_PRICE_CUTOVER != 'true' && ((github.event_name == 'workflow_dispatch' && needs.migrate.result == 'success') || (github.event_name == 'schedule') || (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success'))
+    if: always() && ((github.event_name == 'workflow_dispatch' && needs.migrate.result == 'success') || (github.event_name == 'schedule') || (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success'))
     runs-on: ubuntu-latest
     timeout-minutes: 60
     strategy:

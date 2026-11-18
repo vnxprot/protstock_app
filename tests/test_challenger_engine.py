@@ -4,7 +4,6 @@ from protstock.eod import _write_challenger_shadow
 
 
 def test_eod_shadow_writes_only_isolated_tables(monkeypatch):
-    monkeypatch.setenv("PROTSTOCK_CHALLENGER_ENABLED", "true")
     today = date(2026, 10, 6)
     rows = [{"date": day, "open": 10, "low": 9, "close": 10, "volume": 2_000_000}
             for day in ("2026-10-01", "2026-10-02", "2026-10-05", "2026-10-06")]
@@ -53,8 +52,7 @@ def test_eod_shadow_writes_only_isolated_tables(monkeypatch):
     assert client.writes[3][1][0]["size_multiplier"] == .3
 
 
-def test_eod_shadow_failure_does_not_escape_to_champion(monkeypatch):
-    monkeypatch.setenv("PROTSTOCK_CHALLENGER_ENABLED", "true")
+def test_eod_shadow_failure_does_not_escape_to_champion():
     class Client:
         def _pages(self, *_args):
             raise RuntimeError("shadow schema unavailable")

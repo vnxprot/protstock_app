@@ -5,9 +5,9 @@ Mở **Thị trường → Radar dòng tiền** để chọn nhóm, sàn và chu
 | Nhóm | Nguồn và phạm vi |
 | --- | --- |
 | Top giá và khối lượng | `daily_prices` của các mã đang hoạt động trong Prot Universe. Xếp hạng biến động dùng giá đóng cửa của phiên liền trước và giá cuối kỳ, với đủ phiên và cùng nguồn. |
-| Khối ngoại | Ưu tiên SSI FastConnect cho giá trị, khối lượng và room của phiên mới. CafeF cung cấp phần sở hữu và dự phòng. Room âm được giữ nguyên. |
+| Khối ngoại | CafeF theo sàn và phiên. Giá trị, khối lượng, tỷ lệ sở hữu và room theo công bố của nguồn. Room âm được giữ nguyên. |
 | Tự doanh | Báo cáo theo mã của HNX cho HNX và UPCoM. CafeF theo mã trong Prot Universe cho HOSE. Dữ liệu thu tự động của nhóm hiện là tổng mua bán. |
-| Ba nhóm giá trị khớp | SSI WebSocket cho mã có băng đủ phiên và khớp tham chiếu cuối ngày. Vietcap bổ sung các mã còn thiếu trên cả ba sàn. Radar có Từng lần khớp, Cụm khớp và Định kỳ. Giao dịch thỏa thuận nằm ngoài phạm vi. |
+| Ba nhóm giá trị khớp | Vietcap cho Prot Universe trên cả ba sàn. Khối lượng khớp lệnh cuối ngày đối chiếu với báo cáo CafeF. Radar có Từng lần khớp, Cụm khớp và Định kỳ. Giao dịch thỏa thuận nằm ngoài phạm vi. |
 
 Bảng **Định kỳ** hiển thị giá khớp bình quân theo khối lượng, khối lượng, giá trị và số bản ghi từ băng khớp. Số liệu mở cửa và đóng cửa được lưu riêng từ băng khớp. Phiên cũ chỉ có tổng định kỳ vẫn hiển thị tổng, còn chi tiết từng đợt xuất hiện sau khi nạp lại được băng nguồn.
 
@@ -21,7 +21,7 @@ Thị giá là giá đóng cửa phiên cuối kỳ nếu có trong PROT STOCK. 
 
 Trong sheet lịch sử, **Theo phiên** mở đúng nhóm và phương thức đang chọn. Chọn điểm ngày trên biểu đồ, ngày trong bảng, hoặc tab **Trong phiên** để xem lại dòng tiền theo phút. Biểu đồ trong phiên dùng ba nhóm của phương thức Từng lần khớp liên tục, có chế độ Giá trị, Khối lượng và Mua & Bán.
 
-Số cuối phiên và chuỗi phút của một mã cùng lấy từ băng được chọn. Bản xem lại được công bố sau đối soát, lưu nén theo mã và ngày trong bucket riêng tư `market-radar-minute-replay`. Lưu 5 phiên gần nhất, giới hạn 32 KiB mỗi mã mỗi phiên và dừng ghi khi dung lượng dự kiến chạm ngân sách Storage 450 MB của dự án. Các phiên đã có tổng hợp cũ chỉ có thể dựng lại theo phút khi thu lại được băng khớp nguồn.
+Lượt thu VCI cuối ngày dùng chung một băng khớp để tổng hợp số cuối phiên và chuỗi phút. Bản xem lại được công bố sau đối soát, lưu nén theo mã và ngày trong bucket riêng tư `market-radar-minute-replay`. Lưu 5 phiên gần nhất, giới hạn 32 KiB mỗi mã mỗi phiên và dừng ghi khi dung lượng dự kiến chạm ngân sách Storage 450 MB của dự án. Các phiên đã có tổng hợp cũ chỉ có thể dựng lại theo phút khi thu lại được băng khớp nguồn.
 
 Có thể chạy `python -m protstock.market_radar_minutes` trong giờ khớp liên tục để thử VCI với HDB, OCB, SHS và BVB. Chương trình đọc trang mới nhất mỗi phút trong 5 lượt, in tuổi của bản ghi cuối, tính liên tục của khối lượng tích lũy trong trang và độ chồng lấp giữa các lượt. Lượt thử chạy đọc dữ liệu nguồn và in kết quả tại chỗ. Biểu đồ production hiện được cập nhật theo lịch cuối ngày.
 
@@ -35,12 +35,6 @@ Bật `tape_history` để kiểm tra mẫu OCB, SHS và BVB và nạp các phi�
 
 Có thể nạp bản xuất được phép sử dụng bằng `python -m protstock.market_radar_history --csv-directory <directory>`. Mỗi tập tin `YYYY-MM-DD.csv` hoặc `YYYY-MM-DD.csv.gz` chứa `exchange,symbol,board,timestamp,price_vnd,quantity,cumulative_volume,side`. Dùng `G1` hoặc `G4`, thời gian ISO 8601 kèm múi giờ, khối lượng cổ phiếu và chiều `BUY`, `SELL`, `UNSPECIFIED`, `ATO` hoặc `ATC`. Bản nhập dùng cùng bộ đối soát với API. Tệp nguồn ở bên ngoài repo.
 
-## Kiểm tra SSI FastConnect
+## SSI Radar trong phiên
 
-Cài phần phụ thuộc `pip install -e '.[ssi]'`. Dùng biến môi trường cục bộ `SSI_API_KEY`, `SSI_API_SECRET` và `SSI_CLIENT_ID` nếu SSI cấp Client ID. Dùng khóa Production chỉ đọc Market Data.
-
-Chạy `python -m protstock.market_radar_ssi --reference-date 2026-11-16 --stream-seconds 60` trong phiên để kiểm tra HDB, SHS và BVB. Chương trình đọc tổng khớp và giao dịch khối ngoại của ngày tham chiếu qua REST, sau đó phân nhóm mẫu WebSocket và in khối lượng tích lũy để đánh giá độ phủ. Bỏ `--stream-seconds` để chỉ đọc REST. Bộ kiểm tra không cập nhật dữ liệu production. Phiên mẫu bắt đầu giữa giờ giao dịch có thể thiếu các giao dịch trước thời điểm kết nối.
-
-Chạy `python -m protstock.market_radar_ssi_live --directory <local-directory>` từ 08:45 trên Windows để thu thử ba mã vào SQLite cục bộ. Sau khi xác minh phạm vi sử dụng, pilot và dung lượng, thêm `--publish` cùng `RADAR_SSI_APPROVED=true`; tùy chọn `--universe` dùng toàn bộ Prot Universe. Biến Supabase của tác vụ ghi chỉ dùng ở bộ thu, không ở frontend. `--watch` chọn tối đa 24 mã có biểu đồ phút, mặc định HDB, SHS, BVB.
-
-Bộ thu công bố một file nén mỗi sàn trong Storage mỗi 15 phút. Lúc 15:15, nó gửi ứng viên cuối phiên, gồm số tổng hợp và chuỗi phút. Job cuối ngày ưu tiên ứng viên SSI khớp tổng khối lượng, rồi dùng Vietcap cho các mã–phiên còn thiếu. `RADAR_SSI_EOD=false` dừng nhận ứng viên SSI mới. Bản SSI đã xác minh được giữ khi Vietcap chạy lại. Giao dịch khối ngoại của phiên mới ưu tiên FastConnect khi có khóa, còn thông tin sở hữu từ báo cáo hiện có được giữ. Bộ thu tạm dừng công bố ở ngưỡng 480 MB PostgreSQL và trần Storage 450 MB. Tick nằm trong file SQLite riêng của máy thu và hết hạn sau 7 ngày.
+GitHub Actions chạy bộ thu WebSocket vào ngày giao dịch và công bố bản cập nhật mỗi 15 phút. Bộ thu dùng khóa SSI Production chỉ đọc, lưu giao dịch vào SQLite trong phiên và gửi bản tổng hợp nén vào bucket riêng tư. Tác vụ thủ công với check_startup=true kiểm tra bucket, xác thực và đăng ký mã HDB ngoài giờ giao dịch. Vietcap cung cấp băng khớp cho Radar cuối ngày.

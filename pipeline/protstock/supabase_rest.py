@@ -9,6 +9,7 @@ from typing import Any
 import httpx
 
 from .config import Settings
+from .price_archive import archive_prices, read_prices, remove_previous
 
 
 class SupabaseRestClient:
@@ -157,9 +158,11 @@ class SupabaseRestClient:
         )
 
     def symbol_price_dates(self, symbol_id: int, start_date, end_date) -> list[str]:
-        return self._date_rows(
+        dates = self._date_rows(
             "daily_prices", [("symbol_id", f"eq.{symbol_id}"), ("trading_date", f"gte.{start_date.isoformat()}"), ("trading_date", f"lte.{end_date.isoformat()}")]
         )
+        return sorted(set(dates) | {row["trading_date"] for row in self._archived_prices(
+            symbol_id, start_date.isoformat(), end_date.isoformat())})
 
     def symbol_coherent_price_dates(self, symbol_id: int, start_date: date, end_date: date) -> list[str]:
         """Report only sessions used by the current single-source calculation basis."""
@@ -181,7 +184,9 @@ class SupabaseRestClient:
                 break
         else:
             raise RuntimeError(f"Price coverage pagination exceeded 10,000 rows for symbol {symbol_id}")
-        return [row["trading_date"] for row in latest_coherent_revision(rows)]
+        merged = {row["trading_date"]: row for row in self._archived_prices(symbol_id, start_date.isoformat(), end_date.isoformat())}
+        merged.update((row["trading_date"], row) for row in rows)
+        return [row["trading_date"] for row in latest_coherent_revision([merged[day] for day in sorted(merged)])]
 
     def _date_rows(self, table: str, filters: list[tuple[str, str]]) -> list[str]:
         rows: list[dict[str, Any]] = []
@@ -216,7 +221,33 @@ class SupabaseRestClient:
             rows.extend(page)
             if len(page) < page_size:
                 break
-        return list(reversed(rows))
+        if len(rows) >= limit:
+            return list(reversed(rows))
+        merged = {row["trading_date"]: row for row in self._archived_prices(symbol_id)}
+        merged.update((row["trading_date"], row) for row in rows)
+        return [merged[day] for day in sorted(merged)[-limit:]]
+
+    def _price_archive_manifest(self, symbol_id: int) -> dict | None:
+        response = self._get("/daily_price_archives", params={
+            "select": "symbol_id,first_day,last_day,checksum", "symbol_id": f"eq.{symbol_id}",
+        })
+        if response.status_code == 404 and response.json().get("code") in {"42P01", "PGRST205"}:
+            return None
+        response.raise_for_status()
+        return next(iter(response.json()), None)
+
+    def _archived_prices(self, symbol_id: int, start: str = "", end: str = "9999-12-31") -> list[dict]:
+        manifest = self._price_archive_manifest(symbol_id)
+        if not manifest or start > manifest["last_day"] or end < manifest["first_day"]:
+            return []
+        try:
+            rows = read_prices(self._archive().client, symbol_id, manifest["checksum"])
+        except httpx.HTTPStatusError:
+            latest = self._price_archive_manifest(symbol_id)
+            if not latest or latest["checksum"] == manifest["checksum"]:
+                raise
+            rows = read_prices(self._archive().client, symbol_id, latest["checksum"])
+        return [row for row in rows if start <= row["trading_date"] <= end]
 
     def research_price_history(self, symbol_id: int, limit: int = 2600) -> list[dict[str, Any]]:
         """Read one coherent vendor-rebased series for historical research."""
@@ -363,7 +394,23 @@ class SupabaseRestClient:
             else:
                 raise RuntimeError(f"Daily price pagination exceeded 100,000 rows for {window_start:%Y-%m}")
             window_start = next_month
-        return rows
+        first, last = start_date.isoformat(), end_date.isoformat()
+        archives = self._get("/daily_price_archives", params={
+            "select": "symbol_id,checksum", "last_day": f"gte.{first}", "first_day": f"lte.{last}",
+        })
+        if archives.status_code == 404 and archives.json().get("code") in {"42P01", "PGRST205"}:
+            return rows
+        archives.raise_for_status()
+        if not archives.json():
+            return rows
+        merged = {}
+        for manifest in archives.json():
+            symbol_id = int(manifest["symbol_id"])
+            for row in read_prices(self._archive().client, symbol_id, manifest["checksum"]):
+                if first <= row["trading_date"] <= last:
+                    merged[(row["trading_date"], symbol_id)] = row
+        merged.update(((row["trading_date"], row["symbol_id"]), row) for row in rows)
+        return [merged[key] for key in sorted(merged)]
 
     def index_prices_in_range(self, index_id: int, start_date: date, end_date: date) -> list[dict[str, Any]]:
         """Page the full benchmark history instead of silently truncating 2021+ rebuilds."""
@@ -505,6 +552,34 @@ class SupabaseRestClient:
         payload = list(rows)
         if not payload:
             return 0
+        archived = 0
+        if table == "daily_prices":
+            cold_candidates = [row for row in payload if row["trading_date"] < (date.today() - timedelta(days=365)).isoformat()]
+            symbol_ids = {row["symbol_id"] for row in cold_candidates}
+            for symbol_id in symbol_ids:
+                manifest = self._price_archive_manifest(symbol_id)
+                if not manifest:
+                    continue
+                older = [row for row in payload if row["symbol_id"] == symbol_id and row["trading_date"] <= manifest["last_day"]]
+                if not older:
+                    continue
+                merged = {row["trading_date"]: row for row in read_prices(self._archive().client, symbol_id, manifest["checksum"])}
+                merged.update((row["trading_date"], row) for row in older)
+                ordered = [merged[day] for day in sorted(merged)]
+                checksum = archive_prices(self._archive().client, symbol_id, ordered, manifest["checksum"])
+                if checksum != manifest["checksum"]:
+                    response = self._request("PATCH", "/daily_price_archives", params={
+                        "symbol_id": f"eq.{symbol_id}", "checksum": f"eq.{manifest['checksum']}",
+                    }, json={"checksum": checksum, "first_day": ordered[0]["trading_date"]},
+                        headers={"Prefer": "return=representation"})
+                    response.raise_for_status()
+                    if len(response.json()) != 1:
+                        raise RuntimeError(f"Concurrent price archive update for {symbol_id}")
+                    remove_previous(self._archive().client, symbol_id, manifest["checksum"], checksum)
+                payload = [row for row in payload if row not in older]
+                archived += len(older)
+            if not payload:
+                return archived
         response = self._request("POST",
             f"/{table}",
             params={"on_conflict": on_conflict},
@@ -512,7 +587,7 @@ class SupabaseRestClient:
             json=payload,
         )
         response.raise_for_status()
-        return len(payload)
+        return archived + len(payload)
 
     def remove_superseded_rule_outputs(self, symbol_id: int, timeframe: str, as_of_date: str,
                                        rule_version_ids: list[str], signals: list[dict], evaluations: list[dict]) -> None:

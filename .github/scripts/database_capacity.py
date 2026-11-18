@@ -127,12 +127,6 @@ def report_capacity(conn):
 
 
 def compact_relation(conn, table):
-    if os.getenv("PROTSTOCK_PRICE_CUTOVER") == "true":
-        relation_size = conn.execute("select pg_total_relation_size(%s::regclass)", (f"public.{table}",)).fetchone()[0]
-        if database_bytes(conn) + relation_size >= 480_000_000:
-            print(f"::notice::Reusing free pages in {table}; full rewrite exceeds current headroom", flush=True)
-            conn.execute(f"vacuum (analyze) public.{table}")
-            return
     conn.execute("set lock_timeout = '8s'")
     try:
         conn.execute(f"vacuum full public.{table}")
@@ -314,9 +308,6 @@ def main() -> None:
             return
         ensure_private_bucket(storage)
         if mode == "reclaim-history":
-            if os.getenv("PROTSTOCK_PRICE_CUTOVER") == "true" and database_bytes(conn) < 460_000_000:
-                print("SSI price cutover has at least 20 MB below the operating limit", flush=True)
-                return
             compact_minute_history(conn, storage)
             compact_job_details(conn, storage, directory, run_id)
             projected = archive_analysis(conn, storage, measure=True)
@@ -326,10 +317,6 @@ def main() -> None:
             reclaim_core_bloat(conn)
             report_capacity(conn)
             size = database_bytes(conn)
-            if os.getenv("PROTSTOCK_PRICE_CUTOVER") == "true":
-                if size >= 480_000_000:
-                    print("::warning::SSI publication remains paused at the 480 MB limit", flush=True)
-                return
             if size >= RADAR_START_LIMIT:
                 raise RuntimeError(f"PostgreSQL still above Radar reserve after history compaction: {size:,} bytes")
             if size >= DATABASE_TARGET:

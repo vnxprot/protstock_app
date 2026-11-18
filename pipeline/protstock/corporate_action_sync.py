@@ -3,13 +3,11 @@
 from __future__ import annotations
 
 from datetime import date, timedelta
-from collections import defaultdict
 from hashlib import sha256
 from json import dumps
 from time import sleep
 
 from .config import Settings, vietnam_today
-from .ssi_market_data import configured, market_data, ssi_date
 from .supabase_rest import SupabaseRestClient
 
 
@@ -71,22 +69,6 @@ def vci_action_rows(symbol_id: int, frame) -> list[dict]:
     return result
 
 
-def ssi_event_dates(today):
-    confirmed = defaultdict(list)
-    if not configured():
-        return confirmed
-    try:
-        for offset in (-10, -4, 2):
-            first = today + timedelta(days=offset)
-            for event in market_data().corporate_actions(first, first + timedelta(days=5)):
-                if event.get("exrightDate"):
-                    key = (event["symbol"], ssi_date(event["exrightDate"]).isoformat())
-                    confirmed[key].append(event)
-    except Exception as error:
-        print(f"::notice::SSI corporate-action calendar unavailable: {type(error).__name__}", flush=True)
-    return confirmed
-
-
 def sync_corporate_actions(*, symbols: set[str] | None = None, pause_seconds: float = 6.5,
                            calendar_window_days: int | None = None) -> dict:
     from .market_sources import vci_events
@@ -98,7 +80,6 @@ def sync_corporate_actions(*, symbols: set[str] | None = None, pause_seconds: fl
         if calendar_window_days is not None and calendar_window_days < 1:
             raise ValueError("calendar_window_days must be positive")
         today = vietnam_today()
-        ssi_dates = ssi_event_dates(today)
         first_day = today - timedelta(days=7) if calendar_window_days else date(2021, 1, 1)
         last_day = today + timedelta(days=calendar_window_days or 365)
         if symbols is not None:
@@ -107,17 +88,6 @@ def sync_corporate_actions(*, symbols: set[str] | None = None, pause_seconds: fl
             try:
                 frame = vci_events(item["symbol"], first_day, last_day)
                 rows = vci_action_rows(item["id"], frame)
-                for row in rows:
-                    candidates_on_date = ssi_dates[(item["symbol"], row["ex_date"])]
-                    # Use SSI's record date when an announcement matches unambiguously.
-                    title = " ".join(row["metadata"]["event_title"].casefold().split())
-                    matching = [event for event in candidates_on_date
-                                if " ".join(event.get("eventTitle", "").casefold().split()) == title]
-                    if len(matching) == 1:
-                        event = matching[0]
-                        row["metadata"]["ssi_event_title"] = event["eventTitle"]
-                        if event.get("recordDate"):
-                            row["record_date"] = ssi_date(event["recordDate"]).isoformat()
                 existing_hashes = {row.get("content_hash") for row in client.corporate_actions(item["id"])}
                 new_rows = [row for row in rows if row["content_hash"] not in existing_hashes]
                 if new_rows:

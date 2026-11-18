@@ -4,7 +4,6 @@ on:
   schedule:
     # Archive bars leaving the 400-day window after the weekly direct-source sync.
     - cron: '0 2 * * 0'
-    - cron: '10 10 * * 1-5'
   workflow_dispatch:
     inputs:
       mode:
@@ -33,14 +32,12 @@ concurrency:
 
 jobs:
   capacity:
-    if: github.event.schedule != '10 10 * * 1-5' || vars.PROTSTOCK_PRICE_CUTOVER == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 120
     env:
       SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-      CAPACITY_MODE: ${{ github.event.schedule == '10 10 * * 1-5' && 'reclaim-history' || github.event_name == 'schedule' && 'rollover' || inputs.mode }}
-      PROTSTOCK_PRICE_CUTOVER: ${{ vars.PROTSTOCK_PRICE_CUTOVER }}
+      CAPACITY_MODE: ${{ github.event_name == 'schedule' && 'rollover' || inputs.mode }}
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-python@v6
@@ -66,7 +63,7 @@ jobs:
         if: inputs.mode == 'reclaim-history' && inputs.apply_migrations
         run: supabase db push --include-all --yes --db-url "$SUPABASE_DB_URL"
       - name: Require the frontend archive reader before reclaiming history
-        if: env.CAPACITY_MODE == 'reclaim-history'
+        if: inputs.mode == 'reclaim-history'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -83,7 +80,7 @@ jobs:
       - name: Archive, verify, and optionally reclaim capacity
         run: python .github/scripts/database_capacity.py
       - name: Queue Radar report backfill once space is available
-        if: success() && inputs.mode == 'reclaim-history' && vars.PROTSTOCK_PRICE_CUTOVER != 'true'
+        if: success() && inputs.mode == 'reclaim-history'
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh workflow run market-flow-radar.yml --ref "$GITHUB_REF_NAME" -f reports_backfill=true -f end="$(TZ=Asia/Ho_Chi_Minh date +%F)"

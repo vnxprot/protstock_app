@@ -12,7 +12,6 @@ from protstock.config import vietnam_today
 from protstock.provider_market import MarketDataProvider
 from protstock.market_sources import directory
 from protstock.market_http import SourceUnavailable
-from protstock.ssi_market_data import configured
 
 
 def main():
@@ -33,13 +32,6 @@ def main():
             state["status"] = "DEGRADED_KBS_FALLBACK"
     except Exception as error:
         state.update(status="FAILED", error=str(error)[:300])
-        if configured():
-            try:
-                bars = MarketDataProvider("SSI").history("VNINDEX", day - timedelta(days=14), day)
-                if bars and bars[-1].trading_date == day:
-                    state.update(status="DEGRADED_SSI_ONLY", policy="SSI_FASTCONNECT_ROLLOUT_V1")
-            except Exception:
-                pass
     print(json.dumps(state, ensure_ascii=False), flush=True)
     if os.getenv("GITHUB_STEP_SUMMARY"):
         with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as output:

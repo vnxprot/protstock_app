@@ -3,7 +3,7 @@
 import re
 
 
-CORE_RELEASE_VERSION = "v1.0.0"
+CORE_RELEASE_VERSION = "v0.0.0"
 CORE_ENGINE_NAMES = {
     "Prot Core Engine v0.0": "Prot Core Engine · Mẫu hình",
     "Prot Core Engine v1.0": "Prot Core Engine · Nền tảng",

@@ -3,7 +3,6 @@ from protstock.run_challenger_shadow import run_shadow_session
 
 
 def test_shadow_runner_reads_prices_and_only_invokes_isolated_writer(monkeypatch):
-    monkeypatch.setenv("PROTSTOCK_CHALLENGER_ENABLED", "true")
     called = []
 
     class Client:

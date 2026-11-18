@@ -7,11 +7,9 @@ from typing import Any
 from .market_http import SourceUnavailable, request_json
 from .market_sources import KBS_BASE, VCI_CHART, vci_candles
 from .models import DailyBar
-from .ssi_market_data import MarketDataHTTPError, market_data, ssi_date
 
 KBS_SOURCE_VERSION = "KBS_PUBLIC_V2_20260930"
 VCI_SOURCE_VERSION = "VCI_DIRECT_V1"
-SSI_SOURCE_VERSION = "SSI_FASTCONNECT_V3"
 STOCK_PRICE_UNIT = "THOUSAND_VND_PER_SHARE"
 INDEX_PRICE_UNIT = "INDEX_POINTS"
 
@@ -24,15 +22,12 @@ class MarketDataProvider:
     """VCI first; operational failures may select a complete KBS window."""
     API_BASE = KBS_BASE
 
-    def __init__(self, source: str = "AUTO", *, vnindex_repair: DailyBar | None = None) -> None:
+    def __init__(self, source: str = "AUTO") -> None:
         self.source = source.upper()
-        self.vnindex_repair = vnindex_repair
-        if self.source not in {"AUTO", "SSI", "VCI", "KBS"}:
-            raise ValueError("source must be AUTO, SSI, VCI, or KBS")
+        if self.source not in {"AUTO", "VCI", "KBS"}:
+            raise ValueError("source must be AUTO, VCI, or KBS")
 
     def history(self, symbol: str, start: date, end: date) -> list[DailyBar]:
-        if self.source == "SSI":
-            return self._ssi_history(symbol, start, end)
         if self.source == "KBS":
             return self._kbs_history(symbol, start, end)
         try:
@@ -42,49 +37,6 @@ class MarketDataProvider:
                 raise
             print(f"SOURCE_FALLBACK:{symbol}:VCI->KBS:{error}", file=sys.stderr, flush=True)
             return self._kbs_history(symbol, start, end)
-
-    def _ssi_history(self, symbol: str, start: date, end: date) -> list[DailyBar]:
-        data = market_data()
-        use_file = (end - start).days > 90 and symbol != "VNINDEX"
-        if use_file:
-            try:
-                records = data.daily_file(symbol)
-            except MarketDataHTTPError as error:
-                # Some symbols have REST history before a daily file is available.
-                if error.path not in {"/api/v3/data/file", "/api/v3/data/download"} or error.status not in {400, 403, 404}:
-                    raise
-                print(f"SSI_FILE_FALLBACK:{symbol}:{error}", file=sys.stderr, flush=True)
-                records = data.candles(symbol, start, end)
-        else:
-            records = data.candles(symbol, start, end)
-        if use_file and not any(ssi_date(row["tradingDate"]) == end for row in records):
-            records.extend(data.candles(symbol, max(start, end - timedelta(days=14)), end))
-        scale = 1 if symbol.upper().endswith("INDEX") else 1000
-        collected_at = datetime.now(timezone.utc)
-        bars = {}
-        for row in records:
-            day = ssi_date(row["tradingDate"])
-            if not start <= day <= end:
-                continue
-            if row["symbol"].upper() != symbol.upper():
-                raise ProviderDataError(f"Unexpected SSI symbol for {symbol}")
-            bar = DailyBar.create(symbol=symbol, trading_date=day, open=float(row["open"]) / scale,
-                                  high=float(row["high"]) / scale, low=float(row["low"]) / scale,
-                                  close=float(row["close"]) / scale, volume=int(row["volume"]),
-                                  source="SSI_FASTCONNECT", collected_at=collected_at)
-            problems = bar.validate()
-            if problems:
-                detail = (f"Invalid SSI bar for {symbol} on {day}: {','.join(problems)} "
-                          f"O={bar.open} H={bar.high} L={bar.low} C={bar.close} V={bar.volume}")
-                repair = self.vnindex_repair
-                if symbol != "VNINDEX" or repair is None or day != repair.trading_date:
-                    raise ProviderDataError(detail)
-                print(f"SSI_VNINDEX_REPAIR:{detail}; verified VCI bar retained", file=sys.stderr, flush=True)
-                bar = repair
-            previous = bars.setdefault(day, bar)
-            if previous != bar:
-                raise ProviderDataError(f"Conflicting SSI bars for {symbol} on {day}")
-        return [bars[day] for day in sorted(bars)]
 
     def _vci_history(self, symbol: str, start: date, end: date) -> list[DailyBar]:
         records = vci_candles(symbol, start, end)

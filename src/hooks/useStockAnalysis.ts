@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 import { restoreAnalysisHistory } from '../lib/analysisArchive'
 import { latestSignalPublication } from '../lib/signalPublication'
+import { loadArchivedPrices } from '../lib/priceArchive'
 import type { MonthlyEvidence } from '../components/MonthlyTrendEvidence'
 
 export interface PriceBar {
@@ -16,6 +17,7 @@ export interface PriceBar {
   price_basis?: string
   volume_basis?: string
   volume_adjustment_factor?: number
+  data_revision?: string
 }
 
 export interface TechnicalSnapshot {
@@ -119,9 +121,22 @@ export function useStockAnalysis(symbol: string | null, timeframe: 'D' | 'W' | '
       ])
       const technical = snapshots.map((snapshot, index) => ({ ...snapshot, monthly_context: monthlyContexts[index].evidence }))
       const decision = data.decision as StockDecision | null
+      const prices = (data.prices ?? []) as PriceBar[]
+      if (timeframe === 'D') {
+        const archived = await loadArchivedPrices(data.symbol.id, asOfDate || publication.data?.date)
+        const valid = archived.filter(row => row.data_revision && (
+          row.quality_status === 'VALID' || (row.quality_status === 'WARNING' && row.price_basis === 'VENDOR_CORPORATE_ACTION_ADJUSTED')
+        ))
+        const latest = prices.at(-1) ?? valid.at(-1)
+        const byDay = new Map<string, PriceBar>()
+        valid.filter(row => latest?.data_revision ? latest.data_revision === row.data_revision : latest?.source === row.source)
+          .forEach(row => byDay.set(row.trading_date, row))
+        prices.forEach(row => byDay.set(row.trading_date, row))
+        prices.splice(0, prices.length, ...Array.from(byDay.values()).sort((a, b) => a.trading_date.localeCompare(b.trading_date)).slice(-2600))
+      }
       return {
         symbol: data.symbol as { id: number; symbol: string; sector: string; exchange: string; company_name: string | null },
-        prices: (data.prices ?? []) as PriceBar[], technical,
+        prices, technical,
         decision: decision?.source_revision === technical[0]?.algorithm_version ? decision : null,
         patterns,
         zones: latestUniqueZones(zones, technical[0]?.as_of_date),

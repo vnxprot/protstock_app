@@ -18,12 +18,11 @@ def main():
     directory = Path(os.environ["RUNNER_TEMP"]) / "analysis"
     result = None
     permanent = set()
-    prices_only = os.getenv("PROTSTOCK_PRICE_CUTOVER") == "true"
     for attempt in range(2):
         if not names:
             break
         result = run_eod(day, source="AUTO", fast_lane=True, write_breadth_snapshot=False,
-            symbol_names=names, prepared_dir=None if prices_only else directory, prices_only=prices_only,
+            symbol_names=names, prepared_dir=directory,
             missing_only=attempt == 0 and os.getenv("FORCE_RERUN") != "true")
         print(json.dumps(result, ensure_ascii=False))
         client = SupabaseRestClient(Settings.from_env())

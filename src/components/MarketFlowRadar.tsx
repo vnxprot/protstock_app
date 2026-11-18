@@ -130,7 +130,7 @@ function LiveRadar({ authenticated, active }: { authenticated: boolean; active: 
   const [selected, setSelected] = useState<string | null>(null)
   const day = todayInVietnam()
   const query = useQuery({ queryKey: ['ssi-market-radar-live'], enabled: Boolean(supabase && authenticated && active), retry: false,
-    staleTime: 5 * 60_000, refetchInterval: 15 * 60_000, queryFn: async () => {
+    staleTime: 60_000, refetchInterval: 60_000, queryFn: async () => {
       const results = await Promise.all(exchanges.slice(1).map(async ([exchange]) => {
         const { data, error } = await supabase!.storage.from('market-radar-live').download(`${exchange}.json.gz`)
         if (error) {
@@ -164,7 +164,7 @@ function LiveRadar({ authenticated, active }: { authenticated: boolean; active: 
     {snapshots.length ? <>
       <dl className="radar-summary radar-live-summary">{summary.map(item => <div key={item.label} className="radar-stat" data-direction={direction(item.value)}>
         <dt>{item.label}</dt><dd>{billions(item.value, true)} <small>tỷ ròng</small></dd></div>)}</dl>
-      <p className="radar-meta">SSI · Tạm tính · {updated.length ? `Bản chụp ${vnTime.format(Math.min(...updated))}` : 'Thiếu giờ cập nhật'}{latestTrade > 0 && ` · Khớp mới nhất ${vnTime.format(latestTrade * 1000)}`} · {rows.filter(row => !row.partial).length}/{rows.length} mã liền mạch {updated.length && Date.now() - Math.min(...updated) > 20 * 60_000 ? ' · Dữ liệu đã cũ' : ''}</p>
+      <p className="radar-meta">SSI · Tạm tính · {updated.length ? `Bản chụp ${vnTime.format(Math.min(...updated))}` : 'Thiếu giờ cập nhật'}{latestTrade > 0 && ` · Khớp mới nhất ${vnTime.format(latestTrade * 1000)}`} · {rows.filter(row => !row.partial).length}/{rows.length} mã liền mạch {updated.length && Date.now() - Math.min(...updated) > 180_000 ? ' · Dữ liệu đã cũ' : ''}</p>
       {visible.length ? <div className="radar-table-frame"><table className="market-radar-table"><thead><tr><th>Mã / Sàn</th><th>Giá</th><th>GT mua<span>tỷ đ</span></th><th>GT bán<span>tỷ đ</span></th><th>GT ròng<span>tỷ đ</span></th><th>KL ròng<span>CP</span></th><th>Lần khớp</th><th className="radar-actions">Biểu đồ</th></tr></thead>
         <tbody>{visible.map(row => { const [buy, sell, buyQty, sellQty, count] = row.groups[group] ?? liveEmpty
           return <tr key={row.symbol}><th scope="row">{row.symbol}<small className="radar-company">{exchangeLabel(row.exchange)}{row.partial && ' · Thiếu băng'}</small></th>
