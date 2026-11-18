@@ -19,7 +19,8 @@ def trade_record(message):
     if not price or not quantity or cumulative < quantity:
         raise ValueError("Invalid matched price or volume")
     side = message.side.value if isinstance(message.side, Enum) else message.side
-    direction = {"B": "b", "BUY": "b", "S": "s", "SELL": "s"}.get(str(side).upper(), "unknown")
+    direction = {"B": "b", "BUY": "b", "BU": "b", "S": "s", "SELL": "s", "SD": "s",
+                 "ATO": "ato", "ATC": "atc"}.get(str(side).upper(), "unknown")
     return Match(at, price, quantity, cumulative, direction)
 
 

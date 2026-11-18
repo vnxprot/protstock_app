@@ -112,7 +112,7 @@ def normalize_overview(details, statistics, financial):
     }
 
 
-def collect(symbol):
+def collect(symbol, canonical=()):
     from .market_http import request_json
     from .market_sources import vci_candles
     root = f'{BASE}/{symbol}'
@@ -130,6 +130,13 @@ def collect(symbol):
     today = vietnam_today()
     local = datetime.now(timezone(timedelta(hours=7)))
     last_closed = today if local.hour >= 15 else today-timedelta(days=1)
+    if canonical and canonical[-1]['source'] == 'SSI_FASTCONNECT':
+        prices = [{'date': row['trading_date'], 'open': float(row['open']) * 1000,
+                   'high': float(row['high']) * 1000, 'low': float(row['low']) * 1000,
+                   'close': float(row['close']) * 1000, 'volume': row['volume']}
+                  for row in canonical if row['source'] == 'SSI_FASTCONNECT' and row['trading_date'] <= last_closed.isoformat()]
+        if prices:
+            return financial, prices[-550:]
     bars = vci_candles(symbol, today-timedelta(days=900), today)
     prices = [{'date':r['t'][:10], 'open':r['o'], 'high':r['h'], 'low':r['l'], 'close':r['c'], 'volume':r['v']} for r in bars if r['t'][:10] <= last_closed.isoformat()][-550:]
     return financial, prices
@@ -154,7 +161,7 @@ def main():
             if i%args.shards != args.shard: continue
             stamp=datetime.now(timezone.utc).isoformat()
             try:
-                financial,prices=collect(stock['symbol'])
+                financial,prices=collect(stock['symbol'], client.price_history(stock['id'], 550))
                 try:
                     overview = collect_overview(stock['symbol'], financial)
                     overview.update({'fetched_at': stamp, 'status': 'READY'})

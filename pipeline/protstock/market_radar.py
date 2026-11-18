@@ -1,5 +1,6 @@
 """Collect dated public market flow without storing individual trades."""
 from argparse import ArgumentParser
+from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date, datetime, time, timedelta
 from functools import lru_cache
@@ -19,6 +20,7 @@ from .market_http import SourceUnavailable, request_json
 from .market_radar_minutes import REPLAY_SESSIONS, prepare_replay, publish_replay, summarize_minutes
 from .market_radar_tape import classify, integer, read_tape, tape_integrity
 from .market_sources import VN
+from .ssi_market_data import configured as ssi_configured, market_data
 from .supabase_rest import SupabaseRestClient
 
 EXCHANGES = ('HOSE', 'HNX', 'UPCOM')
@@ -247,12 +249,44 @@ def report_status(db, day, exchange, category, status):
         'category': category, 'status': status}], 'trading_date,exchange,category')
 
 
+def refresh_ssi_foreign(db, day, symbols):
+    existing = {(row['exchange'], row['symbol']): row for row in db._pages('market_radar_daily', {
+        'trading_date': f'eq.{day.isoformat()}', 'category': 'eq.foreign', 'method': 'eq.total',
+        'select': 'exchange,symbol,holdings,ownership_pct,room_remaining', 'order': 'exchange,symbol',
+    })}
+    pending = []
+    fields = {'buy_volume': 'totalForeignBuy', 'sell_volume': 'totalForeignSell',
+              'buy_value': 'totalForeignBuyValue', 'sell_value': 'totalForeignSellValue'}
+    for symbol, exchange in symbols:
+        try:
+            summary = market_data().summaries(symbol, day, day).get(day)
+            if summary is None:
+                continue
+            metrics = {key: integer(summary[field]) for key, field in fields.items()}
+            old = existing.get((exchange, symbol), {})
+            room = summary.get('remainForeignRoom')
+            pending.append(market_row(day, exchange, symbol, 'foreign', 'total', 'SSI FastConnect',
+                **metrics, holdings=old.get('holdings'), ownership_pct=old.get('ownership_pct'),
+                room_remaining=integer(room, allow_negative=True) if room not in (None, '') else old.get('room_remaining')))
+        except SOURCE_ERRORS as error:
+            if isinstance(error, SourceUnavailable):
+                print(f'::warning::SSI foreign flow deferred: {error}', flush=True)
+                break
+    return save(db, pending) if pending else 0
+
+
 def collect(db, sessions, completed=frozenset()):
     if not sessions:
         raise ValueError('No trading sessions found')
     symbols = [(row['symbol'], row['exchange']) for row in db.active_symbols() if row['exchange'] in EXCHANGES]
     start, end = min(sessions), max(sessions)
     valid_days = set(sessions)
+    saved_foreign = defaultdict(dict)
+    for row in db._pages('market_radar_daily', {
+        'and': f'(trading_date.gte.{start},trading_date.lte.{end})', 'category': 'eq.foreign',
+        'method': 'eq.total', 'source': 'eq.SSI FastConnect', 'order': 'trading_date,exchange,symbol',
+    }):
+        saved_foreign[(row['trading_date'], row['exchange'])][row['symbol']] = row
     jobs = [(hnx_proprietary, (day, exchange)) for day in sessions for exchange in ('HNX', 'UPCOM')
             if (day, exchange, 'proprietary') not in completed]
     jobs.extend((foreign_day, (day, exchange)) for day in sessions for exchange in EXCHANGES
@@ -283,6 +317,11 @@ def collect(db, sessions, completed=frozenset()):
                     report_status(db, args[0], args[1], category, 'failed')
                 continue
             if function is not cafef_proprietary:
+                if function is foreign_day:
+                    previous = saved_foreign[(args[0].isoformat(), args[1])]
+                    by_symbol = {row['symbol']: row for row in rows}
+                    by_symbol.update(previous)
+                    rows = list(by_symbol.values())
                 save_report(db, args[0], args[1], category, rows)
                 report_status(db, args[0], args[1], category, 'ready')
                 published += 1
@@ -291,6 +330,8 @@ def collect(db, sessions, completed=frozenset()):
                 total += save(db, rows)
     for day in hose_days:
         report_status(db, day, 'HOSE', 'proprietary', 'failed' if hose_failed else 'ready')
+    if ssi_configured():
+        total += refresh_ssi_foreign(db, end, symbols)
     print(f'Market Flow Radar saved {total} rows across {len(sessions)} sessions. Source failures: {failures}.', flush=True)
     if failures and not (total or published):
         raise SourceUnavailable('No radar data collected from any source')
@@ -331,14 +372,27 @@ def backfill_reports(db, end):
 def ssi_closing_candidates(db, day):
     settings = db._settings
     headers = {'apikey': settings.service_role_key, 'Authorization': f'Bearer {settings.service_role_key}'}
-    try:
-        response = httpx.get(f'{settings.supabase_url}/storage/v1/object/authenticated/market-radar-live/closing.json.gz',
-                             headers=headers, timeout=15)
+    base = f'{settings.supabase_url}/storage/v1/object/authenticated/market-radar-live'
+    def read(key):
+        response = httpx.get(f'{base}/{key}', headers=headers, timeout=15)
         if response.status_code in (400, 404):
             return {}
         response.raise_for_status()
-        payload = json.loads(gzip.decompress(response.content))
-        return payload['symbols'] if payload['day'] == day.isoformat() else {}
+        return json.loads(gzip.decompress(response.content))
+    try:
+        payload = read('closing.json.gz')
+        if payload.get('day') != day.isoformat():
+            return {}
+        if 'parts' not in payload:
+            return payload.get('symbols', {})
+        result = {}
+        for key in payload['parts']:
+            if not re.fullmatch(r'closing/[01]/[0-9]+\.json\.gz', key):
+                continue
+            part = read(key)
+            if part.get('day') == day.isoformat():
+                result.update(part['symbols'])
+        return result
     except (OSError, ValueError, KeyError, httpx.HTTPError) as error:
         print(f'::warning::SSI closing candidate unavailable: {type(error).__name__}', flush=True)
         return {}
@@ -393,30 +447,49 @@ def collect_tape(db, day, shard, shards, file=None, stage=None, *, prefer_ssi=Fa
             print(f'::warning::Radar replay preparation failed: {type(error).__name__}', flush=True)
         missing = {'volume': 0, 'reason': 'source_unavailable', 'groups': []}
         ssi = ssi_closing_candidates(db, day) if prefer_ssi else {}
+        existing_ssi = {row['symbol'] for row in db._pages('market_radar_daily', {
+            'trading_date': f'eq.{day.isoformat()}', 'method': 'eq.continuous', 'category': 'eq.large',
+            'source': 'like.SSI WebSocket*', 'partial': 'eq.false', 'select': 'symbol', 'order': 'symbol',
+        })}
 
         def reconcile(row):
             exchange, symbol = row['exchange'], row['symbol']
             if symbol in ssi:
+                reference, source = None, 'SSI FastConnect'
                 try:
-                    reference = ssi_reference(day, exchange, symbol)
+                    if ssi_configured():
+                        summary = market_data().summaries(symbol, day, day).get(day)
+                        if summary:
+                            reference = integer(summary['totalMatch'])
                 except SOURCE_ERRORS:
-                    reference = None
-                pair = (reference, 'SSI iBoard') if reference is not None else None
+                    pass
+                if reference is None:
+                    try:
+                        reference = ssi_reference(day, exchange, symbol)
+                        source = 'SSI iBoard'
+                    except SOURCE_ERRORS:
+                        pass
+                pair = (reference, source) if reference is not None else None
                 rows = reconcile_tape(day, exchange, symbol, ssi[symbol], 'SSI WebSocket', pair)
                 if not rows[0]['partial']:
-                    return rows
-            return reconcile_tape(day, exchange, symbol, captures.get(symbol, missing))
+                    return rows, ssi[symbol]
+            if symbol in existing_ssi:
+                return None, missing
+            capture = captures.get(symbol, missing)
+            return reconcile_tape(day, exchange, symbol, capture), capture
 
         futures = {pool.submit(reconcile, row): row for row in symbols}
         for future in as_completed(futures):
-            rows = future.result()
+            rows, capture = future.result()
+            if rows is None:
+                verified += 1
+                continue
             response = db._request('POST', '/rpc/publish_market_radar_tape', json={'p_rows': rows})
             response.raise_for_status()
             verified += int(not rows[0]['partial'])
             row = futures[future]
             symbol = row['symbol']
-            capture = captures.get(symbol, missing)
-            if replay_enabled and not rows[0]['partial'] and rows[0]['source'].startswith('Vietcap') and 'minutes' in capture:
+            if replay_enabled and not rows[0]['partial'] and 'minutes' in capture:
                 try:
                     replay_count += publish_replay(db, day, row['exchange'], symbol, capture, rows)
                 except httpx.HTTPError as error:

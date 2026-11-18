@@ -15,6 +15,7 @@ from .config import Settings
 from .price_basis import canonical_price_rows, source_family
 from .provider_market import MarketDataProvider
 from .market_sources import vci_candles
+from .ssi_market_data import market_data
 from .market_http import SourceUnavailable, request_json
 from .supabase_rest import SupabaseRestClient
 
@@ -180,6 +181,13 @@ def _fetch_vci_minutes(symbol: str, start: date, end: date, exchange: str = "") 
     return parse_minute_bars({"data": vci_candles(symbol, start, end, minute=True)}, symbol, start, end, exchange)
 
 
+def _fetch_ssi_minutes(symbol, start, end, exchange):
+    records = market_data().minute_history(symbol, start, end)
+    converted = [{"t": str(row["tradingDate"]).replace("/", "-"), "o": row["open"], "h": row["high"],
+                  "l": row["low"], "c": row["close"], "v": row["volume"]} for row in records if row["symbol"] == symbol]
+    return parse_minute_bars({"data": converted}, symbol, start, end, exchange)
+
+
 def _fetch_kbs_minutes(symbol: str, start: date, end: date, exchange: str = "") -> dict[str, list[dict]]:
     """Use KBS minutes only when the selected EOD series is also KBS."""
     payload = request_json("GET",
@@ -232,9 +240,9 @@ def run_intraday_spikes(trading_date: date, *, symbol_offset: int = 0, symbol_li
                     counts["coverage_issues"].append({"symbol": symbol, "status": "EMPTY"})
                     continue
                 family = source_family(current_daily.get("source"))
-                if family not in {"VCI", "KBS"}:
+                if family not in {"SSI", "VCI", "KBS"}:
                     raise ValueError("UNKNOWN_EOD_SOURCE")
-                minute_source = SOURCE if family == "VCI" else "KBS_PUBLIC_1P"
+                minute_source = {"SSI": "SSI_FASTCONNECT_1M", "VCI": SOURCE, "KBS": "KBS_PUBLIC_1P"}[family]
                 current_revision = current_daily.get("data_revision")
                 if current_daily.get("quality_status") != "VALID" or not current_revision or current_daily.get("source_volume") is None:
                     raise ValueError("MISSING_CANONICAL_INTRADAY_SESSION")
@@ -252,7 +260,8 @@ def run_intraday_spikes(trading_date: date, *, symbol_offset: int = 0, symbol_li
                          and (exchange != "UPCOM" or item.get("session_close") == session_close)][:30]
                 start = trading_date if len(prior) >= MIN_BASELINE_SESSIONS else trading_date - timedelta(days=45)
                 try:
-                    fetched = (_fetch_vci_minutes if family == "VCI" else _fetch_kbs_minutes)(symbol, start, trading_date, exchange)
+                    fetch_minutes = {"SSI": _fetch_ssi_minutes, "VCI": _fetch_vci_minutes, "KBS": _fetch_kbs_minutes}[family]
+                    fetched = fetch_minutes(symbol, start, trading_date, exchange)
                 except SourceUnavailable:
                     if family != "VCI":
                         raise

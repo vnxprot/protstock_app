@@ -160,17 +160,26 @@ def stage_close(db, client, conn, day):
         if symbol in invalid:
             continue
         tape = captured_trades(conn, symbol)
-        summary = capture_matches(tape, exchange)
+        summary = capture_matches(tape, exchange, include_minutes=True)
         if not summary['reason'] and summary['volume']:
             captures[symbol] = summary
     if not captures:
         return
-    content = gzip.compress(json.dumps({"day": day.isoformat(), "symbols": captures}, separators=(",", ":")).encode(), mtime=0)
-    if len(content) >= MAX_SNAPSHOT_BYTES:
-        raise ValueError("SSI closing candidate exceeds budget")
-    check_storage_budget(client, len(content))
-    client.post(f"/storage/v1/object/{LIVE_BUCKET}/closing.json.gz", content=content,
-                headers={"x-upsert": "true", "Content-Type": "application/gzip", "Cache-Control": "no-cache"}).raise_for_status()
+    def packed(value):
+        return gzip.compress(json.dumps(value, separators=(",", ":")).encode(), mtime=0)
+
+    items = list(captures.items())
+    # Two rotating sets keep the previously published manifest readable during upload.
+    slot = day.toordinal() % 2
+    files = {f"closing/{slot}/{offset // 10}.json.gz": packed({"day": day.isoformat(), "symbols": dict(items[offset:offset + 10])})
+             for offset in range(0, len(items), 10)}
+    files["closing.json.gz"] = packed({"day": day.isoformat(), "parts": list(files)})
+    if any(len(content) >= MAX_SNAPSHOT_BYTES for content in files.values()):
+        raise ValueError("SSI closing candidate exceeds file budget")
+    check_storage_budget(client, sum(map(len, files.values())))
+    for key, content in files.items():
+        client.post(f"/storage/v1/object/{LIVE_BUCKET}/{key}", content=content,
+                    headers={"x-upsert": "true", "Content-Type": "application/gzip", "Cache-Control": "no-cache"}).raise_for_status()
     print(f"SSI closing candidate staged: {day} · {len(captures)} symbols", flush=True)
 
 
@@ -207,7 +216,7 @@ def capture(directory, db, client, symbols, watched, day, publish):
             stream.streaming.connect()
             for offset in range(0, len(symbols), 45):
                 stream.streaming.subscribe_symbol_trade(list(symbols)[offset:offset + 45])
-            next_snapshot = monotonic() + 60
+            next_snapshot = monotonic() + 15 * 60
             while datetime.now(VN) < end:
                 batch = []
                 try:
@@ -228,7 +237,7 @@ def capture(directory, db, client, symbols, watched, day, publish):
                             print("Live publication deferred: PostgreSQL is at or above 400 MB", flush=True)
                     except (httpx.HTTPError, RuntimeError, ValueError) as error:
                         print(f"Live publication deferred: {type(error).__name__}", flush=True)
-                    next_snapshot = monotonic() + 60
+                    next_snapshot = monotonic() + 15 * 60
         remaining = []
         while not queue.empty():
             remaining.append(queue.get_nowait())

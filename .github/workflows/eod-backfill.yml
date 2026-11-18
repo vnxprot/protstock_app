@@ -48,6 +48,8 @@ jobs:
         env:
           SUPABASE_URL: https://upmqxwktvvguegqeqibn.supabase.co
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SSI_API_KEY: ${{ secrets.SSI_API_KEY }}
+          SSI_API_SECRET: ${{ secrets.SSI_API_SECRET }}
           START_OFFSET: ${{ inputs.start_offset }}
           END_OFFSET: ${{ inputs.end_offset }}
           LOOKBACK_DAYS: ${{ inputs.lookback_days }}

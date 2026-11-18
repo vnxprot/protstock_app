@@ -65,13 +65,15 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
-      - run: python -m pip install -e "."
-      - name: Collect minute bars and backfill matching VCI baseline
+      - run: python -m pip install -e '.[ssi]'
+      - name: Collect minute bars and backfill matching source baseline
         env:
           SUPABASE_URL: https://upmqxwktvvguegqeqibn.supabase.co
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           TRADING_DATE: ${{ needs.preflight.outputs.trading_date }}
           SYMBOLS: ${{ matrix.symbols }}
+          SSI_API_KEY: ${{ secrets.SSI_API_KEY }}
+          SSI_API_SECRET: ${{ secrets.SSI_API_SECRET }}
         run: protstock intraday-spikes --date "$TRADING_DATE" --symbols "$SYMBOLS" --pause-seconds 3
 
   finalize:

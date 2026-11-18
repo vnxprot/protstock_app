@@ -8,16 +8,22 @@ from json import dumps
 from typing import Iterable
 
 from .models import DailyBar
-from .provider_market import KBS_SOURCE_VERSION, STOCK_PRICE_UNIT, VCI_SOURCE_VERSION
+from .provider_market import KBS_SOURCE_VERSION, SSI_SOURCE_VERSION, STOCK_PRICE_UNIT, VCI_SOURCE_VERSION
 
 
 def source_family(source: str | None) -> str:
     value = (source or "").upper()
     if value.startswith("VCI_"):
         return "VCI"
+    if value.startswith("SSI_"):
+        return "SSI"
     if value.startswith("KBS"):
         return "KBS"
     return "UNKNOWN"
+
+
+def source_version(source: str) -> str:
+    return {"SSI": SSI_SOURCE_VERSION, "VCI": VCI_SOURCE_VERSION, "KBS": KBS_SOURCE_VERSION}[source_family(source)]
 
 
 def vendor_revision(family: str) -> str:
@@ -112,7 +118,7 @@ def canonical_price_rows(symbol_id: int, bars: Iterable[DailyBar], events: Itera
             "volume_adjustment_factor": 1.0,
             "volume_basis": "VENDOR_REPORTED",
             "price_basis": "VENDOR_CORPORATE_ACTION_ADJUSTED",
-            "source": bar.source, "source_version": VCI_SOURCE_VERSION if family == "VCI" else KBS_SOURCE_VERSION,
+            "source": bar.source, "source_version": source_version(bar.source),
             "price_unit": STOCK_PRICE_UNIT, "collected_at": bar.collected_at.isoformat(),
             "quality_status": "VALID", "data_revision": revision,
         })

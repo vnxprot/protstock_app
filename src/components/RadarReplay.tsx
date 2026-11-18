@@ -16,6 +16,7 @@ const decimal = new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 2 })
 const integer = new Intl.NumberFormat('vi-VN')
 type Amounts = [number, number, number, number]
 type Replay = {
+  source?: string
   start: number
   end: number
   minutes: [number, number, ...Amounts][]
@@ -129,7 +130,7 @@ function ReplayChart({ replay }: { replay: Replay }) {
       <div ref={host} className="radar-history-chart" role="img" aria-label="Diễn biến mua bán chủ động tích lũy theo phút"/>
     </div>}
     {replay.unknown.some(Boolean) && <p className="radar-meta">Khớp liên tục chưa rõ chiều {decimal.format(replay.unknown.reduce((sum, value) => sum + value, 0) / 1e9)} tỷ đồng.</p>}
-    <p className="radar-meta">VCI · Từng lần khớp liên tục · Giá trị cuối phiên ở các thẻ</p>
+    <p className="radar-meta">{replay.source === 'SSI WebSocket' ? 'SSI' : 'VCI'} · Từng lần khớp liên tục · Giá trị cuối phiên ở các thẻ</p>
   </>
 }
 
@@ -175,7 +176,7 @@ export function RadarReplay({ exchange, symbol, day, recentDays, onDayChange }: 
     const last = cumulativeMinutes(snapshot).at(-1)
     return groups.every(({ tone }, index) => {
       const row = dailyRows.find(item => item.category === tone)
-      if (!row?.source?.startsWith('Vietcap') || row.partial || row.reference_volume == null || !last) return false
+      if (!row?.source?.startsWith(`${snapshot.source ?? 'Vietcap'} ·`) || row.partial || row.reference_volume == null || !last) return false
       const official = [row.buy_value, row.sell_value, row.buy_volume, row.sell_volume]
       return (row.unknown_value ?? 0) === snapshot.unknown[index] &&
         (snapshot.unavailable[index] ? official.every(value => value == null) : official.every((value, field) => value === last.amounts[index][field]))
@@ -196,7 +197,6 @@ export function RadarReplay({ exchange, symbol, day, recentDays, onDayChange }: 
       : status?.partial ? <p className="radar-meta">Chưa đủ băng khớp · {integer.format(status.tape_volume ?? 0)}/{status.reference_volume == null ? '—' : integer.format(status.reference_volume)} CP đối soát.
         {status.tape_reason === 'missing_reference' && ' Đang thiếu khối lượng tham chiếu.'}
         {status.tape_reason === 'volume_mismatch' && ' Khối lượng VCI lệch tham chiếu.'}</p>
-      : status?.source?.startsWith('SSI WebSocket') ? <p className="radar-meta">Phiên đã đối soát bằng SSI. Chưa có biểu đồ phút từ cùng nguồn.</p>
       : available && snapshot && matchesDaily ? <ReplayChart key={day} replay={snapshot}/>
       : available ? <p className="radar-meta">Bản xem lại đang chờ đồng bộ với số liệu cuối phiên.</p>
       : <p className="radar-meta">Chưa có bản xem lại theo phút cho ngày này.</p>}

@@ -112,6 +112,8 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           SESSION_COUNT: ${{ inputs.sessions || (github.event_name == 'push' && 5) || 2 }}
           END_DATE: ${{ inputs.end }}
+          SSI_API_KEY: ${{ secrets.SSI_API_KEY }}
+          SSI_API_SECRET: ${{ secrets.SSI_API_SECRET }}
         run: |
           args=(--sessions "$SESSION_COUNT")
           if [[ -n "$END_DATE" ]]; then args+=(--end "$END_DATE"); fi
@@ -174,9 +176,11 @@ jobs:
         env:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           RADAR_SSI_EOD: ${{ vars.RADAR_SSI_EOD }}
+          SSI_API_KEY: ${{ secrets.SSI_API_KEY }}
+          SSI_API_SECRET: ${{ secrets.SSI_API_SECRET }}
         run: |
           args=(--tape-date "$TAPE_DATE" --shard "$SHARD" --shards 6 --tape-cache "$CAPTURE_FILE" --tape-stage reconcile)
-          if [[ "$RADAR_SSI_EOD" == true ]]; then args+=(--prefer-ssi); fi
+          if [[ "$RADAR_SSI_EOD" != false ]]; then args+=(--prefer-ssi); fi
           python -m protstock.market_radar "${args[@]}"
 
   probe-dnse:

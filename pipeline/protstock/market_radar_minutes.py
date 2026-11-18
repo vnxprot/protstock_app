@@ -41,7 +41,7 @@ def replay_object(day, exchange, capture, rows):
     unknown = [continuous[group]['unknown_value'] or 0 for group in TRADE_GROUPS]
     unavailable = [continuous[group]['buy_value'] is None for group in TRADE_GROUPS]
     payload = {'start': opening_mark, 'end': closing_mark, 'minutes': capture['minutes'],
-               'unknown': unknown, 'unavailable': unavailable}
+               'unknown': unknown, 'unavailable': unavailable, 'source': rows[0]['source'].split(' · ', 1)[0]}
     return gzip.compress(json.dumps(payload, separators=(',', ':')).encode(), mtime=0)
 
 
