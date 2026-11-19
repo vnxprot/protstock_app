@@ -1,5 +1,5 @@
 """SSI FastConnect WebSocket trades for live Radar."""
-from datetime import datetime
+from datetime import datetime, time
 from enum import Enum
 import os
 
@@ -9,8 +9,15 @@ from .market_sources import VN
 SYMBOLS = {"HDB": "HOSE", "SHS": "HNX", "BVB": "UPCOM"}
 
 
-def trade_record(message):
-    at = datetime.strptime(message.trading_time, "%Y/%m/%d %H:%M:%S").replace(tzinfo=VN)
+def trade_record(message, day=None):
+    stamp = str(message.trading_time).strip()
+    try:
+        at = datetime.fromisoformat(stamp.replace("/", "-"))
+    except ValueError:
+        if day is None:
+            raise
+        at = datetime.combine(day, time.fromisoformat(stamp))
+    at = at.astimezone(VN) if at.tzinfo else at.replace(tzinfo=VN)
     quantity, price, cumulative = map(integer, (message.quantity, message.price, message.total_volume))
     if not price or not quantity or cumulative < quantity:
         raise ValueError("Invalid matched price or volume")

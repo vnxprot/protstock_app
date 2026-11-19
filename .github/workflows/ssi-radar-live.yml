@@ -3,7 +3,9 @@ name: SSI Radar live
 on:
   schedule:
     # 08:42 in Vietnam, before the opening auction.
-    - cron: '42 1 * * 1-5'
+    - cron: '41 1 * * 1-5'
+    # 12:43 retry if the morning schedule did not start.
+    - cron: '43 5 * * 1-5'
   workflow_dispatch:
     inputs:
       check_startup:

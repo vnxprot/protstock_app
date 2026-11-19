@@ -129,9 +129,9 @@ function LiveRadar({ authenticated, active }: { authenticated: boolean; active: 
   const [search, setSearch] = useState('')
   const [selected, setSelected] = useState<string | null>(null)
   const day = todayInVietnam()
-  const query = useQuery({ queryKey: ['ssi-market-radar-live'], enabled: Boolean(supabase && authenticated && active), retry: false,
+  const query = useQuery({ queryKey: ['ssi-market-radar-live', day], enabled: Boolean(supabase && authenticated && active), retry: false,
     staleTime: 60_000, refetchInterval: 60_000, queryFn: async () => {
-      const results = await Promise.all(exchanges.slice(1).map(async ([exchange]) => {
+      const results = await Promise.allSettled(exchanges.slice(1).map(async ([exchange]) => {
         const { data, error } = await supabase!.storage.from('market-radar-live').download(`${exchange}.json.gz`)
         if (error) {
           if (/not found|does not exist/i.test(error.message)) return null
@@ -140,16 +140,22 @@ function LiveRadar({ authenticated, active }: { authenticated: boolean; active: 
         const stream = data.stream().pipeThrough(new DecompressionStream('gzip'))
         return { ...(await new Response(stream).json()), exchange } as LiveSnapshot
       }))
-      return results.filter((row): row is LiveSnapshot => Boolean(row))
+      const available = results.flatMap(result => result.status === 'fulfilled' && result.value ? [result.value] : [])
+      const failure = results.find(result => result.status === 'rejected')
+      if (!available.length && failure?.status === 'rejected') throw failure.reason
+      return available
     } })
   const snapshots = (query.data ?? []).filter(item => item.day === day && (exchange === 'all' || item.exchange === exchange))
   const updated = snapshots.map(item => Date.parse(item.updated_at)).filter(Number.isFinite)
   const latestTrade = snapshots.length ? Math.max(...snapshots.map(item => item.last_tick)) : 0
   const rows = snapshots.flatMap(item => item.rows.map(row => ({ ...row, exchange: item.exchange })))
   const current = rows.find(row => row.symbol === selected)
+  const completeRows = rows.filter(row => !row.partial)
   const summary = liveGroups.map(({ id, label }) => ({ label,
-    value: rows.filter(row => !row.partial).reduce((sum, row) => { const [buy, sell] = row.groups[id] ?? liveEmpty; return sum + buy - sell }, 0) }))
-  const visible = rows.filter(row => search ? row.symbol.includes(search.trim().toUpperCase()) : !row.partial).sort((a, b) => {
+    value: completeRows.reduce((sum, row) => { const [buy, sell] = row.groups[id] ?? liveEmpty; return sum + buy - sell }, 0) }))
+  const rankedRows = search.trim() ? rows.filter(row => row.symbol.includes(search.trim().toUpperCase()))
+    : completeRows.length ? completeRows : rows
+  const visible = rankedRows.sort((a, b) => {
     const [ab, as] = a.groups[group] ?? liveEmpty
     const [bb, bs] = b.groups[group] ?? liveEmpty
     return ((bb - bs) - (ab - as)) * (sort === 'buy' ? 1 : -1)
@@ -163,8 +169,9 @@ function LiveRadar({ authenticated, active }: { authenticated: boolean; active: 
     </div>
     {snapshots.length ? <>
       <dl className="radar-summary radar-live-summary">{summary.map(item => <div key={item.label} className="radar-stat" data-direction={direction(item.value)}>
-        <dt>{item.label}</dt><dd>{billions(item.value, true)} <small>tỷ ròng</small></dd></div>)}</dl>
-      <p className="radar-meta">SSI · Tạm tính · {updated.length ? `Bản chụp ${vnTime.format(Math.min(...updated))}` : 'Thiếu giờ cập nhật'}{latestTrade > 0 && ` · Khớp mới nhất ${vnTime.format(latestTrade * 1000)}`} · {rows.filter(row => !row.partial).length}/{rows.length} mã liền mạch {updated.length && Date.now() - Math.min(...updated) > 180_000 ? ' · Dữ liệu đã cũ' : ''}</p>
+        <dt>{item.label}</dt><dd>{completeRows.length ? billions(item.value, true) : '—'} <small>tỷ ròng</small></dd></div>)}</dl>
+      <p className="radar-meta">SSI · Tạm tính · {updated.length ? `Bản chụp ${vnTime.format(Math.min(...updated))}` : 'Thiếu giờ cập nhật'}{latestTrade > 0 && ` · Khớp mới nhất ${vnTime.format(latestTrade * 1000)}`} · {completeRows.length}/{rows.length} mã liền mạch {updated.length && Date.now() - Math.min(...updated) > 16 * 60_000 ? ' · Dữ liệu đã cũ' : ''}</p>
+      {rows.length > 0 && completeRows.length === 0 && <p className="radar-meta">Bảng chỉ tính các giao dịch đã thu được. Tổng ròng cả phiên đang chờ băng đủ.</p>}
       {visible.length ? <div className="radar-table-frame"><table className="market-radar-table"><thead><tr><th>Mã / Sàn</th><th>Giá</th><th>GT mua<span>tỷ đ</span></th><th>GT bán<span>tỷ đ</span></th><th>GT ròng<span>tỷ đ</span></th><th>KL ròng<span>CP</span></th><th>Lần khớp</th><th className="radar-actions">Biểu đồ</th></tr></thead>
         <tbody>{visible.map(row => { const [buy, sell, buyQty, sellQty, count] = row.groups[group] ?? liveEmpty
           return <tr key={row.symbol}><th scope="row">{row.symbol}<small className="radar-company">{exchangeLabel(row.exchange)}{row.partial && ' · Thiếu băng'}</small></th>

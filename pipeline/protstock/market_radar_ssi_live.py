@@ -123,17 +123,33 @@ def ensure_bucket(client):
 
 
 def publish_snapshot(client, conn, now, watched):
+    markets = {exchange: value for exchange, value in snapshot(conn, now, watched).items() if value["rows"]}
     files = {exchange: gzip.compress(json.dumps(value, separators=(",", ":")).encode(), mtime=0)
-             for exchange, value in snapshot(conn, now, watched).items() if value["rows"]}
+             for exchange, value in markets.items()}
     if any(len(content) >= MAX_SNAPSHOT_BYTES for content in files.values()):
         raise ValueError("Radar snapshot exceeds budget")
     if not files:
-        return True
+        print("SSI live: waiting for the first trade", flush=True)
+        return False
     check_storage_budget(client, sum(map(len, files.values())))
     for exchange, content in files.items():
         client.post(f"/storage/v1/object/{LIVE_BUCKET}/{exchange}.json.gz", content=content,
                     headers={"x-upsert": "true", "Content-Type": "application/gzip", "Cache-Control": "max-age=30"}).raise_for_status()
+    coverage = ", ".join(f"{exchange}: {len(value['rows'])} mã" for exchange, value in markets.items())
+    print(f"SSI live snapshot published at {now:%H:%M:%S} Vietnam time ({coverage})", flush=True)
     return True
+
+
+def subscribe_trades(stream, symbols):
+    names = list(symbols)
+    for offset in range(0, len(names), 45):
+        stream.subscribe_symbol_trade(names[offset:offset + 45])
+    topics = {str(topic).casefold() for topic in stream.list_subscription(timeout_ms=10_000)["data"]}
+    confirmed = sum(f"trade.{symbol}".casefold() in topics or f"trade.{symbol}@tick".casefold() in topics
+                    for symbol in names)
+    if not confirmed:
+        raise RuntimeError("SSI did not confirm any per-symbol trade subscriptions")
+    print(f"SSI confirmed {confirmed}/{len(names)} trade subscriptions", flush=True)
 
 
 def capture(directory, client, symbols, watched, day, publish, *, morning=False):
@@ -150,8 +166,8 @@ def capture(directory, client, symbols, watched, day, publish, *, morning=False)
         if message.quantity in (None, 0, "0"):
             return
         try:
-            match = trade_record(message)
-        except ValueError:
+            match = trade_record(message, day)
+        except (ValueError, TypeError):
             match = None
         if match is not None and match.stamp.date() != day:
             return
@@ -167,10 +183,9 @@ def capture(directory, client, symbols, watched, day, publish, *, morning=False)
         with Stream(auth) as stream:
             stream.streaming.on_data = on_data
             stream.streaming.connect()
-            for offset in range(0, len(symbols), 45):
-                stream.streaming.subscribe_symbol_trade(list(symbols)[offset:offset + 45])
+            subscribe_trades(stream.streaming, symbols)
             print(f"SSI WebSocket capture started for {len(symbols)} symbols through {end:%H:%M}", flush=True)
-            next_snapshot = monotonic() + 15 * 60
+            next_snapshot = monotonic() + 20
             while datetime.now(VN) < end:
                 batch = []
                 try:
@@ -186,11 +201,14 @@ def capture(directory, client, symbols, watched, day, publish, *, morning=False)
                         conn.execute("insert or ignore into gaps values(?)", (int(datetime.now(VN).timestamp()),))
                     lost.clear()
                 if publish and monotonic() >= next_snapshot:
+                    published = False
                     try:
-                        publish_snapshot(client, conn, datetime.now(VN), watched)
+                        published = publish_snapshot(client, conn, datetime.now(VN), watched)
+                    except httpx.HTTPStatusError as error:
+                        print(f"Live publication deferred: Storage HTTP {error.response.status_code}", flush=True)
                     except (httpx.HTTPError, RuntimeError, ValueError) as error:
                         print(f"Live publication deferred: {type(error).__name__}", flush=True)
-                    next_snapshot = monotonic() + 15 * 60
+                    next_snapshot = monotonic() + (15 * 60 if published else 60)
         remaining = []
         while not queue.empty():
             remaining.append(queue.get_nowait())
@@ -249,7 +267,7 @@ def main():
                     auth.authenticate()
                     with Stream(auth) as stream:
                         stream.streaming.connect()
-                        stream.streaming.subscribe_symbol_trade(["HDB"])
+                        subscribe_trades(stream.streaming, ["HDB"])
                 print("SSI live startup check completed", flush=True)
                 return
             capture(args.directory, client, symbols, watched, now.date(), args.publish, morning=args.morning)
