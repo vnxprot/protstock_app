@@ -14,7 +14,7 @@ from threading import local
 
 from .config import Settings
 from .market_radar import (BACKFILL_BUDGET, EXCHANGES, REPORT_BATCH_RESERVE, SOURCE_ERRORS,
-                           capture_matches, reconcile_tape, session_dates, storage_used)
+                           capture_matches, reconcile_tape, session_dates, storage_used, verified_tape_symbols)
 from .market_radar_tape import Match, integer, tape_integrity
 from .market_sources import VN
 from .supabase_rest import SupabaseRestClient
@@ -23,7 +23,7 @@ HISTORY_SESSIONS = 20
 BOARDS = ('G1', 'G4')
 MARKETS = {'HOSE': 'STO', 'HNX': 'STX', 'UPCOM': 'UPX'}
 SIDES = {'BUY': 'b', 'SELL': 's', 'UNSPECIFIED': 'unknown', 'ATO': 'ato', 'ATC': 'atc'}
-PROBES = (('HOSE', 'OCB'), ('HNX', 'SHS'), ('UPCOM', 'BVB'))
+PROBES = (('HOSE', 'HPG'), ('HNX', 'SHS'), ('UPCOM', 'VGT'))
 
 
 class DNSEHistory:
@@ -137,15 +137,6 @@ def candidate(read, source, day, exchange, symbol):
     return None
 
 
-def completed(db, day):
-    methods = {}
-    for row in db._pages('market_radar_daily', {'select': 'symbol,exchange,method', 'trading_date': f'eq.{day}',
-            'category': 'eq.large', 'partial': 'eq.false', 'reference_volume': 'not.is.null',
-            'order': 'exchange,symbol,method'}):
-        methods.setdefault((row['exchange'], row['symbol']), set()).add(row['method'])
-    return {key for key, values in methods.items() if {'continuous', 'continuous_cluster', 'auction'} <= values}
-
-
 def backfill(db, days, provider, directory, shard, shards):
     symbols = [row for row in db.active_symbols() if row['exchange'] in EXCHANGES][shard::shards]
     source = 'DNSE LightSpeed' if provider else 'Băng khớp nhập từ CSV'
@@ -154,7 +145,7 @@ def backfill(db, days, provider, directory, shard, shards):
             if storage_used(db) + REPORT_BATCH_RESERVE >= BACKFILL_BUDGET:
                 print(f'::warning::Tape history deferred at {day}: database reserve reached', flush=True)
                 return
-            ready = completed(db, day)
+            ready = verified_tape_symbols(db, day)
             wanted = [(row['exchange'], row['symbol']) for row in symbols
                       if (not row['listed_from'] or row['listed_from'] <= day.isoformat())]
             missing = [key for key in wanted if key not in ready]
@@ -182,7 +173,9 @@ def main():
     parser = ArgumentParser(description=__doc__)
     parser.add_argument('--csv-directory', type=Path)
     parser.add_argument('--probe', action='store_true')
-    parser.add_argument('--end', type=date.fromisoformat)
+    period = parser.add_mutually_exclusive_group()
+    period.add_argument('--end', type=date.fromisoformat)
+    period.add_argument('--date', type=date.fromisoformat, help='Recover only this closed trading session')
     parser.add_argument('--shard', type=int, default=0)
     parser.add_argument('--shards', type=int, default=1)
     args = parser.parse_args()
@@ -191,7 +184,12 @@ def main():
     now = datetime.now(VN)
     closed = now.date() if now.time() >= time(16, 30) else now.date() - timedelta(days=1)
     db = SupabaseRestClient(Settings.from_env())
-    days = [day for day in session_dates(db, closed, HISTORY_SESSIONS) if not args.end or day <= args.end]
+    if args.date:
+        days = session_dates(db, args.date, 1) if args.date <= closed else []
+        if days != [args.date]:
+            parser.error('The requested date is not a closed VNINDEX trading session')
+    else:
+        days = [day for day in session_dates(db, closed, HISTORY_SESSIONS) if not args.end or day <= args.end]
     if not days:
         parser.error('No closed sessions in the VNINDEX calendar')
     provider = None if args.csv_directory else DNSEHistory()

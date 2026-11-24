@@ -15,15 +15,15 @@ from time import monotonic
 import httpx
 
 from .config import Settings
-from .market_radar import EXCHANGES
-from .market_radar_ssi import SYMBOLS, ssi_config, trade_record
+from .market_radar import EXCHANGES, capture_matches
+from .market_radar_ssi import LIVE_BUCKET, SYMBOLS, closed_capture_key, ssi_config, trade_record
 from .market_radar_tape import Match, phase
 from .market_sources import VN
 from .research_archive import check_storage_budget
 from .supabase_rest import SupabaseRestClient
 
-LIVE_BUCKET = "market-radar-live"
 MAX_SNAPSHOT_BYTES = 512_000
+MAX_CLOSED_CAPTURE_BYTES = 8 * 1024 * 1024
 LOCAL_DAYS = 7
 
 
@@ -140,6 +140,34 @@ def publish_snapshot(client, conn, now, watched):
     return True
 
 
+def publish_closed_capture(client, conn, day, symbols):
+    invalid = {row[0] for row in conn.execute("select symbol from invalid")}
+    captures = {}
+    for symbol, exchange in symbols.items():
+        if symbol in invalid:
+            continue
+        tape = [Match(datetime.fromtimestamp(stamp, VN), price, qty, cumulative, side)
+                for cumulative, stamp, price, qty, side in conn.execute(
+                    "select cumulative, stamp, price, quantity, side from ticks where symbol=? order by cumulative",
+                    (symbol,))]
+        if not tape:
+            continue
+        candidate = capture_matches(tape, exchange, include_minutes=True)
+        if not candidate["reason"]:
+            captures[symbol] = {**candidate, "exchange": exchange}
+    if not captures:
+        print("::warning::SSI closed tape has no complete candidates", flush=True)
+        return
+    content = gzip.compress(json.dumps({"day": day.isoformat(), "symbols": captures},
+                                      separators=(",", ":")).encode(), mtime=0)
+    if len(content) > MAX_CLOSED_CAPTURE_BYTES:
+        raise ValueError("SSI closed capture exceeds its size limit")
+    check_storage_budget(client, len(content))
+    client.post(f"/storage/v1/object/{closed_capture_key(day)}", content=content,
+                headers={"x-upsert": "true", "Content-Type": "application/gzip"}).raise_for_status()
+    print(f"SSI closed tape published {len(captures)}/{len(symbols)} candidates for {day}", flush=True)
+
+
 def subscribe_trades(stream, symbols):
     names = list(symbols)
     for offset in range(0, len(names), 45):
@@ -149,6 +177,8 @@ def subscribe_trades(stream, symbols):
                     for symbol in names)
     if not confirmed:
         raise RuntimeError("SSI did not confirm any per-symbol trade subscriptions")
+    if confirmed != len(names):
+        print(f"::warning::SSI did not confirm {len(names) - confirmed} trade subscriptions", flush=True)
     print(f"SSI confirmed {confirmed}/{len(names)} trade subscriptions", flush=True)
 
 
@@ -224,6 +254,8 @@ def capture(directory, client, symbols, watched, day, publish, *, morning=False)
                 publish_snapshot(client, conn, datetime.now(VN), watched)
             except (httpx.HTTPError, RuntimeError, ValueError) as error:
                 print(f"Final live snapshot deferred: {type(error).__name__}", flush=True)
+            if not morning:
+                publish_closed_capture(client, conn, day, symbols)
 
 
 def main():
@@ -251,9 +283,11 @@ def main():
                     client = stack.enter_context(storage_client(settings))
             now = datetime.now(VN)
             cutoff = time(11, 35) if args.morning else time(15, 15)
-            if not args.check_startup and (now.weekday() > 4 or not time(8, 40) <= now.time() < cutoff):
-                print("SSI streaming is outside the capture window", flush=True)
+            if not args.check_startup and (now.weekday() > 4 or not time(8, 15) <= now.time() < cutoff):
+                print("::warning::SSI streaming is outside the capture window", flush=True)
                 return
+            if not args.check_startup and now.time() >= time(9) and not tape_path(args.directory, now.date()).exists():
+                print("::warning::SSI capture is starting after market open without a checkpoint", flush=True)
             prune_local_tapes(args.directory, now.date())
             stage = "Supabase universe"
             symbols = {row["symbol"]: row["exchange"] for row in db.active_symbols() if row["exchange"] in EXCHANGES} if args.universe else SYMBOLS

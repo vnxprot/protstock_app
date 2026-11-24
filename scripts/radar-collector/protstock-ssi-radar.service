@@ -1,0 +1,15 @@
+[Unit]
+Description=Prot Stock SSI trade collector
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+DynamicUser=yes
+StateDirectory=protstock-radar
+WorkingDirectory=/opt/protstock
+EnvironmentFile=/etc/protstock/radar.env
+Environment=RADAR_SSI_APPROVED=true
+ExecStart=/opt/protstock/.venv/bin/python -m protstock.market_radar_ssi_live --universe --publish --directory /var/lib/protstock-radar
+Restart=on-failure
+RestartSec=30

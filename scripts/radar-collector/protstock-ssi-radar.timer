@@ -1,0 +1,11 @@
+[Unit]
+Description=Start Prot Stock SSI capture before market open
+
+[Timer]
+OnCalendar=Mon..Fri *-*-* 08:20:00 Asia/Ho_Chi_Minh
+OnBootSec=1min
+Persistent=true
+AccuracySec=1s
+
+[Install]
+WantedBy=timers.target

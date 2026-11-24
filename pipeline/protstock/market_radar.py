@@ -1,5 +1,6 @@
 """Collect dated public market flow without storing individual trades."""
 from argparse import ArgumentParser
+from collections import Counter
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date, datetime, time, timedelta
 from functools import lru_cache
@@ -17,7 +18,9 @@ import pdfplumber
 from .config import Settings
 from .market_http import SourceUnavailable, request_json
 from .market_radar_minutes import REPLAY_SESSIONS, prepare_replay, publish_replay, summarize_minutes
-from .market_radar_tape import classify, integer, read_tape, tape_integrity
+from .market_radar_ssi import SSI_TAPE_SOURCE, read_closed_capture
+from .market_radar_ssi_reference import ssi_reference
+from .market_radar_tape import classify, integer, read_tape_with_status, tape_integrity
 from .market_sources import VN
 from .supabase_rest import SupabaseRestClient
 
@@ -159,30 +162,42 @@ def cafef_reference(day, exchange, symbol):
 
 
 def matched_reference(day, exchange, symbol):
-    routes = [('CafeF', cafef_reference)]
-    for source, fetch in routes:
+    try:
+        volume = cafef_reference(day, exchange, symbol)
+        if volume is not None:
+            return volume, 'CafeF'
+    except SOURCE_ERRORS as error:
+        print(f'{exchange}/{symbol} reference CafeF: {error}', flush=True)
+    client = ssi_reference()
+    if client:
         try:
-            volume = fetch(day, exchange, symbol)
+            volume = client.matched_volume(day, symbol)
             if volume is not None:
-                return volume, source
+                return volume, 'SSI FastConnect'
+        except httpx.HTTPStatusError as error:
+            print(f'{exchange}/{symbol} reference SSI: HTTP {error.response.status_code}', flush=True)
         except SOURCE_ERRORS as error:
-            print(f'{symbol} reference {source}: {error}', flush=True)
+            print(f'{exchange}/{symbol} reference SSI: {type(error).__name__}', flush=True)
     return None, None
 
 
 def capture_tape(day, exchange, symbol):
     try:
-        return capture_matches(read_tape(day, symbol), exchange, include_minutes=True)
+        tape, reason = read_tape_with_status(day, symbol)
+        capture = capture_matches(tape, exchange, include_minutes=True, stop_reason=reason)
+        if capture['reason']:
+            print(f'{day} {exchange}/{symbol} Vietcap: {capture["reason"]}, {capture["volume"]} shares', flush=True)
+        return capture
     except SOURCE_ERRORS as error:
         print(f'{symbol} tape: {error}', flush=True)
         return {'volume': 0, 'reason': 'source_unavailable', 'groups': []}
 
 
-def capture_matches(tape, exchange, *, include_minutes=False):
+def capture_matches(tape, exchange, *, include_minutes=False, stop_reason=None):
     volume, complete = tape_integrity(tape, exchange)
-    capture = {'volume': volume, 'reason': None if complete else 'incomplete_tape',
-               'groups': list(classify(tape, exchange)) if complete else []}
-    if include_minutes and complete:
+    reason = stop_reason or (None if complete else 'incomplete_tape')
+    capture = {'volume': volume, 'reason': reason, 'groups': [] if reason else list(classify(tape, exchange))}
+    if include_minutes and not reason:
         capture['minutes'] = summarize_minutes(tape, exchange)
     return capture
 
@@ -309,11 +324,23 @@ def backfill_reports(db, end):
             print(f'::warning::Radar report batch {min(pending)} to {max(pending)}: {error}', flush=True)
 
 
-def collect_tape(db, day, shard, shards, file=None, stage=None):
+def verified_tape_symbols(db, day):
+    methods = {}
+    for row in db._pages('market_radar_daily', {'select': 'symbol,exchange,method', 'trading_date': f'eq.{day}',
+            'category': 'eq.large', 'partial': 'eq.false', 'reference_volume': 'not.is.null',
+            'order': 'exchange,symbol,method'}):
+        methods.setdefault((row['exchange'], row['symbol']), set()).add(row['method'])
+    return {key for key, values in methods.items() if {'continuous', 'continuous_cluster', 'auction'} <= values}
+
+
+def collect_tape(db, day, shard, shards, file=None, stage=None, *, fill_only=False):
     symbols = [row for row in db.active_symbols() if row['exchange'] in EXCHANGES
                and (not row['listed_from'] or row['listed_from'] <= day.isoformat())]
     universe_size = len(symbols)
     symbols = symbols[shard::shards]
+    if fill_only:
+        ready = verified_tape_symbols(db, day)
+        symbols = [row for row in symbols if (row['exchange'], row['symbol']) not in ready]
     captures = {}
     if file and file.is_file():
         with gzip.open(file, 'rt', encoding='utf-8') as stream:
@@ -338,7 +365,7 @@ def collect_tape(db, day, shard, shards, file=None, stage=None):
                 symbol = futures[future]
                 candidate = future.result()
                 previous = captures.get(symbol)
-                if not previous or previous['reason'] or (not candidate['reason'] and candidate['volume'] >= previous['volume']):
+                if not previous or (not candidate['reason'], candidate['volume']) >= (not previous['reason'], previous['volume']):
                     captures[symbol] = candidate
             if file:
                 with gzip.open(file, 'wt', encoding='utf-8') as stream:
@@ -357,26 +384,43 @@ def collect_tape(db, day, shard, shards, file=None, stage=None):
         except httpx.HTTPError as error:
             print(f'::warning::Radar replay preparation failed: {type(error).__name__}', flush=True)
         missing = {'volume': 0, 'reason': 'source_unavailable', 'groups': []}
+        try:
+            ssi = read_closed_capture(db, day)
+        except (*SOURCE_ERRORS, OSError) as error:
+            print(f'SSI closed capture unavailable for {day}: {type(error).__name__}', flush=True)
+            ssi = {}
 
         def reconcile(row):
             exchange, symbol = row['exchange'], row['symbol']
-            return reconcile_tape(day, exchange, symbol, captures.get(symbol, missing))
+            capture = captures.get(symbol, missing)
+            reference = matched_reference(day, exchange, symbol)
+            rows = reconcile_tape(day, exchange, symbol, capture, reference_pair=reference)
+            ssi_capture = ssi.get(symbol)
+            if (rows[0]['partial'] and reference[1] == 'CafeF' and ssi_capture
+                    and ssi_capture['exchange'] == exchange and ssi_capture['volume'] == reference[0]):
+                rows = reconcile_tape(day, exchange, symbol, ssi_capture, SSI_TAPE_SOURCE, reference)
+                capture = ssi_capture
+            return rows, capture
 
+        outcomes = Counter()
         futures = {pool.submit(reconcile, row): row for row in symbols}
         for future in as_completed(futures):
-            rows = future.result()
-            response = db._request('POST', '/rpc/publish_market_radar_tape', json={'p_rows': rows})
+            rows, capture = future.result()
+            payload = {'p_rows': rows, 'p_fill_only': fill_only and not rows[0]['partial']}
+            response = db._request('POST', '/rpc/publish_market_radar_tape', json=payload)
             response.raise_for_status()
             verified += int(not rows[0]['partial'])
+            outcomes[rows[0]['tape_reason'] or rows[0]['source']] += 1
             row = futures[future]
             symbol = row['symbol']
-            capture = captures.get(symbol, missing)
-            if replay_enabled and not rows[0]['partial'] and rows[0]['source'].startswith('Vietcap') and 'minutes' in capture:
+            if replay_enabled and not rows[0]['partial'] and 'minutes' in capture:
                 try:
                     replay_count += publish_replay(db, day, row['exchange'], symbol, capture, rows)
                 except httpx.HTTPError as error:
                     print(f'::warning::Radar replay upload failed for {symbol}: {type(error).__name__}', flush=True)
-    print(f'Tape {day} shard {shard}: {verified}/{len(symbols)} freshly verified, {replay_count} replays uploaded', flush=True)
+    print(f'Tape {day} shard {shard}: {verified}/{len(symbols)} requested symbols freshly verified, '
+          f'{replay_count} replays uploaded', flush=True)
+    print(f'Tape {day} shard {shard} reasons and sources: {dict(sorted(outcomes.items()))}', flush=True)
 
 
 def main():
@@ -388,6 +432,7 @@ def main():
     parser.add_argument('--shards', type=int, default=1)
     parser.add_argument('--tape-cache', type=Path)
     parser.add_argument('--tape-stage', choices=('capture', 'reconcile'))
+    parser.add_argument('--tape-fill-only', action='store_true', help='Recover symbols without verified tape')
     parser.add_argument('--backfill-reports', action='store_true')
     args = parser.parse_args()
     now = datetime.now(VN)
@@ -399,7 +444,8 @@ def main():
             parser.error('Expected a valid shard and a closed tape date')
         # VNINDEX publication may lag the exchange calendar on a regular weekday.
         if session_dates(db, args.tape_date, 1) == [args.tape_date] or args.tape_date.weekday() < 5:
-            collect_tape(db, args.tape_date, args.shard, args.shards, args.tape_cache, args.tape_stage)
+            collect_tape(db, args.tape_date, args.shard, args.shards, args.tape_cache, args.tape_stage,
+                         fill_only=args.tape_fill_only)
         return
     end = min(args.end or latest_closed, latest_closed)
     if args.backfill_reports:

@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - .github/workflows/market-flow-radar.yml
+      - pipeline/protstock/market_radar*.py
       - supabase/migrations/*_market_flow_radar.sql
   schedule:
     - cron: '35 9 * * 1-5'
@@ -19,7 +20,7 @@ on:
         description: Optional final date (YYYY-MM-DD) for investor-flow history
         type: string
       tape_date:
-        description: Optional closed session (YYYY-MM-DD) for Vietcap tape recovery
+        description: Optional closed session (YYYY-MM-DD) for missing trade tape recovery
         type: string
       migrate:
         description: Apply Supabase migrations before collection
@@ -149,6 +150,7 @@ jobs:
       TAPE_DATE: ${{ needs.plan-tape.outputs.day }}
       SHARD: ${{ matrix.shard }}
       CAPTURE_FILE: .radar-candidate.json.gz
+      RECOVERY_DATE: ${{ inputs.tape_date }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -165,7 +167,10 @@ jobs:
       - name: Capture trade tape before the provider rolls the session
         env:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-        run: python -m protstock.market_radar --tape-date "$TAPE_DATE" --shard "$SHARD" --shards 6 --tape-cache "$CAPTURE_FILE" --tape-stage capture
+        run: |
+          args=(--tape-date "$TAPE_DATE" --shard "$SHARD" --shards 6 --tape-cache "$CAPTURE_FILE" --tape-stage capture)
+          if [[ -n "$RECOVERY_DATE" ]]; then args+=(--tape-fill-only); fi
+          python -m protstock.market_radar "${args[@]}"
       - uses: actions/cache/save@v4
         with:
           path: ${{ env.CAPTURE_FILE }}
@@ -173,13 +178,16 @@ jobs:
       - name: Reconcile and publish trade tape
         env:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SSI_API_KEY: ${{ secrets.SSI_API_KEY }}
+          SSI_API_SECRET: ${{ secrets.SSI_API_SECRET }}
         run: |
           args=(--tape-date "$TAPE_DATE" --shard "$SHARD" --shards 6 --tape-cache "$CAPTURE_FILE" --tape-stage reconcile)
+          if [[ -n "$RECOVERY_DATE" ]]; then args+=(--tape-fill-only); fi
           python -m protstock.market_radar "${args[@]}"
 
   probe-dnse:
     needs: migrate
-    if: ${{ !cancelled() && inputs.tape_history && (needs.migrate.result == 'success' || needs.migrate.result == 'skipped') }}
+    if: ${{ !cancelled() && (inputs.tape_history || inputs.tape_date) && (needs.migrate.result == 'success' || needs.migrate.result == 'skipped') }}
     runs-on: ubuntu-latest
     timeout-minutes: 12
     outputs:
@@ -190,7 +198,10 @@ jobs:
       DNSE_API_KEY: ${{ secrets.DNSE_API_KEY }}
       DNSE_API_SECRET: ${{ secrets.DNSE_API_SECRET }}
       RADAR_DNSE_APPROVED: ${{ vars.RADAR_DNSE_APPROVED }}
+      SSI_API_KEY: ${{ secrets.SSI_API_KEY }}
+      SSI_API_SECRET: ${{ secrets.SSI_API_SECRET }}
       END_DATE: ${{ inputs.end }}
+      TAPE_DATE: ${{ inputs.tape_date }}
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-python@v6
@@ -204,13 +215,14 @@ jobs:
           fi
           python -m pip install -e '.[radar]' 'dnse-sdk-openapi==2.4.1'
           args=()
-          if [[ -n "$END_DATE" ]]; then args+=(--end "$END_DATE"); fi
+          if [[ -n "$TAPE_DATE" ]]; then args+=(--date "$TAPE_DATE")
+          elif [[ -n "$END_DATE" ]]; then args+=(--end "$END_DATE"); fi
           python -m protstock.market_radar_history --probe "${args[@]}"
           echo 'available=true' >> "$GITHUB_OUTPUT"
 
   recover-tape-history:
-    needs: probe-dnse
-    if: needs.probe-dnse.outputs.available == 'true'
+    needs: [probe-dnse, collect-tape]
+    if: ${{ !cancelled() && needs.probe-dnse.outputs.available == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 115
     strategy:
@@ -224,16 +236,20 @@ jobs:
         with:
           python-version: '3.12'
       - run: python -m pip install -e '.[radar]' 'dnse-sdk-openapi==2.4.1'
-      - name: Recover 20 sessions of verified trade flow
+      - name: Publish verified historical trade flow
         env:
           SUPABASE_URL: https://upmqxwktvvguegqeqibn.supabase.co
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           DNSE_API_KEY: ${{ secrets.DNSE_API_KEY }}
           DNSE_API_SECRET: ${{ secrets.DNSE_API_SECRET }}
           RADAR_DNSE_APPROVED: ${{ vars.RADAR_DNSE_APPROVED }}
+          SSI_API_KEY: ${{ secrets.SSI_API_KEY }}
+          SSI_API_SECRET: ${{ secrets.SSI_API_SECRET }}
           END_DATE: ${{ inputs.end }}
+          TAPE_DATE: ${{ inputs.tape_date }}
           SHARD: ${{ matrix.shard }}
         run: |
           args=()
-          if [[ -n "$END_DATE" ]]; then args+=(--end "$END_DATE"); fi
+          if [[ -n "$TAPE_DATE" ]]; then args+=(--date "$TAPE_DATE")
+          elif [[ -n "$END_DATE" ]]; then args+=(--end "$END_DATE"); fi
           python -m protstock.market_radar_history --shard "$SHARD" --shards 6 "${args[@]}"

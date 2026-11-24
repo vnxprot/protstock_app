@@ -1,12 +1,30 @@
 """SSI FastConnect WebSocket trades for live Radar."""
 from datetime import datetime, time
 from enum import Enum
+import gzip
+import json
 import os
 
 from .market_radar_tape import Match, integer
 from .market_sources import VN
 
 SYMBOLS = {"HDB": "HOSE", "SHS": "HNX", "BVB": "UPCOM"}
+LIVE_BUCKET = "market-radar-live"
+SSI_TAPE_SOURCE = "SSI WebSocket"
+
+
+def closed_capture_key(day):
+    return f"{LIVE_BUCKET}/closed/{day.weekday()}.json.gz"
+
+
+def read_closed_capture(db, day):
+    url = f"{db._settings.supabase_url}/storage/v1/object/{closed_capture_key(day)}"
+    response = db._get(url)
+    if response.status_code == 404:
+        return {}
+    response.raise_for_status()
+    data = json.loads(gzip.decompress(response.content))
+    return data["symbols"] if data["day"] == day.isoformat() else {}
 
 
 def trade_record(message, day=None):

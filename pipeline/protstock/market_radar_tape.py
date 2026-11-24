@@ -41,12 +41,17 @@ def tape_page(symbol, cursor):
 
 
 def read_tape(day, symbol):
+    return read_tape_with_status(day, symbol)[0]
+
+
+def read_tape_with_status(day, symbol):
     trades = {}
     page = tape_page(symbol, None)
     if page and local_timestamp(page[0]['truncTime']).date() > day:
         boundary = datetime.combine(day + timedelta(days=1), time.min, VN)
         page = tape_page(symbol, int(boundary.timestamp()))
     oldest_seen = None
+    reason = None
     for page_number in range(MAX_TAPE_PAGES):
         page_trades = []
         for item in page:
@@ -71,11 +76,19 @@ def read_tape(day, symbol):
             break
         cursor = int(oldest.stamp.timestamp()) + 1
         if oldest_seen is not None and cursor >= oldest_seen:
+            reason = 'cursor_stalled'
             break
         oldest_seen = cursor
         if page_number + 1 < MAX_TAPE_PAGES:
-            page = tape_page(symbol, cursor)
-    return sorted(trades.values(), key=lambda match: (match.stamp, match.cumulative))
+            try:
+                page = tape_page(symbol, cursor)
+            except SourceUnavailable as error:
+                print(f'{symbol} tape page {page_number + 2}: {error}', flush=True)
+                reason = 'source_unavailable'
+                break
+    else:
+        reason = 'page_limit'
+    return sorted(trades.values(), key=lambda match: (match.stamp, match.cumulative)), reason
 
 
 def phase(exchange, match):

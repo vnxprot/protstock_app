@@ -2,9 +2,9 @@ name: SSI Radar live
 
 on:
   schedule:
-    # 08:42 in Vietnam, before the opening auction.
-    - cron: '41 1 * * 1-5'
-    # 12:43 retry if the morning schedule did not start.
+    # 08:19 in Vietnam, with room for scheduler delay before the opening auction.
+    - cron: '19 1 * * 1-5'
+    # 12:43 fallback if the morning attempt did not start.
     - cron: '43 5 * * 1-5'
   workflow_dispatch:
     inputs:
@@ -25,8 +25,9 @@ env:
 
 jobs:
   morning:
+    if: vars.RADAR_SSI_EXTERNAL_COLLECTOR != 'true' || inputs.check_startup
     runs-on: ubuntu-latest
-    timeout-minutes: 195
+    timeout-minutes: 215
     outputs:
       checkpoint: ${{ steps.checkpoint.outputs.ready }}
     steps:
@@ -78,7 +79,7 @@ jobs:
 
   afternoon:
     needs: morning
-    if: ${{ !cancelled() }}
+    if: ${{ !cancelled() && needs.morning.result != 'skipped' && !inputs.check_startup }}
     runs-on: ubuntu-latest
     timeout-minutes: 235
     steps:
